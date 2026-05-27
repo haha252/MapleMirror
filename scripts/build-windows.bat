@@ -17,7 +17,7 @@ if errorlevel 1 goto :failed
 
 set "REV=unknown"
 for /f %%i in ('git rev-parse --short HEAD 2^>NUL') do set "REV=%%i"
-set "VERSION=M1-%REV%"
+set "VERSION=dev-%REV%"
 set "GOOS=windows"
 set "GOARCH=amd64"
 set "CGO_ENABLED=0"
