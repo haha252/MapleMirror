@@ -1,0 +1,11 @@
+# 本地构建缓存与产物
+/.cache/
+/dist/
+
+# 运行期数据、日志与本地确认后的配置
+/data/
+/logs/
+/config.yaml
+/projects.yaml
+/quota.yaml
+/node.yaml

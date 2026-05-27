@@ -1,0 +1,24 @@
+# 主节点额度配置示例
+# 请求额度按地址和网段同时检查；每日流量一律按节点真实发送字节统计。
+request_buckets:
+  ipv4_32:
+    capacity: 120
+    full_refill: "48h"
+  ipv4_24:
+    capacity: 600
+    full_refill: "48h"
+  ipv6_128:
+    capacity: 120
+    full_refill: "48h"
+  ipv6_64:
+    capacity: 600
+    full_refill: "48h"
+
+daily_traffic:
+  ipv4_32: "3 GiB"
+  ipv4_24: "20 GiB"
+  ipv6_128: "3 GiB"
+  ipv6_64: "20 GiB"
+
+blacklist: []
+exemptions: []

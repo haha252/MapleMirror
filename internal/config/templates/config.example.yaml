@@ -1,0 +1,71 @@
+# 镜像服务主节点配置示例
+# 本文件使用 UTF-8 编码。管理令牌和签名密钥不得直接填写在本文件中。
+server:
+  # 公共基础监听地址；M1 仅提供健康检查。
+  public_listen: ":8080"
+  # 管理接口在首版必须限制于本机或明确的管理网络，本地址当前仅作合同校验。
+  management_listen: "127.0.0.1:9080"
+  # 节点控制通道监听地址；M2 启用 mTLS 后使用。
+  control_listen: ":9443"
+
+database:
+  path: "data/master.db"
+  busy_timeout: "5s"
+  wal: true
+
+logging:
+  console_level: "info"
+  file_level: "info"
+  directory: "logs/master"
+  retention_days: 30
+
+request_id:
+  response_header: "X-Request-ID"
+  parent_header: "X-Request-ID"
+
+proxy:
+  # 仅直连来源位于以下网段时，后续阶段才信任代理转发头。
+  trusted_cidrs: []
+
+stats:
+  timezone: "Asia/Shanghai"
+
+scan:
+  interval: "15m"
+  # 仅填写环境变量名称，不得填写 GitHub 凭据内容。
+  github_token_env: "MIRROR_GITHUB_TOKEN"
+
+altcha:
+  # 网页验证仅使用 ALTCHA；medium 表示定稿的“中等”工作量档位。
+  workload_profile: "medium"
+  challenge_ttl: "2m"
+
+api_pow:
+  # 公开 API 独立使用 SHA-256 前导零挑战，不与 ALTCHA 参数混用。
+  algorithm: "sha256"
+  leading_zero_bits: 23
+  challenge_ttl: "2m"
+
+download_token:
+  ttl: "15m"
+  # M4 启用授权前设置为签名密钥文件路径，文件内容不得写入日志。
+  signing_key_file: ""
+
+node:
+  heartbeat_timeout: "30s"
+  pairing_code_ttl: "5m"
+  tls:
+    # M2 启用控制通道前配置证书文件路径。
+    ca_file: ""
+    cert_file: ""
+    key_file: ""
+
+admin:
+  # 首版管理接口仅向管理网络开放；示例默认只允许本机。
+  allowed_cidrs:
+    - "127.0.0.0/8"
+    - "::1/128"
+  # 仅引用强随机管理令牌所在的环境变量名称。
+  token_env: "MIRROR_ADMIN_TOKEN"
+  # 高风险节点操作必须叠加 mTLS，不得关闭。
+  high_risk_require_mtls: true

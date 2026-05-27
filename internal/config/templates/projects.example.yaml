@@ -1,0 +1,16 @@
+# 主节点项目清单示例
+# 仅支持公开 GitHub 仓库，M3 扫描时将校验可访问性及资产摘要。
+projects:
+  - id: "example"
+    name: "示例项目"
+    repository: "owner/repository"
+    enabled: false
+    # 每个下载节点应保留的版本数量，默认值为 3。
+    retain_versions: 3
+    include_prerelease: false
+    # 倍率仅扣减请求额度，不放大实际流量统计或每日流量限额。
+    download_multiplier: 1
+    asset_include:
+      - "*.zip"
+    asset_exclude: []
+    architecture_regex: "(?i)(amd64|arm64|x86_64)"

@@ -1,0 +1,40 @@
+# 镜像服务下载节点配置示例
+# 本文件使用 UTF-8 编码。M1 仅提供配置校验和基础健康服务。
+node:
+  name: "示例下载节点"
+  id_file: "data/node-id"
+
+server:
+  listen: ":8081"
+
+master:
+  # 下载节点主动连接主节点控制面，M2 开始使用 mTLS。
+  control_address: "https://127.0.0.1:9443"
+
+storage:
+  directory: "data/assets"
+  temp_directory: "data/tmp"
+  # 节点状态库将持久化未被主节点确认的流量事件。
+  state_db: "data/node-state.db"
+
+bandwidth:
+  target: "100 MiB/s"
+
+sync:
+  max_workers: 2
+  bandwidth_limit: "0"
+
+logging:
+  console_level: "info"
+  file_level: "info"
+  directory: "logs/node"
+  retention_days: 30
+
+pairing:
+  credential_file: "data/node-credential.json"
+
+tls:
+  # M2 配对后配置证书文件路径；私钥不得记录到日志。
+  ca_file: ""
+  cert_file: ""
+  key_file: ""
