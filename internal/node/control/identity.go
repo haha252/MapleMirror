@@ -44,6 +44,12 @@ func (s IdentityStore) Save(nodeID string, certPEM, caPEM []byte) error {
 	return err
 }
 
+func (s IdentityStore) NodeID() (string, error) {
+	var nodeID string
+	err := s.DB.QueryRow(`SELECT node_id FROM control_identity WHERE id = 1`).Scan(&nodeID)
+	return nodeID, err
+}
+
 func writePrivate(path string, data []byte, perm os.FileMode) error {
 	if path == "" {
 		return fmt.Errorf("身份材料路径为空")

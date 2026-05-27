@@ -27,6 +27,27 @@ func TestReportsDoNotWriteFormalInventory(t *testing.T) {
 	}
 }
 
+func TestPressureReportReplayHasNoDuplicateSideEffect(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	report := protocol.PressureReport{
+		ReportID: "p1", SampledAt: time.Now(), SampleWindowSeconds: 10,
+		TargetBandwidthBPS: 100, ActualBandwidthBPS: 50, FreeBytes: 1,
+	}
+	if _, err := repo.AcceptPressureReport(context.Background(), session, 1, report); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AcceptPressureReport(context.Background(), session, 1, report); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_pressure_reports").Scan(&count)
+	if count != 1 {
+		t.Fatalf("重复压力报告不应产生副作用，count=%d", count)
+	}
+}
+
 func TestDisableNodeAuditsAndMasksRouting(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

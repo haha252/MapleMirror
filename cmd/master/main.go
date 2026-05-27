@@ -97,12 +97,28 @@ func startAdminService(cfg config.Master, repo mastercontrol.Repository, logger 
 		logger.Error(context.Background(), "管理 API 鉴权初始化失败", slog.String("error", err.Error()))
 		return
 	}
-	handler := requestid.Middleware(admin.Server{Auth: auth, Repo: repo}.Handler(),
+	if cfg.Node.TLS.SigningCACertFile == "" || cfg.Node.TLS.SigningCAKeyFile == "" {
+		logger.Error(context.Background(), "节点证书签发 CA 未配置，管理服务未启动")
+		return
+	}
+	loaded, err := mastercontrol.LoadCertificateSigner(
+		cfg.Node.TLS.SigningCACertFile, cfg.Node.TLS.SigningCAKeyFile, 365*24*time.Hour)
+	if err != nil {
+		logger.Error(context.Background(), "节点证书签发器初始化失败", slog.String("error", err.Error()))
+		return
+	}
+	handler := requestid.Middleware(admin.Server{Auth: auth, Repo: repo, Signer: loaded.Sign}.Handler(),
 		cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader)
-	server := &http.Server{Addr: cfg.Server.ManagementListen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	tlsCfg, err := controltls.AdminServer(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile, cfg.Admin.TLS.ClientCAFile)
+	if err != nil {
+		logger.Error(context.Background(), "管理 API TLS 初始化失败", slog.String("error", err.Error()))
+		return
+	}
+	server := &http.Server{Addr: cfg.Server.ManagementListen, Handler: handler,
+		ReadHeaderTimeout: 5 * time.Second, TLSConfig: tlsCfg}
 	go func() {
 		logger.Info(context.Background(), "管理 API 已启动", slog.String("listen", cfg.Server.ManagementListen))
-		if err := server.ListenAndServeTLS(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error(context.Background(), "管理 API 异常退出", slog.String("error", err.Error()))
 		}
 	}()

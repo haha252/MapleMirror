@@ -29,10 +29,17 @@ func (s EnrollmentServer) Handle(conn net.Conn) {
 		_ = writeProtocolError(conn, msg, reqID, "INVALID_PAYLOAD", err.Error())
 		return
 	}
-	if msg.MessageType != protocol.TypeEnrollRequest {
-		_ = writeProtocolError(conn, msg, reqID, "INVALID_PAYLOAD", "登记入口只接受登记请求")
-		return
+	switch msg.MessageType {
+	case protocol.TypeEnrollRequest:
+		s.handleEnrollRequest(conn, msg, reqID)
+	case protocol.TypeEnrollCertificate:
+		s.handleCertificateCollect(conn, msg, reqID)
+	default:
+		_ = writeProtocolError(conn, msg, reqID, "INVALID_PAYLOAD", "登记入口只接受登记和领证请求")
 	}
+}
+
+func (s EnrollmentServer) handleEnrollRequest(conn net.Conn, msg protocol.Envelope, reqID string) {
 	var payload protocol.EnrollRequest
 	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 		_ = writeProtocolError(conn, msg, reqID, "INVALID_PAYLOAD", "登记请求内容不合法")
@@ -46,15 +53,36 @@ func (s EnrollmentServer) Handle(conn net.Conn) {
 		_ = writeProtocolError(conn, msg, reqID, "PAIRING_CODE_INVALID", err.Error())
 		return
 	}
-	body, _ := json.Marshal(map[string]any{
-		"enrollment_id":       enrollment.ID,
-		"expires_at":          enrollment.ExpiresAt,
-		"retry_after_seconds": 10,
-		"message":             "登记请求已提交，等待管理员审批",
+	body, _ := json.Marshal(protocol.EnrollPending{
+		EnrollmentID: enrollment.ID, ExpiresAt: enrollment.ExpiresAt,
+		RetryAfterSeconds: 10, Message: "登记请求已提交，等待管理员审批",
 	})
 	_ = protocol.WriteFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: protocol.TypeEnrollPending, SentAt: time.Now().UTC(),
+		RequestID: reqID, ReplyTo: msg.MessageID, Payload: body,
+	})
+}
+
+func (s EnrollmentServer) handleCertificateCollect(conn net.Conn, msg protocol.Envelope, reqID string) {
+	var payload protocol.EnrollCertificateRequest
+	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+		_ = writeProtocolError(conn, msg, reqID, "INVALID_PAYLOAD", "领证请求内容不合法")
+		return
+	}
+	delivery, err := s.Repo.CollectCertificate(context.Background(), payload.EnrollmentID)
+	if err != nil {
+		_ = writeProtocolError(conn, msg, reqID, "ENROLLMENT_PENDING", err.Error())
+		return
+	}
+	body, _ := json.Marshal(protocol.EnrollCertificate{
+		EnrollmentID: delivery.EnrollmentID, NodeID: delivery.NodeID,
+		CertificatePEM: delivery.CertificatePEM, CAChainPEM: delivery.CAChainPEM,
+		NotAfter: delivery.NotAfter,
+	})
+	_ = protocol.WriteFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: reqID,
+		MessageType: protocol.TypeEnrollCertificate, SentAt: time.Now().UTC(),
 		RequestID: reqID, ReplyTo: msg.MessageID, Payload: body,
 	})
 }

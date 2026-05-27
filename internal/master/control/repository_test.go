@@ -47,6 +47,16 @@ func TestApproveKeepsRoutingReadyFalse(t *testing.T) {
 	if err != nil || ready != 0 {
 		t.Fatalf("M2 审批不得使节点可路由，ready=%d err=%v", ready, err)
 	}
+	delivery, err := repo.CollectCertificate(ctx, enrollment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.NodeID != "node-1" || delivery.CertificatePEM == "" {
+		t.Fatal("审批后的证书领取结果不完整")
+	}
+	if _, err := repo.CollectCertificate(ctx, enrollment.ID); err == nil {
+		t.Fatal("证书只能领取一次")
+	}
 }
 
 func testRepo(t *testing.T) (Repository, func()) {

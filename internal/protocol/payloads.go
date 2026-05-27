@@ -10,6 +10,25 @@ type EnrollRequest struct {
 	Capabilities         []string `json:"capabilities"`
 }
 
+type EnrollPending struct {
+	EnrollmentID      string    `json:"enrollment_id"`
+	ExpiresAt         time.Time `json:"expires_at"`
+	RetryAfterSeconds int       `json:"retry_after_seconds"`
+	Message           string    `json:"message"`
+}
+
+type EnrollCertificateRequest struct {
+	EnrollmentID string `json:"enrollment_id"`
+}
+
+type EnrollCertificate struct {
+	EnrollmentID   string    `json:"enrollment_id"`
+	NodeID         string    `json:"node_id"`
+	CertificatePEM string    `json:"certificate_pem"`
+	CAChainPEM     string    `json:"ca_chain_pem"`
+	NotAfter       time.Time `json:"not_after"`
+}
+
 type Welcome struct {
 	SessionID               string `json:"session_id"`
 	AcceptedSequence        uint64 `json:"accepted_sequence"`

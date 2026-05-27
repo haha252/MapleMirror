@@ -58,6 +58,27 @@ func (r Repository) CSRForEnrollment(ctx context.Context, id string) (string, En
 	return csr, item, nil
 }
 
+func (r Repository) CSRForNode(ctx context.Context, nodeID string) (string, string, error) {
+	var csr, name string
+	err := r.DB.QueryRowContext(ctx, `SELECT csr_pem, public_name
+		FROM node_enrollment_requests WHERE node_id = ?
+		ORDER BY created_at DESC LIMIT 1`, nodeID).Scan(&csr, &name)
+	return csr, name, err
+}
+
+func (r Repository) RejectEnrollment(ctx context.Context, id, requestID, reason, admin string) error {
+	result, err := r.DB.ExecContext(ctx, `UPDATE node_enrollment_requests
+		SET status = 'rejected', rejected_at = ? WHERE id = ? AND status = 'pending'`,
+		time.Now().UTC().Format(time.RFC3339Nano), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return fmt.Errorf("登记请求状态不允许拒绝")
+	}
+	return r.Audit(ctx, "pairing.reject", "enrollment", id, "success", requestID, reason, admin)
+}
+
 func (r Repository) ApproveEnrollment(ctx context.Context, id, name, fp, requestID string, signed SignedCertificate) error {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -107,6 +128,39 @@ func insertCertificate(ctx context.Context, tx *sql.Tx, cert SignedCertificate, 
 		cert.NotBefore.Format(time.RFC3339Nano), cert.NotAfter.Format(time.RFC3339Nano),
 		requestID, now, cert.CertificatePEM, cert.CAChainPEM)
 	return err
+}
+
+func (r Repository) RotateCertificate(ctx context.Context, nodeID, requestID, admin string, signed SignedCertificate) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = tx.ExecContext(ctx, `UPDATE node_certificates SET status = 'revoked',
+		revoked_at = ? WHERE node_id = ? AND status = 'active'`, now, nodeID)
+	if err != nil {
+		return err
+	}
+	if err := insertCertificate(ctx, tx, signed, requestID, now); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET certificate_fingerprint = ?,
+		routing_ready = 0, updated_at = ? WHERE id = ?`, signed.Fingerprint, now, nodeID)
+	if err != nil {
+		return err
+	}
+	_, _ = tx.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
+		close_reason = '证书轮换' WHERE node_id = ? AND disconnected_at IS NULL`, now, nodeID)
+	_, err = tx.ExecContext(ctx, `INSERT INTO admin_audit_events
+		(id, operation, target_type, target_id, result, request_id, created_at,
+		admin_identity, details_summary) VALUES (?, 'certificate.rotate', 'node', ?,
+		'success', ?, ?, ?, '节点证书已轮换')`,
+		mustID(), nodeID, requestID, now, admin)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func CertRecord(nodeID, certID string, cert *x509.Certificate, pemText, caChain string) SignedCertificate {

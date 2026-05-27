@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -56,7 +57,8 @@ func main() {
 	}
 	defer database.Close()
 	logger.Info(context.Background(), "下载节点本地状态库迁移已完成")
-	startControlClient(cfg, logger)
+	startEnrollmentClient(cfg, database, logger)
+	startControlClient(cfg, database, logger)
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Version: version,
@@ -64,7 +66,37 @@ func main() {
 	runServer(cfg.Server.Listen, mux, logger)
 }
 
-func startControlClient(cfg config.Node, logger *logging.Logger) {
+func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
+	if cfg.Master.EnrollmentAddress == "" || cfg.Pairing.CodeFile == "" {
+		return
+	}
+	if _, err := os.Stat(cfg.TLS.CertFile); err == nil {
+		return
+	}
+	address, err := url.Parse(cfg.Master.EnrollmentAddress)
+	if err != nil {
+		logger.Error(context.Background(), "主节点登记地址无效", slog.String("error", err.Error()))
+		return
+	}
+	tlsCfg, err := controltls.NodeClient(cfg.TLS.CAFile, "", "", cfg.TLS.ServerName)
+	if err != nil {
+		logger.Error(context.Background(), "节点登记 TLS 初始化失败", slog.String("error", err.Error()))
+		return
+	}
+	enroller := nodecontrol.Enroller{
+		NodeName: cfg.Node.Name, Address: address.Host, TLSConfig: tlsCfg,
+		CodeFile: cfg.Pairing.CodeFile, CredentialFile: cfg.Pairing.CredentialFile,
+		Identity: nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
+			KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile},
+	}
+	go func() {
+		if err := enroller.RunOnce(); err != nil {
+			logger.Warn(context.Background(), "节点首次登记未完成", slog.String("error", err.Error()))
+		}
+	}()
+}
+
+func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
 	if cfg.TLS.CAFile == "" || cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
 		logger.Warn(context.Background(), "节点控制证书材料未配置，控制连接未启动")
 		return
@@ -79,7 +111,13 @@ func startControlClient(cfg config.Node, logger *logging.Logger) {
 		logger.Error(context.Background(), "主节点控制地址无效", slog.String("error", err.Error()))
 		return
 	}
-	client := nodecontrol.Client{NodeID: cfg.Node.Name, Address: address.Host, TLSConfig: tlsCfg}
+	store := nodecontrol.IdentityStore{DB: db}
+	nodeID, err := store.NodeID()
+	if err != nil {
+		logger.Warn(context.Background(), "节点身份尚未登记，控制连接未启动")
+		return
+	}
+	client := nodecontrol.Client{NodeID: nodeID, Address: address.Host, TLSConfig: tlsCfg}
 	stop := make(chan struct{})
 	go client.Run(stop)
 	logger.Info(context.Background(), "节点主动控制连接已启动", slog.String("master", address.Host))

@@ -15,7 +15,12 @@ type createPairingRequest struct {
 }
 
 func (s Server) pairingCodes(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method == http.MethodDelete {
+		id := strings.TrimPrefix(r.URL.Path, "/api/admin/v1/pairing-codes/")
+		s.revokePairing(w, r, id)
+		return
+	}
+	if r.Method != http.MethodPost || r.URL.Path != "/api/admin/v1/pairing-codes" {
 		writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "接口不存在")
 		return
 	}
@@ -66,9 +71,24 @@ func (s Server) pairingRequestByID(w http.ResponseWriter, r *http.Request) {
 		s.pairingDetail(w, r, id)
 	case r.Method == http.MethodPost && action == "approve":
 		s.approvePairing(w, r, id)
+	case r.Method == http.MethodPost && action == "reject":
+		s.rejectPairing(w, r, id)
 	default:
 		writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "接口不存在")
 	}
+}
+
+func (s Server) revokePairing(w http.ResponseWriter, r *http.Request, id string) {
+	adminID, ok := s.require(w, r, true)
+	if !ok {
+		return
+	}
+	if err := s.Repo.RevokePairing(r.Context(), id, requestID(r)); err != nil {
+		writeError(w, r, http.StatusConflict, "STATE_CONFLICT", "配对码不可撤销")
+		return
+	}
+	_ = s.Repo.Audit(r.Context(), "pairing_code.revoke", "pairing_code", id, "success", requestID(r), "配对码已撤销", adminID)
+	writeOK(w, r, http.StatusOK, "配对码已撤销", map[string]string{"pairing_code_id": id})
 }
 
 func (s Server) pairingDetail(w http.ResponseWriter, r *http.Request, id string) {
@@ -123,6 +143,22 @@ func (s Server) approvePairing(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	writeOK(w, r, http.StatusOK, "登记请求已批准", map[string]string{"node_id": signed.NodeID})
+}
+
+func (s Server) rejectPairing(w http.ResponseWriter, r *http.Request, id string) {
+	adminID, ok := s.require(w, r, true)
+	if !ok {
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := s.Repo.RejectEnrollment(r.Context(), id, requestID(r), body.Reason, adminID); err != nil {
+		writeError(w, r, http.StatusConflict, "STATE_CONFLICT", err.Error())
+		return
+	}
+	writeOK(w, r, http.StatusOK, "登记请求已拒绝", map[string]string{"enrollment_id": id})
 }
 
 func splitPairingPath(path string) (string, string) {
