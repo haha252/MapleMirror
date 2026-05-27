@@ -7,6 +7,8 @@ server:
   management_listen: "127.0.0.1:9080"
   # 节点控制通道监听地址；M2 启用 mTLS 后使用。
   control_listen: ":9443"
+  # 首次领证登记入口，独立于正式 mTLS 控制通道。
+  enrollment_listen: ":9444"
 
 database:
   path: "data/master.db"
@@ -53,12 +55,17 @@ download_token:
 
 node:
   heartbeat_timeout: "30s"
+  heartbeat_interval: "10s"
+  enrollment_timeout: "10m"
   pairing_code_ttl: "5m"
   tls:
     # M2 启用控制通道前配置证书文件路径。
     ca_file: ""
     cert_file: ""
     key_file: ""
+    client_ca_file: ""
+    signing_ca_cert_file: ""
+    signing_ca_key_file: ""
 
 admin:
   # 首版管理接口仅向管理网络开放；示例默认只允许本机。
@@ -67,5 +74,10 @@ admin:
     - "::1/128"
   # 仅引用强随机管理令牌所在的环境变量名称。
   token_env: "MIRROR_ADMIN_TOKEN"
+  token_min_bytes: 32
   # 高风险节点操作必须叠加 mTLS，不得关闭。
   high_risk_require_mtls: true
+  tls:
+    cert_file: ""
+    key_file: ""
+    client_ca_file: ""

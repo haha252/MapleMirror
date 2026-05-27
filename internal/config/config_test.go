@@ -23,6 +23,9 @@ func TestLoadMasterExample(t *testing.T) {
 	if c.ALTCHA.WorkloadProfile != "medium" || c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
 		t.Fatal("验证或管理安全合同被修改")
 	}
+	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" || c.Admin.TokenMinBytes != 32 {
+		t.Fatal("M2 控制面配置默认值缺失")
+	}
 }
 
 func TestMasterRejectsPublicManagementListen(t *testing.T) {

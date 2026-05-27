@@ -17,6 +17,8 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	}
 	assertTable(t, db, "download_authorizations")
 	assertTable(t, db, "traffic_events")
+	assertTable(t, db, "node_enrollment_requests")
+	assertTable(t, db, "node_control_sessions")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {
@@ -24,7 +26,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	}
 	defer db.Close()
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 4 {
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 6 {
 		t.Fatalf("主节点迁移重复执行不符合预期：count=%d err=%v", count, err)
 	}
 }
@@ -37,6 +39,7 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	defer db.Close()
 	assertTable(t, db, "local_assets")
 	assertTable(t, db, "pending_traffic_events")
+	assertTable(t, db, "control_identity")
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {

@@ -10,6 +10,7 @@ server:
 master:
   # 下载节点主动连接主节点控制面，M2 开始使用 mTLS。
   control_address: "https://127.0.0.1:9443"
+  enrollment_address: "https://127.0.0.1:9444"
 
 storage:
   directory: "data/assets"
@@ -32,9 +33,11 @@ logging:
 
 pairing:
   credential_file: "data/node-credential.json"
+  code_file: "data/pairing-code"
 
 tls:
   # M2 配对后配置证书文件路径；私钥不得记录到日志。
   ca_file: ""
   cert_file: ""
   key_file: ""
+  server_name: "127.0.0.1"

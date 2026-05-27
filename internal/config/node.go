@@ -25,7 +25,8 @@ type NodeServer struct {
 	Listen string `yaml:"listen"`
 }
 type NodeMaster struct {
-	ControlAddress string `yaml:"control_address"`
+	ControlAddress    string `yaml:"control_address"`
+	EnrollmentAddress string `yaml:"enrollment_address"`
 }
 type NodeStorage struct {
 	Directory     string `yaml:"directory"`
@@ -41,6 +42,7 @@ type Sync struct {
 }
 type Pairing struct {
 	CredentialFile string `yaml:"credential_file"`
+	CodeFile       string `yaml:"code_file"`
 }
 
 func LoadNode(path string, warn WarnFunc) (Node, error) {
@@ -73,6 +75,15 @@ func validateNode(c Node) error {
 	address, err := url.Parse(c.Master.ControlAddress)
 	if err != nil || address.Scheme != "https" || address.Host == "" {
 		return errors.New("节点配置 master.control_address 必须为 HTTPS 地址")
+	}
+	if c.Master.EnrollmentAddress != "" {
+		enrollment, err := url.Parse(c.Master.EnrollmentAddress)
+		if err != nil || enrollment.Scheme != "https" || enrollment.Host == "" {
+			return errors.New("节点配置 master.enrollment_address 必须为 HTTPS 地址")
+		}
+	}
+	if c.TLS.ServerName == "" {
+		return errors.New("节点配置 tls.server_name 不得为空")
 	}
 	if c.Storage.Directory == "" || c.Storage.TempDirectory == "" || c.Storage.StateDB == "" {
 		return errors.New("节点存储目录和本地状态库路径不得为空")
