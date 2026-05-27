@@ -1,24 +1,35 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/logging"
+	"mirror-server/internal/master/health"
+	"mirror-server/internal/requestid"
 )
+
+var version = "开发版"
 
 func main() {
 	path := flag.String("config", "config.yaml", "主节点配置文件路径")
 	projectsPath := flag.String("projects", "projects.yaml", "项目清单配置文件路径")
 	quotaPath := flag.String("quota", "quota.yaml", "额度配置文件路径")
 	flag.Parse()
-	warn := func(field, value string) {
-		fmt.Printf("警告：配置字段 %s 缺失，已使用默认值 %s\n", field, value)
-	}
+	var warnings [][2]string
+	warn := func(field, value string) { warnings = append(warnings, [2]string{field, value}) }
 	var created bool
-	if _, err := config.LoadMaster(*path, warn); handleLoad(err, "主节点配置", &created) {
+	cfg, err := config.LoadMaster(*path, warn)
+	if handleLoad(err, "主节点配置", &created) {
 		os.Exit(1)
 	}
 	if _, err := config.LoadProjects(*projectsPath, warn); handleLoad(err, "项目清单", &created) {
@@ -31,7 +42,21 @@ func main() {
 		fmt.Fprintln(os.Stderr, "已生成主节点所需示例配置，请确认安全字段后重新启动。")
 		return
 	}
-	fmt.Println("主节点基础配置加载完成，健康服务将在后续子阶段启用。")
+	location, _ := time.LoadLocation(cfg.Stats.Timezone)
+	logger, err := logging.New("master", cfg.Logging, location, os.Stdout)
+	if err != nil {
+		logging.StartupError("主节点", err)
+		os.Exit(1)
+	}
+	defer logger.Close()
+	for _, item := range warnings {
+		logger.ConfigWarning(item[0], item[1])
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/healthz", requestid.Middleware(health.Handler{
+		Logger: logger, Ready: func() bool { return false }, Version: version,
+	}, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
+	runServer(cfg.Server.PublicListen, mux, logger)
 }
 
 func handleLoad(err error, name string, created *bool) bool {
@@ -44,4 +69,21 @@ func handleLoad(err error, name string, created *bool) bool {
 		return true
 	}
 	return false
+}
+
+func runServer(address string, handler http.Handler, logger *logging.Logger) {
+	server := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdown)
+	}()
+	logger.Info(context.Background(), "主节点健康服务已启动", slog.String("listen", address))
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error(context.Background(), "主节点健康服务异常退出", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 }
