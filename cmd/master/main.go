@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,7 +15,10 @@ import (
 	"time"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/controltls"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/master/admin"
+	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/health"
 	"mirror-server/internal/requestid"
 	"mirror-server/internal/storage"
@@ -60,6 +65,9 @@ func main() {
 	}
 	defer database.Close()
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
+	repo := mastercontrol.Repository{DB: database}
+	startControlServices(cfg, repo, logger)
+	startAdminService(cfg, repo, logger)
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Ready: func() bool { return true }, Version: version,
@@ -77,6 +85,67 @@ func handleLoad(err error, name string, created *bool) bool {
 		return true
 	}
 	return false
+}
+
+func startAdminService(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {
+	if cfg.Admin.TLS.CertFile == "" || cfg.Admin.TLS.KeyFile == "" {
+		logger.Warn(context.Background(), "管理 API TLS 材料未配置，管理服务未启动")
+		return
+	}
+	auth, err := admin.NewAuth(cfg.Admin)
+	if err != nil {
+		logger.Error(context.Background(), "管理 API 鉴权初始化失败", slog.String("error", err.Error()))
+		return
+	}
+	handler := requestid.Middleware(admin.Server{Auth: auth, Repo: repo}.Handler(),
+		cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader)
+	server := &http.Server{Addr: cfg.Server.ManagementListen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		logger.Info(context.Background(), "管理 API 已启动", slog.String("listen", cfg.Server.ManagementListen))
+		if err := server.ListenAndServeTLS(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error(context.Background(), "管理 API 异常退出", slog.String("error", err.Error()))
+		}
+	}()
+}
+
+func startControlServices(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {
+	timeout, _ := time.ParseDuration(cfg.Node.HeartbeatTimeout)
+	interval, _ := time.ParseDuration(cfg.Node.HeartbeatInterval)
+	if cfg.Server.ControlListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
+		tlsCfg, err := controltls.ControlServer(cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile, cfg.Node.TLS.ClientCAFile)
+		startTLSListener(cfg.Server.ControlListen, tlsCfg, err, logger, mastercontrol.ControlServer{
+			Repo: repo, HeartbeatInterval: interval, HeartbeatTimeout: timeout,
+		}.Handle)
+	}
+	if cfg.Server.EnrollmentListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
+		tlsCfg, err := controltls.EnrollmentServer(cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile, "")
+		enrollTimeout, _ := time.ParseDuration(cfg.Node.EnrollmentTimeout)
+		startTLSListener(cfg.Server.EnrollmentListen, tlsCfg, err, logger, mastercontrol.EnrollmentServer{
+			Repo: repo, EnrollmentTimeout: enrollTimeout,
+		}.Handle)
+	}
+}
+
+func startTLSListener(address string, tlsCfg *tls.Config, cfgErr error, logger *logging.Logger, handle func(net.Conn)) {
+	if cfgErr != nil {
+		logger.Error(context.Background(), "控制面 TLS 配置失败", slog.String("error", cfgErr.Error()))
+		return
+	}
+	listener, err := tls.Listen("tcp", address, tlsCfg)
+	if err != nil {
+		logger.Error(context.Background(), "控制面监听启动失败", slog.String("listen", address), slog.String("error", err.Error()))
+		return
+	}
+	go func() {
+		logger.Info(context.Background(), "控制面 TLS 监听已启动", slog.String("listen", address))
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go handle(conn)
+		}
+	}()
 }
 
 func runServer(address string, handler http.Handler, logger *logging.Logger) {

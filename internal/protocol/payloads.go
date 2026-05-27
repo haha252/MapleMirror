@@ -49,3 +49,14 @@ type InventoryItem struct {
 	DigestSHA256 string `json:"digest_sha256"`
 	LocalState   string `json:"local_state"`
 }
+
+type PressureReport struct {
+	ReportID            string    `json:"report_id"`
+	SampledAt           time.Time `json:"sampled_at"`
+	SampleWindowSeconds int64     `json:"sample_window_seconds"`
+	TargetBandwidthBPS  int64     `json:"target_bandwidth_bps"`
+	ActualBandwidthBPS  int64     `json:"actual_bandwidth_bps"`
+	PressureRatio       float64   `json:"pressure_ratio"`
+	ActiveDownloads     int64     `json:"active_downloads"`
+	FreeBytes           int64     `json:"free_bytes"`
+}

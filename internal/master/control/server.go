@@ -42,14 +42,10 @@ func (s ControlServer) Handle(conn net.Conn) {
 		if err != nil {
 			return
 		}
-		if msg.MessageType != protocol.TypeHeartbeat || msg.NodeID != session.NodeID {
+		if msg.NodeID != session.NodeID {
 			return
 		}
-		var hb protocol.Heartbeat
-		if err := json.Unmarshal(msg.Payload, &hb); err != nil {
-			return
-		}
-		result, err := s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
+		result, err := s.handleMessage(session, msg)
 		if err != nil {
 			return
 		}
@@ -59,6 +55,31 @@ func (s ControlServer) Handle(conn net.Conn) {
 			NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
 			Payload: HeartbeatAck(result),
 		})
+	}
+}
+
+func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (HeartbeatResult, error) {
+	switch msg.MessageType {
+	case protocol.TypeHeartbeat:
+		var hb protocol.Heartbeat
+		if err := json.Unmarshal(msg.Payload, &hb); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
+	case protocol.TypeInventoryReport:
+		var report protocol.InventoryReport
+		if err := json.Unmarshal(msg.Payload, &report); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptInventoryReport(context.Background(), session, msg.Sequence, report)
+	case protocol.TypePressureReport:
+		var report protocol.PressureReport
+		if err := json.Unmarshal(msg.Payload, &report); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
+	default:
+		return HeartbeatResult{}, context.Canceled
 	}
 }
 

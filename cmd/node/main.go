@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/controltls"
 	"mirror-server/internal/logging"
+	nodecontrol "mirror-server/internal/node/control"
 	"mirror-server/internal/node/health"
 	"mirror-server/internal/requestid"
 	"mirror-server/internal/storage"
@@ -53,11 +56,33 @@ func main() {
 	}
 	defer database.Close()
 	logger.Info(context.Background(), "下载节点本地状态库迁移已完成")
+	startControlClient(cfg, logger)
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Version: version,
 	}, "X-Request-ID", "X-Request-ID"))
 	runServer(cfg.Server.Listen, mux, logger)
+}
+
+func startControlClient(cfg config.Node, logger *logging.Logger) {
+	if cfg.TLS.CAFile == "" || cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
+		logger.Warn(context.Background(), "节点控制证书材料未配置，控制连接未启动")
+		return
+	}
+	tlsCfg, err := controltls.NodeClient(cfg.TLS.CAFile, cfg.TLS.CertFile, cfg.TLS.KeyFile, cfg.TLS.ServerName)
+	if err != nil {
+		logger.Error(context.Background(), "节点控制 TLS 初始化失败", slog.String("error", err.Error()))
+		return
+	}
+	address, err := url.Parse(cfg.Master.ControlAddress)
+	if err != nil {
+		logger.Error(context.Background(), "主节点控制地址无效", slog.String("error", err.Error()))
+		return
+	}
+	client := nodecontrol.Client{NodeID: cfg.Node.Name, Address: address.Host, TLSConfig: tlsCfg}
+	stop := make(chan struct{})
+	go client.Run(stop)
+	logger.Info(context.Background(), "节点主动控制连接已启动", slog.String("master", address.Host))
 }
 
 func runServer(address string, handler http.Handler, logger *logging.Logger) {

@@ -33,6 +33,17 @@ func (c Client) RunOnce() error {
 	return c.heartbeat(conn, reqID, 2)
 }
 
+func (c Client) Run(stop <-chan struct{}) {
+	for {
+		_ = c.RunOnce()
+		select {
+		case <-stop:
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
 func (c Client) hello(conn net.Conn, reqID string) error {
 	body, _ := json.Marshal(map[string]any{
 		"last_ack_sequence": 0,

@@ -28,6 +28,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/admin/v1/pairing-codes", s.pairingCodes)
 	mux.HandleFunc("/api/admin/v1/pairing-requests", s.pairingRequests)
 	mux.HandleFunc("/api/admin/v1/pairing-requests/", s.pairingRequestByID)
+	mux.HandleFunc("/api/admin/v1/nodes", s.nodes)
+	mux.HandleFunc("/api/admin/v1/nodes/", s.nodeByID)
 	return mux
 }
 
