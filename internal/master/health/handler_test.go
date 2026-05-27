@@ -31,3 +31,19 @@ func TestHealthDoesNotClaimReadyBeforeStorage(t *testing.T) {
 		t.Fatal("健康响应缺少请求 ID")
 	}
 }
+
+func TestHealthIsReadyAfterStorage(t *testing.T) {
+	logger, err := logging.New("master", config.Logging{
+		ConsoleLevel: "error", FileLevel: "error", Directory: t.TempDir(), RetentionDays: 1,
+	}, time.Local, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Close()
+	handler := requestid.Middleware(Handler{Logger: logger, Ready: func() bool { return true }, Version: "test"}, "X-Request-ID", "X-Request-ID")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "基础服务已就绪") {
+		t.Fatal("存储初始化完成后主节点应报告基础就绪")
+	}
+}

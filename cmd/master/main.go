@@ -16,6 +16,7 @@ import (
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/health"
 	"mirror-server/internal/requestid"
+	"mirror-server/internal/storage"
 )
 
 var version = "开发版"
@@ -52,9 +53,16 @@ func main() {
 	for _, item := range warnings {
 		logger.ConfigWarning(item[0], item[1])
 	}
+	database, err := storage.OpenMaster(cfg.Database)
+	if err != nil {
+		logger.Error(context.Background(), "数据库初始化失败，主节点无法就绪", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer database.Close()
+	logger.Info(context.Background(), "主节点数据库迁移已完成")
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
-		Logger: logger, Ready: func() bool { return false }, Version: version,
+		Logger: logger, Ready: func() bool { return true }, Version: version,
 	}, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
 	runServer(cfg.Server.PublicListen, mux, logger)
 }
