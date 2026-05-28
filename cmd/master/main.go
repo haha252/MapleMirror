@@ -22,6 +22,7 @@ import (
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/health"
 	"mirror-server/internal/master/mirrorsync"
+	"mirror-server/internal/master/public"
 	"mirror-server/internal/requestid"
 	"mirror-server/internal/storage"
 )
@@ -76,6 +77,8 @@ func main() {
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Ready: func() bool { return true }, Version: version,
 	}, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
+	mux.Handle("/", requestid.Middleware(public.New(database).Handler(),
+		cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
 	runServer(cfg.Server.PublicListen, mux, logger)
 }
 
