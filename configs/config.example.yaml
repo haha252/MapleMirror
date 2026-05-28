@@ -50,8 +50,8 @@ api_pow:
 
 download_token:
   ttl: "15m"
-  # M4 启用授权前设置为签名密钥文件路径，文件内容不得写入日志。
-  signing_key_file: ""
+  # 主节点和下载节点共享的强随机签名密钥文件，文件内容不得写入日志。
+  signing_key_file: "secrets/download-token.key"
 
 node:
   heartbeat_timeout: "30s"

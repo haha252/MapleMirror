@@ -1,9 +1,9 @@
 # 公开 API
 
-> 状态：待确认，M4 开工前合同
+> 状态：已实现，进入 M5 前评估
 > 版本前缀：`/api/public/v1`
 > 需求基线：`docs/开发要求.md` 定稿 v1.1（2026-05-27）
-> 阶段边界：本文定义 M4 的项目查询、网页 ALTCHA 下载授权、公开 API SHA-256 前导零 PoW、节点绑定令牌、Range 下载和错误格式；M5 前不启用额度扣减、流量入账、统计聚合或 SLA。
+> 阶段边界：本文记录 M4 的项目查询、网页 ALTCHA 下载授权、公开 API SHA-256 前导零 PoW、节点绑定令牌、Range 下载和错误格式；M5 前不启用额度扣减、流量入账、统计聚合或 SLA。
 
 ## 1. 通用原则
 
@@ -339,7 +339,15 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 
 M4 不得把这些占位值解释为真实统计结果。
 
-## 10. 脱敏与兼容
+## 10. M4 实现说明
+
+- 主节点公共接口挂载在 `server.public_listen`。
+- 下载节点文件服务挂载在 `/downloads/{asset_id}`。
+- 主节点和下载节点必须配置同一份 `download_token.signing_key_file` 强随机密钥文件。
+- M4 的 `download_url` 返回节点相对下载路径；部署时可由反向代理转换为实际节点域名。
+- M4 已支持单段 HTTP Range；multipart Range 不作为 M4 必须能力。
+
+## 11. 脱敏与兼容
 
 - 公共 API 响应不得包含节点内部地址、控制端口、证书、磁盘路径、GitHub Token 或完整客户端 IP。
 - 日志不得记录完整 `download_token`、完整 ALTCHA payload、完整 PoW 规范字符串或完整 URL 查询令牌。

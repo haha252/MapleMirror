@@ -178,6 +178,9 @@ func validateMaster(c Master) error {
 	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits <= 0 {
 		return errors.New("公开 API PoW 必须使用 sha256 且前导零位数大于零")
 	}
+	if c.DownloadToken.SigningKeyFile == "" {
+		return errors.New("下载令牌签名密钥文件 download_token.signing_key_file 不得为空")
+	}
 	if c.Admin.TokenEnv == "" || c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
 		return errors.New("管理 API 必须配置令牌环境变量且高风险操作强制 mTLS")
 	}

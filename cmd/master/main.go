@@ -116,22 +116,14 @@ func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, lo
 }
 
 func publicHandler(cfg config.Master, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
-	var signer downloadtoken.Signer
-	var err error
-	if cfg.DownloadToken.SigningKeyFile != "" {
-		signer, err = downloadtoken.NewFromFile(cfg.DownloadToken.SigningKeyFile)
-	} else {
-		signer, err = downloadtoken.NewPersistent(db)
-	}
+	signer, err := downloadtoken.NewFromFile(cfg.DownloadToken.SigningKeyFile)
 	if err != nil {
 		return nil, err
 	}
 	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
-	if cfg.DownloadToken.SigningKeyFile == "" {
-		logger.Warn(context.Background(), "下载令牌签名密钥未配置文件路径，已使用数据库持久化随机密钥")
-	}
+	logger.Info(context.Background(), "公共下载链路已启用")
 	return public.New(db, signer, altchaTTL, apiTTL, tokenTTL, cfg.APIPoW.LeadingZeroBits).Handler(), nil
 }
 
