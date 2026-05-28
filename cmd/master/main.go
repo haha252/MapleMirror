@@ -46,7 +46,8 @@ func main() {
 	if handleLoad(err, "项目清单", &created) {
 		os.Exit(1)
 	}
-	if _, err := config.LoadQuota(*quotaPath, warn); handleLoad(err, "额度配置", &created) {
+	quota, err := config.LoadQuota(*quotaPath, warn)
+	if handleLoad(err, "额度配置", &created) {
 		os.Exit(1)
 	}
 	if created {
@@ -74,7 +75,7 @@ func main() {
 	syncService := startMirrorSync(cfg, projects, database, logger)
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, logger)
-	publicHandler, err := publicHandler(cfg, database, logger)
+	publicHandler, err := publicHandler(cfg, quota, location, database, logger)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -115,7 +116,7 @@ func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, lo
 	return service
 }
 
-func publicHandler(cfg config.Master, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
+func publicHandler(cfg config.Master, quota config.Quota, loc *time.Location, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
 	signer, err := downloadtoken.NewFromFile(cfg.DownloadToken.SigningKeyFile)
 	if err != nil {
 		return nil, err
@@ -124,7 +125,16 @@ func publicHandler(cfg config.Master, db *sql.DB, logger *logging.Logger) (http.
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	logger.Info(context.Background(), "公共下载链路已启用")
-	return public.New(db, signer, altchaTTL, apiTTL, tokenTTL, cfg.APIPoW.LeadingZeroBits).Handler(), nil
+	server := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
+		cfg.APIPoW.LeadingZeroBits, quota, loc)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			_ = server.Store.SampleNodeAvailability(context.Background())
+		}
+	}()
+	return server.Handler(), nil
 }
 
 func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, logger *logging.Logger) {

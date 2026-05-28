@@ -9,7 +9,11 @@ import (
 	"mirror-server/internal/requestid"
 )
 
-type Store struct{ DB *sql.DB }
+type Store struct {
+	DB       *sql.DB
+	Quota    quotaPolicy
+	Location *time.Location
+}
 
 type ProjectSummary struct {
 	ProjectID   string `json:"project_id"`
@@ -36,7 +40,9 @@ type NodeSummary struct {
 	State         string `json:"state"`
 	RoutingReady  bool   `json:"routing_ready"`
 	LastHeartbeat string `json:"last_heartbeat_at,omitempty"`
-	SLAEnabled    bool   `json:"sla_enabled"`
+	SLA24H        string `json:"sla_24h"`
+	SLA7D         string `json:"sla_7d"`
+	SLA30D        string `json:"sla_30d"`
 }
 
 type Challenge struct {
@@ -133,6 +139,9 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 			return nil, err
 		}
 		n.RoutingReady = ready == 1
+		n.SLA24H = s.slaText(ctx, n.NodeID, 24)
+		n.SLA7D = s.slaText(ctx, n.NodeID, 24*7)
+		n.SLA30D = s.slaText(ctx, n.NodeID, 24*30)
 		out = append(out, n)
 	}
 	return out, rows.Err()
@@ -166,51 +175,6 @@ func (s Store) LoadChallenge(ctx context.Context, id string) (Challenge, error) 
 	return c, err
 }
 
-func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string) (IssuedAuthorization, error) {
-	tx, err := s.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return IssuedAuthorization{}, err
-	}
-	defer tx.Rollback()
-	nodeID, size, err := s.routableAssetTx(ctx, tx, c.AssetID)
-	if err != nil {
-		return IssuedAuthorization{}, err
-	}
-	authID, err := requestid.New()
-	if err != nil {
-		return IssuedAuthorization{}, err
-	}
-	expires := expiresAfter(ttl)
-	_, err = tx.ExecContext(ctx, `INSERT INTO download_authorizations
-		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at,
-		max_bytes, range_limit, status, request_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
-		authID, c.AssetID, nodeID, c.ClientPrefixKey, nowText(), expires, size, 4, reqID)
-	if err != nil {
-		return IssuedAuthorization{}, err
-	}
-	result, err := tx.ExecContext(ctx, `UPDATE challenges SET consumed_at = ?
-		WHERE id = ? AND consumed_at IS NULL`, nowText(), c.ID)
-	if err != nil {
-		return IssuedAuthorization{}, err
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return IssuedAuthorization{}, sql.ErrNoRows
-	}
-	claims := downloadtoken.Claims{TokenVersion: "download.v1", AuthorizationID: authID,
-		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
-		ExpiresAt: expires, MaxBytes: size, RangeConcurrencyLimit: 4, RequestID: reqID}
-	return IssuedAuthorization{Claims: claims}, tx.Commit()
-}
-
-func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatus, error) {
-	var out AuthorizationStatus
-	err := s.DB.QueryRowContext(ctx, `SELECT id, asset_id, node_id, status,
-		expires_at FROM download_authorizations WHERE id = ?`, id).
-		Scan(&out.AuthorizationID, &out.AssetID, &out.NodeID, &out.State, &out.ExpiresAt)
-	return out, err
-}
-
 func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {
 	var size int64
 	err := s.DB.QueryRowContext(ctx, `SELECT a.size_bytes FROM assets a
@@ -218,16 +182,4 @@ func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error)
 		JOIN nodes n ON n.id = ni.node_id AND n.routing_ready = 1 AND n.state != 'disabled'
 		WHERE a.id = ? AND a.service_state = 'candidate' LIMIT 1`, assetID).Scan(&size)
 	return size, err
-}
-
-func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (string, int64, error) {
-	var nodeID string
-	var size int64
-	err := tx.QueryRowContext(ctx, `SELECT n.id, a.size_bytes FROM assets a
-		JOIN node_inventory ni ON ni.asset_id = a.id AND ni.state = 'verified'
-		JOIN nodes n ON n.id = ni.node_id AND n.routing_ready = 1 AND n.state != 'disabled'
-		WHERE a.id = ? AND a.service_state = 'candidate'
-		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id LIMIT 1`, assetID).
-		Scan(&nodeID, &size)
-	return nodeID, size, err
 }

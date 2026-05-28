@@ -35,10 +35,20 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 	auth, err := s.Store.IssueAuthorization(r.Context(), loaded, s.TokenTTL, requestID(r))
 	if err != nil {
 		code, stable := http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR"
+		message := "下载授权签发失败"
 		if err == sql.ErrNoRows {
 			code, stable = http.StatusConflict, "NO_ROUTABLE_NODE"
+			message = "当前没有可用下载节点"
 		}
-		writeError(w, r, code, stable, "当前没有可用下载节点")
+		if err == errRequestQuota {
+			code, stable = http.StatusTooManyRequests, "REQUEST_QUOTA_EXHAUSTED"
+			message = "请求额度不足，请稍后再试"
+		}
+		if err == errTrafficLimit {
+			code, stable = http.StatusTooManyRequests, "TRAFFIC_LIMIT_EXCEEDED"
+			message = "今日流量额度不足，请稍后再试"
+		}
+		writeError(w, r, code, stable, message)
 		return
 	}
 	token, err := s.Signer.Sign(auth.Claims)
@@ -71,10 +81,11 @@ func (s Server) authorization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "ASSET_NOT_FOUND", "授权不存在")
 		return
 	}
+	sent, first, _ := s.Store.AuthorizationBytes(r.Context(), id)
 	writeOK(w, r, http.StatusOK, "查询成功", map[string]any{
 		"authorization_id": auth.AuthorizationID, "asset_id": auth.AssetID,
 		"node_id": auth.NodeID, "state": auth.State, "expires_at": auth.ExpiresAt,
-		"bytes_accounting_enabled": false, "sent_bytes": nil,
+		"bytes_accounting_enabled": true, "sent_bytes": sent, "first_transfer_at": first,
 	})
 }
 

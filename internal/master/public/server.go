@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"mirror-server/internal/config"
 	"mirror-server/internal/downloadtoken"
 )
 
@@ -18,8 +19,8 @@ type Server struct {
 	APIZeroBits int
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int) Server {
-	return Server{Store: Store{DB: db}, Signer: signer, ALTCHATTL: altchaTTL,
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location) Server {
+	return Server{Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc}, Signer: signer, ALTCHATTL: altchaTTL,
 		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits}
 }
 
