@@ -414,3 +414,40 @@ M5 后节点状态页展示公开节点名称、公开状态、同步就绪、�
 ### 12.5 M4 令牌兼容
 
 M5 上线前已签发且未过期的 M4 下载令牌仍按签名、节点、资产、客户端前缀和过期时间校验。若该授权缺少 M5 流量预留，主节点在首次流量事件入账时走兼容路径补建或标记旧授权预留；已真实发送的字节必须入账，后续超限请求可拒绝或撤销。
+
+## 13. M6 最终对外字段和安全边界
+
+M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段必须保持向后兼容；删除或重命名前必须先更新本文并经过阶段确认。
+
+### 13.1 最终对外字段
+
+| 接口或页面 | 可公开字段 |
+| --- | --- |
+| 项目列表 | `project_id`、`repository`、`display_name`、`available` |
+| 项目资产 | `asset_id`、`version`、`prerelease`、`file_name`、`architecture`、`size_bytes`、`digest_sha256`、`available`、`unavailable_reason` |
+| ALTCHA 挑战 | `challenge_id`、ALTCHA 组件字段、`expires_at` |
+| API PoW 挑战 | `challenge_id`、`asset_id`、`nonce_seed`、`algorithm`、`leading_zero_bits`、`expires_at`、`canonical_format` |
+| 授权领取 | `authorization_id`、`download_url`、`download_token`、`expires_at`、`range_concurrency_limit`、`max_bytes` |
+| 授权查询 | `authorization_id`、`asset_id`、脱敏节点标识、`state`、`expires_at`、`bytes_accounting_enabled`、`sent_bytes`、`first_transfer_at` |
+| 统计页面 | 下载授权次数、开始传输授权数、当日真实流量、累计真实流量、项目聚合统计、统计时区、最近更新时间 |
+| 节点状态页面 | 公开节点名、公开状态、同步就绪、最近更新时间、负载分档、24h/7d/30d SLA、样本不足提示 |
+
+### 13.2 仍不得公开的内部字段
+
+- 管理令牌、下载令牌签名密钥、配对码明文、证书私钥、完整 CSR 或证书正文。
+- 完整客户端 IP、完整客户端网段、额度桶精确余额、黑名单和豁免规则明细。
+- 节点内部地址、控制端口、管理监听地址、本地磁盘路径、临时文件路径。
+- GitHub Token、源站敏感请求头、同步任务内部错误全文。
+- 单个流量事件完整明细、完整请求 URL 查询令牌、可绕过挑战的 PoW 或 ALTCHA 内部材料。
+
+### 13.3 M6 安全和负载验收
+
+| 用例 | 公开 API 通过标准 |
+| --- | --- |
+| 伪造代理头 | 非受信代理来源不能改变客户端前缀 |
+| 伪造令牌 | 签名或声明篡改后下载失败 |
+| 跨节点复用 | 绑定节点不一致时下载失败 |
+| 跨资产复用 | 请求资产与令牌资产不一致时下载失败 |
+| 跨客户端前缀复用 | 客户端前缀变化时授权提交或节点下载失败 |
+| 并发授权 | 同一地址和网段额度不透支，错误使用 `REQUEST_QUOTA_EXHAUSTED` 或 `TRAFFIC_LIMIT_EXCEEDED` |
+| Range 下载 | 同一令牌多段 Range 不增加下载授权次数，真实字节按事件入账 |
