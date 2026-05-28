@@ -16,8 +16,10 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
+	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
 	nodecontrol "mirror-server/internal/node/control"
+	"mirror-server/internal/node/files"
 	"mirror-server/internal/node/health"
 	"mirror-server/internal/node/syncer"
 	"mirror-server/internal/requestid"
@@ -64,7 +66,24 @@ func main() {
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Version: version,
 	}, "X-Request-ID", "X-Request-ID"))
+	if handler := fileHandler(cfg, database, logger); handler != nil {
+		mux.Handle("/downloads/", requestid.Middleware(handler, "X-Request-ID", "X-Request-ID"))
+	}
 	runServer(cfg.Server.Listen, mux, logger)
+}
+
+func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger) http.Handler {
+	signer, err := downloadtoken.NewFromFile(cfg.Download.SigningKeyFile)
+	if err != nil {
+		logger.Error(context.Background(), "下载令牌签名密钥加载失败，文件服务未启动", slog.String("error", err.Error()))
+		return nil
+	}
+	nodeID, err := (nodecontrol.IdentityStore{DB: db}).NodeID()
+	if err != nil {
+		logger.Warn(context.Background(), "节点身份尚未登记，文件服务未启动")
+		return nil
+	}
+	return &files.Handler{DB: db, Storage: cfg.Storage.Directory, NodeID: nodeID, Signer: signer}
 }
 
 func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {

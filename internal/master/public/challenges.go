@@ -1,10 +1,8 @@
 package public
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -92,9 +90,7 @@ func (s Server) apiAuthorize(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) altchaPayload(c Challenge) altchaPayload {
 	salt := randomText(12)
-	mac := hmac.New(sha256.New, s.Signer.key)
-	_, _ = mac.Write([]byte(c.Nonce + ":" + salt))
-	return altchaPayload{Challenge: c.Nonce, Salt: salt, Signature: base64.RawURLEncoding.EncodeToString(mac.Sum(nil))}
+	return altchaPayload{Challenge: c.Nonce, Salt: salt, Signature: s.Signer.Signature(c.Nonce + ":" + salt)}
 }
 
 func validLeadingZeros(c Challenge, solution string) bool {

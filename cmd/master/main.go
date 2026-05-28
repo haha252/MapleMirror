@@ -17,6 +17,7 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
+	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/admin"
 	mastercontrol "mirror-server/internal/master/control"
@@ -115,7 +116,13 @@ func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, lo
 }
 
 func publicHandler(cfg config.Master, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
-	signer, err := public.NewTokenSigner(db, cfg.DownloadToken.SigningKeyFile)
+	var signer downloadtoken.Signer
+	var err error
+	if cfg.DownloadToken.SigningKeyFile != "" {
+		signer, err = downloadtoken.NewFromFile(cfg.DownloadToken.SigningKeyFile)
+	} else {
+		signer, err = downloadtoken.NewPersistent(db)
+	}
 	if err != nil {
 		return nil, err
 	}

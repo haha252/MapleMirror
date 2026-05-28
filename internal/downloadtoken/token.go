@@ -1,4 +1,4 @@
-package public
+package downloadtoken
 
 import (
 	"crypto/hmac"
@@ -13,11 +13,11 @@ import (
 	"time"
 )
 
-type TokenSigner struct {
+type Signer struct {
 	key []byte
 }
 
-type DownloadClaims struct {
+type Claims struct {
 	TokenVersion          string `json:"token_version"`
 	AuthorizationID       string `json:"authorization_id"`
 	AssetID               string `json:"asset_id"`
@@ -29,46 +29,40 @@ type DownloadClaims struct {
 	RequestID             string `json:"request_id"`
 }
 
-func NewTokenSigner(db *sql.DB, keyFile string) (TokenSigner, error) {
-	if keyFile != "" {
-		data, err := os.ReadFile(keyFile)
-		if err != nil {
-			return TokenSigner{}, err
-		}
-		key := []byte(strings.TrimSpace(string(data)))
-		if len(key) < 32 {
-			return TokenSigner{}, errors.New("下载令牌签名密钥长度不足")
-		}
-		return TokenSigner{key: key}, nil
-	}
-	key, err := persistedKey(db)
+func NewFromFile(path string) (Signer, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return TokenSigner{}, err
+		return Signer{}, err
 	}
-	return TokenSigner{key: key}, nil
+	key := []byte(strings.TrimSpace(string(data)))
+	if len(key) < 32 {
+		return Signer{}, errors.New("下载令牌签名密钥长度不足")
+	}
+	return Signer{key: key}, nil
 }
 
-func persistedKey(db *sql.DB) ([]byte, error) {
+func NewPersistent(db *sql.DB) (Signer, error) {
 	const name = "download_token_signing_key"
 	var value string
 	err := db.QueryRow(`SELECT value FROM runtime_kv WHERE key = ?`, name).Scan(&value)
 	if err == nil {
-		return base64.RawStdEncoding.DecodeString(value)
+		key, err := base64.RawStdEncoding.DecodeString(value)
+		return Signer{key: key}, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
+		return Signer{}, err
 	}
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
-		return nil, err
+		return Signer{}, err
 	}
 	value = base64.RawStdEncoding.EncodeToString(key)
 	_, err = db.Exec(`INSERT INTO runtime_kv(key, value, updated_at) VALUES (?, ?, ?)`,
-		name, value, nowText())
-	return key, err
+		name, value, time.Now().UTC().Format(time.RFC3339Nano))
+	return Signer{key: key}, err
 }
 
-func (s TokenSigner) Sign(claims DownloadClaims) (string, error) {
+func (s Signer) Sign(claims Claims) (string, error) {
 	body, err := json.Marshal(claims)
 	if err != nil {
 		return "", err
@@ -80,17 +74,22 @@ func (s TokenSigner) Sign(claims DownloadClaims) (string, error) {
 	return payload + "." + sig, nil
 }
 
-func (s TokenSigner) Verify(token string) (DownloadClaims, error) {
-	var out DownloadClaims
+func (s Signer) Signature(message string) string {
+	mac := hmac.New(sha256.New, s.key)
+	_, _ = mac.Write([]byte(message))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (s Signer) Verify(token string) (Claims, error) {
+	var out Claims
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return out, errors.New("令牌格式不合法")
 	}
 	mac := hmac.New(sha256.New, s.key)
 	_, _ = mac.Write([]byte(parts[0]))
-	want := mac.Sum(nil)
 	got, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || !hmac.Equal(got, want) {
+	if err != nil || !hmac.Equal(got, mac.Sum(nil)) {
 		return out, errors.New("令牌签名不合法")
 	}
 	body, err := base64.RawURLEncoding.DecodeString(parts[0])

@@ -25,6 +25,10 @@ sync:
   max_workers: 2
   bandwidth_limit: "0"
 
+download_token:
+  # 与主节点 download_token.signing_key_file 指向同一份强随机签名密钥。
+  signing_key_file: "secrets/download-token.key"
+
 logging:
   console_level: "info"
   file_level: "info"

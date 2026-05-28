@@ -5,18 +5,20 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"mirror-server/internal/downloadtoken"
 )
 
 type Server struct {
 	Store       Store
-	Signer      TokenSigner
+	Signer      downloadtoken.Signer
 	ALTCHATTL   time.Duration
 	APITTL      time.Duration
 	TokenTTL    time.Duration
 	APIZeroBits int
 }
 
-func New(db *sql.DB, signer TokenSigner, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int) Server {
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int) Server {
 	return Server{Store: Store{DB: db}, Signer: signer, ALTCHATTL: altchaTTL,
 		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits}
 }

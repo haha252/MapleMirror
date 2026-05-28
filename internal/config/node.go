@@ -12,6 +12,7 @@ type Node struct {
 	Storage   NodeStorage  `yaml:"storage"`
 	Bandwidth Bandwidth    `yaml:"bandwidth"`
 	Sync      Sync         `yaml:"sync"`
+	Download  NodeDownload `yaml:"download_token"`
 	Logging   Logging      `yaml:"logging"`
 	Pairing   Pairing      `yaml:"pairing"`
 	TLS       TLS          `yaml:"tls"`
@@ -39,6 +40,9 @@ type Bandwidth struct {
 type Sync struct {
 	MaxWorkers     int    `yaml:"max_workers"`
 	BandwidthLimit string `yaml:"bandwidth_limit"`
+}
+type NodeDownload struct {
+	SigningKeyFile string `yaml:"signing_key_file"`
 }
 type Pairing struct {
 	CredentialFile string `yaml:"credential_file"`
@@ -87,6 +91,9 @@ func validateNode(c Node) error {
 	}
 	if c.Storage.Directory == "" || c.Storage.TempDirectory == "" || c.Storage.StateDB == "" {
 		return errors.New("节点存储目录和本地状态库路径不得为空")
+	}
+	if c.Download.SigningKeyFile == "" {
+		return errors.New("节点配置 download_token.signing_key_file 不得为空")
 	}
 	if c.Bandwidth.Target == "" || c.Sync.MaxWorkers <= 0 {
 		return errors.New("节点目标带宽不得为空且同步线程数必须大于零")

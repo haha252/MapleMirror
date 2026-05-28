@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/requestid"
 )
 
@@ -49,7 +50,7 @@ type Challenge struct {
 }
 
 type IssuedAuthorization struct {
-	Claims DownloadClaims
+	Claims downloadtoken.Claims
 }
 
 type AuthorizationStatus struct {
@@ -196,7 +197,7 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 	if n, _ := result.RowsAffected(); n == 0 {
 		return IssuedAuthorization{}, sql.ErrNoRows
 	}
-	claims := DownloadClaims{TokenVersion: "download.v1", AuthorizationID: authID,
+	claims := downloadtoken.Claims{TokenVersion: "download.v1", AuthorizationID: authID,
 		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
 		ExpiresAt: expires, MaxBytes: size, RangeConcurrencyLimit: 4, RequestID: reqID}
 	return IssuedAuthorization{Claims: claims}, tx.Commit()
