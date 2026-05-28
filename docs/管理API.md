@@ -483,3 +483,71 @@ M4 不要求新增管理 API 路由。现有 M3 管理 API 可继续用于确认
 | 从管理 API 直接返回公共下载令牌 | 不提供 |
 
 若 M4 实现过程中确需增加只读排障接口，必须继续挂载在管理监听器，遵守管理网络、Bearer 令牌、高风险 mTLS 分级、中文错误、请求 ID 和日志脱敏要求，并先更新本文。
+
+## 13. M5 统计与 SLA 管理接口
+
+M5 可新增统计和流量排障管理接口。所有接口仍只挂载在管理监听器，继续要求管理网络来源和 Bearer 管理令牌；改变节点状态、撤销授权或重置统计修复任务的操作若后续增加，必须按高风险操作叠加管理员 mTLS 并先更新本文。
+
+### 13.1 统计总览
+
+`GET /api/admin/v1/stats/overview`
+
+鉴权：普通管理查询。
+
+响应数据：
+
+| 字段 | 含义 |
+| --- | --- |
+| `stat_day` | 当前统计日 |
+| `timezone` | 统计时区 |
+| `authorization_count` | 当日下载授权次数 |
+| `transfer_started_count` | 当日开始传输授权数 |
+| `daily_sent_bytes` | 当日真实发送字节 |
+| `total_sent_bytes` | 累计真实发送字节 |
+| `updated_at` | 最近聚合更新时间 |
+
+### 13.2 项目统计
+
+`GET /api/admin/v1/stats/projects?day=YYYY-MM-DD`
+
+鉴权：普通管理查询。
+
+输出按项目聚合的授权次数、开始传输授权数和真实发送字节。下载倍率只影响请求额度扣减，不影响 `sent_bytes`。
+
+### 13.3 节点 SLA
+
+`GET /api/admin/v1/nodes/{node_id}/sla`
+
+鉴权：普通管理查询。
+
+响应数据：
+
+| 字段 | 含义 |
+| --- | --- |
+| `node_id` | 节点标识 |
+| `window` | `24h`、`7d` 或 `30d` |
+| `availability_ratio` | 可用样本比例 |
+| `sample_count` | 样本数 |
+| `insufficient_samples` | 样本不足标记 |
+
+SLA 只基于主节点采集的 `routing_ready` 和心跳状态样本，不接受节点自报为最终 SLA。
+
+### 13.4 授权排障
+
+`GET /api/admin/v1/authorizations/{authorization_id}`
+
+鉴权：普通管理查询。
+
+可返回授权状态、资产 ID、节点 ID、脱敏客户端前缀、签发请求 ID、已入账字节、`first_transfer_at` 和过期时间。不得返回完整下载令牌、完整客户端 IP 或可绕过验证的挑战材料。
+
+### 13.5 流量事件排障
+
+`GET /api/admin/v1/traffic/events?authorization_id=...`
+
+鉴权：普通管理查询。
+
+只返回脱敏事件摘要：节点 ID、事件序号、节点请求 ID、主节点授权请求 ID、发送字节、状态和入账时间。不得返回完整 IP、下载令牌、节点本地路径或控制面凭据。
+
+### 13.6 审计与脱敏
+
+M5 新增的统计查询通常不写状态审计，但异常查询、人工修复或未来撤销授权操作必须写 `admin_audit_events`。审计摘要只记录资源 ID、请求 ID、结果和中文原因，不记录完整令牌、完整 IP、管理令牌、证书正文或本地路径。
