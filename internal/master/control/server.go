@@ -55,6 +55,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 			NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
 			Payload: HeartbeatAck(result),
 		})
+		s.writeNextTask(conn, session, reqID)
 	}
 }
 
@@ -78,9 +79,30 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (He
 			return HeartbeatResult{}, err
 		}
 		return s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
+	case protocol.TypeSyncTaskAck:
+		return HeartbeatResult{AcceptedSequence: msg.Sequence, ManagedState: "syncing"}, nil
+	case protocol.TypeSyncTaskResult:
+		var result protocol.SyncTaskResult
+		if err := json.Unmarshal(msg.Payload, &result); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
 	default:
 		return HeartbeatResult{}, context.Canceled
 	}
+}
+
+func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID string) {
+	task, ok, err := s.Repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || !ok {
+		return
+	}
+	body, _ := json.Marshal(task)
+	_ = protocol.WriteFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: task.TaskID,
+		MessageType: protocol.TypeSyncTask, SentAt: time.Now().UTC(),
+		NodeID: session.NodeID, RequestID: reqID, Payload: body,
+	})
 }
 
 func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) bool {

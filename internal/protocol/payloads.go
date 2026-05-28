@@ -79,3 +79,33 @@ type PressureReport struct {
 	ActiveDownloads     int64     `json:"active_downloads"`
 	FreeBytes           int64     `json:"free_bytes"`
 }
+
+type SyncAsset struct {
+	AssetID      string `json:"asset_id"`
+	FileName     string `json:"file_name"`
+	SizeBytes    int64  `json:"size_bytes"`
+	DownloadURL  string `json:"download_url"`
+	DigestSHA256 string `json:"digest_sha256"`
+}
+
+type SyncTask struct {
+	TaskID            string    `json:"task_id"`
+	TaskType          string    `json:"task_type"`
+	Asset             SyncAsset `json:"asset"`
+	RetryAfterSeconds int       `json:"retry_after_seconds"`
+}
+
+type SyncTaskAck struct {
+	TaskID  string `json:"task_id"`
+	State   string `json:"state"`
+	Message string `json:"message,omitempty"`
+}
+
+type SyncTaskResult struct {
+	TaskID            string `json:"task_id"`
+	AssetID           string `json:"asset_id"`
+	Result            string `json:"result"`
+	LocalDigestSHA256 string `json:"local_digest_sha256,omitempty"`
+	SizeBytes         int64  `json:"size_bytes,omitempty"`
+	Message           string `json:"message,omitempty"`
+}

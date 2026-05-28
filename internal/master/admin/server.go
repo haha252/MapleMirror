@@ -1,11 +1,13 @@
 package admin
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/json"
 	"net/http"
 
 	"mirror-server/internal/master/control"
+	"mirror-server/internal/master/mirrorsync"
 	"mirror-server/internal/requestid"
 )
 
@@ -13,6 +15,10 @@ type Server struct {
 	Auth   Auth
 	Repo   control.Repository
 	Signer func(*x509.CertificateRequest) (control.SignedCertificate, error)
+	Sync   interface {
+		Trigger(context.Context, string, string) (string, error)
+	}
+	SyncStore mirrorsync.Store
 }
 
 type response struct {
@@ -31,6 +37,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/admin/v1/pairing-requests/", s.pairingRequestByID)
 	mux.HandleFunc("/api/admin/v1/nodes", s.nodes)
 	mux.HandleFunc("/api/admin/v1/nodes/", s.nodeByID)
+	mux.HandleFunc("/api/admin/v1/sync/scans", s.syncScans)
+	mux.HandleFunc("/api/admin/v1/sync/scans/latest", s.syncScans)
 	return mux
 }
 

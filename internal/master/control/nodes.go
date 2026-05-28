@@ -27,7 +27,7 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State, &ready, &item.LastHeartbeat); err != nil {
 			return nil, err
 		}
-		item.RoutingReady = false
+		item.RoutingReady = ready == 1
 		items = append(items, item)
 	}
 	return items, rows.Err()

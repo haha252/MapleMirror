@@ -12,6 +12,12 @@ const (
 	TypeHeartbeatAck      = "heartbeat_ack"
 	TypeInventoryReport   = "inventory_report"
 	TypePressureReport    = "pressure_report"
+	TypeSyncTask          = "sync_task"
+	TypeSyncTaskAck       = "sync_task_ack"
+	TypeSyncTaskProgress  = "sync_task_progress"
+	TypeSyncTaskResult    = "sync_task_result"
+	TypeReconcileRequest  = "inventory_reconcile_request"
+	TypeReconcileResult   = "inventory_reconcile_result"
 	TypeNodeDisabled      = "node_disabled"
 	TypeCertificateReject = "certificate_rejected"
 	TypeProtocolError     = "protocol_error"
@@ -26,6 +32,9 @@ var controlTypes = map[string]bool{
 	TypeHello: true, TypeWelcome: true, TypeHeartbeat: true,
 	TypeHeartbeatAck: true, TypeInventoryReport: true,
 	TypePressureReport: true, TypeNodeDisabled: true,
+	TypeSyncTask: true, TypeSyncTaskAck: true,
+	TypeSyncTaskProgress: true, TypeSyncTaskResult: true,
+	TypeReconcileRequest: true, TypeReconcileResult: true,
 	TypeCertificateReject: true, TypeProtocolError: true,
 }
 

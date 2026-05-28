@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"net"
@@ -15,6 +16,9 @@ type Client struct {
 	Address           string
 	TLSConfig         *tls.Config
 	HeartbeatInterval time.Duration
+	Executor          interface {
+		Execute(context.Context, protocol.SyncTask) protocol.SyncTaskResult
+	}
 }
 
 func (c Client) RunOnce() error {
@@ -30,7 +34,10 @@ func (c Client) RunOnce() error {
 	if _, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes); err != nil {
 		return err
 	}
-	return c.heartbeat(conn, reqID, 2)
+	if err := c.heartbeat(conn, reqID, 2); err != nil {
+		return err
+	}
+	return c.readOptionalTask(conn, reqID, 3)
 }
 
 func (c Client) Run(stop <-chan struct{}) {
@@ -65,6 +72,40 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 	if err := protocol.WriteFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: protocol.TypeHeartbeat, SentAt: time.Now().UTC(),
+		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
+	}); err != nil {
+		return err
+	}
+	_, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	return err
+}
+
+func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) error {
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	_ = conn.SetReadDeadline(time.Time{})
+	if err != nil || msg.MessageType != protocol.TypeSyncTask {
+		return nil
+	}
+	var task protocol.SyncTask
+	if err := json.Unmarshal(msg.Payload, &task); err != nil {
+		return err
+	}
+	if c.Executor == nil {
+		return c.sendTaskResult(conn, reqID, sequence, protocol.SyncTaskResult{
+			TaskID: task.TaskID, AssetID: task.Asset.AssetID,
+			Result: "temporary_error", Message: "节点同步执行器未启用",
+		})
+	}
+	result := c.Executor.Execute(context.Background(), task)
+	return c.sendTaskResult(conn, reqID, sequence, result)
+}
+
+func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64, result protocol.SyncTaskResult) error {
+	body, _ := json.Marshal(result)
+	if err := protocol.WriteFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-result",
+		MessageType: protocol.TypeSyncTaskResult, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return err

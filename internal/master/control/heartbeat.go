@@ -36,7 +36,7 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		return HeartbeatResult{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
-		last_heartbeat_at = ?, routing_ready = 0, updated_at = ? WHERE id = ?`,
+		last_heartbeat_at = ?, updated_at = ? WHERE id = ?`,
 		now, now, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
@@ -66,7 +66,7 @@ func HeartbeatAck(result HeartbeatResult) json.RawMessage {
 		"accepted_sequence": result.AcceptedSequence,
 		"server_time":       time.Now().UTC(),
 		"managed_state":     result.ManagedState,
-		"routing_ready":     false,
+		"routing_ready":     result.ManagedState == "ready",
 	})
 	return body
 }

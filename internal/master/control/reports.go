@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -34,9 +35,48 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
+	for _, item := range report.Items {
+		if err := acceptInventoryItem(ctx, tx, session.NodeID, item, now); err != nil {
+			return HeartbeatResult{}, err
+		}
+	}
+	if report.Complete {
+		if err := reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
+			return HeartbeatResult{}, err
+		}
+	}
 	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET
 		last_message_sequence = ? WHERE id = ?`, seq, session.ID)
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
+}
+
+func acceptInventoryItem(ctx context.Context, tx interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, nodeID string, item protocol.InventoryItem, now string) error {
+	var expectedDigest string
+	var expectedSize int64
+	err := tx.QueryRowContext(ctx, `SELECT digest_sha256, size_bytes FROM assets
+		WHERE id = ?`, item.AssetID).Scan(&expectedDigest, &expectedSize)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	state := "verified"
+	if item.DigestSHA256 != expectedDigest || item.SizeBytes != expectedSize {
+		state = "mismatch"
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO node_inventory
+		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(node_id, asset_id) DO UPDATE SET
+		local_digest_sha256 = excluded.local_digest_sha256,
+		size_bytes = excluded.size_bytes, verified_at = excluded.verified_at,
+		state = excluded.state`,
+		nodeID, item.AssetID, item.DigestSHA256, item.SizeBytes, now, state)
+	return err
 }
 
 func (r Repository) AcceptPressureReport(ctx context.Context, session Session, seq uint64, report protocol.PressureReport) (HeartbeatResult, error) {
@@ -82,7 +122,7 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
-		last_heartbeat_at = ?, routing_ready = 0, updated_at = ? WHERE id = ?`,
+		last_heartbeat_at = ?, updated_at = ? WHERE id = ?`,
 		now, now, session.NodeID)
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
 }

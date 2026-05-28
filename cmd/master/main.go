@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"mirror-server/internal/master/admin"
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/health"
+	"mirror-server/internal/master/mirrorsync"
 	"mirror-server/internal/requestid"
 	"mirror-server/internal/storage"
 )
@@ -38,7 +40,8 @@ func main() {
 	if handleLoad(err, "主节点配置", &created) {
 		os.Exit(1)
 	}
-	if _, err := config.LoadProjects(*projectsPath, warn); handleLoad(err, "项目清单", &created) {
+	projects, err := config.LoadProjects(*projectsPath, warn)
+	if handleLoad(err, "项目清单", &created) {
 		os.Exit(1)
 	}
 	if _, err := config.LoadQuota(*quotaPath, warn); handleLoad(err, "额度配置", &created) {
@@ -66,8 +69,9 @@ func main() {
 	defer database.Close()
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
 	repo := mastercontrol.Repository{DB: database}
+	syncService := startMirrorSync(cfg, projects, database, logger)
 	startControlServices(cfg, repo, logger)
-	startAdminService(cfg, repo, logger)
+	startAdminService(cfg, repo, syncService, logger)
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Ready: func() bool { return true }, Version: version,
@@ -87,7 +91,23 @@ func handleLoad(err error, name string, created *bool) bool {
 	return false
 }
 
-func startAdminService(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {
+func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, logger *logging.Logger) mirrorsync.Service {
+	interval, _ := time.ParseDuration(cfg.Scan.Interval)
+	token := ""
+	if cfg.Scan.GitHubTokenEnv != "" {
+		token = os.Getenv(cfg.Scan.GitHubTokenEnv)
+	}
+	store := mirrorsync.Store{DB: db}
+	service := mirrorsync.Service{Scanner: mirrorsync.Scanner{
+		Store: store, GitHub: mirrorsync.HTTPGitHubClient{Token: token},
+	}, Projects: projects, Interval: interval, Logger: logger}
+	ctx := context.Background()
+	go service.Run(ctx)
+	logger.Info(ctx, "Release 扫描调度已启动", slog.String("interval", cfg.Scan.Interval))
+	return service
+}
+
+func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, logger *logging.Logger) {
 	if cfg.Admin.TLS.CertFile == "" || cfg.Admin.TLS.KeyFile == "" {
 		logger.Warn(context.Background(), "管理 API TLS 材料未配置，管理服务未启动")
 		return
@@ -107,7 +127,8 @@ func startAdminService(cfg config.Master, repo mastercontrol.Repository, logger 
 		logger.Error(context.Background(), "节点证书签发器初始化失败", slog.String("error", err.Error()))
 		return
 	}
-	handler := requestid.Middleware(admin.Server{Auth: auth, Repo: repo, Signer: loaded.Sign}.Handler(),
+	handler := requestid.Middleware(admin.Server{Auth: auth, Repo: repo, Signer: loaded.Sign,
+		Sync: syncService, SyncStore: syncService.Scanner.Store}.Handler(),
 		cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader)
 	tlsCfg, err := controltls.AdminServer(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile, cfg.Admin.TLS.ClientCAFile)
 	if err != nil {

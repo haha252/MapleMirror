@@ -38,6 +38,10 @@ func (s Server) nodeByID(w http.ResponseWriter, r *http.Request) {
 		s.enableNode(w, r, nodeID)
 	case r.Method == http.MethodPost && action == "sync-reset":
 		s.syncReset(w, r, nodeID)
+	case r.Method == http.MethodGet && action == "sync-status":
+		s.syncStatus(w, r, nodeID)
+	case r.Method == http.MethodPost && strings.HasPrefix(action, "sync-tasks/"):
+		s.syncTaskAction(w, r, nodeID, action)
 	case r.Method == http.MethodPost && action == "certificates/rotate":
 		s.rotateCertificate(w, r, nodeID)
 	case r.Method == http.MethodGet && strings.HasSuffix(action, "latest"):
