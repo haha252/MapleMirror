@@ -3,6 +3,9 @@ package public
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	"mirror-server/internal/requestid"
 )
 
 type Store struct{ DB *sql.DB }
@@ -33,6 +36,28 @@ type NodeSummary struct {
 	RoutingReady  bool   `json:"routing_ready"`
 	LastHeartbeat string `json:"last_heartbeat_at,omitempty"`
 	SLAEnabled    bool   `json:"sla_enabled"`
+}
+
+type Challenge struct {
+	ID              string
+	Kind            string
+	AssetID         string
+	ClientPrefixKey string
+	Nonce           string
+	Difficulty      int
+	ExpiresAt       string
+}
+
+type IssuedAuthorization struct {
+	Claims DownloadClaims
+}
+
+type AuthorizationStatus struct {
+	AuthorizationID string
+	AssetID         string
+	NodeID          string
+	State           string
+	ExpiresAt       string
 }
 
 func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
@@ -110,4 +135,98 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 		out = append(out, n)
 	}
 	return out, rows.Err()
+}
+
+func (s Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, requestID string) (Challenge, error) {
+	if _, err := s.routableAsset(ctx, assetID); err != nil {
+		return Challenge{}, err
+	}
+	id, err := requestid.New()
+	if err != nil {
+		return Challenge{}, err
+	}
+	c := Challenge{ID: id, Kind: kind, AssetID: assetID, ClientPrefixKey: prefix,
+		Nonce: randomText(16), Difficulty: difficulty, ExpiresAt: expiresAfter(ttl)}
+	_, err = s.DB.ExecContext(ctx, `INSERT INTO challenges
+		(id, kind, asset_id, client_prefix_key, nonce_hash, difficulty,
+		expires_at, request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.ID, c.Kind, c.AssetID, c.ClientPrefixKey, c.Nonce,
+		c.Difficulty, c.ExpiresAt, requestID)
+	return c, err
+}
+
+func (s Store) LoadChallenge(ctx context.Context, id string) (Challenge, error) {
+	var c Challenge
+	err := s.DB.QueryRowContext(ctx, `SELECT id, kind, asset_id,
+		client_prefix_key, nonce_hash, COALESCE(difficulty, 0), expires_at
+		FROM challenges WHERE id = ? AND consumed_at IS NULL AND expires_at > ?`,
+		id, nowText()).Scan(&c.ID, &c.Kind, &c.AssetID, &c.ClientPrefixKey,
+		&c.Nonce, &c.Difficulty, &c.ExpiresAt)
+	return c, err
+}
+
+func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string) (IssuedAuthorization, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return IssuedAuthorization{}, err
+	}
+	defer tx.Rollback()
+	nodeID, size, err := s.routableAssetTx(ctx, tx, c.AssetID)
+	if err != nil {
+		return IssuedAuthorization{}, err
+	}
+	authID, err := requestid.New()
+	if err != nil {
+		return IssuedAuthorization{}, err
+	}
+	expires := expiresAfter(ttl)
+	_, err = tx.ExecContext(ctx, `INSERT INTO download_authorizations
+		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at,
+		max_bytes, range_limit, status, request_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
+		authID, c.AssetID, nodeID, c.ClientPrefixKey, nowText(), expires, size, 4, reqID)
+	if err != nil {
+		return IssuedAuthorization{}, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE challenges SET consumed_at = ?
+		WHERE id = ? AND consumed_at IS NULL`, nowText(), c.ID)
+	if err != nil {
+		return IssuedAuthorization{}, err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return IssuedAuthorization{}, sql.ErrNoRows
+	}
+	claims := DownloadClaims{TokenVersion: "download.v1", AuthorizationID: authID,
+		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
+		ExpiresAt: expires, MaxBytes: size, RangeConcurrencyLimit: 4, RequestID: reqID}
+	return IssuedAuthorization{Claims: claims}, tx.Commit()
+}
+
+func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatus, error) {
+	var out AuthorizationStatus
+	err := s.DB.QueryRowContext(ctx, `SELECT id, asset_id, node_id, status,
+		expires_at FROM download_authorizations WHERE id = ?`, id).
+		Scan(&out.AuthorizationID, &out.AssetID, &out.NodeID, &out.State, &out.ExpiresAt)
+	return out, err
+}
+
+func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {
+	var size int64
+	err := s.DB.QueryRowContext(ctx, `SELECT a.size_bytes FROM assets a
+		JOIN node_inventory ni ON ni.asset_id = a.id AND ni.state = 'verified'
+		JOIN nodes n ON n.id = ni.node_id AND n.routing_ready = 1 AND n.state != 'disabled'
+		WHERE a.id = ? AND a.service_state = 'candidate' LIMIT 1`, assetID).Scan(&size)
+	return size, err
+}
+
+func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (string, int64, error) {
+	var nodeID string
+	var size int64
+	err := tx.QueryRowContext(ctx, `SELECT n.id, a.size_bytes FROM assets a
+		JOIN node_inventory ni ON ni.asset_id = a.id AND ni.state = 'verified'
+		JOIN nodes n ON n.id = ni.node_id AND n.routing_ready = 1 AND n.state != 'disabled'
+		WHERE a.id = ? AND a.service_state = 'candidate'
+		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id LIMIT 1`, assetID).
+		Scan(&nodeID, &size)
+	return nodeID, size, err
 }

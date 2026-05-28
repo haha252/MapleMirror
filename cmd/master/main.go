@@ -73,12 +73,16 @@ func main() {
 	syncService := startMirrorSync(cfg, projects, database, logger)
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, logger)
+	publicHandler, err := publicHandler(cfg, database, logger)
+	if err != nil {
+		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Ready: func() bool { return true }, Version: version,
 	}, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
-	mux.Handle("/", requestid.Middleware(public.New(database).Handler(),
-		cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
+	mux.Handle("/", requestid.Middleware(publicHandler, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
 	runServer(cfg.Server.PublicListen, mux, logger)
 }
 
@@ -108,6 +112,20 @@ func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, lo
 	go service.Run(ctx)
 	logger.Info(ctx, "Release 扫描调度已启动", slog.String("interval", cfg.Scan.Interval))
 	return service
+}
+
+func publicHandler(cfg config.Master, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
+	signer, err := public.NewTokenSigner(db, cfg.DownloadToken.SigningKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
+	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
+	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
+	if cfg.DownloadToken.SigningKeyFile == "" {
+		logger.Warn(context.Background(), "下载令牌签名密钥未配置文件路径，已使用数据库持久化随机密钥")
+	}
+	return public.New(db, signer, altchaTTL, apiTTL, tokenTTL, cfg.APIPoW.LeadingZeroBits).Handler(), nil
 }
 
 func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, logger *logging.Logger) {

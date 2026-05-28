@@ -4,14 +4,21 @@ import (
 	"database/sql"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Server struct {
-	Store Store
+	Store       Store
+	Signer      TokenSigner
+	ALTCHATTL   time.Duration
+	APITTL      time.Duration
+	TokenTTL    time.Duration
+	APIZeroBits int
 }
 
-func New(db *sql.DB) Server {
-	return Server{Store: Store{DB: db}}
+func New(db *sql.DB, signer TokenSigner, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int) Server {
+	return Server{Store: Store{DB: db}, Signer: signer, ALTCHATTL: altchaTTL,
+		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits}
 }
 
 func (s Server) Handler() http.Handler {
@@ -22,6 +29,11 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/nodes", s.nodesPage)
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
 	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
+	mux.HandleFunc("/api/public/v1/web/challenges", s.webChallenge)
+	mux.HandleFunc("/api/public/v1/web/authorizations", s.webAuthorize)
+	mux.HandleFunc("/api/public/v1/api/challenges", s.apiChallenge)
+	mux.HandleFunc("/api/public/v1/api/authorizations", s.apiAuthorize)
+	mux.HandleFunc("/api/public/v1/authorizations/", s.authorization)
 	return mux
 }
 
