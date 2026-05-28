@@ -1,9 +1,9 @@
 # 公开 API
 
-> 状态：已实现，进入 M5 前评估
+> 状态：已实现，进入 M6 前评估
 > 版本前缀：`/api/public/v1`
 > 需求基线：`docs/开发要求.md` 定稿 v1.1（2026-05-27）
-> 阶段边界：本文记录 M4 的项目查询、网页 ALTCHA 下载授权、公开 API SHA-256 前导零 PoW、节点绑定令牌、Range 下载和错误格式；M5 前不启用额度扣减、流量入账、统计聚合或 SLA。
+> 阶段边界：本文记录项目查询、网页 ALTCHA 下载授权、公开 API SHA-256 前导零 PoW、节点绑定令牌、Range 下载、M5 额度扣减、流量入账、统计聚合、SLA 和错误格式。
 
 ## 1. 通用原则
 
@@ -53,7 +53,8 @@
 | `409` | `CHALLENGE_CONSUMED` | 挑战已被使用 |
 | `409` | `NO_ROUTABLE_NODE` | 当前没有可用下载节点 |
 | `416` | `RANGE_NOT_SATISFIABLE` | Range 不合法或超出文件范围 |
-| `429` | `QUOTA_NOT_ENABLED` | M4 占位；M5 才启用真实额度拒绝 |
+| `429` | `REQUEST_QUOTA_EXHAUSTED` | 地址级或网段级请求额度不足 |
+| `429` | `TRAFFIC_LIMIT_EXCEEDED` | 地址级或网段级每日流量预算不足 |
 | `500` | `PUBLIC_INTERNAL_ERROR` | 服务端处理失败，使用请求 ID 排查 |
 
 ## 3. 项目与资产查询
@@ -240,7 +241,7 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 `GET /api/public/v1/authorizations/{authorization_id}`
 
-M4 返回授权基本状态，不返回 M5 流量结算结果。
+M5 返回授权基本状态和已由主节点幂等入账的真实发送字节。
 
 ```json
 {
@@ -322,22 +323,20 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 
 伪造、过期、跨节点、跨资产、跨客户端前缀复用的令牌必须被拒绝。
 
-## 9. M5 前的占位字段
+## 9. M5 统计字段
 
-统计页和部分 API 可以返回下列占位字段，但必须明确未启用：
+统计页和部分 API 返回下列字段：
 
 | 字段 | M4 值 |
 | --- | --- |
-| `quota_enabled` | `false` |
-| `traffic_accounting_enabled` | `false` |
-| `statistics_enabled` | `false` |
-| `sla_enabled` | `false` |
-| `authorization_count` | `null` 或“统计尚未启用” |
-| `started_transfer_count` | `null` 或“统计尚未启用” |
-| `daily_bytes` | `null` 或“统计尚未启用” |
-| `node_sla` | `null` 或“统计尚未启用” |
-
-M4 不得把这些占位值解释为真实统计结果。
+| `quota_enabled` | `true` |
+| `traffic_accounting_enabled` | `true` |
+| `statistics_enabled` | `true` |
+| `sla_enabled` | `true`，样本不足时显示“统计样本不足” |
+| `authorization_count` | 主节点成功签发下载令牌次数 |
+| `started_transfer_count` | 首次产生正字节响应体的授权数 |
+| `daily_bytes` | 当前统计日真实发送字节 |
+| `node_sla` | 24h、7d、30d SLA |
 
 ## 10. M4 实现说明
 

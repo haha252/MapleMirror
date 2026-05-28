@@ -37,6 +37,10 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/admin/v1/pairing-requests/", s.pairingRequestByID)
 	mux.HandleFunc("/api/admin/v1/nodes", s.nodes)
 	mux.HandleFunc("/api/admin/v1/nodes/", s.nodeByID)
+	mux.HandleFunc("/api/admin/v1/stats/overview", s.statsOverview)
+	mux.HandleFunc("/api/admin/v1/stats/projects", s.projectStats)
+	mux.HandleFunc("/api/admin/v1/authorizations/", s.authorization)
+	mux.HandleFunc("/api/admin/v1/traffic/events", s.trafficEvents)
 	mux.HandleFunc("/api/admin/v1/sync/scans", s.syncScans)
 	mux.HandleFunc("/api/admin/v1/sync/scans/latest", s.syncScans)
 	return mux
