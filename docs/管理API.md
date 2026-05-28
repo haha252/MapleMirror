@@ -352,4 +352,108 @@ M2 不下发资产同步任务、不扫描 Release、不执行库存对账；实
 | 公共 API、下载授权或 Range | M4 | 不挂载 |
 | 额度、流量入账、统计和 SLA | M5 | 不查询为可用业务结论 |
 
-本文经确认后，M2 管理 API 实现必须与字段、鉴权级别、状态效果和审计合同一致；新增路由或改变高风险分级前必须先更新本文。
+## 11. M3 扫描与同步管理接口
+
+M3 在现有管理 API 上增加 Release 扫描、同步任务和库存对账相关接口。所有接口仍只挂载在管理监听器，仍要求管理网络和 Bearer 管理令牌；会改变扫描、同步或节点就绪状态的操作属于高风险，必须叠加管理员 mTLS。
+
+### 11.1 手动触发扫描
+
+`POST /api/admin/v1/sync/scans`
+
+鉴权：高风险。
+
+请求：
+
+```json
+{
+  "project_id": "example"
+}
+```
+
+字段规则：
+
+- `project_id` 可选；为空表示扫描 `projects.yaml` 中全部启用项目。
+- 不允许传入任意仓库地址。
+- 不允许临时覆盖 `include_prerelease`、`retain_versions` 或资产过滤规则。
+
+成功响应 `202 Accepted`：
+
+```json
+{
+  "status": "success",
+  "message": "Release 扫描任务已创建",
+  "request_id": "请求标识",
+  "data": {
+    "scan_id": "扫描任务标识",
+    "state": "pending"
+  }
+}
+```
+
+手动扫描不能绕过 GitHub `sha256:` 摘要门禁；不能直接把节点设为 `routing_ready=true`。
+
+### 11.2 查询扫描状态
+
+`GET /api/admin/v1/sync/scans/latest?project_id=example`
+
+鉴权：普通管理查询。
+
+响应数据可包含：
+
+| 字段 | 含义 |
+| --- | --- |
+| `scan_id` | 扫描任务标识 |
+| `project_id` | 项目标识 |
+| `state` | `pending`、`running`、`succeeded`、`failed`、`deferred` |
+| `selected_releases` | 本轮选中的 Release 数 |
+| `accepted_assets` | 通过摘要门禁的资产数 |
+| `rejected_assets` | 摘要缺失、算法不符或过滤拒绝的资产数 |
+| `next_allowed_scan_at` | GitHub 限频退避时间，可空 |
+| `request_id` | 任务关联请求 ID |
+
+响应不得返回 GitHub Token、完整外部错误正文或敏感请求头。
+
+### 11.3 查询节点同步状态
+
+`GET /api/admin/v1/nodes/{node_id}/sync-status`
+
+鉴权：普通管理查询。
+
+响应数据：
+
+| 字段 | 含义 |
+| --- | --- |
+| `node_id` | 节点标识 |
+| `routing_ready` | 是否完成 M3 目标库存最终对账 |
+| `required_assets` | 当前目标资产数 |
+| `verified_assets` | 已验证持有资产数 |
+| `missing_assets` | 缺失资产数 |
+| `mismatched_assets` | 摘要或大小不一致资产数 |
+| `running_tasks` | 运行中任务数 |
+| `failed_tasks` | 失败任务数 |
+| `latest_inventory_revision` | 最近完整库存报告修订 |
+
+M3 管理 API 可以展示同步就绪状态，但不得返回公共下载 URL、下载令牌或本地绝对路径。
+
+### 11.4 重试与重新对账
+
+| 方法和路径 | 鉴权 | 行为 |
+| --- | --- | --- |
+| `POST /api/admin/v1/nodes/{node_id}/sync-reconcile` | 高风险 | 要求节点上报完整库存并重新计算差异 |
+| `POST /api/admin/v1/nodes/{node_id}/sync-tasks/{task_id}/retry` | 高风险 | 重试失败或等待中的同步任务 |
+| `POST /api/admin/v1/nodes/{node_id}/sync-tasks/{task_id}/cancel` | 高风险 | 取消尚未完成且已因目标库存变化失效的任务 |
+
+这些操作只影响 M3 同步任务和最终对账，不执行 M4 下载授权、M5 额度扣减或流量入账。
+
+### 11.5 M3 审计
+
+以下操作必须写入 `admin_audit_events`：
+
+- 手动触发扫描。
+- 强制节点重新对账。
+- 重试或取消同步任务。
+- 因最终对账把 `routing_ready` 置为 true 或置回 false。
+
+审计摘要只记录项目 ID、节点 ID、任务 ID、结果和请求 ID，不记录 GitHub Token、管理令牌、完整本地路径或证书/私钥内容。
+
+本文经确认后，M2/M3 管理 API 实现必须与字段、鉴权级别、状态效果和审计合同一致；新增路由或改变高风险分级前必须先更新本文。
