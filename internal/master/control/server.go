@@ -49,11 +49,20 @@ func (s ControlServer) Handle(conn net.Conn) {
 		if err != nil {
 			return
 		}
+		messageType := protocol.TypeHeartbeatAck
+		payload := HeartbeatAck(result)
+		if msg.MessageType == protocol.TypeTrafficEvent {
+			messageType = protocol.TypeTrafficEventAck
+			payload, _ = json.Marshal(protocol.TrafficEventAck{
+				AcceptedSequence: result.AcceptedSequence,
+				Message:          "流量事件已入账",
+			})
+		}
 		_ = protocol.WriteFrame(conn, protocol.Envelope{
 			ProtocolVersion: protocol.Version, MessageID: reqID,
-			MessageType: protocol.TypeHeartbeatAck, SentAt: time.Now().UTC(),
+			MessageType: messageType, SentAt: time.Now().UTC(),
 			NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
-			Payload: HeartbeatAck(result),
+			Payload: payload,
 		})
 		s.writeNextTask(conn, session, reqID)
 	}
@@ -87,6 +96,12 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (He
 			return HeartbeatResult{}, err
 		}
 		return s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
+	case protocol.TypeTrafficEvent:
+		var event protocol.TrafficEvent
+		if err := json.Unmarshal(msg.Payload, &event); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptTrafficEvent(context.Background(), session, msg.Sequence, event)
 	default:
 		return HeartbeatResult{}, context.Canceled
 	}

@@ -137,7 +137,7 @@ func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
 		logger.Warn(context.Background(), "节点身份尚未登记，控制连接未启动")
 		return
 	}
-	client := nodecontrol.Client{NodeID: nodeID, Address: address.Host, TLSConfig: tlsCfg,
+	client := nodecontrol.Client{NodeID: nodeID, Address: address.Host, TLSConfig: tlsCfg, DB: db,
 		Executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
 			TempDir: cfg.Storage.TempDirectory}}
 	stop := make(chan struct{})

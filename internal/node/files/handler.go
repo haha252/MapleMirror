@@ -71,7 +71,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Authorization-Request-ID", claims.RequestID)
 	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(asset.RelativePath))
-	http.ServeContent(w, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
+	counter := &countingWriter{ResponseWriter: w}
+	http.ServeContent(counter, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
+	if counter.bytes > 0 {
+		_ = h.recordTraffic(claims, assetID, requestid.FromContext(r.Context()), counter.bytes)
+	}
 }
 
 func (h *Handler) localAsset(assetID string) (localAsset, error) {
@@ -129,4 +133,15 @@ func httpError(w http.ResponseWriter, r *http.Request, code int, message string)
 	w.WriteHeader(code)
 	_, _ = w.Write([]byte(`{"status":"error","message":"` + message +
 		`","request_id":"` + requestid.FromContext(r.Context()) + `"}`))
+}
+
+type countingWriter struct {
+	http.ResponseWriter
+	bytes int64
+}
+
+func (w *countingWriter) Write(data []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(data)
+	w.bytes += int64(n)
+	return n, err
 }

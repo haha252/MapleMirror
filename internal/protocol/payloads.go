@@ -109,3 +109,20 @@ type SyncTaskResult struct {
 	SizeBytes         int64  `json:"size_bytes,omitempty"`
 	Message           string `json:"message,omitempty"`
 }
+
+type TrafficEvent struct {
+	EventSequence   uint64    `json:"event_sequence"`
+	AuthorizationID string    `json:"authorization_id"`
+	AssetID         string    `json:"asset_id"`
+	NodeRequestID   string    `json:"node_request_id"`
+	MasterRequestID string    `json:"master_request_id"`
+	SentBytes       int64     `json:"sent_bytes"`
+	Status          string    `json:"status"`
+	ReportedAt      time.Time `json:"reported_at"`
+}
+
+type TrafficEventAck struct {
+	AcceptedSequence uint64 `json:"accepted_sequence"`
+	Duplicate        bool   `json:"duplicate"`
+	Message          string `json:"message"`
+}

@@ -33,6 +33,13 @@ func TestHandlerServesVerifiedAssetRange(t *testing.T) {
 	if rec.Code != http.StatusPartialContent || rec.Body.String() != "bcd" {
 		t.Fatalf("Range 下载响应不符合预期：code=%d body=%q", rec.Code, rec.Body.String())
 	}
+	var bytes int64
+	var masterReq string
+	err = db.QueryRow(`SELECT sent_bytes, master_request_id FROM pending_traffic_events
+		WHERE authorization_id = 'auth-1'`).Scan(&bytes, &masterReq)
+	if err != nil || bytes != 3 || masterReq != "req-1" {
+		t.Fatalf("真实流量事件未正确记录：bytes=%d req=%q err=%v", bytes, masterReq, err)
+	}
 }
 
 func TestHandlerRejectsCrossAssetToken(t *testing.T) {

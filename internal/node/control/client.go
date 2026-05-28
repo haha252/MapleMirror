@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"net"
 	"time"
@@ -19,6 +20,7 @@ type Client struct {
 	Executor          interface {
 		Execute(context.Context, protocol.SyncTask) protocol.SyncTaskResult
 	}
+	DB *sql.DB
 }
 
 func (c Client) RunOnce() error {
@@ -37,7 +39,11 @@ func (c Client) RunOnce() error {
 	if err := c.heartbeat(conn, reqID, 2); err != nil {
 		return err
 	}
-	return c.readOptionalTask(conn, reqID, 3)
+	nextSeq, err := c.sendPendingTraffic(conn, reqID, 3)
+	if err != nil {
+		return err
+	}
+	return c.readOptionalTask(conn, reqID, nextSeq)
 }
 
 func (c Client) Run(stop <-chan struct{}) {

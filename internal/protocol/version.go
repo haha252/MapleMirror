@@ -16,6 +16,9 @@ const (
 	TypeSyncTaskAck       = "sync_task_ack"
 	TypeSyncTaskProgress  = "sync_task_progress"
 	TypeSyncTaskResult    = "sync_task_result"
+	TypeTrafficEvent      = "traffic_event"
+	TypeTrafficEventAck   = "traffic_event_ack"
+	TypeTrafficReplay     = "traffic_replay_request"
 	TypeReconcileRequest  = "inventory_reconcile_request"
 	TypeReconcileResult   = "inventory_reconcile_result"
 	TypeNodeDisabled      = "node_disabled"
@@ -34,6 +37,7 @@ var controlTypes = map[string]bool{
 	TypePressureReport: true, TypeNodeDisabled: true,
 	TypeSyncTask: true, TypeSyncTaskAck: true,
 	TypeSyncTaskProgress: true, TypeSyncTaskResult: true,
+	TypeTrafficEvent: true, TypeTrafficEventAck: true, TypeTrafficReplay: true,
 	TypeReconcileRequest: true, TypeReconcileResult: true,
 	TypeCertificateReject: true, TypeProtocolError: true,
 }
