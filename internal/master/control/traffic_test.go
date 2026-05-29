@@ -32,6 +32,25 @@ func TestAcceptTrafficEventAccountsOnceAndStartsTransfer(t *testing.T) {
 	}
 }
 
+func TestAcceptTrafficEventRejectsConflictingConfirmedReplay(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	seedTrafficAuth(t, repo)
+	session := Session{ID: "sess-1", NodeID: "node-1"}
+	event := protocol.TrafficEvent{
+		EventSequence: 1, AuthorizationID: "auth-1", AssetID: "asset-1",
+		NodeRequestID: "node-req-1", MasterRequestID: "master-req-1",
+		SentBytes: 5, Status: "completed", ReportedAt: time.Now().UTC(),
+	}
+	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err != nil {
+		t.Fatal(err)
+	}
+	event.SentBytes = 7
+	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err == nil {
+		t.Fatal("已确认序号的冲突流量事件不应被静默确认")
+	}
+}
+
 func seedTrafficAuth(t *testing.T, repo Repository) {
 	t.Helper()
 	exec := func(query string, args ...any) {

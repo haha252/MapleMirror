@@ -22,6 +22,13 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		return HeartbeatResult{}, err
 	}
 	if seq <= last {
+		dup, err := existingTraffic(ctx, tx, session.NodeID, event)
+		if err != nil {
+			return HeartbeatResult{}, err
+		}
+		if !dup {
+			return HeartbeatResult{}, fmt.Errorf("流量事件序号已确认但事件不存在")
+		}
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
 	}
 	if event.SentBytes < 0 {
