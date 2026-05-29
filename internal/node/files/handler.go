@@ -14,12 +14,13 @@ import (
 )
 
 type Handler struct {
-	DB      *sql.DB
-	Storage string
-	NodeID  string
-	Signer  downloadtoken.Signer
-	mu      sync.Mutex
-	active  map[string]int
+	DB           *sql.DB
+	Storage      string
+	NodeID       string
+	Signer       downloadtoken.Signer
+	TrustedCIDRs []string
+	mu           sync.Mutex
+	active       map[string]int
 }
 
 type localAsset struct {
@@ -43,7 +44,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusUnauthorized, "下载令牌无效")
 		return
 	}
-	if claims.ClientPrefix != clientPrefix(r) {
+	if claims.ClientPrefix != h.clientPrefix(r) {
 		httpError(w, r, http.StatusForbidden, "客户端网络前缀不匹配")
 		return
 	}

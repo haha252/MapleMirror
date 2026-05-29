@@ -126,7 +126,7 @@ func publicHandler(cfg config.Master, quota config.Quota, loc *time.Location, db
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
-		cfg.APIPoW.LeadingZeroBits, quota, loc)
+		cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs)
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()

@@ -11,17 +11,18 @@ import (
 )
 
 type Server struct {
-	Store       Store
-	Signer      downloadtoken.Signer
-	ALTCHATTL   time.Duration
-	APITTL      time.Duration
-	TokenTTL    time.Duration
-	APIZeroBits int
+	Store        Store
+	Signer       downloadtoken.Signer
+	ALTCHATTL    time.Duration
+	APITTL       time.Duration
+	TokenTTL     time.Duration
+	APIZeroBits  int
+	TrustedCIDRs []string
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location) Server {
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location, trusted []string) Server {
 	return Server{Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc}, Signer: signer, ALTCHATTL: altchaTTL,
-		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits}
+		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits, TrustedCIDRs: trusted}
 }
 
 func (s Server) Handler() http.Handler {

@@ -83,7 +83,8 @@ func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger) http.Handl
 		logger.Warn(context.Background(), "节点身份尚未登记，文件服务未启动")
 		return nil
 	}
-	return &files.Handler{DB: db, Storage: cfg.Storage.Directory, NodeID: nodeID, Signer: signer}
+	return &files.Handler{DB: db, Storage: cfg.Storage.Directory, NodeID: nodeID,
+		Signer: signer, TrustedCIDRs: cfg.Proxy.TrustedCIDRs}
 }
 
 func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {

@@ -29,6 +29,10 @@ download_token:
   # 与主节点 download_token.signing_key_file 指向同一份强随机签名密钥。
   signing_key_file: "secrets/download-token.key"
 
+proxy:
+  # 下载节点若位于反向代理后，仅信任这些直连代理 CIDR 提供的转发头。
+  trusted_cidrs: []
+
 logging:
   console_level: "info"
   file_level: "info"

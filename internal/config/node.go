@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"net"
 	"net/url"
 )
 
@@ -13,6 +14,7 @@ type Node struct {
 	Bandwidth Bandwidth    `yaml:"bandwidth"`
 	Sync      Sync         `yaml:"sync"`
 	Download  NodeDownload `yaml:"download_token"`
+	Proxy     Proxy        `yaml:"proxy"`
 	Logging   Logging      `yaml:"logging"`
 	Pairing   Pairing      `yaml:"pairing"`
 	TLS       TLS          `yaml:"tls"`
@@ -94,6 +96,11 @@ func validateNode(c Node) error {
 	}
 	if c.Download.SigningKeyFile == "" {
 		return errors.New("节点配置 download_token.signing_key_file 不得为空")
+	}
+	for _, cidr := range c.Proxy.TrustedCIDRs {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return errors.New("节点配置 proxy.trusted_cidrs 包含无效 CIDR")
+		}
 	}
 	if c.Bandwidth.Target == "" || c.Sync.MaxWorkers <= 0 {
 		return errors.New("节点目标带宽不得为空且同步线程数必须大于零")

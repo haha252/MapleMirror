@@ -24,7 +24,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与资产不匹配")
 		return
 	}
-	if loaded.ClientPrefixKey != clientPrefix(r) {
+	if loaded.ClientPrefixKey != s.clientPrefix(r) {
 		writeError(w, r, http.StatusForbidden, "CLIENT_PREFIX_MISMATCH", "客户端网络前缀不匹配")
 		return
 	}

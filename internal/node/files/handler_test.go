@@ -59,6 +59,44 @@ func TestHandlerRejectsCrossAssetToken(t *testing.T) {
 	}
 }
 
+func TestHandlerIgnoresForwardedHeaderFromUntrustedRemote(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	claims := downloadtoken.Claims{TokenVersion: "download.v1",
+		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
+		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
+	token, _ := signer.Sign(claims)
+	req := httptest.NewRequest(http.MethodGet, "/downloads/asset-1", nil)
+	req.RemoteAddr = "198.51.100.10:12345"
+	req.Header.Set("X-Forwarded-For", "192.0.2.1")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer,
+		TrustedCIDRs: []string{"127.0.0.0/8"}}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("不可信代理头不应通过客户端前缀校验：%d", rec.Code)
+	}
+}
+
+func TestHandlerUsesForwardedHeaderFromTrustedRemote(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	claims := downloadtoken.Claims{TokenVersion: "download.v1",
+		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
+		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
+	token, _ := signer.Sign(claims)
+	req := httptest.NewRequest(http.MethodGet, "/downloads/asset-1", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "192.0.2.1")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer,
+		TrustedCIDRs: []string{"127.0.0.0/8"}}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("可信代理头应通过客户端前缀校验：%d", rec.Code)
+	}
+}
+
 func prepareNodeFile(t *testing.T) (*sql.DB, string, downloadtoken.Signer) {
 	t.Helper()
 	dir := t.TempDir()

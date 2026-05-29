@@ -65,6 +65,42 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 	}
 }
 
+func TestNodeRejectsInvalidTrustedProxyCIDR(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "key")
+	if err := os.WriteFile(keyPath, []byte("12345678901234567890123456789012"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	nodePath := filepath.Join(dir, "node.yaml")
+	body := []byte(`node:
+  name: "节点一"
+server:
+  listen: ":8081"
+master:
+  control_address: "https://127.0.0.1:9443"
+storage:
+  directory: "data/assets"
+  temp_directory: "data/tmp"
+  state_db: "data/node-state.db"
+bandwidth:
+  target: "100 MiB/s"
+sync:
+  max_workers: 1
+download_token:
+  signing_key_file: "` + keyPath + `"
+proxy:
+  trusted_cidrs: ["bad-cidr"]
+tls:
+  server_name: "127.0.0.1"
+`)
+	if err := os.WriteFile(nodePath, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadNode(nodePath, nil); err == nil {
+		t.Fatal("下载节点应拒绝无效 proxy.trusted_cidrs")
+	}
+}
+
 func TestWriteExamplesKeepsEmbeddedUTF8Content(t *testing.T) {
 	dir := t.TempDir()
 	if err := WriteExamples(dir); err != nil {

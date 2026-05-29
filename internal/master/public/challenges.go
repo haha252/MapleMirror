@@ -25,7 +25,7 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	challenge, err := s.Store.CreateChallenge(r.Context(), "altcha", in.AssetID,
-		clientPrefix(r), 10, s.ALTCHATTL, requestID(r))
+		s.clientPrefix(r), 10, s.ALTCHATTL, requestID(r))
 	if err != nil {
 		writeError(w, r, http.StatusConflict, "NO_ROUTABLE_NODE", "当前没有可用下载节点")
 		return
@@ -44,7 +44,7 @@ func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	challenge, err := s.Store.CreateChallenge(r.Context(), "api_pow", in.AssetID,
-		clientPrefix(r), s.APIZeroBits, s.APITTL, requestID(r))
+		s.clientPrefix(r), s.APIZeroBits, s.APITTL, requestID(r))
 	if err != nil {
 		writeError(w, r, http.StatusConflict, "NO_ROUTABLE_NODE", "当前没有可用下载节点")
 		return
