@@ -23,36 +23,55 @@ type Client struct {
 	DB *sql.DB
 }
 
-func (c Client) RunOnce() error {
+func (c Client) RunOnce() (time.Duration, error) {
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", c.Address, c.TLSConfig)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer conn.Close()
 	reqID, _ := requestid.New()
 	if err := c.hello(conn, reqID); err != nil {
-		return err
+		return 0, err
 	}
-	if _, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes); err != nil {
-		return err
+	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	if err != nil {
+		return 0, err
 	}
+	var welcome protocol.Welcome
+	if msg.MessageType != protocol.TypeWelcome {
+		return 0, nil
+	}
+	if err := json.Unmarshal(msg.Payload, &welcome); err != nil {
+		return 0, err
+	}
+	interval := time.Duration(welcome.HeartbeatIntervalSecond) * time.Second
 	if err := c.heartbeat(conn, reqID, 2); err != nil {
-		return err
+		return interval, err
 	}
 	nextSeq, err := c.sendPendingTraffic(conn, reqID, 3)
 	if err != nil {
-		return err
+		return interval, err
 	}
-	return c.readOptionalTask(conn, reqID, nextSeq)
+	if err := c.readOptionalTask(conn, reqID, nextSeq); err != nil {
+		return interval, err
+	}
+	return interval, nil
 }
 
-func (c Client) Run(stop <-chan struct{}) {
+func (c *Client) Run(stop <-chan struct{}) {
+	interval := c.HeartbeatInterval
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
 	for {
-		_ = c.RunOnce()
+		if nextInterval, err := c.RunOnce(); err == nil && nextInterval > 0 {
+			interval = nextInterval
+			c.HeartbeatInterval = nextInterval
+		}
 		select {
 		case <-stop:
 			return
-		case <-time.After(5 * time.Second):
+		case <-time.After(interval):
 		}
 	}
 }
