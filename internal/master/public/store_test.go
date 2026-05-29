@@ -85,6 +85,41 @@ func TestCreateChallengeRejectsUnavailableAsset(t *testing.T) {
 	}
 }
 
+func TestNodesReadsSLAAfterClosingNodeRows(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	seedAvailabilitySamples(t, db, "node-1")
+	store := Store{DB: db}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	nodes, err := store.Nodes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].SLA24H != "100.00%" {
+		t.Fatalf("节点 SLA 读取异常：%+v", nodes)
+	}
+}
+
+func TestSampleNodeAvailabilityWritesAfterClosingNodeRows(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := Store{DB: db}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	if err := store.SampleNodeAvailability(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM node_availability_samples
+		WHERE node_id = 'node-1'`).Scan(&count)
+	if err != nil || count != 1 {
+		t.Fatalf("节点 SLA 采样未写入：count=%d err=%v", count, err)
+	}
+}
+
 func openMaster(t *testing.T) *sql.DB {
 	t.Helper()
 	wal := true
@@ -119,6 +154,20 @@ func seedRoutableAsset(t *testing.T, db *sql.DB) {
 	mustExec(t, db, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
 		VALUES ('node-1', 'asset-1', 'sha256:aa', 12, 'now', 'verified')`)
+}
+
+func seedAvailabilitySamples(t *testing.T, db *sql.DB, nodeID string) {
+	t.Helper()
+	for i := 1; i <= 3; i++ {
+		start := timeNow().Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano)
+		end := timeNow().Add(-time.Duration(i)*time.Hour + time.Minute).Format(time.RFC3339Nano)
+		_, err := db.Exec(`INSERT INTO node_availability_samples
+			(node_id, sample_start, sample_end, routable, heartbeat_ok)
+			VALUES (?, ?, ?, 1, 1)`, nodeID, start, end)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func mustExec(t *testing.T, db *sql.DB, query string) {

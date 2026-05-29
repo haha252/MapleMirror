@@ -30,18 +30,31 @@ func (s Store) SampleNodeAvailability(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	type sampleTarget struct {
+		nodeID    string
+		ready     int
+		heartbeat int
+	}
+	var targets []sampleTarget
 	for rows.Next() {
-		var nodeID string
-		var ready, heartbeat int
-		if err := rows.Scan(&nodeID, &ready, &heartbeat); err != nil {
+		var target sampleTarget
+		if err := rows.Scan(&target.nodeID, &target.ready, &target.heartbeat); err != nil {
 			return err
 		}
-		if err := s.insertSample(ctx, nodeID, start, end, ready, heartbeat); err != nil {
+		targets = append(targets, target)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, target := range targets {
+		if err := s.insertSample(ctx, target.nodeID, start, end, target.ready, target.heartbeat); err != nil {
 			return err
 		}
 	}
-	return rows.Err()
+	return nil
 }
 
 func (s Store) insertSample(ctx context.Context, nodeID, start, end string, ready, heartbeat int) error {

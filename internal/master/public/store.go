@@ -129,7 +129,6 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []NodeSummary
 	for rows.Next() {
 		var n NodeSummary
@@ -139,12 +138,20 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 			return nil, err
 		}
 		n.RoutingReady = ready == 1
-		n.SLA24H = s.slaText(ctx, n.NodeID, 24)
-		n.SLA7D = s.slaText(ctx, n.NodeID, 24*7)
-		n.SLA30D = s.slaText(ctx, n.NodeID, 24*30)
 		out = append(out, n)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].SLA24H = s.slaText(ctx, out[i].NodeID, 24)
+		out[i].SLA7D = s.slaText(ctx, out[i].NodeID, 24*7)
+		out[i].SLA30D = s.slaText(ctx, out[i].NodeID, 24*30)
+	}
+	return out, nil
 }
 
 func (s Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, requestID string) (Challenge, error) {
