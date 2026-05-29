@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -35,8 +36,19 @@ func (s Server) createScan(w http.ResponseWriter, r *http.Request) {
 		ProjectID string `json:"project_id"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "管理端触发扫描",
+			slog.String("request_id", requestID(r)),
+			slog.String("project_id", body.ProjectID))
+	}
 	scanID, err := s.Sync.Trigger(r.Context(), body.ProjectID, requestID(r))
 	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "创建扫描任务失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("project_id", body.ProjectID),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, http.StatusInternalServerError, "CONTROL_INTERNAL_ERROR", "创建扫描任务失败")
 		return
 	}
@@ -57,6 +69,13 @@ func (s Server) latestScan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "扫描记录不存在")
 		return
 	}
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "查询最新扫描记录",
+			slog.String("request_id", requestID(r)),
+			slog.String("project_id", item.ProjectID),
+			slog.String("scan_id", item.ScanID),
+			slog.String("state", item.State))
+	}
 	writeOK(w, r, http.StatusOK, "最近扫描", item)
 }
 
@@ -68,6 +87,18 @@ func (s Server) syncStatus(w http.ResponseWriter, r *http.Request, nodeID string
 	if err != nil {
 		writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "同步状态不存在")
 		return
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "查询节点同步状态",
+			slog.String("request_id", requestID(r)),
+			slog.String("node_id", nodeID),
+			slog.Bool("routing_ready", item.RoutingReady),
+			slog.Int("required_assets", item.RequiredAssets),
+			slog.Int("verified_assets", item.VerifiedAssets),
+			slog.Int("missing_assets", item.MissingAssets),
+			slog.Int("mismatched_assets", item.MismatchedAssets),
+			slog.Int("running_tasks", item.RunningTasks),
+			slog.Int("failed_tasks", item.FailedTasks))
 	}
 	writeOK(w, r, http.StatusOK, "节点同步状态", item)
 }
@@ -92,8 +123,23 @@ func (s Server) syncTaskAction(w http.ResponseWriter, r *http.Request, nodeID, a
 		return
 	}
 	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "同步任务操作失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("node_id", nodeID),
+				slog.String("task_id", taskID),
+				slog.String("action", op),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, http.StatusInternalServerError, "CONTROL_INTERNAL_ERROR", "同步任务操作失败")
 		return
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "同步任务已更新",
+			slog.String("request_id", requestID(r)),
+			slog.String("node_id", nodeID),
+			slog.String("task_id", taskID),
+			slog.String("action", op))
 	}
 	writeOK(w, r, http.StatusOK, "同步任务已更新",
 		map[string]any{"node_id": nodeID, "task_id": taskID})

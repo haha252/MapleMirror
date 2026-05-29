@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"mirror-server/internal/logging"
 	"mirror-server/internal/master/control"
 	"mirror-server/internal/master/mirrorsync"
 	"mirror-server/internal/requestid"
@@ -19,6 +20,7 @@ type Server struct {
 		Trigger(context.Context, string, string) (string, error)
 	}
 	SyncStore mirrorsync.Store
+	Logger    *logging.Logger
 }
 
 type response struct {

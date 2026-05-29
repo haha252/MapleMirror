@@ -24,7 +24,7 @@ func rebuildTargetInventory(ctx context.Context, tx *sql.Tx, projectID, now stri
 	return err
 }
 
-func generateTasks(ctx context.Context, tx *sql.Tx, now string) error {
+func generateTasks(ctx context.Context, tx *sql.Tx, now string) (int, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT ti.node_id, ti.asset_id
 		FROM target_inventory ti
 		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
@@ -32,19 +32,21 @@ func generateTasks(ctx context.Context, tx *sql.Tx, now string) error {
 		AND (ni.asset_id IS NULL OR ni.state != 'verified' OR ni.local_digest_sha256 !=
 			(SELECT digest_sha256 FROM assets WHERE id = ti.asset_id))`)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer rows.Close()
+	var generated int
 	for rows.Next() {
 		var nodeID, assetID string
 		if err := rows.Scan(&nodeID, &assetID); err != nil {
-			return err
+			return generated, err
 		}
 		if err := insertTask(ctx, tx, nodeID, assetID, "asset_download", now); err != nil {
-			return err
+			return generated, err
 		}
+		generated++
 	}
-	return rows.Err()
+	return generated, rows.Err()
 }
 
 func insertTask(ctx context.Context, tx *sql.Tx, nodeID, assetID, taskType, now string) error {

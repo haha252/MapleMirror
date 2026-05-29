@@ -180,8 +180,9 @@ func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
 		return
 	}
 	client := nodecontrol.Client{NodeID: nodeID, Address: address.Host, TLSConfig: tlsCfg, DB: db,
+		Logger: logger,
 		Executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
-			TempDir: cfg.Storage.TempDirectory}}
+			TempDir: cfg.Storage.TempDirectory, Logger: logger}}
 	stop := make(chan struct{})
 	go client.Run(stop)
 	logger.Info(context.Background(), "节点主动控制连接已启动", slog.String("master", address.Host))

@@ -2,22 +2,19 @@ package mirrorsync
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
-	"path"
-	"regexp"
-	"sort"
-	"strings"
+	"log/slog"
 	"time"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/logging"
 )
 
 type Scanner struct {
 	Store  Store
 	GitHub GitHubClient
+	Logger *logging.Logger
 }
 
 func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, requestID string) (ScanSummary, error) {
@@ -40,14 +37,42 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 		if !project.Enabled || (projectID != "" && project.ID != projectID) {
 			continue
 		}
+		if s.Logger != nil {
+			s.Logger.Debug(ctx, "开始扫描项目",
+				slog.String("request_id", summary.RequestID),
+				slog.String("project_id", project.ID),
+				slog.String("repository", project.Repository))
+		}
 		releases, err := s.GitHub.ListReleases(ctx, project.Repository)
 		if err != nil {
+			if s.Logger != nil {
+				s.Logger.Warn(ctx, "项目 Release 扫描失败",
+					slog.String("request_id", summary.RequestID),
+					slog.String("project_id", project.ID),
+					slog.String("repository", project.Repository),
+					slog.String("error", err.Error()))
+			}
 			return err
+		}
+		if s.Logger != nil {
+			s.Logger.Debug(ctx, "项目 Release 拉取完成",
+				slog.String("request_id", summary.RequestID),
+				slog.String("project_id", project.ID),
+				slog.String("repository", project.Repository),
+				slog.Int("release_count", len(releases)))
 		}
 		selected := selectReleases(releases, project.IncludePrerelease, project.RetainVersions)
 		projectSummary, err := s.writeProject(ctx, project, selected)
 		if err != nil {
 			return err
+		}
+		if s.Logger != nil {
+			s.Logger.Debug(ctx, "项目扫描写入完成",
+				slog.String("request_id", summary.RequestID),
+				slog.String("project_id", project.ID),
+				slog.Int("selected_releases", projectSummary.SelectedReleases),
+				slog.Int("accepted_assets", projectSummary.AcceptedAssets),
+				slog.Int("rejected_assets", projectSummary.RejectedAssets))
 		}
 		summary.SelectedReleases += projectSummary.SelectedReleases
 		summary.AcceptedAssets += projectSummary.AcceptedAssets
@@ -62,6 +87,7 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 		return ScanSummary{}, err
 	}
 	defer tx.Rollback()
+
 	now := nowText()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO projects
 		(id, name, repository, enabled, retain_versions, include_prerelease,
@@ -78,20 +104,30 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 		project.DownloadMultiplier, projectHash(project), now); err != nil {
 		return ScanSummary{}, err
 	}
-	summary, err := writeReleases(ctx, tx, project, releases, now)
+
+	summary, err := writeReleases(ctx, tx, project, releases, now, s.Logger)
 	if err != nil {
 		return ScanSummary{}, err
 	}
 	if err := rebuildTargetInventory(ctx, tx, project.ID, now); err != nil {
 		return ScanSummary{}, err
 	}
-	if err := generateTasks(ctx, tx, now); err != nil {
+	generated, err := generateTasks(ctx, tx, now)
+	if err != nil {
 		return ScanSummary{}, err
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(ctx, "项目目标库存与任务生成完成",
+			slog.String("project_id", project.ID),
+			slog.Int("selected_releases", summary.SelectedReleases),
+			slog.Int("accepted_assets", summary.AcceptedAssets),
+			slog.Int("rejected_assets", summary.RejectedAssets),
+			slog.Int("generated_tasks", generated))
 	}
 	return summary, tx.Commit()
 }
 
-func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, releases []GitHubRelease, now string) (ScanSummary, error) {
+func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, releases []GitHubRelease, now string, logger *logging.Logger) (ScanSummary, error) {
 	var summary ScanSummary
 	_, _ = tx.ExecContext(ctx, `UPDATE releases SET selected = 0 WHERE project_id = ?`, project.ID)
 	for _, rel := range releases {
@@ -107,7 +143,7 @@ func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, rele
 		if err != nil {
 			return summary, err
 		}
-		accepted, rejected, err := writeAssets(ctx, tx, project, releaseID, rel.Assets, now)
+		accepted, rejected, err := writeAssets(ctx, tx, project, releaseID, rel.Assets, logger, now)
 		summary.AcceptedAssets += accepted
 		summary.RejectedAssets += rejected
 		if err != nil {
@@ -115,94 +151,4 @@ func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, rele
 		}
 	}
 	return summary, nil
-}
-
-func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releaseID string, assets []GitHubAsset, now string) (int, int, error) {
-	archRE, err := regexp.Compile(project.ArchitectureRegex)
-	if err != nil {
-		return 0, 0, err
-	}
-	var accepted, rejected int
-	for _, asset := range assets {
-		if !assetAllowed(asset.Name, project.AssetInclude, project.AssetExclude) {
-			rejected++
-			continue
-		}
-		digest, err := normalizeDigest(asset.Digest)
-		matches := archRE.FindStringSubmatch(asset.Name)
-		if err != nil || len(matches) == 0 {
-			rejected++
-			continue
-		}
-		arch := matches[len(matches)-1]
-		assetID := fmt.Sprintf("%s:%d", releaseID, asset.ID)
-		_, err = tx.ExecContext(ctx, `INSERT INTO assets
-			(id, release_id, github_asset_id, file_name, architecture, size_bytes,
-			source_url, digest_sha256, service_state, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?)
-			ON CONFLICT(release_id, github_asset_id) DO UPDATE SET
-			file_name = excluded.file_name, architecture = excluded.architecture,
-			size_bytes = excluded.size_bytes, source_url = excluded.source_url,
-			digest_sha256 = excluded.digest_sha256, service_state = 'candidate'`,
-			assetID, releaseID, asset.ID, asset.Name, arch, asset.Size,
-			asset.URL, digest, now)
-		if err != nil {
-			return accepted, rejected, err
-		}
-		accepted++
-	}
-	return accepted, rejected, nil
-}
-
-func selectReleases(releases []GitHubRelease, includePrerelease bool, keep int) []GitHubRelease {
-	var selected []GitHubRelease
-	for _, rel := range releases {
-		if rel.Draft || (rel.Prerelease && !includePrerelease) {
-			continue
-		}
-		selected = append(selected, rel)
-	}
-	sort.SliceStable(selected, func(i, j int) bool {
-		if selected[i].PublishedAt.Equal(selected[j].PublishedAt) {
-			return selected[i].ID > selected[j].ID
-		}
-		return selected[i].PublishedAt.After(selected[j].PublishedAt)
-	})
-	if keep > 0 && len(selected) > keep {
-		selected = selected[:keep]
-	}
-	return selected
-}
-
-func assetAllowed(name string, includes, excludes []string) bool {
-	for _, pattern := range excludes {
-		if matched, _ := path.Match(pattern, name); matched {
-			return false
-		}
-	}
-	if len(includes) == 0 {
-		return true
-	}
-	for _, pattern := range includes {
-		if matched, _ := path.Match(pattern, name); matched {
-			return true
-		}
-	}
-	return false
-}
-
-func projectHash(project config.Project) string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{project.ID, project.Repository,
-		fmt.Sprint(project.Enabled), fmt.Sprint(project.RetainVersions),
-		fmt.Sprint(project.IncludePrerelease), fmt.Sprint(project.DownloadMultiplier),
-		strings.Join(project.AssetInclude, ","), strings.Join(project.AssetExclude, ","),
-		project.ArchitectureRegex}, "|")))
-	return hex.EncodeToString(sum[:])
-}
-
-func boolInt(v bool) int {
-	if v {
-		return 1
-	}
-	return 0
 }

@@ -1,0 +1,99 @@
+package control
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net"
+	"time"
+
+	"mirror-server/internal/protocol"
+)
+
+func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (HeartbeatResult, error) {
+	switch msg.MessageType {
+	case protocol.TypeHeartbeat:
+		var hb protocol.Heartbeat
+		if err := json.Unmarshal(msg.Payload, &hb); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
+	case protocol.TypeInventoryReport:
+		var report protocol.InventoryReport
+		if err := json.Unmarshal(msg.Payload, &report); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptInventoryReport(context.Background(), session, msg.Sequence, report)
+	case protocol.TypePressureReport:
+		var report protocol.PressureReport
+		if err := json.Unmarshal(msg.Payload, &report); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
+	case protocol.TypeSyncTaskAck:
+		return HeartbeatResult{AcceptedSequence: msg.Sequence, ManagedState: "syncing"}, nil
+	case protocol.TypeSyncTaskResult:
+		var result protocol.SyncTaskResult
+		if err := json.Unmarshal(msg.Payload, &result); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
+	case protocol.TypeTrafficEvent:
+		var event protocol.TrafficEvent
+		if err := json.Unmarshal(msg.Payload, &event); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptTrafficEvent(context.Background(), session, msg.Sequence, event)
+	default:
+		return HeartbeatResult{}, context.Canceled
+	}
+}
+
+func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID string) {
+	task, ok, err := s.Repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || !ok {
+		if err != nil && s.Logger != nil {
+			s.Logger.Debug(context.Background(), "查询待下发同步任务失败",
+				slog.String("request_id", reqID),
+				slog.String("node_id", session.NodeID),
+				slog.String("error", err.Error()))
+		}
+		return
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(context.Background(), "向节点下发同步任务",
+			slog.String("request_id", reqID),
+			slog.String("task_id", task.TaskID),
+			slog.String("task_type", task.TaskType),
+			slog.String("node_id", session.NodeID),
+			slog.String("asset_id", task.Asset.AssetID),
+			slog.String("file_name", task.Asset.FileName),
+			slog.Int64("size_bytes", task.Asset.SizeBytes))
+	}
+	body, _ := json.Marshal(task)
+	_ = protocol.WriteFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: task.TaskID,
+		MessageType: protocol.TypeSyncTask, SentAt: time.Now().UTC(),
+		NodeID: session.NodeID, RequestID: reqID, Payload: body,
+	})
+}
+
+func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) bool {
+	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	if err != nil || msg.MessageType != protocol.TypeHello || msg.NodeID != session.NodeID {
+		return false
+	}
+	body, _ := json.Marshal(protocol.Welcome{
+		SessionID: session.ID, AcceptedSequence: session.AcceptedSequence,
+		HeartbeatIntervalSecond: int(s.HeartbeatInterval.Seconds()),
+		HeartbeatTimeoutSecond:  int(s.HeartbeatTimeout.Seconds()),
+		ManagedState:            "syncing", RoutingReady: false,
+	})
+	_ = protocol.WriteFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: reqID,
+		MessageType: protocol.TypeWelcome, SentAt: time.Now().UTC(),
+		NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
+		Payload: body,
+	})
+	return true
+}

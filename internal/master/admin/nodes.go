@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -63,10 +64,22 @@ func (s Server) disableNode(w http.ResponseWriter, r *http.Request, nodeID strin
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.Repo.DisableNode(r.Context(), nodeID, requestID(r), body.Reason); err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "禁用节点失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("node_id", nodeID),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, http.StatusInternalServerError, "CONTROL_INTERNAL_ERROR", "禁用节点失败")
 		return
 	}
-	_ = s.Repo.Audit(r.Context(), "node.disable.mtls", "node", nodeID, "success", requestID(r), "管理员 mTLS 已验证", adminID)
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "节点已禁用",
+			slog.String("request_id", requestID(r)),
+			slog.String("node_id", nodeID),
+			slog.String("reason", body.Reason))
+	}
+	_ = s.Repo.Audit(r.Context(), "node.disable.mtls", "node", nodeID, "success", requestID(r), "管理者mTLS 已校验", adminID)
 	writeOK(w, r, http.StatusOK, "节点已禁用", map[string]any{"node_id": nodeID, "routing_ready": false})
 }
 
@@ -76,8 +89,19 @@ func (s Server) syncReset(w http.ResponseWriter, r *http.Request, nodeID string)
 		return
 	}
 	if err := s.Repo.SyncReset(r.Context(), nodeID, requestID(r), adminID); err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "同步状态重置失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("node_id", nodeID),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, http.StatusInternalServerError, "CONTROL_INTERNAL_ERROR", "同步状态重置失败")
 		return
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "同步状态已重置",
+			slog.String("request_id", requestID(r)),
+			slog.String("node_id", nodeID))
 	}
 	writeOK(w, r, http.StatusOK, "同步状态已重置", map[string]any{"node_id": nodeID, "routing_ready": false})
 }
@@ -88,8 +112,19 @@ func (s Server) enableNode(w http.ResponseWriter, r *http.Request, nodeID string
 		return
 	}
 	if err := s.Repo.EnableNode(r.Context(), nodeID, requestID(r), adminID); err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "启用节点失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("node_id", nodeID),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, http.StatusInternalServerError, "CONTROL_INTERNAL_ERROR", "启用节点失败")
 		return
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "节点已启用",
+			slog.String("request_id", requestID(r)),
+			slog.String("node_id", nodeID))
 	}
 	writeOK(w, r, http.StatusOK, "节点已启用", map[string]any{"node_id": nodeID, "routing_ready": false})
 }
@@ -120,8 +155,19 @@ func (s Server) rotateCertificate(w http.ResponseWriter, r *http.Request, nodeID
 	}
 	signed.NodeID = nodeID
 	if err := s.Repo.RotateCertificate(r.Context(), nodeID, requestID(r), adminID, signed); err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "证书轮换失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("node_id", nodeID),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, http.StatusInternalServerError, "CONTROL_INTERNAL_ERROR", "证书轮换失败")
 		return
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "节点证书已轮换",
+			slog.String("request_id", requestID(r)),
+			slog.String("node_id", nodeID))
 	}
 	writeOK(w, r, http.StatusOK, "节点证书已轮换", map[string]any{"node_id": nodeID, "routing_ready": false})
 }

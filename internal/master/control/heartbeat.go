@@ -51,14 +51,67 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 
 func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int64, error) {
 	cutoff := time.Now().UTC().Add(-timeout).Format(time.RFC3339Nano)
-	result, err := r.DB.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
-		routing_ready = 0, updated_at = ? WHERE state != 'disabled'
-		AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)`,
-		time.Now().UTC().Format(time.RFC3339Nano), cutoff)
+	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM nodes WHERE state != 'disabled'
+		AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, tx.Commit()
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
+		routing_ready = 0, updated_at = ? WHERE id IN (`+placeholders(len(ids))+`)`,
+		append([]any{now}, stringArgs(ids)...)...)
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
+		close_reason = '心跳超时' WHERE node_id IN (`+placeholders(len(ids))+`) AND disconnected_at IS NULL`,
+		append([]any{now}, stringArgs(ids)...)...)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int64(len(ids)), nil
+}
+
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	out := "?"
+	for i := 1; i < n; i++ {
+		out += ",?"
+	}
+	return out
+}
+
+func stringArgs(values []string) []any {
+	args := make([]any, 0, len(values))
+	for _, v := range values {
+		args = append(args, v)
+	}
+	return args
 }
 
 func HeartbeatAck(result HeartbeatResult) json.RawMessage {

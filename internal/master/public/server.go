@@ -8,6 +8,7 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/downloadtoken"
+	"mirror-server/internal/logging"
 )
 
 type Server struct {
@@ -18,11 +19,12 @@ type Server struct {
 	TokenTTL     time.Duration
 	APIZeroBits  int
 	TrustedCIDRs []string
+	Logger       *logging.Logger
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location, trusted []string) Server {
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location, trusted []string, logger *logging.Logger) Server {
 	return Server{Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc}, Signer: signer, ALTCHATTL: altchaTTL,
-		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits, TrustedCIDRs: trusted}
+		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits, TrustedCIDRs: trusted, Logger: logger}
 }
 
 func (s Server) Handler() http.Handler {

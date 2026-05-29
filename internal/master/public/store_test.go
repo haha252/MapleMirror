@@ -25,7 +25,7 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 	if !validLeadingZeros(challenge, nonce) {
 		t.Fatal("测试 nonce 未满足 PoW")
 	}
-	auth, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestIssueAuthorizationRejectsRequestQuotaExhausted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	_, _, err = store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
 	if err != errRequestQuota {
 		t.Fatalf("请求额度不足应拒绝授权：%v", err)
 	}

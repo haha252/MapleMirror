@@ -2,6 +2,7 @@ package public
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,7 +33,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战校验失败")
 		return
 	}
-	auth, err := s.Store.IssueAuthorization(r.Context(), loaded, s.TokenTTL, requestID(r))
+	auth, debug, err := s.Store.IssueAuthorization(r.Context(), loaded, s.TokenTTL, requestID(r))
 	if err != nil {
 		code, stable := http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR"
 		message := "下载授权签发失败"
@@ -48,13 +49,43 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 			code, stable = http.StatusTooManyRequests, "TRAFFIC_LIMIT_EXCEEDED"
 			message = "今日流量额度不足，请稍后再试"
 		}
+		if s.Logger != nil {
+			s.Logger.Debug(r.Context(), "下载授权签发失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("challenge_id", loaded.ID),
+				slog.String("asset_id", in.AssetID),
+				slog.String("client_prefix", loaded.ClientPrefixKey),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, code, stable, message)
 		return
 	}
 	token, err := s.Signer.Sign(auth.Claims)
 	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "下载令牌签名失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("authorization_id", auth.Claims.AuthorizationID),
+				slog.String("asset_id", in.AssetID),
+				slog.String("client_prefix", loaded.ClientPrefixKey),
+				slog.String("error", err.Error()))
+		}
 		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "下载令牌签发失败")
 		return
+	}
+	if s.Logger != nil {
+		s.Logger.Debug(r.Context(), "下载令牌已签发",
+			slog.String("request_id", requestID(r)),
+			slog.String("authorization_id", auth.Claims.AuthorizationID),
+			slog.String("asset_id", in.AssetID),
+			slog.String("node_id", debug.NodeID),
+			slog.String("project_id", debug.ProjectID),
+			slog.String("client_prefix", debug.ClientPrefix),
+			slog.String("expires_at", debug.ExpiresAt),
+			slog.Int64("max_bytes", debug.MaxBytes),
+			slog.Int("range_limit", debug.RangeLimit),
+			slog.Any("request_remaining_microunits", debug.RequestRemainingMicrounits),
+			slog.Any("traffic_remaining_bytes", debug.TrafficRemainingBytes))
 	}
 	writeOK(w, r, http.StatusCreated, "下载授权已签发", map[string]any{
 		"authorization_id":        auth.Claims.AuthorizationID,

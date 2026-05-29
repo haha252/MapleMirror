@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net"
 	"time"
 
+	"mirror-server/internal/logging"
 	"mirror-server/internal/protocol"
 	"mirror-server/internal/requestid"
 )
@@ -17,6 +19,7 @@ type Client struct {
 	Address           string
 	TLSConfig         *tls.Config
 	HeartbeatInterval time.Duration
+	Logger            *logging.Logger
 	Executor          interface {
 		Execute(context.Context, protocol.SyncTask) protocol.SyncTaskResult
 	}
@@ -24,8 +27,19 @@ type Client struct {
 }
 
 func (c Client) RunOnce() (time.Duration, error) {
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点开始连接主节点",
+			slog.String("node_id", c.NodeID),
+			slog.String("master", c.Address))
+	}
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", c.Address, c.TLSConfig)
 	if err != nil {
+		if c.Logger != nil {
+			c.Logger.Debug(context.Background(), "节点连接主节点失败",
+				slog.String("node_id", c.NodeID),
+				slog.String("master", c.Address),
+				slog.String("error", err.Error()))
+		}
 		return 0, err
 	}
 	defer conn.Close()
@@ -45,6 +59,15 @@ func (c Client) RunOnce() (time.Duration, error) {
 		return 0, err
 	}
 	interval := time.Duration(welcome.HeartbeatIntervalSecond) * time.Second
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点收到主节点欢迎信息",
+			slog.String("node_id", c.NodeID),
+			slog.String("master", c.Address),
+			slog.Int("heartbeat_interval_seconds", welcome.HeartbeatIntervalSecond),
+			slog.Int("heartbeat_timeout_seconds", welcome.HeartbeatTimeoutSecond),
+			slog.String("managed_state", welcome.ManagedState),
+			slog.Bool("routing_ready", welcome.RoutingReady))
+	}
 	if err := c.heartbeat(conn, reqID, 2); err != nil {
 		return interval, err
 	}
@@ -64,9 +87,29 @@ func (c *Client) Run(stop <-chan struct{}) {
 		interval = 5 * time.Second
 	}
 	for {
-		if nextInterval, err := c.RunOnce(); err == nil && nextInterval > 0 {
+		if c.Logger != nil {
+			c.Logger.Debug(context.Background(), "节点控制轮询开始",
+				slog.String("node_id", c.NodeID),
+				slog.String("master", c.Address),
+				slog.String("interval", interval.String()))
+		}
+		nextInterval, err := c.RunOnce()
+		if err != nil {
+			if c.Logger != nil {
+				c.Logger.Warn(context.Background(), "节点控制轮询失败",
+					slog.String("node_id", c.NodeID),
+					slog.String("master", c.Address),
+					slog.String("error", err.Error()))
+			}
+		} else if nextInterval > 0 {
 			interval = nextInterval
 			c.HeartbeatInterval = nextInterval
+			if c.Logger != nil {
+				c.Logger.Debug(context.Background(), "节点控制轮询完成",
+					slog.String("node_id", c.NodeID),
+					slog.String("master", c.Address),
+					slog.String("next_interval", nextInterval.String()))
+			}
 		}
 		select {
 		case <-stop:
@@ -94,6 +137,12 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 		Status: "syncing", ActiveDownloads: 0, FreeBytes: 0,
 		Pressure: protocol.PressureSample{},
 	})
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点发送心跳",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID),
+			slog.Uint64("sequence", sequence))
+	}
 	if err := protocol.WriteFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: protocol.TypeHeartbeat, SentAt: time.Now().UTC(),
@@ -101,8 +150,17 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 	}); err != nil {
 		return err
 	}
-	_, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
-	return err
+	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	if err != nil {
+		return err
+	}
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点收到心跳确认",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID),
+			slog.String("message_type", msg.MessageType))
+	}
+	return nil
 }
 
 func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) error {
@@ -116,18 +174,50 @@ func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) e
 	if err := json.Unmarshal(msg.Payload, &task); err != nil {
 		return err
 	}
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点收到同步任务",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID),
+			slog.String("task_id", task.TaskID),
+			slog.String("task_type", task.TaskType),
+			slog.String("asset_id", task.Asset.AssetID),
+			slog.String("file_name", task.Asset.FileName))
+	}
 	if c.Executor == nil {
+		if c.Logger != nil {
+			c.Logger.Debug(context.Background(), "节点同步执行器未启用",
+				slog.String("node_id", c.NodeID),
+				slog.String("request_id", reqID),
+				slog.String("task_id", task.TaskID))
+		}
 		return c.sendTaskResult(conn, reqID, sequence, protocol.SyncTaskResult{
 			TaskID: task.TaskID, AssetID: task.Asset.AssetID,
 			Result: "temporary_error", Message: "节点同步执行器未启用",
 		})
 	}
 	result := c.Executor.Execute(context.Background(), task)
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点完成同步任务执行",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID),
+			slog.String("task_id", task.TaskID),
+			slog.String("asset_id", task.Asset.AssetID),
+			slog.String("result", result.Result),
+			slog.Int64("size_bytes", result.SizeBytes))
+	}
 	return c.sendTaskResult(conn, reqID, sequence, result)
 }
 
 func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64, result protocol.SyncTaskResult) error {
 	body, _ := json.Marshal(result)
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点回传同步任务结果",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID),
+			slog.String("task_id", result.TaskID),
+			slog.String("asset_id", result.AssetID),
+			slog.String("result", result.Result))
+	}
 	if err := protocol.WriteFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-result",
 		MessageType: protocol.TypeSyncTaskResult, SentAt: time.Now().UTC(),

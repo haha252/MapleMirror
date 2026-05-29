@@ -9,20 +9,31 @@ import (
 	"mirror-server/internal/requestid"
 )
 
-func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string) (IssuedAuthorization, error) {
+type AuthorizationDebug struct {
+	ClientPrefix               string
+	NodeID                     string
+	ProjectID                  string
+	ExpiresAt                  string
+	MaxBytes                   int64
+	RangeLimit                 int
+	RequestRemainingMicrounits map[string]int64
+	TrafficRemainingBytes      map[string]int64
+}
+
+func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string) (IssuedAuthorization, AuthorizationDebug, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	defer tx.Rollback()
 	nodeID, projectID, multiplier, size, err := s.routableAssetTx(ctx, tx, c.AssetID)
 	if err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	now := time.Now().UTC()
 	scopes, err := quotaScopes(c.ClientPrefixKey)
 	if err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	quota := s.Quota
 	if quota.buckets == nil {
@@ -32,33 +43,47 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 		multiplier = 1
 	}
 	if err := quota.consume(ctx, tx, scopes, multiplier, now); err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	day := statDay(now, s.Location)
 	if err := quota.reserve(ctx, tx, day, scopes, size); err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	authID, err := requestid.New()
 	if err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	expires := expiresAfter(ttl)
 	if err := insertAuthorization(ctx, tx, authID, c, nodeID, size, expires, reqID); err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := insertReservation(ctx, tx, authID, day, size, now, scopes); err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := upsertProjectStats(ctx, tx, day, projectID, 1, 0, 0); err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := consumeChallenge(ctx, tx, c.ID); err != nil {
-		return IssuedAuthorization{}, err
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
+	}
+	requestRemaining, trafficRemaining, err := quota.snapshot(ctx, tx, day, scopes)
+	if err != nil {
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version, AuthorizationID: authID,
 		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
 		ExpiresAt: expires, MaxBytes: size, RangeConcurrencyLimit: 4, RequestID: reqID}
-	return IssuedAuthorization{Claims: claims}, tx.Commit()
+	debug := AuthorizationDebug{
+		ClientPrefix:               c.ClientPrefixKey,
+		NodeID:                     nodeID,
+		ProjectID:                  projectID,
+		ExpiresAt:                  expires,
+		MaxBytes:                   size,
+		RangeLimit:                 4,
+		RequestRemainingMicrounits: requestRemaining,
+		TrafficRemainingBytes:      trafficRemaining,
+	}
+	return IssuedAuthorization{Claims: claims}, debug, tx.Commit()
 }
 
 func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatus, error) {
