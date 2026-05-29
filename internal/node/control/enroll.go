@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -34,6 +35,8 @@ type Credential struct {
 	EnrollmentID string `json:"enrollment_id"`
 }
 
+var errEnrollmentPending = errors.New("节点登记仍待审批")
+
 func (e Enroller) RunOnce() error {
 	if cred, err := e.readCredential(); err == nil && cred.EnrollmentID != "" {
 		return e.collect(cred.EnrollmentID)
@@ -55,14 +58,18 @@ func (e Enroller) RunOnce() error {
 func (e Enroller) RunUntilComplete(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		if err := e.RunOnce(); err != nil {
-			return err
-		}
 		if _, err := os.Stat(e.Identity.CertFile); err == nil {
 			return nil
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("节点登记等待审批超时")
+		}
+		if err := e.RunOnce(); err != nil {
+			if errors.Is(err, errEnrollmentPending) {
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			return err
 		}
 		time.Sleep(10 * time.Second)
 	}
@@ -96,10 +103,22 @@ func (e Enroller) collect(enrollmentID string) error {
 	if err != nil {
 		return err
 	}
-	if reply.MessageType != protocol.TypeEnrollCertificate {
+	switch reply.MessageType {
+	case protocol.TypeEnrollCertificate:
+		return e.saveCertificate(reply)
+	case protocol.TypeProtocolError:
+		if errBody, ok := parseProtocolError(reply.Payload); ok {
+			if errBody.Code == "ENROLLMENT_PENDING" {
+				return errEnrollmentPending
+			}
+			if errBody.Message != "" {
+				return fmt.Errorf("%s", errBody.Message)
+			}
+		}
+		return fmt.Errorf("证书领取失败")
+	default:
 		return fmt.Errorf("证书尚未可领取")
 	}
-	return e.saveCertificate(reply)
 }
 
 func (e Enroller) exchange(messageType string, payload any) (protocol.Envelope, error) {
@@ -151,6 +170,19 @@ func (e Enroller) readCredential() (Credential, error) {
 func (e Enroller) writeCredential(c Credential) error {
 	data, _ := json.Marshal(c)
 	return writePrivate(e.CredentialFile, data, 0o600)
+}
+
+type protocolError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func parseProtocolError(payload []byte) (protocolError, bool) {
+	var errBody protocolError
+	if err := json.Unmarshal(payload, &errBody); err != nil {
+		return protocolError{}, false
+	}
+	return errBody, true
 }
 
 func createCSR(name string) ([]byte, []byte, string, error) {
