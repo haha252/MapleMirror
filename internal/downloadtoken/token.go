@@ -1,20 +1,25 @@
 package downloadtoken
 
 import (
-	"crypto/hmac"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
-	"database/sql"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
+const Version = "download.v2"
+
 type Signer struct {
-	key []byte
+	private ed25519.PrivateKey
+	public  ed25519.PublicKey
 }
 
 type Claims struct {
@@ -29,67 +34,79 @@ type Claims struct {
 	RequestID             string `json:"request_id"`
 }
 
-func NewFromFile(path string) (Signer, error) {
-	data, err := os.ReadFile(path)
+func NewSignerFromPrivateFile(path string) (Signer, error) {
+	key, err := readPrivate(path)
 	if err != nil {
 		return Signer{}, err
 	}
-	key := []byte(strings.TrimSpace(string(data)))
-	if len(key) < 32 {
-		return Signer{}, errors.New("下载令牌签名密钥长度不足")
-	}
-	return Signer{key: key}, nil
+	return Signer{private: key, public: key.Public().(ed25519.PublicKey)}, nil
 }
 
-func NewPersistent(db *sql.DB) (Signer, error) {
-	const name = "download_token_signing_key"
-	var value string
-	err := db.QueryRow(`SELECT value FROM runtime_kv WHERE key = ?`, name).Scan(&value)
-	if err == nil {
-		key, err := base64.RawStdEncoding.DecodeString(value)
-		return Signer{key: key}, err
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+func NewVerifierFromPublicFile(path string) (Signer, error) {
+	key, err := readPublic(path)
+	if err != nil {
 		return Signer{}, err
 	}
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		return Signer{}, err
+	return Signer{public: key}, nil
+}
+
+func GenerateKeyFiles(privatePath, publicPath string) error {
+	if exists(privatePath) && exists(publicPath) {
+		return nil
 	}
-	value = base64.RawStdEncoding.EncodeToString(key)
-	_, err = db.Exec(`INSERT INTO runtime_kv(key, value, updated_at) VALUES (?, ?, ?)`,
-		name, value, time.Now().UTC().Format(time.RFC3339Nano))
-	return Signer{key: key}, err
+	if exists(privatePath) || exists(publicPath) {
+		return errors.New("下载令牌 Ed25519 密钥文件不完整，请同时保留私钥和公钥或先备份后重新生成")
+	}
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("生成下载令牌 Ed25519 密钥失败：%w", err)
+	}
+	privateDER, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		return err
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return err
+	}
+	if err := writePEM(privatePath, "PRIVATE KEY", privateDER, 0o600); err != nil {
+		return err
+	}
+	return writePEM(publicPath, "PUBLIC KEY", publicDER, 0o644)
 }
 
 func (s Signer) Sign(claims Claims) (string, error) {
+	if len(s.private) == 0 {
+		return "", errors.New("下载令牌私钥未加载")
+	}
+	claims.TokenVersion = Version
 	body, err := json.Marshal(claims)
 	if err != nil {
 		return "", err
 	}
 	payload := base64.RawURLEncoding.EncodeToString(body)
-	mac := hmac.New(sha256.New, s.key)
-	_, _ = mac.Write([]byte(payload))
-	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	sig := base64.RawURLEncoding.EncodeToString(ed25519.Sign(s.private, []byte(payload)))
 	return payload + "." + sig, nil
 }
 
 func (s Signer) Signature(message string) string {
-	mac := hmac.New(sha256.New, s.key)
-	_, _ = mac.Write([]byte(message))
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if len(s.private) == 0 {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(ed25519.Sign(s.private, []byte(message)))
 }
 
 func (s Signer) Verify(token string) (Claims, error) {
 	var out Claims
+	if len(s.public) == 0 {
+		return out, errors.New("下载令牌公钥未加载")
+	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return out, errors.New("令牌格式不合法")
 	}
-	mac := hmac.New(sha256.New, s.key)
-	_, _ = mac.Write([]byte(parts[0]))
 	got, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || !hmac.Equal(got, mac.Sum(nil)) {
+	if err != nil || !ed25519.Verify(s.public, []byte(parts[0]), got) {
 		return out, errors.New("令牌签名不合法")
 	}
 	body, err := base64.RawURLEncoding.DecodeString(parts[0])
@@ -99,7 +116,7 @@ func (s Signer) Verify(token string) (Claims, error) {
 	if err := json.Unmarshal(body, &out); err != nil {
 		return out, err
 	}
-	if out.TokenVersion != "download.v1" {
+	if out.TokenVersion != Version {
 		return out, errors.New("令牌版本不支持")
 	}
 	expires, err := time.Parse(time.RFC3339Nano, out.ExpiresAt)
@@ -107,4 +124,64 @@ func (s Signer) Verify(token string) (Claims, error) {
 		return out, errors.New("令牌已过期")
 	}
 	return out, nil
+}
+
+func readPrivate(path string) (ed25519.PrivateKey, error) {
+	block, err := readPEM(path)
+	if err != nil {
+		return nil, err
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("下载令牌私钥格式无效：%w", err)
+	}
+	priv, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, errors.New("下载令牌私钥不是 Ed25519")
+	}
+	return priv, nil
+}
+
+func readPublic(path string) (ed25519.PublicKey, error) {
+	block, err := readPEM(path)
+	if err != nil {
+		return nil, err
+	}
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("下载令牌公钥格式无效：%w", err)
+	}
+	pub, ok := key.(ed25519.PublicKey)
+	if !ok {
+		return nil, errors.New("下载令牌公钥不是 Ed25519")
+	}
+	return pub, nil
+}
+
+func readPEM(path string) (*pem.Block, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New("下载令牌密钥 PEM 内容无效")
+	}
+	return block, nil
+}
+
+func writePEM(path, typ string, der []byte, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, pem.EncodeToMemory(&pem.Block{Type: typ, Bytes: der}), perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

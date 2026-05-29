@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	"mirror-server/internal/config"
 )
@@ -19,6 +20,13 @@ type Auth struct {
 
 func NewAuth(cfg config.Administration) (Auth, error) {
 	token := os.Getenv(cfg.TokenEnv)
+	if token == "" && cfg.TokenFile != "" {
+		data, err := os.ReadFile(cfg.TokenFile)
+		if err != nil {
+			return Auth{}, fmt.Errorf("读取管理令牌文件失败：%w", err)
+		}
+		token = strings.TrimSpace(string(data))
+	}
 	if len(token) < cfg.TokenMinBytes {
 		return Auth{}, fmt.Errorf("管理令牌缺失或长度不足")
 	}

@@ -15,7 +15,7 @@ import (
 
 func TestHandlerServesVerifiedAssetRange(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
-	claims := downloadtoken.Claims{TokenVersion: "download.v1",
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
 		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
 		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
 		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
@@ -44,7 +44,7 @@ func TestHandlerServesVerifiedAssetRange(t *testing.T) {
 
 func TestHandlerRejectsCrossAssetToken(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
-	claims := downloadtoken.Claims{TokenVersion: "download.v1",
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
 		AuthorizationID: "auth-1", AssetID: "other", NodeID: "node-1",
 		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
 		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
@@ -61,7 +61,7 @@ func TestHandlerRejectsCrossAssetToken(t *testing.T) {
 
 func TestHandlerIgnoresForwardedHeaderFromUntrustedRemote(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
-	claims := downloadtoken.Claims{TokenVersion: "download.v1",
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
 		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
 		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
 		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
@@ -80,7 +80,7 @@ func TestHandlerIgnoresForwardedHeaderFromUntrustedRemote(t *testing.T) {
 
 func TestHandlerUsesForwardedHeaderFromTrustedRemote(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
-	claims := downloadtoken.Claims{TokenVersion: "download.v1",
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
 		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
 		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
 		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
@@ -118,11 +118,12 @@ func prepareNodeFile(t *testing.T) (*sql.DB, string, downloadtoken.Signer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keyPath := filepath.Join(dir, "key")
-	if err := os.WriteFile(keyPath, []byte("12345678901234567890123456789012"), 0o600); err != nil {
+	privatePath := filepath.Join(dir, "token.key")
+	publicPath := filepath.Join(dir, "token.pub")
+	if err := downloadtoken.GenerateKeyFiles(privatePath, publicPath); err != nil {
 		t.Fatal(err)
 	}
-	signer, err := downloadtoken.NewFromFile(keyPath)
+	signer, err := downloadtoken.NewSignerFromPrivateFile(privatePath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,8 +11,10 @@ import (
 )
 
 type EnrollmentServer struct {
-	Repo              Repository
-	EnrollmentTimeout time.Duration
+	Repo                      Repository
+	EnrollmentTimeout         time.Duration
+	DownloadTokenPublicKeyPEM string
+	MasterCAPEM               string
 }
 
 func (s EnrollmentServer) Handle(conn net.Conn) {
@@ -77,8 +79,9 @@ func (s EnrollmentServer) handleCertificateCollect(conn net.Conn, msg protocol.E
 	}
 	body, _ := json.Marshal(protocol.EnrollCertificate{
 		EnrollmentID: delivery.EnrollmentID, NodeID: delivery.NodeID,
-		CertificatePEM: delivery.CertificatePEM, CAChainPEM: delivery.CAChainPEM,
-		NotAfter: delivery.NotAfter,
+		CertificatePEM: delivery.CertificatePEM, CAChainPEM: s.MasterCAPEM,
+		DownloadTokenPublicKeyPEM: s.DownloadTokenPublicKeyPEM,
+		NotAfter:                  delivery.NotAfter,
 	})
 	_ = protocol.WriteFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,

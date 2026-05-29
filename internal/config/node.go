@@ -44,7 +44,8 @@ type Sync struct {
 	BandwidthLimit string `yaml:"bandwidth_limit"`
 }
 type NodeDownload struct {
-	SigningKeyFile string `yaml:"signing_key_file"`
+	VerifyPublicKeyFile string `yaml:"verify_public_key_file"`
+	SigningKeyFile      string `yaml:"signing_key_file"`
 }
 type Pairing struct {
 	CredentialFile string `yaml:"credential_file"`
@@ -65,6 +66,12 @@ func applyNodeDefaults(c *Node, warn WarnFunc) {
 	setString(&c.Storage.Directory, "data/assets", "storage.directory", warn)
 	setString(&c.Storage.TempDirectory, "data/tmp", "storage.temp_directory", warn)
 	setString(&c.Storage.StateDB, "data/node-state.db", "storage.state_db", warn)
+	setString(&c.Download.VerifyPublicKeyFile, "data/download-token-ed25519.pub", "download_token.verify_public_key_file", warn)
+	setString(&c.Pairing.CredentialFile, "data/node-credential.json", "pairing.credential_file", warn)
+	setString(&c.Pairing.CodeFile, "data/pairing-code", "pairing.code_file", warn)
+	setString(&c.TLS.CAFile, "data/master-ca.pem", "tls.ca_file", warn)
+	setString(&c.TLS.CertFile, "data/node.crt", "tls.cert_file", warn)
+	setString(&c.TLS.KeyFile, "data/node.key", "tls.key_file", warn)
 	if c.Sync.MaxWorkers == 0 {
 		c.Sync.MaxWorkers = 2
 		warnDefault(warn, "sync.max_workers", "2")
@@ -94,8 +101,11 @@ func validateNode(c Node) error {
 	if c.Storage.Directory == "" || c.Storage.TempDirectory == "" || c.Storage.StateDB == "" {
 		return errors.New("节点存储目录和本地状态库路径不得为空")
 	}
-	if c.Download.SigningKeyFile == "" {
-		return errors.New("节点配置 download_token.signing_key_file 不得为空")
+	if c.Download.SigningKeyFile != "" {
+		return errors.New("download_token.signing_key_file 已废弃，下载节点只应配置 verify_public_key_file")
+	}
+	if c.Download.VerifyPublicKeyFile == "" {
+		return errors.New("节点配置 download_token.verify_public_key_file 不得为空")
 	}
 	for _, cidr := range c.Proxy.TrustedCIDRs {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {

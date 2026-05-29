@@ -55,7 +55,7 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 	if err := consumeChallenge(ctx, tx, c.ID); err != nil {
 		return IssuedAuthorization{}, err
 	}
-	claims := downloadtoken.Claims{TokenVersion: "download.v1", AuthorizationID: authID,
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version, AuthorizationID: authID,
 		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
 		ExpiresAt: expires, MaxBytes: size, RangeConcurrencyLimit: 4, RequestID: reqID}
 	return IssuedAuthorization{Claims: claims}, tx.Commit()

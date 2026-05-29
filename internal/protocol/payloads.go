@@ -22,11 +22,12 @@ type EnrollCertificateRequest struct {
 }
 
 type EnrollCertificate struct {
-	EnrollmentID   string    `json:"enrollment_id"`
-	NodeID         string    `json:"node_id"`
-	CertificatePEM string    `json:"certificate_pem"`
-	CAChainPEM     string    `json:"ca_chain_pem"`
-	NotAfter       time.Time `json:"not_after"`
+	EnrollmentID              string    `json:"enrollment_id"`
+	NodeID                    string    `json:"node_id"`
+	CertificatePEM            string    `json:"certificate_pem"`
+	CAChainPEM                string    `json:"ca_chain_pem"`
+	DownloadTokenPublicKeyPEM string    `json:"download_token_public_key_pem"`
+	NotAfter                  time.Time `json:"not_after"`
 }
 
 type Welcome struct {

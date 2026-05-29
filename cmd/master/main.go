@@ -2,19 +2,17 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
+	_ "time/tzdata"
 
+	"mirror-server/internal/bootstrap"
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/downloadtoken"
@@ -51,7 +49,24 @@ func main() {
 		os.Exit(1)
 	}
 	if created {
-		fmt.Fprintln(os.Stderr, "已生成主节点所需示例配置，请确认安全字段后重新启动。")
+		cfg, err = config.LoadMaster(*path, warn)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "主节点配置加载失败：%v\n", err)
+			os.Exit(1)
+		}
+		if err := bootstrap.MasterFirstRun(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "主节点首次初始化未完成：%v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stderr, "已生成主节点所需示例配置和安全材料，请确认项目配置后重新启动。")
+		return
+	}
+	if bootstrap.MasterNeedsMaterials(cfg) {
+		if err := bootstrap.MasterFirstRun(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "主节点首次初始化未完成：%v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stderr, "主节点安全材料已生成，请重新启动。")
 		return
 	}
 	location, _ := time.LoadLocation(cfg.Stats.Timezone)
@@ -75,6 +90,7 @@ func main() {
 	syncService := startMirrorSync(cfg, projects, database, logger)
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, logger)
+	startConsolePairing(cfg, repo, logger)
 	publicHandler, err := publicHandler(cfg, quota, location, database, logger)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
@@ -117,7 +133,7 @@ func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, lo
 }
 
 func publicHandler(cfg config.Master, quota config.Quota, loc *time.Location, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
-	signer, err := downloadtoken.NewFromFile(cfg.DownloadToken.SigningKeyFile)
+	signer, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -187,47 +203,17 @@ func startControlServices(cfg config.Master, repo mastercontrol.Repository, logg
 	if cfg.Server.EnrollmentListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
 		tlsCfg, err := controltls.EnrollmentServer(cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile, "")
 		enrollTimeout, _ := time.ParseDuration(cfg.Node.EnrollmentTimeout)
-		startTLSListener(cfg.Server.EnrollmentListen, tlsCfg, err, logger, mastercontrol.EnrollmentServer{
-			Repo: repo, EnrollmentTimeout: enrollTimeout,
-		}.Handle)
-	}
-}
-
-func startTLSListener(address string, tlsCfg *tls.Config, cfgErr error, logger *logging.Logger, handle func(net.Conn)) {
-	if cfgErr != nil {
-		logger.Error(context.Background(), "控制面 TLS 配置失败", slog.String("error", cfgErr.Error()))
-		return
-	}
-	listener, err := tls.Listen("tcp", address, tlsCfg)
-	if err != nil {
-		logger.Error(context.Background(), "控制面监听启动失败", slog.String("listen", address), slog.String("error", err.Error()))
-		return
-	}
-	go func() {
-		logger.Info(context.Background(), "控制面 TLS 监听已启动", slog.String("listen", address))
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			go handle(conn)
+		publicKey, keyErr := bootstrap.PublicKeyPEM(cfg.DownloadToken.VerifyPublicKeyFile)
+		if keyErr != nil {
+			err = keyErr
 		}
-	}()
-}
-
-func runServer(address string, handler http.Handler, logger *logging.Logger) {
-	server := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go func() {
-		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(shutdown)
-	}()
-	logger.Info(context.Background(), "主节点健康服务已启动", slog.String("listen", address))
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Error(context.Background(), "主节点健康服务异常退出", slog.String("error", err.Error()))
-		os.Exit(1)
+		caData, caErr := os.ReadFile(cfg.Node.TLS.CAFile)
+		if caErr != nil {
+			err = caErr
+		}
+		startTLSListener(cfg.Server.EnrollmentListen, tlsCfg, err, logger, mastercontrol.EnrollmentServer{
+			Repo: repo, EnrollmentTimeout: enrollTimeout, DownloadTokenPublicKeyPEM: publicKey,
+			MasterCAPEM: string(caData),
+		}.Handle)
 	}
 }

@@ -21,12 +21,13 @@ import (
 )
 
 type Enroller struct {
-	NodeName       string
-	Address        string
-	TLSConfig      *tls.Config
-	CodeFile       string
-	CredentialFile string
-	Identity       IdentityStore
+	NodeName           string
+	Address            string
+	TLSConfig          *tls.Config
+	CodeFile           string
+	CredentialFile     string
+	TokenPublicKeyFile string
+	Identity           IdentityStore
 }
 
 type Credential struct {
@@ -49,6 +50,22 @@ func (e Enroller) RunOnce() error {
 		return err
 	}
 	return e.submit(string(code), string(csrPEM), fp)
+}
+
+func (e Enroller) RunUntilComplete(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		if err := e.RunOnce(); err != nil {
+			return err
+		}
+		if _, err := os.Stat(e.Identity.CertFile); err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("节点登记等待审批超时")
+		}
+		time.Sleep(10 * time.Second)
+	}
 }
 
 func (e Enroller) submit(code, csrPEM, fp string) error {
@@ -111,6 +128,11 @@ func (e Enroller) saveCertificate(reply protocol.Envelope) error {
 	}
 	if err := e.Identity.Save(cert.NodeID, []byte(cert.CertificatePEM), []byte(cert.CAChainPEM)); err != nil {
 		return err
+	}
+	if cert.DownloadTokenPublicKeyPEM != "" {
+		if err := writePrivate(e.TokenPublicKeyFile, []byte(cert.DownloadTokenPublicKeyPEM), 0o644); err != nil {
+			return err
+		}
 	}
 	_ = os.Remove(e.CodeFile)
 	_ = os.Remove(e.CredentialFile)

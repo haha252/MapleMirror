@@ -13,7 +13,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
+	"mirror-server/internal/bootstrap"
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/downloadtoken"
@@ -36,8 +38,13 @@ func main() {
 		warnings = append(warnings, [2]string{field, value})
 	})
 	if errors.Is(err, config.ErrExampleCreated) {
-		fmt.Fprintln(os.Stderr, "已生成下载节点示例配置，请确认安全字段后重新启动。")
-		return
+		cfg, err = config.LoadNode(*path, func(field, value string) {
+			warnings = append(warnings, [2]string{field, value})
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "下载节点配置加载失败：%v\n", err)
+			os.Exit(1)
+		}
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "下载节点配置加载失败：%v\n", err)
@@ -60,6 +67,10 @@ func main() {
 	}
 	defer database.Close()
 	logger.Info(context.Background(), "下载节点本地状态库迁移已完成")
+	if err := interactiveEnrollIfNeeded(&cfg, database); err != nil {
+		logger.Error(context.Background(), "下载节点首次交互登记失败", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 	startEnrollmentClient(cfg, database, logger)
 	startControlClient(cfg, database, logger)
 	mux := http.NewServeMux()
@@ -73,9 +84,9 @@ func main() {
 }
 
 func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger) http.Handler {
-	signer, err := downloadtoken.NewFromFile(cfg.Download.SigningKeyFile)
+	signer, err := downloadtoken.NewVerifierFromPublicFile(cfg.Download.VerifyPublicKeyFile)
 	if err != nil {
-		logger.Error(context.Background(), "下载令牌签名密钥加载失败，文件服务未启动", slog.String("error", err.Error()))
+		logger.Error(context.Background(), "下载令牌验证公钥加载失败，文件服务未启动", slog.String("error", err.Error()))
 		return nil
 	}
 	nodeID, err := (nodecontrol.IdentityStore{DB: db}).NodeID()
@@ -107,6 +118,7 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 	enroller := nodecontrol.Enroller{
 		NodeName: cfg.Node.Name, Address: address.Host, TLSConfig: tlsCfg,
 		CodeFile: cfg.Pairing.CodeFile, CredentialFile: cfg.Pairing.CredentialFile,
+		TokenPublicKeyFile: cfg.Download.VerifyPublicKeyFile,
 		Identity: nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
 			KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile},
 	}
@@ -115,6 +127,35 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 			logger.Warn(context.Background(), "节点首次登记未完成", slog.String("error", err.Error()))
 		}
 	}()
+}
+
+func interactiveEnrollIfNeeded(cfg *config.Node, db *sql.DB) error {
+	if _, err := (nodecontrol.IdentityStore{DB: db}).NodeID(); err == nil {
+		return nil
+	}
+	answers, err := bootstrap.NodeFirstRun(*cfg)
+	if err != nil {
+		return err
+	}
+	cfg.Node.Name = answers.Name
+	cfg.Master.ControlAddress = answers.ControlAddress
+	cfg.Master.EnrollmentAddress = answers.EnrollmentAddress
+	cfg.TLS.ServerName = answers.ServerName
+	if err := bootstrap.WritePairingCode(cfg.Pairing.CodeFile, answers.PairingCode); err != nil {
+		return err
+	}
+	address, err := url.Parse(cfg.Master.EnrollmentAddress)
+	if err != nil {
+		return err
+	}
+	enroller := nodecontrol.Enroller{
+		NodeName: cfg.Node.Name, Address: address.Host, TLSConfig: answers.TLSConfig,
+		CodeFile: cfg.Pairing.CodeFile, CredentialFile: cfg.Pairing.CredentialFile,
+		TokenPublicKeyFile: cfg.Download.VerifyPublicKeyFile,
+		Identity: nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
+			KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile},
+	}
+	return enroller.RunUntilComplete(15 * time.Minute)
 }
 
 func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {

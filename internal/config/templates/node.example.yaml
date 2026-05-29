@@ -26,8 +26,8 @@ sync:
   bandwidth_limit: "0"
 
 download_token:
-  # 与主节点 download_token.signing_key_file 指向同一份强随机签名密钥。
-  signing_key_file: "secrets/download-token.key"
+  # 下载节点只保存主节点下载令牌 Ed25519 公钥，不保存签发私钥。
+  verify_public_key_file: "data/download-token-ed25519.pub"
 
 proxy:
   # 下载节点若位于反向代理后，仅信任这些直连代理 CIDR 提供的转发头。
@@ -44,8 +44,8 @@ pairing:
   code_file: "data/pairing-code"
 
 tls:
-  # M2 配对后配置证书文件路径；私钥不得记录到日志。
-  ca_file: ""
-  cert_file: ""
-  key_file: ""
+  # 配对后写入证书文件；私钥不得记录到日志。
+  ca_file: "data/master-ca.pem"
+  cert_file: "data/node.crt"
+  key_file: "data/node.key"
   server_name: "127.0.0.1"

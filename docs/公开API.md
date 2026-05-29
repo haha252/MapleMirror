@@ -311,7 +311,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 
 | 声明 | 必填 | 说明 |
 | --- | --- | --- |
-| `token_version` | 是 | `download.v1` |
+| `token_version` | 是 | `download.v2` |
 | `authorization_id` | 是 | 主节点授权记录 |
 | `asset_id` | 是 | 只能下载该资产 |
 | `node_id` | 是 | 只能由该节点接受 |
@@ -321,7 +321,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 | `range_concurrency_limit` | 是 | 并发 Range 限制 |
 | `request_id` | 是 | 主节点签发请求 ID |
 
-伪造、过期、跨节点、跨资产、跨客户端前缀复用的令牌必须被拒绝。
+下载令牌使用 Ed25519 非对称签名：主节点持私钥签发，下载节点只持公钥验证。令牌格式仍为 `base64url(payload).base64url(signature)`。伪造、过期、跨节点、跨资产、跨客户端前缀复用的令牌必须被拒绝。
 
 ## 9. M5 统计字段
 
@@ -342,7 +342,8 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 
 - 主节点公共接口挂载在 `server.public_listen`。
 - 下载节点文件服务挂载在 `/downloads/{asset_id}`。
-- 主节点和下载节点必须配置同一份 `download_token.signing_key_file` 强随机密钥文件。
+- 主节点必须配置 `download_token.signing_private_key_file` 和 `download_token.verify_public_key_file`；下载节点只配置 `download_token.verify_public_key_file`。
+- 旧版 `download_token.signing_key_file` HMAC 共享密钥已废弃，启动时不得继续使用；升级后旧 `download.v1` 令牌需要重新签发。
 - M4 的 `download_url` 返回节点相对下载路径；部署时可由反向代理转换为实际节点域名。
 - M4 已支持单段 HTTP Range；multipart Range 不作为 M4 必须能力。
 
@@ -434,7 +435,7 @@ M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段
 
 ### 13.2 仍不得公开的内部字段
 
-- 管理令牌、下载令牌签名密钥、配对码明文、证书私钥、完整 CSR 或证书正文。
+- 管理令牌、下载令牌私钥、配对码明文、证书私钥、完整 CSR 或证书正文。
 - 完整客户端 IP、完整客户端网段、额度桶精确余额、黑名单和豁免规则明细。
 - 节点内部地址、控制端口、管理监听地址、本地磁盘路径、临时文件路径。
 - GitHub Token、源站敏感请求头、同步任务内部错误全文。

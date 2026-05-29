@@ -57,8 +57,10 @@ type APIPoW struct {
 	ChallengeTTL    string `yaml:"challenge_ttl"`
 }
 type DownloadToken struct {
-	TTL            string `yaml:"ttl"`
-	SigningKeyFile string `yaml:"signing_key_file"`
+	TTL                   string `yaml:"ttl"`
+	SigningPrivateKeyFile string `yaml:"signing_private_key_file"`
+	VerifyPublicKeyFile   string `yaml:"verify_public_key_file"`
+	SigningKeyFile        string `yaml:"signing_key_file"`
 }
 type NodeControl struct {
 	HeartbeatTimeout  string `yaml:"heartbeat_timeout"`
@@ -79,6 +81,7 @@ type TLS struct {
 type Administration struct {
 	AllowedCIDRs        []string `yaml:"allowed_cidrs"`
 	TokenEnv            string   `yaml:"token_env"`
+	TokenFile           string   `yaml:"token_file"`
 	TokenMinBytes       int      `yaml:"token_min_bytes"`
 	HighRiskRequireMTLS *bool    `yaml:"high_risk_require_mtls"`
 	TLS                 AdminTLS `yaml:"tls"`
@@ -121,19 +124,31 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	}
 	setString(&c.APIPoW.ChallengeTTL, "2m", "api_pow.challenge_ttl", warn)
 	setString(&c.DownloadToken.TTL, "15m", "download_token.ttl", warn)
+	setString(&c.DownloadToken.SigningPrivateKeyFile, "secrets/download-token-ed25519.key", "download_token.signing_private_key_file", warn)
+	setString(&c.DownloadToken.VerifyPublicKeyFile, "secrets/download-token-ed25519.pub", "download_token.verify_public_key_file", warn)
 	setString(&c.Node.HeartbeatTimeout, "30s", "node.heartbeat_timeout", warn)
 	setString(&c.Node.HeartbeatInterval, "10s", "node.heartbeat_interval", warn)
 	setString(&c.Node.EnrollmentTimeout, "10m", "node.enrollment_timeout", warn)
 	setString(&c.Node.PairingCodeTTL, "5m", "node.pairing_code_ttl", warn)
+	setString(&c.Node.TLS.CAFile, "secrets/master-ca.pem", "node.tls.ca_file", warn)
+	setString(&c.Node.TLS.CertFile, "secrets/master-control.crt", "node.tls.cert_file", warn)
+	setString(&c.Node.TLS.KeyFile, "secrets/master-control.key", "node.tls.key_file", warn)
+	setString(&c.Node.TLS.ClientCAFile, "secrets/node-signing-ca.pem", "node.tls.client_ca_file", warn)
+	setString(&c.Node.TLS.SigningCACertFile, "secrets/node-signing-ca.pem", "node.tls.signing_ca_cert_file", warn)
+	setString(&c.Node.TLS.SigningCAKeyFile, "secrets/node-signing-ca.key", "node.tls.signing_ca_key_file", warn)
 	if c.Admin.TokenMinBytes == 0 {
 		c.Admin.TokenMinBytes = 32
 		warnDefault(warn, "admin.token_min_bytes", "32")
 	}
+	setString(&c.Admin.TokenFile, "secrets/admin-token", "admin.token_file", warn)
 	if c.Admin.HighRiskRequireMTLS == nil {
 		value := true
 		c.Admin.HighRiskRequireMTLS = &value
 		warnDefault(warn, "admin.high_risk_require_mtls", "true")
 	}
+	setString(&c.Admin.TLS.CertFile, "secrets/admin-api.crt", "admin.tls.cert_file", warn)
+	setString(&c.Admin.TLS.KeyFile, "secrets/admin-api.key", "admin.tls.key_file", warn)
+	setString(&c.Admin.TLS.ClientCAFile, "secrets/admin-client-ca.pem", "admin.tls.client_ca_file", warn)
 }
 
 func setString(value *string, fallback, field string, warn WarnFunc) {
@@ -178,11 +193,17 @@ func validateMaster(c Master) error {
 	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits <= 0 {
 		return errors.New("公开 API PoW 必须使用 sha256 且前导零位数大于零")
 	}
-	if c.DownloadToken.SigningKeyFile == "" {
-		return errors.New("下载令牌签名密钥文件 download_token.signing_key_file 不得为空")
+	if c.DownloadToken.SigningKeyFile != "" {
+		return errors.New("download_token.signing_key_file 已废弃，请改用 Ed25519 signing_private_key_file 与 verify_public_key_file")
 	}
-	if c.Admin.TokenEnv == "" || c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
-		return errors.New("管理 API 必须配置令牌环境变量且高风险操作强制 mTLS")
+	if c.DownloadToken.SigningPrivateKeyFile == "" || c.DownloadToken.VerifyPublicKeyFile == "" {
+		return errors.New("下载令牌 Ed25519 私钥和公钥文件不得为空")
+	}
+	if c.Admin.TokenEnv == "" && c.Admin.TokenFile == "" {
+		return errors.New("管理 API 必须配置令牌环境变量或令牌文件")
+	}
+	if c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
+		return errors.New("管理 API 高风险操作必须强制 mTLS")
 	}
 	if c.Admin.TokenMinBytes < 32 {
 		return errors.New("管理令牌最小字节数不得低于 32")

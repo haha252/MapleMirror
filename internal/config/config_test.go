@@ -67,10 +67,6 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 
 func TestNodeRejectsInvalidTrustedProxyCIDR(t *testing.T) {
 	dir := t.TempDir()
-	keyPath := filepath.Join(dir, "key")
-	if err := os.WriteFile(keyPath, []byte("12345678901234567890123456789012"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	nodePath := filepath.Join(dir, "node.yaml")
 	body := []byte(`node:
   name: "节点一"
@@ -87,7 +83,7 @@ bandwidth:
 sync:
   max_workers: 1
 download_token:
-  signing_key_file: "` + keyPath + `"
+  verify_public_key_file: "data/download-token-ed25519.pub"
 proxy:
   trusted_cidrs: ["bad-cidr"]
 tls:

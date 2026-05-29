@@ -8,11 +8,12 @@ import (
 )
 
 type CertificateDelivery struct {
-	EnrollmentID   string
-	NodeID         string
-	CertificatePEM string
-	CAChainPEM     string
-	NotAfter       time.Time
+	EnrollmentID              string
+	NodeID                    string
+	CertificatePEM            string
+	CAChainPEM                string
+	DownloadTokenPublicKeyPEM string
+	NotAfter                  time.Time
 }
 
 func (r Repository) CollectCertificate(ctx context.Context, enrollmentID string) (CertificateDelivery, error) {

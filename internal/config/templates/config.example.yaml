@@ -50,8 +50,10 @@ api_pow:
 
 download_token:
   ttl: "15m"
-  # 主节点和下载节点共享的强随机签名密钥文件，文件内容不得写入日志。
-  signing_key_file: "secrets/download-token.key"
+  # 主节点保存 Ed25519 私钥用于签发下载令牌，私钥不得分发给下载节点。
+  signing_private_key_file: "secrets/download-token-ed25519.key"
+  # 下载节点只需要同一对密钥的公钥来验证令牌。
+  verify_public_key_file: "secrets/download-token-ed25519.pub"
 
 node:
   heartbeat_timeout: "30s"
@@ -59,25 +61,26 @@ node:
   enrollment_timeout: "10m"
   pairing_code_ttl: "5m"
   tls:
-    # M2 启用控制通道前配置证书文件路径。
-    ca_file: ""
-    cert_file: ""
-    key_file: ""
-    client_ca_file: ""
-    signing_ca_cert_file: ""
-    signing_ca_key_file: ""
+    ca_file: "secrets/master-ca.pem"
+    cert_file: "secrets/master-control.crt"
+    key_file: "secrets/master-control.key"
+    client_ca_file: "secrets/node-signing-ca.pem"
+    signing_ca_cert_file: "secrets/node-signing-ca.pem"
+    signing_ca_key_file: "secrets/node-signing-ca.key"
 
 admin:
   # 首版管理接口仅向管理网络开放；示例默认只允许本机。
   allowed_cidrs:
     - "127.0.0.0/8"
     - "::1/128"
-  # 仅引用强随机管理令牌所在的环境变量名称。
+  # 可选：环境变量存在时优先使用它覆盖 token_file。
   token_env: "MIRROR_ADMIN_TOKEN"
+  # 首次交互初始化会自动生成强随机管理令牌并写入此文件。
+  token_file: "secrets/admin-token"
   token_min_bytes: 32
   # 高风险节点操作必须叠加 mTLS，不得关闭。
   high_risk_require_mtls: true
   tls:
-    cert_file: ""
-    key_file: ""
-    client_ca_file: ""
+    cert_file: "secrets/admin-api.crt"
+    key_file: "secrets/admin-api.key"
+    client_ca_file: "secrets/admin-client-ca.pem"
