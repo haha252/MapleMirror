@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"mirror-server/internal/logging"
@@ -208,30 +207,4 @@ func (e Executor) recordTask(task protocol.SyncTask, state, message string) erro
 		task.TaskID, task.Asset.AssetID, task.TaskType, state, nullable(message),
 		time.Now().UTC().Format(time.RFC3339Nano))
 	return err
-}
-
-func taskResult(task protocol.SyncTask, result, digest string, size int64, msg string) protocol.SyncTaskResult {
-	return protocol.SyncTaskResult{
-		TaskID:            task.TaskID,
-		AssetID:           task.Asset.AssetID,
-		Result:            result,
-		LocalDigestSHA256: digest,
-		SizeBytes:         size,
-		Message:           msg,
-	}
-}
-
-func safeName(assetID, name string) string {
-	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
-	if name == "." || name == string(filepath.Separator) || name == "" {
-		name = "asset.bin"
-	}
-	return assetID + "-" + name
-}
-
-func nullable(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
 }

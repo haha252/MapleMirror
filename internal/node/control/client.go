@@ -79,6 +79,10 @@ func (c Client) RunOnce() (time.Duration, error) {
 	if err != nil {
 		return interval, err
 	}
+	nextSeq, err = c.sendPendingTaskResults(conn, reqID, nextSeq)
+	if err != nil {
+		return interval, err
+	}
 	if err := c.readOptionalTask(conn, reqID, nextSeq); err != nil {
 		return interval, err
 	}
@@ -170,17 +174,8 @@ func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) e
 			Result: "temporary_error", Message: "节点同步执行器未启用",
 		})
 	}
-	result := c.Executor.Execute(context.Background(), task)
-	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点完成同步任务执行",
-			slog.String("node_id", c.NodeID),
-			slog.String("request_id", reqID),
-			slog.String("task_id", task.TaskID),
-			slog.String("asset_id", task.Asset.AssetID),
-			slog.String("result", result.Result),
-			slog.Int64("size_bytes", result.SizeBytes))
-	}
-	return c.sendTaskResult(conn, reqID, sequence, result)
+	c.executeTaskAsync(task)
+	return nil
 }
 
 func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64, result protocol.SyncTaskResult) error {

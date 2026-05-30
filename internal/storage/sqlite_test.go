@@ -42,6 +42,7 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertTable(t, db, "pending_traffic_events")
 	assertTable(t, db, "control_identity")
 	assertTable(t, db, "local_sync_tasks")
+	assertTable(t, db, "pending_sync_task_results")
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {
