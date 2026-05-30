@@ -31,6 +31,13 @@ type SyncStatus struct {
 	RunningTasks            int    `json:"running_tasks"`
 	FailedTasks             int    `json:"failed_tasks"`
 	LatestInventoryRevision int    `json:"latest_inventory_revision"`
+	LatestInventoryComplete bool   `json:"latest_inventory_complete"`
+	HasInventoryReport      bool   `json:"has_inventory_report"`
+	ActiveControlSession    bool   `json:"active_control_session"`
+	LastHeartbeatAt         string `json:"last_heartbeat_at,omitempty"`
+	RoutingReadyReason      string `json:"routing_ready_reason"`
+	RoutingReadyDetail      string `json:"routing_ready_detail"`
+	OutstandingTasks        int    `json:"-"`
 }
 
 func (s Store) StartScan(ctx context.Context, projectID, requestID string) (string, error) {
@@ -79,8 +86,12 @@ func (s Store) NextTask(ctx context.Context, nodeID string) (protocol.SyncTask, 
 	err := s.DB.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id,
 		a.file_name, a.size_bytes, a.source_url, a.digest_sha256
 		FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id
-		WHERE t.node_id = ? AND t.state IN ('pending', 'retry_wait')
-		ORDER BY t.created_at LIMIT 1`, nodeID).
+		WHERE t.node_id = ?
+		AND (
+			t.state = 'pending'
+			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
+		)
+		ORDER BY t.created_at LIMIT 1`, nodeID, nowText()).
 		Scan(&task.TaskID, &task.TaskType, &task.Asset.AssetID, &task.Asset.FileName,
 			&task.Asset.SizeBytes, &task.Asset.DownloadURL, &task.Asset.DigestSHA256)
 	if err == sql.ErrNoRows {
@@ -98,7 +109,8 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 	out := SyncStatus{NodeID: nodeID}
 	var ready int
 	if err := s.DB.QueryRowContext(ctx,
-		`SELECT routing_ready FROM nodes WHERE id = ?`, nodeID).Scan(&ready); err != nil {
+		`SELECT routing_ready, COALESCE(last_heartbeat_at, '') FROM nodes WHERE id = ?`, nodeID).
+		Scan(&ready, &out.LastHeartbeatAt); err != nil {
 		return out, err
 	}
 	out.RoutingReady = ready == 1
@@ -114,15 +126,34 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 		WHERE node_id = ? AND state = 'mismatch'`, nodeID)
 	out.RunningTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND state IN ('sent', 'running')`, nodeID)
+	out.OutstandingTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
+		WHERE node_id = ? AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`, nodeID)
 	out.FailedTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND state = 'failed'`, nodeID)
-	_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(MAX(revision), 0)
-		FROM node_inventory_reports WHERE node_id = ?`, nodeID).Scan(&out.LatestInventoryRevision)
+	var latestComplete int
+	_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(revision, 0), COALESCE(complete, 0)
+		FROM node_inventory_reports WHERE node_id = ?
+		ORDER BY reported_at DESC LIMIT 1`, nodeID).
+		Scan(&out.LatestInventoryRevision, &latestComplete)
+	out.LatestInventoryComplete = latestComplete == 1
+	out.HasInventoryReport = out.LatestInventoryRevision > 0
+	out.ActiveControlSession = exists(ctx, s.DB, `SELECT 1 FROM node_control_sessions
+		WHERE node_id = ? AND disconnected_at IS NULL`, nodeID)
+	out.RoutingReadyReason, out.RoutingReadyDetail = syncStatusReason(out)
 	return out, nil
 }
 
 func (s Store) RetryTask(ctx context.Context, nodeID, taskID string) error {
-	return updateTask(ctx, s.DB, nodeID, taskID, "pending", "")
+	result, err := s.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+		error_message = NULL, attempts = 0, retry_after = NULL, updated_at = ?
+		WHERE id = ? AND node_id = ?`, nowText(), taskID, nodeID)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s Store) CancelTask(ctx context.Context, nodeID, taskID string) error {
@@ -146,6 +177,12 @@ func count(ctx context.Context, db *sql.DB, query string, arg any) int {
 	var n int
 	_ = db.QueryRowContext(ctx, query, arg).Scan(&n)
 	return n
+}
+
+func exists(ctx context.Context, db *sql.DB, query string, arg any) bool {
+	var ok int
+	_ = db.QueryRowContext(ctx, `SELECT EXISTS(`+query+`)`, arg).Scan(&ok)
+	return ok == 1
 }
 
 func nullable(value string) any {

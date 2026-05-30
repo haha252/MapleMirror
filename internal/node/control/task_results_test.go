@@ -2,14 +2,11 @@ package control
 
 import (
 	"crypto/tls"
-	"database/sql"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"mirror-server/internal/protocol"
-	"mirror-server/internal/storage"
 )
 
 func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T) {
@@ -85,6 +82,20 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 			ReplyTo:         result.MessageID,
 			Payload:         ackBody,
 		})
+		report, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+		if err != nil || report.MessageType != protocol.TypeInventoryReport {
+			return
+		}
+		_ = protocol.WriteFrame(conn, protocol.Envelope{
+			ProtocolVersion: protocol.Version,
+			MessageID:       "inventory-ack",
+			MessageType:     protocol.TypeHeartbeatAck,
+			SentAt:          time.Now().UTC(),
+			NodeID:          report.NodeID,
+			RequestID:       report.RequestID,
+			ReplyTo:         report.MessageID,
+			Payload:         ackBody,
+		})
 	}()
 	client := &Client{
 		NodeID:    "node-1",
@@ -104,13 +115,4 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 		t.Fatal("待上报同步结果未标记为已上报")
 	}
 	<-done
-}
-
-func openNodeDB(t *testing.T) *sql.DB {
-	t.Helper()
-	db, err := storage.OpenNode(filepath.Join(t.TempDir(), "node.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return db
 }

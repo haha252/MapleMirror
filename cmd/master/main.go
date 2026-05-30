@@ -92,7 +92,7 @@ func main() {
 	defer database.Close()
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
 
-	repo := mastercontrol.Repository{DB: database}
+	repo := mastercontrol.Repository{DB: database, Logger: logger}
 	syncService := startMirrorSync(cfg, projects, database, logger)
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, logger)

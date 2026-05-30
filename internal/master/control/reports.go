@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"mirror-server/internal/protocol"
@@ -41,8 +42,19 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		}
 	}
 	if report.Complete {
-		if err := reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
+		if err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
 			return HeartbeatResult{}, err
+		}
+		if r.Logger != nil {
+			missing, running, ready := readySnapshot(ctx, tx, session.NodeID)
+			r.Logger.Debug(ctx, "节点完整库存上报已接收",
+				slog.String("node_id", session.NodeID),
+				slog.Uint64("revision", report.Revision),
+				slog.Int("item_count", len(report.Items)),
+				slog.Bool("complete", report.Complete),
+				slog.Int("missing_targets", missing),
+				slog.Int("running_tasks", running),
+				slog.Bool("routing_ready", ready))
 		}
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET

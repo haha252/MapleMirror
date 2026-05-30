@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"mirror-server/internal/protocol"
@@ -11,14 +12,22 @@ import (
 
 func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.SyncTask, bool, error) {
 	var task protocol.SyncTask
+	var attempts int
+	var retryAfter string
 	err := r.DB.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, a.file_name,
-		a.size_bytes, a.source_url, a.digest_sha256
+		a.size_bytes, a.source_url, a.digest_sha256, COALESCE(t.attempts, 0),
+		COALESCE(t.retry_after, '')
 		FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id
-		WHERE t.node_id = ? AND t.state IN ('pending', 'retry_wait')
-		ORDER BY t.created_at LIMIT 1`, nodeID).
+		WHERE t.node_id = ?
+		AND (
+			t.state = 'pending'
+			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
+		)
+		ORDER BY t.created_at LIMIT 1`, nodeID, time.Now().UTC().Format(time.RFC3339Nano)).
 		Scan(&task.TaskID, &task.TaskType, &task.Asset.AssetID,
 			&task.Asset.FileName, &task.Asset.SizeBytes,
-			&task.Asset.DownloadURL, &task.Asset.DigestSHA256)
+			&task.Asset.DownloadURL, &task.Asset.DigestSHA256,
+			&attempts, &retryAfter)
 	if err == sql.ErrNoRows {
 		return protocol.SyncTask{}, false, nil
 	}
@@ -27,6 +36,15 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 	}
 	_, err = r.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'sent',
 		updated_at = ? WHERE id = ?`, time.Now().UTC().Format(time.RFC3339Nano), task.TaskID)
+	if err == nil && r.Logger != nil {
+		r.Logger.Debug(ctx, "同步任务可派发",
+			slog.String("node_id", nodeID),
+			slog.String("task_id", task.TaskID),
+			slog.String("task_type", task.TaskType),
+			slog.String("asset_id", task.Asset.AssetID),
+			slog.Int("attempts", attempts),
+			slog.String("retry_after", retryAfter))
+	}
 	return task, true, err
 }
 
@@ -43,12 +61,9 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	if seq <= last {
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	state := taskState(result.Result)
-	_, err = tx.ExecContext(ctx, `UPDATE node_tasks SET state = ?,
-		error_message = ?, completed_at = CASE WHEN ? = 'succeeded' THEN ? ELSE completed_at END,
-		updated_at = ? WHERE id = ? AND node_id = ?`,
-		state, nullable(result.Message), state, now, now, result.TaskID, session.NodeID)
+	nowValue := time.Now().UTC()
+	now := nowValue.Format(time.RFC3339Nano)
+	taskState, attempts, retryAfter, err := r.applyTaskResult(ctx, tx, session.NodeID, result, nowValue)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -57,11 +72,22 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 			return HeartbeatResult{}, err
 		}
 	}
-	if err := reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
+	if err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
 		return HeartbeatResult{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET
 		last_message_sequence = ? WHERE id = ?`, seq, session.ID)
+	if err == nil && r.Logger != nil {
+		r.Logger.Debug(ctx, "同步任务结果已处理",
+			slog.String("node_id", session.NodeID),
+			slog.String("task_id", result.TaskID),
+			slog.String("asset_id", result.AssetID),
+			slog.String("result", result.Result),
+			slog.String("task_state", taskState),
+			slog.Int("attempts", attempts),
+			slog.String("retry_after", retryAfter),
+			slog.String("message", result.Message))
+	}
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
 }
 
@@ -88,7 +114,11 @@ func upsertVerifiedInventory(ctx context.Context, tx *sql.Tx, nodeID string, res
 	return err
 }
 
-func reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
+func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
+	var previousReady int
+	if err := tx.QueryRowContext(ctx, `SELECT routing_ready FROM nodes WHERE id = ?`, nodeID).Scan(&previousReady); err != nil {
+		return err
+	}
 	var missing, running int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM target_inventory ti
 		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
@@ -110,7 +140,28 @@ func reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 	_, err := tx.ExecContext(ctx, `UPDATE nodes SET routing_ready = ?,
 		state = CASE WHEN state = 'disabled' THEN state ELSE ? END,
 		updated_at = ? WHERE id = ?`, ready, state, now, nodeID)
+	if err == nil && r.Logger != nil && previousReady != ready {
+		r.Logger.Debug(ctx, "节点同步就绪状态已更新",
+			slog.String("node_id", nodeID),
+			slog.Bool("routing_ready", ready == 1),
+			slog.Int("missing_targets", missing),
+			slog.Int("running_tasks", running),
+			slog.String("state", state))
+	}
 	return err
+}
+
+func readySnapshot(ctx context.Context, tx *sql.Tx, nodeID string) (missing, running int, ready bool) {
+	_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM target_inventory ti
+		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
+		WHERE ti.node_id = ? AND ti.desired_state = 'required'
+		AND (ni.asset_id IS NULL OR ni.state != 'verified')`, nodeID).Scan(&missing)
+	_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks
+		WHERE node_id = ? AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`,
+		nodeID).Scan(&running)
+	var readyInt int
+	_ = tx.QueryRowContext(ctx, `SELECT routing_ready FROM nodes WHERE id = ?`, nodeID).Scan(&readyInt)
+	return missing, running, readyInt == 1
 }
 
 func currentSequence(ctx context.Context, tx *sql.Tx, sessionID string) (uint64, error) {
@@ -121,16 +172,6 @@ func currentSequence(ctx context.Context, tx *sql.Tx, sessionID string) (uint64,
 		return 0, fmt.Errorf("控制会话不可用")
 	}
 	return last, nil
-}
-
-func taskState(result string) string {
-	if result == "succeeded" {
-		return "succeeded"
-	}
-	if result == "temporary_error" {
-		return "retry_wait"
-	}
-	return "failed"
 }
 
 func nullable(value string) any {

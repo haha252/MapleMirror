@@ -50,6 +50,52 @@ func TestCompleteInventoryReportCanMarkNodeReady(t *testing.T) {
 	}
 }
 
+func TestReconnectResetsReadyUntilCompleteInventoryReportArrives(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+		ReportID: "r-ready", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-1", SizeBytes: 10,
+			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			LocalState:   "reported",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ready int
+	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
+	if ready != 1 {
+		t.Fatalf("expected ready before reconnect, got %d", ready)
+	}
+	restarted, err := repo.StartSession(context.Background(), "sha256:aa", "req-reconnect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
+	if ready != 0 {
+		t.Fatalf("expected ready reset on reconnect, got %d", ready)
+	}
+	_, err = repo.AcceptInventoryReport(context.Background(), restarted, 1, protocol.InventoryReport{
+		ReportID: "r-reconnect", Revision: 2, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-1", SizeBytes: 10,
+			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			LocalState:   "reported",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
+	if ready != 1 {
+		t.Fatalf("expected ready restored after complete report, got %d", ready)
+	}
+}
+
 func TestPressureReportReplayHasNoDuplicateSideEffect(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

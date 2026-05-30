@@ -9,9 +9,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	"mirror-server/internal/logging"
 )
 
-type Repository struct{ DB *sql.DB }
+type Repository struct {
+	DB     *sql.DB
+	Logger *logging.Logger
+}
 
 type PairingCode struct {
 	ID        string

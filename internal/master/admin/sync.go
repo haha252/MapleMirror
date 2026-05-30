@@ -98,7 +98,10 @@ func (s Server) syncStatus(w http.ResponseWriter, r *http.Request, nodeID string
 			slog.Int("missing_assets", item.MissingAssets),
 			slog.Int("mismatched_assets", item.MismatchedAssets),
 			slog.Int("running_tasks", item.RunningTasks),
-			slog.Int("failed_tasks", item.FailedTasks))
+			slog.Int("failed_tasks", item.FailedTasks),
+			slog.Bool("latest_inventory_complete", item.LatestInventoryComplete),
+			slog.Bool("active_control_session", item.ActiveControlSession),
+			slog.String("routing_ready_reason", item.RoutingReadyReason))
 	}
 	writeOK(w, r, http.StatusOK, "节点同步状态", item)
 }

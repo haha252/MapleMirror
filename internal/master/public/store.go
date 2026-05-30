@@ -16,33 +16,38 @@ type Store struct {
 }
 
 type ProjectSummary struct {
-	ProjectID   string `json:"project_id"`
-	Repository  string `json:"repository"`
-	DisplayName string `json:"display_name"`
-	Available   bool   `json:"available"`
+	ProjectID          string `json:"project_id"`
+	Repository         string `json:"repository"`
+	DisplayName        string `json:"display_name"`
+	Available          bool   `json:"available"`
+	UnavailableReason  string `json:"-"`
+	UnavailableDetails string `json:"-"`
 }
 
 type AssetSummary struct {
-	AssetID           string `json:"asset_id"`
-	Version           string `json:"version"`
-	Prerelease        bool   `json:"prerelease"`
-	FileName          string `json:"file_name"`
-	Architecture      string `json:"architecture"`
-	SizeBytes         int64  `json:"size_bytes"`
-	DigestSHA256      string `json:"digest_sha256"`
-	Available         bool   `json:"available"`
-	UnavailableReason string `json:"unavailable_reason"`
+	AssetID            string `json:"asset_id"`
+	Version            string `json:"version"`
+	Prerelease         bool   `json:"prerelease"`
+	FileName           string `json:"file_name"`
+	Architecture       string `json:"architecture"`
+	SizeBytes          int64  `json:"size_bytes"`
+	DigestSHA256       string `json:"digest_sha256"`
+	Available          bool   `json:"available"`
+	UnavailableReason  string `json:"unavailable_reason"`
+	UnavailableDetails string `json:"-"`
 }
 
 type NodeSummary struct {
-	NodeID        string `json:"node_id"`
-	PublicName    string `json:"public_name"`
-	State         string `json:"state"`
-	RoutingReady  bool   `json:"routing_ready"`
-	LastHeartbeat string `json:"last_heartbeat_at,omitempty"`
-	SLA24H        string `json:"sla_24h"`
-	SLA7D         string `json:"sla_7d"`
-	SLA30D        string `json:"sla_30d"`
+	NodeID              string `json:"node_id"`
+	PublicName          string `json:"public_name"`
+	State               string `json:"state"`
+	RoutingReady        bool   `json:"routing_ready"`
+	RoutingReadyReason  string `json:"-"`
+	RoutingReadyDetails string `json:"-"`
+	LastHeartbeat       string `json:"last_heartbeat_at,omitempty"`
+	SLA24H              string `json:"sla_24h"`
+	SLA7D               string `json:"sla_7d"`
+	SLA30D              string `json:"sla_30d"`
 }
 
 type Challenge struct {
@@ -79,17 +84,31 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var out []ProjectSummary
 	for rows.Next() {
-		var p ProjectSummary
+		var item ProjectSummary
 		var available int
-		if err := rows.Scan(&p.ProjectID, &p.Repository, &p.DisplayName, &available); err != nil {
+		if err := rows.Scan(&item.ProjectID, &item.Repository, &item.DisplayName, &available); err != nil {
 			return nil, err
 		}
-		p.Available = available == 1
-		out = append(out, p)
+		item.Available = available == 1
+		out = append(out, item)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if !out[i].Available {
+			info := s.projectUnavailableInfo(ctx, out[i].ProjectID)
+			out[i].UnavailableReason = info.Summary
+			out[i].UnavailableDetails = info.Detail
+		}
+	}
+	return out, nil
 }
 
 func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, error) {
@@ -105,40 +124,18 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 		return nil, err
 	}
 	defer rows.Close()
+
 	var out []AssetSummary
 	for rows.Next() {
-		var a AssetSummary
+		var item AssetSummary
 		var prerelease, available int
-		err := rows.Scan(&a.AssetID, &a.Version, &prerelease, &a.FileName,
-			&a.Architecture, &a.SizeBytes, &a.DigestSHA256, &available)
-		if err != nil {
+		if err := rows.Scan(&item.AssetID, &item.Version, &prerelease, &item.FileName,
+			&item.Architecture, &item.SizeBytes, &item.DigestSHA256, &available); err != nil {
 			return nil, err
 		}
-		a.Prerelease, a.Available = prerelease == 1, available == 1
-		if !a.Available {
-			a.UnavailableReason = "暂不可下载"
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
-}
-
-func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, public_name, state,
-		routing_ready, COALESCE(last_heartbeat_at, '') FROM nodes ORDER BY public_name, id`)
-	if err != nil {
-		return nil, err
-	}
-	var out []NodeSummary
-	for rows.Next() {
-		var n NodeSummary
-		var ready int
-		if err := rows.Scan(&n.NodeID, &n.PublicName, &n.State,
-			&ready, &n.LastHeartbeat); err != nil {
-			return nil, err
-		}
-		n.RoutingReady = ready == 1
-		out = append(out, n)
+		item.Prerelease = prerelease == 1
+		item.Available = available == 1
+		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -147,6 +144,45 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 		return nil, err
 	}
 	for i := range out {
+		if !out[i].Available {
+			info := s.assetUnavailableInfo(ctx, out[i].AssetID)
+			out[i].UnavailableReason = info.Summary
+			out[i].UnavailableDetails = info.Detail
+		}
+	}
+	return out, nil
+}
+
+func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, public_name, state,
+		routing_ready, COALESCE(last_heartbeat_at, '') FROM nodes ORDER BY public_name, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []NodeSummary
+	for rows.Next() {
+		var item NodeSummary
+		var ready int
+		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State, &ready, &item.LastHeartbeat); err != nil {
+			return nil, err
+		}
+		item.RoutingReady = ready == 1
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if !out[i].RoutingReady {
+			info := s.nodeRoutingReadyInfo(ctx, out[i].NodeID, out[i].State, out[i].LastHeartbeat)
+			out[i].RoutingReadyReason = info.Summary
+			out[i].RoutingReadyDetails = info.Detail
+		}
 		out[i].SLA24H = s.slaText(ctx, out[i].NodeID, 24)
 		out[i].SLA7D = s.slaText(ctx, out[i].NodeID, 24*7)
 		out[i].SLA30D = s.slaText(ctx, out[i].NodeID, 24*30)
@@ -162,24 +198,31 @@ func (s Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string
 	if err != nil {
 		return Challenge{}, err
 	}
-	c := Challenge{ID: id, Kind: kind, AssetID: assetID, ClientPrefixKey: prefix,
-		Nonce: randomText(16), Difficulty: difficulty, ExpiresAt: expiresAfter(ttl)}
+	challenge := Challenge{
+		ID:              id,
+		Kind:            kind,
+		AssetID:         assetID,
+		ClientPrefixKey: prefix,
+		Nonce:           randomText(16),
+		Difficulty:      difficulty,
+		ExpiresAt:       expiresAfter(ttl),
+	}
 	_, err = s.DB.ExecContext(ctx, `INSERT INTO challenges
 		(id, kind, asset_id, client_prefix_key, nonce_hash, difficulty,
 		expires_at, request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.ID, c.Kind, c.AssetID, c.ClientPrefixKey, c.Nonce,
-		c.Difficulty, c.ExpiresAt, requestID)
-	return c, err
+		challenge.ID, challenge.Kind, challenge.AssetID, challenge.ClientPrefixKey,
+		challenge.Nonce, challenge.Difficulty, challenge.ExpiresAt, requestID)
+	return challenge, err
 }
 
 func (s Store) LoadChallenge(ctx context.Context, id string) (Challenge, error) {
-	var c Challenge
+	var challenge Challenge
 	err := s.DB.QueryRowContext(ctx, `SELECT id, kind, asset_id,
 		client_prefix_key, nonce_hash, COALESCE(difficulty, 0), expires_at
 		FROM challenges WHERE id = ? AND consumed_at IS NULL AND expires_at > ?`,
-		id, nowText()).Scan(&c.ID, &c.Kind, &c.AssetID, &c.ClientPrefixKey,
-		&c.Nonce, &c.Difficulty, &c.ExpiresAt)
-	return c, err
+		id, nowText()).Scan(&challenge.ID, &challenge.Kind, &challenge.AssetID,
+		&challenge.ClientPrefixKey, &challenge.Nonce, &challenge.Difficulty, &challenge.ExpiresAt)
+	return challenge, err
 }
 
 func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {

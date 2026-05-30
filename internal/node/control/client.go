@@ -83,6 +83,10 @@ func (c Client) RunOnce() (time.Duration, error) {
 	if err != nil {
 		return interval, err
 	}
+	nextSeq, err = c.sendFullInventoryReport(conn, reqID, nextSeq)
+	if err != nil {
+		return interval, err
+	}
 	if err := c.readOptionalTask(conn, reqID, nextSeq); err != nil {
 		return interval, err
 	}
