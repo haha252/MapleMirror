@@ -3,8 +3,13 @@ package control
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"errors"
 	"time"
+)
+
+var (
+	ErrCertificateNotActive = errors.New("证书未批准或已失效")
+	ErrNodeDisabled         = errors.New("节点已禁用")
 )
 
 type Session struct {
@@ -31,12 +36,12 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 		time.Now().UTC().Format(time.RFC3339Nano)).Scan(&session.CertificateID, &session.NodeID, &nodeState)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return Session{}, fmt.Errorf("证书未批准或已失效")
+			return Session{}, ErrCertificateNotActive
 		}
 		return Session{}, err
 	}
 	if nodeState == "disabled" {
-		return Session{}, fmt.Errorf("节点已禁用")
+		return Session{}, ErrNodeDisabled
 	}
 	session.ID, err = newID()
 	if err != nil {

@@ -47,6 +47,24 @@ func TestMarkOfflineMasksRouting(t *testing.T) {
 	}
 }
 
+func TestMarkOfflineDoesNotRepeatAlreadyOfflineNode(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	_, err := repo.DB.Exec(`UPDATE nodes SET state = 'offline', last_heartbeat_at = ? WHERE id = ?`,
+		time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano), session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := repo.MarkOffline(context.Background(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed != 0 {
+		t.Fatalf("已离线节点不应重复计数，changed=%d", changed)
+	}
+}
+
 func seedNodeAndSession(t *testing.T, repo Repository) Session {
 	t.Helper()
 	now := time.Now().UTC().Format(time.RFC3339Nano)

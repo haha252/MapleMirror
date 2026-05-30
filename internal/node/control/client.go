@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"time"
@@ -51,9 +52,12 @@ func (c Client) RunOnce() (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
+	if msg.MessageType == protocol.TypeProtocolError {
+		return 0, parseRejectionError(msg)
+	}
 	var welcome protocol.Welcome
 	if msg.MessageType != protocol.TypeWelcome {
-		return 0, nil
+		return 0, errors.New("主节点返回了非预期的控制响应")
 	}
 	if err := json.Unmarshal(msg.Payload, &welcome); err != nil {
 		return 0, err
@@ -79,44 +83,6 @@ func (c Client) RunOnce() (time.Duration, error) {
 		return interval, err
 	}
 	return interval, nil
-}
-
-func (c *Client) Run(stop <-chan struct{}) {
-	interval := c.HeartbeatInterval
-	if interval <= 0 {
-		interval = 5 * time.Second
-	}
-	for {
-		if c.Logger != nil {
-			c.Logger.Debug(context.Background(), "节点控制轮询开始",
-				slog.String("node_id", c.NodeID),
-				slog.String("master", c.Address),
-				slog.String("interval", interval.String()))
-		}
-		nextInterval, err := c.RunOnce()
-		if err != nil {
-			if c.Logger != nil {
-				c.Logger.Warn(context.Background(), "节点控制轮询失败",
-					slog.String("node_id", c.NodeID),
-					slog.String("master", c.Address),
-					slog.String("error", err.Error()))
-			}
-		} else if nextInterval > 0 {
-			interval = nextInterval
-			c.HeartbeatInterval = nextInterval
-			if c.Logger != nil {
-				c.Logger.Debug(context.Background(), "节点控制轮询完成",
-					slog.String("node_id", c.NodeID),
-					slog.String("master", c.Address),
-					slog.String("next_interval", nextInterval.String()))
-			}
-		}
-		select {
-		case <-stop:
-			return
-		case <-time.After(interval):
-		}
-	}
 }
 
 func (c Client) hello(conn net.Conn, reqID string) error {
@@ -154,6 +120,9 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 	if err != nil {
 		return err
 	}
+	if msg.MessageType == protocol.TypeProtocolError {
+		return parseRejectionError(msg)
+	}
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点收到心跳确认",
 			slog.String("node_id", c.NodeID),
@@ -167,7 +136,13 @@ func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) e
 	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
 	_ = conn.SetReadDeadline(time.Time{})
-	if err != nil || msg.MessageType != protocol.TypeSyncTask {
+	if err != nil {
+		return nil
+	}
+	if msg.MessageType == protocol.TypeProtocolError {
+		return parseRejectionError(msg)
+	}
+	if msg.MessageType != protocol.TypeSyncTask {
 		return nil
 	}
 	var task protocol.SyncTask
@@ -225,6 +200,12 @@ func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64, res
 	}); err != nil {
 		return err
 	}
-	_, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
-	return err
+	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	if err != nil {
+		return err
+	}
+	if msg.MessageType == protocol.TypeProtocolError {
+		return parseRejectionError(msg)
+	}
+	return nil
 }

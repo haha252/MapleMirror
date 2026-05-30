@@ -30,6 +30,11 @@ type EnrollCertificate struct {
 	NotAfter                  time.Time `json:"not_after"`
 }
 
+type ProtocolError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 type Welcome struct {
 	SessionID               string `json:"session_id"`
 	AcceptedSequence        uint64 `json:"accepted_sequence"`

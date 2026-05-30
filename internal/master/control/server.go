@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"time"
@@ -24,15 +25,37 @@ type ControlServer struct {
 func (s ControlServer) Handle(conn net.Conn) {
 	defer conn.Close()
 	tlsConn, ok := conn.(*tls.Conn)
-	if !ok || tlsConn.ConnectionState().PeerCertificates == nil {
+	if !ok {
+		if s.Logger != nil {
+			s.Logger.Debug(context.Background(), "控制会话收到非 TLS 连接",
+				slog.String("remote_addr", conn.RemoteAddr().String()))
+		}
 		return
 	}
+	remote := conn.RemoteAddr().String()
 	reqID, err := requestid.New()
 	if err != nil {
 		return
 	}
-	fp := controltls.Fingerprint(tlsConn.ConnectionState().PeerCertificates[0])
-	remote := conn.RemoteAddr().String()
+	if err := tlsConn.Handshake(); err != nil {
+		if s.Logger != nil {
+			s.Logger.Debug(context.Background(), "控制会话 TLS 握手失败",
+				slog.String("request_id", reqID),
+				slog.String("remote_addr", remote),
+				slog.String("error", err.Error()))
+		}
+		return
+	}
+	state := tlsConn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		if s.Logger != nil {
+			s.Logger.Debug(context.Background(), "控制会话未提供客户端证书",
+				slog.String("request_id", reqID),
+				slog.String("remote_addr", remote))
+		}
+		return
+	}
+	fp := controltls.Fingerprint(state.PeerCertificates[0])
 	if s.Logger != nil {
 		s.Logger.Debug(context.Background(), "控制会话开始",
 			slog.String("request_id", reqID),
@@ -48,6 +71,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 				slog.String("remote_addr", remote),
 				slog.String("error", err.Error()))
 		}
+		s.writeStartSessionReject(conn, tlsConn, reqID, fp, err)
 		return
 	}
 	closeReason := "连接关闭"
@@ -183,4 +207,37 @@ func (s ControlServer) Handle(conn net.Conn) {
 		})
 		s.writeNextTask(conn, session, reqID)
 	}
+}
+
+func (s ControlServer) writeStartSessionReject(conn net.Conn, tlsConn *tls.Conn, reqID, fingerprint string, err error) {
+	code := "CONTROL_INTERNAL_ERROR"
+	message := err.Error()
+	switch {
+	case errors.Is(err, ErrCertificateNotActive):
+		code = "CERTIFICATE_NOT_ACTIVE"
+	case errors.Is(err, ErrNodeDisabled):
+		code = "NODE_DISABLED"
+	}
+	nodeID := ""
+	if tlsConn != nil && len(tlsConn.ConnectionState().PeerCertificates) > 0 {
+		nodeID = tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName
+	}
+	if nodeID == "" && fingerprint != "" {
+		if resolved, lookupErr := s.Repo.NodeIDByFingerprint(context.Background(), fingerprint); lookupErr == nil {
+			nodeID = resolved
+		}
+	}
+	if nodeID == "" {
+		nodeID = fingerprint
+	}
+	body, _ := json.Marshal(protocol.ProtocolError{Code: code, Message: message})
+	_ = protocol.WriteFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version,
+		MessageID:       reqID,
+		MessageType:     protocol.TypeProtocolError,
+		SentAt:          time.Now().UTC(),
+		NodeID:          nodeID,
+		RequestID:       reqID,
+		Payload:         body,
+	})
 }

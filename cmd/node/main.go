@@ -163,28 +163,17 @@ func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
 		logger.Warn(context.Background(), "节点控制证书材料未配置，控制连接未启动")
 		return
 	}
-	tlsCfg, err := controltls.NodeClient(cfg.TLS.CAFile, cfg.TLS.CertFile, cfg.TLS.KeyFile, cfg.TLS.ServerName)
-	if err != nil {
-		logger.Error(context.Background(), "节点控制 TLS 初始化失败", slog.String("error", err.Error()))
-		return
-	}
 	address, err := url.Parse(cfg.Master.ControlAddress)
 	if err != nil {
 		logger.Error(context.Background(), "主节点控制地址无效", slog.String("error", err.Error()))
 		return
 	}
-	store := nodecontrol.IdentityStore{DB: db}
-	nodeID, err := store.NodeID()
-	if err != nil {
-		logger.Warn(context.Background(), "节点身份尚未登记，控制连接未启动")
-		return
+	supervisor := controlSupervisor{
+		cfg: cfg, db: db, logger: logger, address: address.Host,
+		executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
+			TempDir: cfg.Storage.TempDirectory, Logger: logger},
 	}
-	client := nodecontrol.Client{NodeID: nodeID, Address: address.Host, TLSConfig: tlsCfg, DB: db,
-		Logger: logger,
-		Executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
-			TempDir: cfg.Storage.TempDirectory, Logger: logger}}
-	stop := make(chan struct{})
-	go client.Run(stop)
+	go supervisor.run()
 	logger.Info(context.Background(), "节点主动控制连接已启动", slog.String("master", address.Host))
 }
 

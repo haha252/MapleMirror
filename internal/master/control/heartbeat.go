@@ -56,7 +56,7 @@ func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM nodes WHERE state != 'disabled'
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM nodes WHERE state NOT IN ('disabled', 'offline')
 		AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)`, cutoff)
 	if err != nil {
 		return 0, err

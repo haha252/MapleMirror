@@ -50,6 +50,16 @@ func (r Repository) CreatePairing(ctx context.Context, ttl time.Duration, reques
 	return PairingCode{ID: id, Code: code, ExpiresAt: now.Add(ttl)}, nil
 }
 
+func (r Repository) NodeIDByFingerprint(ctx context.Context, fingerprint string) (string, error) {
+	var nodeID string
+	err := r.DB.QueryRowContext(ctx, `SELECT node_id FROM node_certificates
+		WHERE fingerprint = ? ORDER BY created_at DESC LIMIT 1`, fingerprint).Scan(&nodeID)
+	if err != nil {
+		return "", err
+	}
+	return nodeID, nil
+}
+
 func (r Repository) RevokePairing(ctx context.Context, id, requestID string) error {
 	result, err := r.DB.ExecContext(ctx, `UPDATE pairing_codes
 		SET revoked_at = ?, consumed_by_request_id = COALESCE(consumed_by_request_id, ?)

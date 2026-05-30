@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net"
 	"testing"
@@ -57,6 +58,57 @@ func TestClientRunUsesServerInterval(t *testing.T) {
 	case <-clientDone:
 	case <-time.After(3 * time.Second):
 		t.Fatal("客户端未能停止")
+	}
+	<-done
+}
+
+func TestClientRunOnceReturnsProtocolError(t *testing.T) {
+	ln := testTLSServer(t)
+	defer ln.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		hello, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+		if err != nil || hello.MessageType != protocol.TypeHello {
+			return
+		}
+		body, _ := json.Marshal(protocol.ProtocolError{
+			Code:    "CERTIFICATE_NOT_ACTIVE",
+			Message: "证书未批准或已失效",
+		})
+		_ = protocol.WriteFrame(conn, protocol.Envelope{
+			ProtocolVersion: protocol.Version,
+			MessageID:       "reject",
+			MessageType:     protocol.TypeProtocolError,
+			SentAt:          time.Now().UTC(),
+			NodeID:          hello.NodeID,
+			RequestID:       hello.RequestID,
+			ReplyTo:         hello.MessageID,
+			Payload:         body,
+		})
+	}()
+
+	client := &Client{
+		NodeID:    "node-1",
+		Address:   ln.Addr().String(),
+		TLSConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	_, err := client.RunOnce()
+	if err == nil {
+		t.Fatal("期望收到拒绝错误")
+	}
+	var rejection RejectionError
+	if !errors.As(err, &rejection) {
+		t.Fatalf("期望拒绝错误，实际为 %T: %v", err, err)
+	}
+	if rejection.Code != "CERTIFICATE_NOT_ACTIVE" {
+		t.Fatalf("期望 CERTIFICATE_NOT_ACTIVE，实际为 %q", rejection.Code)
 	}
 	<-done
 }
