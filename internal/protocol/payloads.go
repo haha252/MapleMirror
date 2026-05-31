@@ -49,6 +49,7 @@ type Heartbeat struct {
 	UptimeSeconds           uint64         `json:"uptime_seconds"`
 	ActiveDownloads         int64          `json:"active_downloads"`
 	FreeBytes               int64          `json:"free_bytes"`
+	PublicDownloadBaseURL   string         `json:"public_download_base_url"`
 	Pressure                PressureSample `json:"pressure"`
 	InventoryDigest         string         `json:"inventory_digest"`
 	InventoryReportRevision uint64         `json:"inventory_report_revision"`

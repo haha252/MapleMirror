@@ -4,6 +4,8 @@ projects:
   - id: "example"
     name: "示例项目"
     repository: "owner/repository"
+    # 项目图标相对当前 projects.yaml 所在目录，例如 project-icons/example.svg。
+    icon_path: "project-icons/example.svg"
     enabled: false
     # 每个下载节点应保留的版本数量，默认值为 3。
     retain_versions: 3

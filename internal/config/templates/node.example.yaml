@@ -6,6 +6,8 @@ node:
 
 server:
   listen: ":8081"
+  # 浏览器最终下载文件时访问的公网基地址，主节点会基于它返回完整下载链接。
+  public_download_base_url: "https://node1.example.com"
 
 master:
   # 下载节点主动连接主节点控制面，M2 开始使用 mTLS。

@@ -6,44 +6,6 @@ import (
 	"net/http"
 )
 
-var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}}</title>
-<style>
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f7f8fa;color:#1f2933}
-header{background:#fff;border-bottom:1px solid #dde3ea;padding:16px 24px}
-nav a{margin-right:16px;color:#0b5cad;text-decoration:none}
-main{max-width:960px;margin:0 auto;padding:24px}
-table{width:100%;border-collapse:collapse;background:#fff}
-th,td{border-bottom:1px solid #e5e9ef;padding:10px;text-align:left;vertical-align:top}
-.muted{color:#667085}.ok{color:#067647}.warn{color:#b54708}
-.sub{display:block;margin-top:4px;font-size:12px;color:#667085;line-height:1.5}
-.status{margin:0 0 16px;padding:12px 14px;border:1px solid #dde3ea;border-radius:10px;background:#fff}
-.project-card{margin:0 0 20px;padding:18px;border:1px solid #dde3ea;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.04)}
-.project-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}
-.project-head h2{margin:0 0 4px;font-size:20px}
-.asset-table{margin-top:12px;background:#fafbfc}
-.asset-table th,.asset-table td{padding:10px 12px}
-.asset-table .download-btn{padding:8px 12px;border:0;border-radius:999px;background:#0b5cad;color:#fff;cursor:pointer;font:inherit}
-.asset-table .download-btn:disabled{opacity:.6;cursor:not-allowed}
-.asset-table .download-btn:hover:not(:disabled){background:#094a94}
-</style>
-</head>
-<body>
-<header><nav>
-<a href="/">下载</a><a href="/stats">统计数据</a><a href="/about">关于</a><a href="/nodes">节点状态</a>
-</nav></header>
-<main><h1>{{.Title}}</h1>{{.Body}}</main>
-</body></html>`))
-
-type pageData struct {
-	Title string
-	Body  template.HTML
-}
-
 func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 	overview, err := s.Store.StatsOverview(r.Context())
 	if err != nil {
@@ -61,11 +23,12 @@ func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 			`</td><td>` + num(p.TransferStartedCount) + `</td><td>` + bytesText(p.SentBytes) + `</td></tr>`
 	}
 	body += `</table>`
-	renderPage(w, "统计数据", body)
+	s.renderPage(w, pageData{Title: "统计数据", BodyClass: "page-stats", Body: template.HTML(body)})
 }
 
 func (s Server) aboutPage(w http.ResponseWriter, _ *http.Request) {
-	renderPage(w, "关于", `<p>本服务提供公开 GitHub Release 文件镜像下载。</p><p class="muted">镜像内容来自公开仓库，本服务不是 GitHub 官方服务。网页下载使用自托管 ALTCHA，公开 API 使用独立 SHA-256 前导零 PoW。</p>`)
+	body := `<p>本服务提供公开 GitHub Release 文件镜像下载。</p><p class="muted">镜像内容来自公开仓库，本服务不是 GitHub 官方服务。网页下载使用自托管 ALTCHA，公开 API 使用独立 SHA-256 前导零 PoW。</p>`
+	s.renderPage(w, pageData{Title: "关于", BodyClass: "page-about", Body: template.HTML(body)})
 }
 
 func (s Server) nodesPage(w http.ResponseWriter, r *http.Request) {
@@ -88,12 +51,7 @@ func (s Server) nodesPage(w http.ResponseWriter, r *http.Request) {
 			`</td><td>` + esc(n.SLA30D) + `</td></tr>`
 	}
 	body += `</table>`
-	renderPage(w, "节点状态", body)
-}
-
-func renderPage(w http.ResponseWriter, title, body string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = pageTemplate.Execute(w, pageData{Title: title, Body: template.HTML(body)})
+	s.renderPage(w, pageData{Title: "节点状态", BodyClass: "page-nodes", Body: template.HTML(body)})
 }
 
 func renderDetail(label, value string) string {

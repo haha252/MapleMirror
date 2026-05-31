@@ -25,7 +25,8 @@ type NodeIdentity struct {
 	IDFile string `yaml:"id_file"`
 }
 type NodeServer struct {
-	Listen string `yaml:"listen"`
+	Listen                string `yaml:"listen"`
+	PublicDownloadBaseURL string `yaml:"public_download_base_url"`
 }
 type NodeMaster struct {
 	ControlAddress    string `yaml:"control_address"`
@@ -84,6 +85,10 @@ func validateNode(c Node) error {
 	}
 	if !validListen(c.Server.Listen) {
 		return errors.New("节点配置 server.listen 必须为合法监听地址")
+	}
+	baseURL, err := url.Parse(c.Server.PublicDownloadBaseURL)
+	if err != nil || baseURL.Host == "" || (baseURL.Scheme != "http" && baseURL.Scheme != "https") {
+		return errors.New("节点配置 server.public_download_base_url 必须为合法 HTTP 或 HTTPS 地址")
 	}
 	address, err := url.Parse(c.Master.ControlAddress)
 	if err != nil || address.Scheme != "https" || address.Host == "" {

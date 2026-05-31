@@ -9,8 +9,8 @@ OUT="$ROOT/dist/linux-amd64"
 mkdir -p "$OUT"
 
 go test ./...
-find cmd internal configs scripts -type f \
-  \( -name '*.go' -o -name '*.sql' -o -name '*.yaml' -o -name '*.yml' -o -name '*.sh' -o -name '*.bat' -o -name '*.ps1' \) |
+find cmd internal configs scripts web -type f \
+  \( -name '*.go' -o -name '*.sql' -o -name '*.yaml' -o -name '*.yml' -o -name '*.sh' -o -name '*.bat' -o -name '*.ps1' -o -name '*.js' -o -name '*.css' -o -name '*.html' \) |
 while IFS= read -r file; do
   lines=$(wc -l < "$file")
   if [ "$lines" -gt 250 ]; then
@@ -29,5 +29,7 @@ go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-master" .
 go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-node" ./cmd/node
 rm -rf "$OUT/configs"
 cp -R "$ROOT/configs" "$OUT/configs"
+rm -rf "$OUT/web"
+cp -R "$ROOT/web" "$OUT/web"
 
 printf '%s\n' "Linux amd64 构建完成：$OUT"

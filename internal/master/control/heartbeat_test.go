@@ -14,7 +14,7 @@ func TestHeartbeatKeepsNodeNonRoutable(t *testing.T) {
 	ctx := context.Background()
 	session := seedNodeAndSession(t, repo)
 	_, err := repo.AcceptHeartbeat(ctx, session, 1, protocol.Heartbeat{
-		Status: "syncing", FreeBytes: 100,
+		Status: "syncing", FreeBytes: 100, PublicDownloadBaseURL: "https://node-1.example.com",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -24,6 +24,10 @@ func TestHeartbeatKeepsNodeNonRoutable(t *testing.T) {
 	err = repo.DB.QueryRow("SELECT routing_ready, state FROM nodes WHERE id = ?", session.NodeID).Scan(&ready, &state)
 	if err != nil || ready != 0 || state != "syncing" {
 		t.Fatalf("心跳不得使节点可路由，ready=%d state=%s err=%v", ready, state, err)
+	}
+	var downloadURL string
+	if err := repo.DB.QueryRow("SELECT public_download_base_url FROM nodes WHERE id = ?", session.NodeID).Scan(&downloadURL); err != nil || downloadURL != "https://node-1.example.com" {
+		t.Fatalf("节点公网下载地址未写入：url=%q err=%v", downloadURL, err)
 	}
 }
 

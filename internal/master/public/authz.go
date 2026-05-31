@@ -89,7 +89,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 	}
 	writeOK(w, r, http.StatusCreated, "下载授权已签发", map[string]any{
 		"authorization_id":        auth.Claims.AuthorizationID,
-		"download_url":            "/downloads/" + auth.Claims.AssetID,
+		"download_url":            debug.DownloadURL,
 		"download_token":          token,
 		"expires_at":              auth.Claims.ExpiresAt,
 		"range_concurrency_limit": auth.Claims.RangeConcurrencyLimit,

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<link rel="stylesheet" href="/static/public/base.css">
+{{range .Styles}}<link rel="stylesheet" href="{{.}}">
+{{end}}
+</head>
+<body class="{{.BodyClass}}">
+<header class="site-header">
+  <div class="site-header__inner">
+    <nav class="site-nav">
+      <a href="/">下载</a>
+      <a href="/stats">统计数据</a>
+      <a href="/about">关于</a>
+      <a href="/nodes">节点状态</a>
+    </nav>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切换主题">主题</button>
+  </div>
+</header>
+<main class="site-main">
+  <h1>{{.Title}}</h1>
+  {{.Body}}
+</main>
+<script src="/static/public/theme.js" defer></script>
+{{range .Scripts}}<script src="{{.}}" defer></script>
+{{end}}
+</body>
+</html>

@@ -344,7 +344,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 - 下载节点文件服务挂载在 `/downloads/{asset_id}`。
 - 主节点必须配置 `download_token.signing_private_key_file` 和 `download_token.verify_public_key_file`；下载节点只配置 `download_token.verify_public_key_file`。
 - 旧版 `download_token.signing_key_file` HMAC 共享密钥已废弃，启动时不得继续使用；升级后旧 `download.v1` 令牌需要重新签发。
-- M4 的 `download_url` 返回节点相对下载路径；部署时可由反向代理转换为实际节点域名。
+- `download_url` 返回主节点当前选定下载节点的完整公网下载地址；浏览器和 API 客户端应直接向该地址发起下载，请勿再经主节点转发文件流量。
 - M4 已支持单段 HTTP Range；multipart Range 不作为 M4 必须能力。
 
 ## 11. 脱敏与兼容

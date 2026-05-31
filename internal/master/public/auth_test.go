@@ -23,12 +23,15 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		t.Fatal("测试 nonce 未满足 PoW")
 	}
 
-	auth, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if auth.Claims.AssetID != "asset-1" || auth.Claims.NodeID != "node-1" {
 		t.Fatalf("授权绑定错误：%+v", auth.Claims)
+	}
+	if debug.DownloadURL != "https://node-1.example.com/downloads/asset-1" {
+		t.Fatalf("下载地址返回错误：%q", debug.DownloadURL)
 	}
 	if _, err := store.LoadChallenge(context.Background(), challenge.ID); err == nil {
 		t.Fatal("挑战提交后仍可重复使用")

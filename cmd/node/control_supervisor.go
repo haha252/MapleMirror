@@ -79,7 +79,7 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 		return nil, err
 	}
 	return &nodecontrol.Client{
-		NodeID: nodeID, Address: s.address, TLSConfig: tlsCfg,
+		NodeID: nodeID, Address: s.address, PublicDownloadBaseURL: s.cfg.Server.PublicDownloadBaseURL, TLSConfig: tlsCfg,
 		HeartbeatInterval: interval, Logger: s.logger, Executor: s.executor, DB: s.db,
 	}, nil
 }
@@ -133,11 +133,11 @@ func (s controlSupervisor) reEnroll(client *nodecontrol.Client, rejection nodeco
 	}
 	_ = os.Remove(s.cfg.Pairing.CredentialFile)
 	enroller := nodecontrol.Enroller{
-		NodeName: s.cfg.Node.Name,
-		Address:  "",
-		TLSConfig: nil,
-		CodeFile: s.cfg.Pairing.CodeFile,
-		CredentialFile: s.cfg.Pairing.CredentialFile,
+		NodeName:           s.cfg.Node.Name,
+		Address:            "",
+		TLSConfig:          nil,
+		CodeFile:           s.cfg.Pairing.CodeFile,
+		CredentialFile:     s.cfg.Pairing.CredentialFile,
 		TokenPublicKeyFile: s.cfg.Download.VerifyPublicKeyFile,
 		Identity: nodecontrol.IdentityStore{DB: s.db, CertFile: s.cfg.TLS.CertFile,
 			KeyFile: s.cfg.TLS.KeyFile, CAFile: s.cfg.TLS.CAFile},

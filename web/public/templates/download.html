@@ -1,0 +1,43 @@
+<section class="download-page">
+  <p class="page-intro">选择项目、版本和架构后点击“下载”，系统会先执行 ALTCHA 验证，再签发绑定单节点的短时下载令牌。</p>
+  <div id="download-status" class="status muted">请选择一个项目版本开始下载。</div>
+  <div id="challenge-overlay" class="challenge-overlay" hidden>
+    <div class="challenge-overlay__card panel-card">
+      <h2>ALTCHA 验证中</h2>
+      <p id="challenge-overlay-text" class="muted">正在准备挑战...</p>
+    </div>
+  </div>
+  <div id="project-cards" class="project-grid"></div>
+  <template id="project-card-template">
+    <section class="project-card panel-card">
+      <div class="project-card__head">
+        <div class="project-card__meta">
+          <img class="project-card__icon" alt="">
+          <div class="project-card__title">
+            <h2><span class="project-name"></span><span class="version-badge"></span></h2>
+            <p class="muted project-repository"></p>
+          </div>
+        </div>
+        <div class="project-card__summary">
+          <p class="muted project-updated"></p>
+          <p class="project-availability"></p>
+        </div>
+      </div>
+      <div class="project-card__body">
+        <div class="field">
+          <label>版本</label>
+          <select class="version-select"></select>
+        </div>
+        <div class="field">
+          <label>架构</label>
+          <select class="architecture-select"></select>
+        </div>
+        <div class="project-card__actions">
+          <span class="project-card__size muted"></span>
+          <button type="button" class="download-button">下载</button>
+        </div>
+      </div>
+    </section>
+  </template>
+  <script id="download-projects" type="application/json">{{.ProjectsJSON}}</script>
+</section>

@@ -16,12 +16,13 @@ import (
 )
 
 type Client struct {
-	NodeID            string
-	Address           string
-	TLSConfig         *tls.Config
-	HeartbeatInterval time.Duration
-	Logger            *logging.Logger
-	Executor          interface {
+	NodeID                string
+	Address               string
+	PublicDownloadBaseURL string
+	TLSConfig             *tls.Config
+	HeartbeatInterval     time.Duration
+	Logger                *logging.Logger
+	Executor              interface {
 		Execute(context.Context, protocol.SyncTask) protocol.SyncTaskResult
 	}
 	DB *sql.DB
@@ -109,7 +110,8 @@ func (c Client) hello(conn net.Conn, reqID string) error {
 func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 	body, _ := json.Marshal(protocol.Heartbeat{
 		Status: "syncing", ActiveDownloads: 0, FreeBytes: 0,
-		Pressure: protocol.PressureSample{},
+		PublicDownloadBaseURL: c.PublicDownloadBaseURL,
+		Pressure:              protocol.PressureSample{},
 	})
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点发送心跳",

@@ -1,0 +1,115 @@
+.project-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.project-card {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.project-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.project-card__meta {
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+}
+
+.project-card__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel-muted);
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.project-card__title h2 { margin-bottom: 6px; font-size: 28px; }
+.project-card__title .version-badge { color: var(--muted); font-size: 18px; margin-left: 6px; }
+.project-card__summary { text-align: right; }
+.project-card__summary p { margin-bottom: 4px; }
+.project-card__body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(180px, 240px) auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.field select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-muted);
+  color: var(--text);
+  font: inherit;
+}
+
+.project-card__actions {
+  display: flex;
+  gap: 14px;
+  justify-content: flex-end;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.download-button {
+  min-width: 110px;
+  padding: 12px 18px;
+}
+
+.challenge-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(21, 32, 51, 0.32);
+  z-index: 20;
+}
+
+.challenge-overlay[hidden] {
+  display: none;
+}
+
+.challenge-overlay__card {
+  width: min(420px, calc(100% - 32px));
+  padding: 24px;
+}
+
+@media (max-width: 920px) {
+  .project-card__body {
+    grid-template-columns: 1fr 1fr;
+  }
+  .project-card__actions {
+    grid-column: 1 / -1;
+  }
+  .project-card__actions { justify-content: flex-start; }
+}
+
+@media (max-width: 640px) {
+  .project-card__head,
+  .project-card__meta {
+    flex-direction: column;
+  }
+  .project-card__summary {
+    text-align: left;
+  }
+  .project-card__body {
+    grid-template-columns: 1fr;
+  }
+}

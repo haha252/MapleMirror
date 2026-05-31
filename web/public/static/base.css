@@ -1,0 +1,80 @@
+:root {
+  color-scheme: light;
+  --bg: #fff7ed;
+  --panel: #ffffff;
+  --panel-muted: #fff3e2;
+  --border: #f1d4ad;
+  --text: #152033;
+  --muted: #66758c;
+  --accent: #ffa436;
+  --accent-hover: #e6922a;
+  --ok: #147d54;
+  --warn: #ad5f00;
+  --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1d1610;
+  --panel: #2a2017;
+  --panel-muted: #36281d;
+  --border: #5a4230;
+  --text: #f8efe4;
+  --muted: #c9b39b;
+  --accent: #ffa436;
+  --accent-hover: #ffb85f;
+  --ok: #58c291;
+  --warn: #ffb454;
+  --shadow: 0 18px 40px rgba(2, 6, 23, 0.35);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+h1, h2, h3, p { margin-top: 0; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.site-header { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(16px); background: color-mix(in srgb, var(--bg) 80%, transparent); border-bottom: 1px solid var(--border); }
+.site-header__inner, .site-main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+.site-header__inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; }
+.site-nav { display: flex; flex-wrap: wrap; gap: 18px; }
+.site-nav a { font-weight: 600; }
+.site-main { padding: 28px 0 40px; }
+.theme-toggle, .download-button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #2b1a08;
+  cursor: pointer;
+  font: inherit;
+}
+.theme-toggle { padding: 10px 16px; }
+.theme-toggle:hover, .download-button:hover:not(:disabled) { background: var(--accent-hover); }
+.download-button:disabled { opacity: .6; cursor: not-allowed; }
+.muted { color: var(--muted); }
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+.sub { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.status {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.page-intro { max-width: 760px; color: var(--muted); }
+.panel-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+}

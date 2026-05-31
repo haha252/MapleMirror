@@ -98,7 +98,7 @@ func main() {
 	startAdminService(cfg, repo, syncService, logger)
 	startConsolePairing(cfg, repo, logger)
 
-	publicHandler, err := publicHandler(cfg, quota, location, database, logger)
+	publicHandler, err := publicHandler(cfg, quota, projects, location, database, logger)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -143,7 +143,7 @@ func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, lo
 	return service
 }
 
-func publicHandler(cfg config.Master, quota config.Quota, loc *time.Location, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
+func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, loc *time.Location, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
 	signer, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)
 	if err != nil {
 		return nil, err
@@ -152,8 +152,11 @@ func publicHandler(cfg config.Master, quota config.Quota, loc *time.Location, db
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	logger.Info(context.Background(), "公共下载链路已启用")
-	server := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
-		cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs, logger)
+	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
+		cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs, projects, logger)
+	if err != nil {
+		return nil, err
+	}
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()

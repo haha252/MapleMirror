@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -15,6 +16,7 @@ type Project struct {
 	ID                 string   `yaml:"id"`
 	Name               string   `yaml:"name"`
 	Repository         string   `yaml:"repository"`
+	IconPath           string   `yaml:"icon_path"`
 	Enabled            bool     `yaml:"enabled"`
 	RetainVersions     int      `yaml:"retain_versions"`
 	IncludePrerelease  bool     `yaml:"include_prerelease"`
@@ -22,6 +24,7 @@ type Project struct {
 	AssetInclude       []string `yaml:"asset_include"`
 	AssetExclude       []string `yaml:"asset_exclude"`
 	ArchitectureRegex  string   `yaml:"architecture_regex"`
+	ResolvedIconPath   string   `yaml:"-"`
 }
 
 func LoadProjects(path string, warn WarnFunc) (Projects, error) {
@@ -29,6 +32,7 @@ func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 	if err := readYAML(path, &c, ProjectsExample); err != nil {
 		return c, err
 	}
+	baseDir := filepath.Dir(path)
 	known := map[string]bool{}
 	for i := range c.Projects {
 		p := &c.Projects[i]
@@ -40,6 +44,11 @@ func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 			p.DownloadMultiplier = 1
 			warnDefault(warn, "projects[].download_multiplier", "1")
 		}
+		resolved, err := resolveProjectIconPath(baseDir, p.IconPath)
+		if err != nil {
+			return c, err
+		}
+		p.ResolvedIconPath = resolved
 		if err := validateProject(*p, known); err != nil {
 			return c, err
 		}
@@ -63,4 +72,26 @@ func validateProject(p Project, known map[string]bool) error {
 		return fmt.Errorf("项目 %s 的架构提取正则无效：%w", p.ID, err)
 	}
 	return nil
+}
+
+func resolveProjectIconPath(baseDir, value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
+	}
+	clean := filepath.Clean(strings.TrimSpace(value))
+	if filepath.IsAbs(clean) {
+		return "", errors.New("项目 icon_path 必须使用相对路径")
+	}
+	if clean == "." || clean == "" {
+		return "", errors.New("项目 icon_path 不能为空路径")
+	}
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", errors.New("项目 icon_path 不得越级访问配置目录")
+	}
+	switch strings.ToLower(filepath.Ext(clean)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg":
+	default:
+		return "", errors.New("项目 icon_path 只允许 png、jpg、jpeg、gif、webp、svg 图片")
+	}
+	return filepath.Join(baseDir, clean), nil
 }

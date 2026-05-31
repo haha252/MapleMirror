@@ -65,6 +65,47 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 	}
 }
 
+func TestProjectsResolveIconPathRelativeToConfig(t *testing.T) {
+	dir := t.TempDir()
+	iconDir := filepath.Join(dir, "project-icons")
+	if err := os.MkdirAll(iconDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	projectsPath := filepath.Join(dir, "projects.yaml")
+	body := "projects:\n  - id: a\n    name: 示例\n    repository: owner/repo\n    enabled: true\n    icon_path: project-icons/a.svg\n    architecture_regex: '(amd64)'\n"
+	if err := os.WriteFile(projectsPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	projects, err := LoadProjects(projectsPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := projects.Projects[0].ResolvedIconPath; got != filepath.Join(iconDir, "a.svg") {
+		t.Fatalf("icon_path 解析错误：%q", got)
+	}
+}
+
+func TestProjectsRejectInvalidIconPath(t *testing.T) {
+	cases := []string{
+		"icon_path: C:/tmp/a.svg",
+		"icon_path: ../a.svg",
+		"icon_path: project-icons/a.txt",
+	}
+	for _, line := range cases {
+		t.Run(line, func(t *testing.T) {
+			dir := t.TempDir()
+			projectsPath := filepath.Join(dir, "projects.yaml")
+			body := "projects:\n  - id: a\n    name: 示例\n    repository: owner/repo\n    enabled: true\n    " + line + "\n    architecture_regex: '(amd64)'\n"
+			if err := os.WriteFile(projectsPath, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadProjects(projectsPath, nil); err == nil {
+				t.Fatalf("应拒绝非法 icon_path：%s", line)
+			}
+		})
+	}
+}
+
 func TestNodeRejectsInvalidTrustedProxyCIDR(t *testing.T) {
 	dir := t.TempDir()
 	nodePath := filepath.Join(dir, "node.yaml")
@@ -72,6 +113,7 @@ func TestNodeRejectsInvalidTrustedProxyCIDR(t *testing.T) {
   name: "节点一"
 server:
   listen: ":8081"
+  public_download_base_url: "https://node1.example.com"
 master:
   control_address: "https://127.0.0.1:9443"
 storage:

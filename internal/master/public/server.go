@@ -3,6 +3,7 @@ package public
 import (
 	"database/sql"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,23 +13,53 @@ import (
 )
 
 type Server struct {
-	Store        Store
-	Signer       downloadtoken.Signer
-	ALTCHATTL    time.Duration
-	APITTL       time.Duration
-	TokenTTL     time.Duration
-	APIZeroBits  int
-	TrustedCIDRs []string
-	Logger       *logging.Logger
+	Store         Store
+	Signer        downloadtoken.Signer
+	ALTCHATTL     time.Duration
+	APITTL        time.Duration
+	TokenTTL      time.Duration
+	APIZeroBits   int
+	TrustedCIDRs  []string
+	Logger        *logging.Logger
+	WebAssets     *webAssets
+	ProjectAssets map[string]projectAssetConfig
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location, trusted []string, logger *logging.Logger) Server {
-	return Server{Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc}, Signer: signer, ALTCHATTL: altchaTTL,
-		APITTL: apiTTL, TokenTTL: tokenTTL, APIZeroBits: apiBits, TrustedCIDRs: trusted, Logger: logger}
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location, trusted []string, projects config.Projects, logger *logging.Logger) (Server, error) {
+	assets, err := loadDefaultWebAssets()
+	if err != nil {
+		return Server{}, err
+	}
+	projectAssets := map[string]projectAssetConfig{}
+	for _, item := range projects.Projects {
+		projectAssets[item.ID] = projectAssetConfig{IconPath: filepath.Clean(item.ResolvedIconPath)}
+		if strings.TrimSpace(item.ResolvedIconPath) == "" {
+			projectAssets[item.ID] = projectAssetConfig{}
+		}
+	}
+	return Server{
+		Store:         Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc},
+		Signer:        signer,
+		ALTCHATTL:     altchaTTL,
+		APITTL:        apiTTL,
+		TokenTTL:      tokenTTL,
+		APIZeroBits:   apiBits,
+		TrustedCIDRs:  trusted,
+		Logger:        logger,
+		WebAssets:     assets,
+		ProjectAssets: projectAssets,
+	}, nil
 }
 
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	if s.WebAssets != nil {
+		mux.Handle("/static/public/", http.StripPrefix("/static/public/", http.FileServer(http.Dir(s.WebAssets.staticDir))))
+	} else if assets, err := loadDefaultWebAssets(); err == nil {
+		mux.Handle("/static/public/", http.StripPrefix("/static/public/", http.FileServer(http.Dir(assets.staticDir))))
+	}
+	mux.HandleFunc("/static/project-icons/", s.projectIcon)
+	mux.HandleFunc("/downloads/", s.downloadMisrouted)
 	mux.HandleFunc("/", s.downloadPage)
 	mux.HandleFunc("/stats", s.statsPage)
 	mux.HandleFunc("/about", s.aboutPage)

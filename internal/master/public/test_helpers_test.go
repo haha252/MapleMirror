@@ -42,8 +42,8 @@ func seedRoutableAsset(t *testing.T, db *sql.DB) {
 		'https://example.test/a.zip', 'sha256:aa', 'candidate', 'now')`)
 	mustExec(t, db, `INSERT INTO nodes
 		(id, public_name, state, target_bandwidth_bps, last_heartbeat_at,
-		routing_ready, created_at, updated_at)
-		VALUES ('node-1', '节点一', 'syncing', 1, 'now', 1, 'now', 'now')`)
+		routing_ready, public_download_base_url, created_at, updated_at)
+		VALUES ('node-1', '节点一', 'syncing', 1, 'now', 1, 'https://node-1.example.com', 'now', 'now')`)
 	mustExec(t, db, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
 		VALUES ('node-1', 'asset-1', 'sha256:aa', 12, 'now', 'verified')`)

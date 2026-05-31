@@ -13,6 +13,7 @@ type AuthorizationDebug struct {
 	ClientPrefix               string
 	NodeID                     string
 	ProjectID                  string
+	DownloadURL                string
 	ExpiresAt                  string
 	MaxBytes                   int64
 	RangeLimit                 int
@@ -26,7 +27,7 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	defer tx.Rollback()
-	nodeID, projectID, multiplier, size, err := s.routableAssetTx(ctx, tx, c.AssetID)
+	nodeID, projectID, downloadURL, multiplier, size, err := s.routableAssetTx(ctx, tx, c.AssetID)
 	if err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
@@ -81,6 +82,7 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 		ClientPrefix:               c.ClientPrefixKey,
 		NodeID:                     nodeID,
 		ProjectID:                  projectID,
+		DownloadURL:                downloadURL,
 		ExpiresAt:                  expires,
 		MaxBytes:                   size,
 		RangeLimit:                 4,
@@ -98,19 +100,23 @@ func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatu
 	return out, err
 }
 
-func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (string, string, int64, int64, error) {
-	var nodeID, projectID string
+func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (string, string, string, int64, int64, error) {
+	var nodeID, projectID, downloadBaseURL string
 	var size, multiplier int64
 	err := tx.QueryRowContext(ctx, `SELECT n.id, r.project_id,
-		COALESCE(NULLIF(p.download_multiplier, 0), 1), a.size_bytes FROM assets a
+		n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1), a.size_bytes FROM assets a
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id
 		JOIN node_inventory ni ON ni.asset_id = a.id AND ni.state = 'verified'
 		JOIN nodes n ON n.id = ni.node_id AND n.routing_ready = 1 AND n.state != 'disabled'
+		AND n.public_download_base_url != ''
 		WHERE a.id = ? AND a.service_state = 'candidate'
 		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id LIMIT 1`, assetID).
-		Scan(&nodeID, &projectID, &multiplier, &size)
-	return nodeID, projectID, multiplier, size, err
+		Scan(&nodeID, &projectID, &downloadBaseURL, &multiplier, &size)
+	if err != nil {
+		return "", "", "", 0, 0, err
+	}
+	return nodeID, projectID, joinDownloadURL(downloadBaseURL, assetID), multiplier, size, err
 }
 
 func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge, nodeID string, size int64, expires, reqID string) error {

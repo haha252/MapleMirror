@@ -29,6 +29,8 @@ if errorlevel 1 goto :failed
 
 if exist "%OUT%\configs" rmdir /s /q "%OUT%\configs"
 xcopy /e /i /y "configs" "%OUT%\configs" >nul
+if exist "%OUT%\web" rmdir /s /q "%OUT%\web"
+xcopy /e /i /y "web" "%OUT%\web" >nul
 powershell -NoProfile -Command "$m=ConvertFrom-Json '\"Windows amd64 \u6784\u5efa\u5b8c\u6210\uff1a\"'; Write-Host ($m + '%OUT%')"
 if errorlevel 1 goto :failed
 popd
