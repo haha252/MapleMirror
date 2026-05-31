@@ -28,11 +28,43 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `/static/project-icons/p1`) {
 		t.Fatalf("expected project icon route in page: %s", body)
 	}
-	if !strings.Contains(body, `/static/public/download.js`) || !strings.Contains(body, `id="theme-toggle"`) {
+	if !strings.Contains(body, `/static/public/download.js`) || !strings.Contains(body, `id="palette-toggle"`) {
 		t.Fatalf("expected themed assets in page: %s", body)
 	}
 	if !strings.Contains(body, `"asset_id":"asset-1"`) {
 		t.Fatalf("expected download data payload in page: %s", body)
+	}
+}
+
+func TestDownloadPageDoesNotHandleUnknownPath(t *testing.T) {
+	db := openMaster(t)
+	srv := Server{Store: Store{DB: db}}
+	req := httptest.NewRequest(http.MethodGet, "/favicon-missing.ico", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown path, got %d", rec.Code)
+	}
+	var views int
+	err := db.QueryRow(`SELECT COUNT(*) FROM daily_site_stats`).Scan(&views)
+	if err != nil || views != 0 {
+		t.Fatalf("未知路径不应计入访问量：views=%d err=%v", views, err)
+	}
+}
+
+func TestHandlerIgnoresFaviconForPageViews(t *testing.T) {
+	db := openMaster(t)
+	srv := Server{Store: Store{DB: db}, WebAssets: &webAssets{staticDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for favicon, got %d", rec.Code)
+	}
+	var rows int
+	err := db.QueryRow(`SELECT COUNT(*) FROM daily_site_stats`).Scan(&rows)
+	if err != nil || rows != 0 {
+		t.Fatalf("favicon 不应计入访问量：rows=%d err=%v", rows, err)
 	}
 }
 

@@ -6,60 +6,73 @@ import (
 	"time"
 )
 
-type StatsOverview struct {
-	StatDay              string `json:"stat_day"`
-	AuthorizationCount   int64  `json:"authorization_count"`
-	TransferStartedCount int64  `json:"transfer_started_count"`
-	DailySentBytes       int64  `json:"daily_sent_bytes"`
-	TotalSentBytes       int64  `json:"total_sent_bytes"`
+type StatsDashboard struct {
+	Today          string
+	TotalViews     MetricStat
+	TotalDownloads MetricStat
+	TotalTraffic   MetricStat
+	Resources      []ResourceRank
+	Trend          []DailyTrend
 }
 
-type ProjectStat struct {
-	ProjectID            string `json:"project_id"`
-	AuthorizationCount   int64  `json:"authorization_count"`
-	TransferStartedCount int64  `json:"transfer_started_count"`
-	SentBytes            int64  `json:"sent_bytes"`
+type MetricStat struct {
+	Total      int64
+	Recent     int64
+	Previous   int64
+	Trend      []int64
+	TrendLabel string
 }
 
-func (s Store) StatsOverview(ctx context.Context) (StatsOverview, error) {
-	day := statDay(timeNow(), s.Location)
-	var out StatsOverview
-	out.StatDay = day
-	err := s.DB.QueryRowContext(ctx, `SELECT
-		COALESCE(SUM(authorization_count), 0),
-		COALESCE(SUM(transfer_started_count), 0),
-		COALESCE(SUM(sent_bytes), 0)
-		FROM daily_project_stats WHERE stat_day = ?`, day).
-		Scan(&out.AuthorizationCount, &out.TransferStartedCount, &out.DailySentBytes)
+type ResourceRank struct {
+	ProjectName   string
+	Version       string
+	Architecture  string
+	DownloadCount int64
+}
+
+type DailyTrend struct {
+	Day       string `json:"day"`
+	Views     int64  `json:"views"`
+	Downloads int64  `json:"downloads"`
+	SentBytes int64  `json:"sent_bytes"`
+}
+
+func (s Store) StatsDashboard(ctx context.Context) (StatsDashboard, error) {
+	today := statDay(timeNow(), s.Location)
+	start, previousStart := dateOffset(today, -29), dateOffset(today, -59)
+	var out StatsDashboard
+	out.Today = today
+	if err := s.loadMetric(ctx, "views", previousStart, start, today, &out.TotalViews); err != nil {
+		return out, err
+	}
+	if err := s.loadMetric(ctx, "downloads", previousStart, start, today, &out.TotalDownloads); err != nil {
+		return out, err
+	}
+	if err := s.loadMetric(ctx, "traffic", previousStart, start, today, &out.TotalTraffic); err != nil {
+		return out, err
+	}
+	resources, err := s.TopResources(ctx, start, today, 8)
 	if err != nil {
 		return out, err
 	}
-	err = s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
-		FROM traffic_events WHERE accounted_at IS NOT NULL`).Scan(&out.TotalSentBytes)
-	return out, err
+	out.Resources = resources
+	trend, err := s.DailyTrends(ctx, start, today)
+	if err != nil {
+		return out, err
+	}
+	out.Trend = trend
+	return out, nil
 }
 
-func (s Store) ProjectStats(ctx context.Context, day string) ([]ProjectStat, error) {
-	if day == "" {
-		day = statDay(timeNow(), s.Location)
-	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT project_id, authorization_count,
-		transfer_started_count, sent_bytes FROM daily_project_stats
-		WHERE stat_day = ? ORDER BY project_id`, day)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []ProjectStat
-	for rows.Next() {
-		var item ProjectStat
-		if err := rows.Scan(&item.ProjectID, &item.AuthorizationCount,
-			&item.TransferStartedCount, &item.SentBytes); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, rows.Err()
+func (s Store) IncrementPageView(ctx context.Context) error {
+	now := timeNow()
+	day := statDay(now, s.Location)
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO daily_site_stats
+		(stat_day, page_views, updated_at) VALUES (?, 1, ?)
+		ON CONFLICT(stat_day) DO UPDATE SET
+		page_views = page_views + 1, updated_at = excluded.updated_at`,
+		day, now.Format(time.RFC3339Nano))
+	return err
 }
 
 func (s Store) AuthorizationBytes(ctx context.Context, id string) (int64, string, error) {
@@ -85,6 +98,18 @@ func upsertProjectStats(ctx context.Context, tx *sql.Tx, day, projectID string, 
 		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
 		sent_bytes = sent_bytes + excluded.sent_bytes`,
 		day, projectID, auth, started, bytes)
+	return err
+}
+
+func upsertAssetStats(ctx context.Context, tx *sql.Tx, day, assetID string, auth, started, bytes int64, now string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO daily_asset_stats
+		(stat_day, asset_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(stat_day, asset_id) DO UPDATE SET
+		authorization_count = authorization_count + excluded.authorization_count,
+		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
+		sent_bytes = sent_bytes + excluded.sent_bytes, updated_at = excluded.updated_at`,
+		day, assetID, auth, started, bytes, now)
 	return err
 }
 

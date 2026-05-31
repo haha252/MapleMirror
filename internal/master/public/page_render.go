@@ -8,6 +8,7 @@ import (
 
 type pageData struct {
 	Title     string
+	Subtitle  string
 	BodyClass string
 	Body      template.HTML
 	Styles    []string

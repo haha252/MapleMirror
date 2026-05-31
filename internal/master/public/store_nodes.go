@@ -32,6 +32,9 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 		out[i].SLA24H = s.slaText(ctx, out[i].NodeID, 24)
 		out[i].SLA7D = s.slaText(ctx, out[i].NodeID, 24*7)
 		out[i].SLA30D = s.slaText(ctx, out[i].NodeID, 24*30)
+		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
+			FROM daily_node_traffic_stats WHERE node_id = ?`, out[i].NodeID).
+			Scan(&out[i].TotalSentBytes)
 	}
 	return out, nil
 }

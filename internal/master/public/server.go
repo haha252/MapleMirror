@@ -68,16 +68,15 @@ func minDuration(values ...time.Duration) time.Duration {
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	if s.WebAssets != nil {
-		mux.Handle("/static/public/", http.StripPrefix("/static/public/", http.FileServer(http.Dir(s.WebAssets.staticDir))))
+		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.Dir(s.WebAssets.staticDir)))))
 	} else if assets, err := loadDefaultWebAssets(); err == nil {
-		mux.Handle("/static/public/", http.StripPrefix("/static/public/", http.FileServer(http.Dir(assets.staticDir))))
+		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.Dir(assets.staticDir)))))
 	}
 	mux.HandleFunc("/static/project-icons/", s.projectIcon)
 	mux.HandleFunc("/downloads/", s.downloadMisrouted)
-	mux.HandleFunc("/", s.downloadPage)
+	mux.HandleFunc("/favicon.ico", noContent)
 	mux.HandleFunc("/stats", s.statsPage)
 	mux.HandleFunc("/about", s.aboutPage)
-	mux.HandleFunc("/nodes", s.nodesPage)
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
 	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
 	mux.HandleFunc("/api/public/v1/web/challenges", s.webChallenge)
@@ -85,7 +84,19 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/public/v1/api/challenges", s.apiChallenge)
 	mux.HandleFunc("/api/public/v1/api/authorizations", s.apiAuthorize)
 	mux.HandleFunc("/api/public/v1/authorizations/", s.authorization)
+	mux.HandleFunc("/", s.downloadPage)
 	return mux
+}
+
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func noContent(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s Server) projects(w http.ResponseWriter, r *http.Request) {

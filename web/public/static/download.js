@@ -19,6 +19,7 @@
   function setStatus(message, level) {
     statusBox.textContent = message;
     statusBox.className = "status " + (level || "muted");
+    statusBox.hidden = !message;
   }
 
   function setOverlay(message, visible) {

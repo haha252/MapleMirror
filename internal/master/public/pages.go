@@ -4,53 +4,36 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 )
 
 func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
-	overview, err := s.Store.StatsOverview(r.Context())
+	s.trackPageView(r)
+	stats, err := s.Store.StatsDashboard(r.Context())
 	if err != nil {
 		http.Error(w, "统计数据读取失败", http.StatusInternalServerError)
 		return
 	}
-	projects, _ := s.Store.ProjectStats(r.Context(), overview.StatDay)
-	body := `<table><tr><th>统计日</th><th>下载授权次数</th><th>开始传输授权数</th><th>当日流量</th><th>累计流量</th></tr>`
-	body += `<tr><td>` + esc(overview.StatDay) + `</td><td>` + num(overview.AuthorizationCount) +
-		`</td><td>` + num(overview.TransferStartedCount) + `</td><td>` + bytesText(overview.DailySentBytes) +
-		`</td><td>` + bytesText(overview.TotalSentBytes) + `</td></tr></table>`
-	body += `<h2>项目统计</h2><table><tr><th>项目</th><th>授权次数</th><th>开始传输</th><th>实际流量</th></tr>`
-	for _, p := range projects {
-		body += `<tr><td>` + esc(p.ProjectID) + `</td><td>` + num(p.AuthorizationCount) +
-			`</td><td>` + num(p.TransferStartedCount) + `</td><td>` + bytesText(p.SentBytes) + `</td></tr>`
-	}
-	body += `</table>`
-	s.renderPage(w, pageData{Title: "统计数据", BodyClass: "page-stats", Body: template.HTML(body)})
+	nodes, _ := s.Store.Nodes(r.Context())
+	s.renderPage(w, pageData{Title: "数据洞察", BodyClass: "page-stats",
+		Body: statsBody(stats, nodes), Styles: []string{"/static/public/stats.css"},
+		Scripts: []string{"/static/public/stats.js"}})
 }
 
-func (s Server) aboutPage(w http.ResponseWriter, _ *http.Request) {
+func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
+	s.trackPageView(r)
 	body := `<p>本服务提供公开 GitHub Release 文件镜像下载。</p><p class="muted">镜像内容来自公开仓库，本服务不是 GitHub 官方服务。网页下载使用自托管 ALTCHA，公开 API 使用独立 SHA-256 前导零 PoW。</p>`
 	s.renderPage(w, pageData{Title: "关于", BodyClass: "page-about", Body: template.HTML(body)})
 }
 
 func (s Server) nodesPage(w http.ResponseWriter, r *http.Request) {
+	s.trackPageView(r)
 	nodes, err := s.Store.Nodes(r.Context())
 	if err != nil {
 		http.Error(w, "节点状态读取失败", http.StatusInternalServerError)
 		return
 	}
-	body := `<table><tr><th>节点</th><th>状态</th><th>同步就绪</th><th>最近心跳</th><th>24h SLA</th><th>7d SLA</th><th>30d SLA</th></tr>`
-	for _, n := range nodes {
-		ready := "否"
-		if n.RoutingReady {
-			ready = "是"
-		} else {
-			ready += renderDetail("原因", n.RoutingReadyReason)
-		}
-		body += `<tr><td>` + esc(n.PublicName) + `</td><td>` + esc(n.State) +
-			`</td><td>` + ready + `</td><td>` + esc(n.LastHeartbeat) +
-			`</td><td>` + esc(n.SLA24H) + `</td><td>` + esc(n.SLA7D) +
-			`</td><td>` + esc(n.SLA30D) + `</td></tr>`
-	}
-	body += `</table>`
+	body := nodesTable(nodes)
 	s.renderPage(w, pageData{Title: "节点状态", BodyClass: "page-nodes", Body: template.HTML(body)})
 }
 
@@ -74,4 +57,25 @@ func bytesText(value int64) string {
 		return num(value) + " B"
 	}
 	return template.HTMLEscapeString(fmt.Sprintf("%.2f MiB", float64(value)/(1024*1024)))
+}
+
+func (s Server) trackPageView(r *http.Request) {
+	if r.Method == http.MethodGet {
+		_ = s.Store.IncrementPageView(r.Context())
+	}
+}
+
+func stateText(value string) string {
+	switch strings.ToLower(value) {
+	case "syncing":
+		return "同步中"
+	case "offline":
+		return "离线"
+	case "disabled":
+		return "已禁用"
+	case "pending":
+		return "待接入"
+	default:
+		return value
+	}
 }

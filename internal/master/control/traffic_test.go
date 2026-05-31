@@ -30,6 +30,16 @@ func TestAcceptTrafficEventAccountsOnceAndStartsTransfer(t *testing.T) {
 	if err != nil || sent != 5 || started != 1 {
 		t.Fatalf("流量幂等入账不符合预期：sent=%d started=%d err=%v", sent, started, err)
 	}
+	err = repo.DB.QueryRow(`SELECT sent_bytes, transfer_started_count
+		FROM daily_asset_stats WHERE asset_id = 'asset-1'`).Scan(&sent, &started)
+	if err != nil || sent != 5 || started != 1 {
+		t.Fatalf("资源流量入账不符合预期：sent=%d started=%d err=%v", sent, started, err)
+	}
+	err = repo.DB.QueryRow(`SELECT sent_bytes FROM daily_node_traffic_stats
+		WHERE node_id = 'node-1'`).Scan(&sent)
+	if err != nil || sent != 5 {
+		t.Fatalf("节点流量入账不符合预期：sent=%d err=%v", sent, err)
+	}
 }
 
 func TestAcceptTrafficEventRejectsConflictingConfirmedReplay(t *testing.T) {
@@ -48,6 +58,36 @@ func TestAcceptTrafficEventRejectsConflictingConfirmedReplay(t *testing.T) {
 	event.SentBytes = 7
 	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err == nil {
 		t.Fatal("已确认序号的冲突流量事件不应被静默确认")
+	}
+}
+
+func TestAcceptTrafficEventAccountsExemptReservation(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	seedTrafficAuth(t, repo)
+	if _, err := repo.DB.Exec(`UPDATE traffic_reservations SET status = 'exempt'
+		WHERE authorization_id = 'auth-1'`); err != nil {
+		t.Fatal(err)
+	}
+	session := Session{ID: "sess-1", NodeID: "node-1"}
+	event := protocol.TrafficEvent{
+		EventSequence: 1, AuthorizationID: "auth-1", AssetID: "asset-1",
+		NodeRequestID: "node-req-1", MasterRequestID: "master-req-1",
+		SentBytes: 5, Status: "completed", ReportedAt: time.Now().UTC(),
+	}
+	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err != nil {
+		t.Fatal(err)
+	}
+	var sent int64
+	err := repo.DB.QueryRow(`SELECT sent_bytes FROM daily_traffic_stats
+		WHERE scope_kind = 'ipv4_32' AND scope_key = '192.0.2.1/32'`).Scan(&sent)
+	if err != nil || sent != 5 {
+		t.Fatalf("豁免授权流量仍应进入地址统计：sent=%d err=%v", sent, err)
+	}
+	err = repo.DB.QueryRow(`SELECT sent_bytes FROM daily_project_stats
+		WHERE project_id = 'p1'`).Scan(&sent)
+	if err != nil || sent != 5 {
+		t.Fatalf("豁免授权流量仍应进入项目统计：sent=%d err=%v", sent, err)
 	}
 }
 

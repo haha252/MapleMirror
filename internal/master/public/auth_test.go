@@ -53,6 +53,11 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 	if err != nil || authCount != 1 {
 		t.Fatalf("下载授权次数未入账：count=%d err=%v", authCount, err)
 	}
+	err = db.QueryRow(`SELECT authorization_count FROM daily_asset_stats
+		WHERE asset_id = 'asset-1'`).Scan(&authCount)
+	if err != nil || authCount != 1 {
+		t.Fatalf("资源下载授权次数未入账：count=%d err=%v", authCount, err)
+	}
 	var reserved int64
 	err = db.QueryRow(`SELECT address_reserved_bytes FROM traffic_reservations
 		WHERE authorization_id = ?`, auth.Claims.AuthorizationID).Scan(&reserved)
@@ -165,8 +170,8 @@ func TestIssueAuthorizationBypassesTrafficLimitForLoopback(t *testing.T) {
 	var reserved int64
 	var status string
 	err = db.QueryRow(`SELECT address_reserved_bytes, status FROM traffic_reservations`).Scan(&reserved, &status)
-	if err != nil || reserved != 0 || status != "exempt" {
-		t.Fatalf("白名单流量预留应标记豁免：reserved=%d status=%q err=%v", reserved, status, err)
+	if err != nil || reserved != int64(2<<30) || status != "exempt" {
+		t.Fatalf("白名单流量预留应保留字节并标记豁免：reserved=%d status=%q err=%v", reserved, status, err)
 	}
 }
 

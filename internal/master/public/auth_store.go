@@ -56,10 +56,8 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	day := statDay(now, s.Location)
-	reservedBytes := maxBytes
 	reservationStatus := "active"
 	if exempt {
-		reservedBytes = 0
 		reservationStatus = "exempt"
 	}
 	if !exempt {
@@ -75,10 +73,13 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	if err := insertAuthorization(ctx, tx, authID, c, nodeID, maxBytes, expires, reqID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
-	if err := insertReservation(ctx, tx, authID, day, reservedBytes, reservationStatus, now, scopes); err != nil {
+	if err := insertReservation(ctx, tx, authID, day, maxBytes, reservationStatus, now, scopes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := upsertProjectStats(ctx, tx, day, projectID, 1, 0, 0); err != nil {
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
+	}
+	if err := upsertAssetStats(ctx, tx, day, c.AssetID, 1, 0, 0, nowText()); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	requestRemaining, trafficRemaining, err := quota.snapshot(ctx, tx, day, scopes)

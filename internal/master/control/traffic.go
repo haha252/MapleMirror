@@ -76,6 +76,8 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 
 type authAccounting struct {
 	AuthorizationID  string
+	AssetID          string
+	NodeID           string
 	ProjectID        string
 	Day              string
 	AddressKind      string
@@ -83,7 +85,6 @@ type authAccounting struct {
 	NetworkKind      string
 	NetworkKey       string
 	Started          bool
-	Exempt           bool
 	StartedIncrement int64
 }
 
@@ -107,11 +108,12 @@ func existingTraffic(ctx context.Context, tx *sql.Tx, nodeID string, event proto
 func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event protocol.TrafficEvent) (authAccounting, error) {
 	var info authAccounting
 	info.AuthorizationID = event.AuthorizationID
+	info.AssetID = event.AssetID
+	info.NodeID = nodeID
 	var first sql.NullString
-	var status string
 	err := tx.QueryRowContext(ctx, `SELECT r.project_id, tr.scope_day,
 		tr.address_scope_kind, tr.address_scope_key,
-		tr.network_scope_kind, tr.network_scope_key, tr.status, da.first_transfer_at
+		tr.network_scope_kind, tr.network_scope_key, da.first_transfer_at
 		FROM download_authorizations da
 		JOIN assets a ON a.id = da.asset_id
 		JOIN releases r ON r.id = a.release_id
@@ -120,7 +122,7 @@ func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event pro
 		AND da.request_id = ?`,
 		event.AuthorizationID, nodeID, event.AssetID, event.MasterRequestID).
 		Scan(&info.ProjectID, &info.Day, &info.AddressKind, &info.AddressKey,
-			&info.NetworkKind, &info.NetworkKey, &status, &first)
+			&info.NetworkKind, &info.NetworkKey, &first)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return loadLegacyAuthorization(ctx, tx, nodeID, event)
@@ -128,12 +130,14 @@ func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event pro
 		return info, err
 	}
 	info.Started = first.Valid && first.String != ""
-	info.Exempt = status == "exempt"
 	return info, nil
 }
 
 func loadLegacyAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event protocol.TrafficEvent) (authAccounting, error) {
 	var info authAccounting
+	info.AuthorizationID = event.AuthorizationID
+	info.AssetID = event.AssetID
+	info.NodeID = nodeID
 	var first sql.NullString
 	var prefix string
 	var maxBytes int64
@@ -151,7 +155,6 @@ func loadLegacyAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, eve
 		return info, err
 	}
 	now := time.Now().UTC()
-	info.AuthorizationID = event.AuthorizationID
 	info.Day = now.In(time.Local).Format("2006-01-02")
 	info.AddressKind, info.AddressKey = scopes[0].Kind, scopes[0].Key
 	info.NetworkKind, info.NetworkKey = scopes[1].Kind, scopes[1].Key
@@ -197,37 +200,20 @@ func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, by
 		bytes, info.AuthorizationID, info.Day, info.AddressKind, info.AddressKey, info.NetworkKind, info.NetworkKey); err != nil {
 		return err
 	}
-	if info.Exempt {
-		return nil
-	}
 	if err := upsertTrafficDay(ctx, tx, info.Day, info.AddressKind, info.AddressKey, bytes, now); err != nil {
 		return err
 	}
 	if err := upsertTrafficDay(ctx, tx, info.Day, info.NetworkKind, info.NetworkKey, bytes, now); err != nil {
 		return err
 	}
-	return upsertProjectTraffic(ctx, tx, info, bytes)
-}
-
-func upsertTrafficDay(ctx context.Context, tx *sql.Tx, day, kind, key string, bytes int64, now string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO daily_traffic_stats
-		(stat_day, scope_kind, scope_key, sent_bytes, updated_at)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(stat_day, scope_kind, scope_key) DO UPDATE SET
-		sent_bytes = sent_bytes + excluded.sent_bytes, updated_at = excluded.updated_at`,
-		day, kind, key, bytes, now)
-	return err
-}
-
-func upsertProjectTraffic(ctx context.Context, tx *sql.Tx, info authAccounting, bytes int64) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO daily_project_stats
-		(stat_day, project_id, authorization_count, transfer_started_count, sent_bytes)
-		VALUES (?, ?, 0, ?, ?)
-		ON CONFLICT(stat_day, project_id) DO UPDATE SET
-		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
-		sent_bytes = sent_bytes + excluded.sent_bytes`,
-		info.Day, info.ProjectID, info.StartedIncrement, bytes)
-	return err
+	if err := upsertProjectTraffic(ctx, tx, info, bytes); err != nil {
+		return err
+	}
+	if err := upsertAssetStats(ctx, tx, info.Day, info.AssetID, 0,
+		info.StartedIncrement, bytes, now); err != nil {
+		return err
+	}
+	return upsertNodeTraffic(ctx, tx, info.Day, info.NodeID, bytes, now)
 }
 
 func updateSequence(ctx context.Context, tx *sql.Tx, sessionID string, seq uint64) error {

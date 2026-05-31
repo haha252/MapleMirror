@@ -29,6 +29,11 @@ type downloadAssetUI struct {
 }
 
 func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	s.trackPageView(r)
 	projects, err := s.Store.Projects(r.Context())
 	if err != nil {
 		http.Error(w, "项目列表读取失败", http.StatusInternalServerError)
@@ -50,6 +55,7 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.renderPage(w, pageData{
 		Title:     "下载",
+		Subtitle:  "选择版本与架构，开始下载！",
 		BodyClass: "page-download",
 		Body:      body,
 		Styles:    []string{"/static/public/download.css"},

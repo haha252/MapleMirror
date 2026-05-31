@@ -10,18 +10,28 @@
 </head>
 <body class="{{.BodyClass}}">
 <header class="site-header">
-  <div class="site-header__inner">
-    <nav class="site-nav">
-      <a href="/">下载</a>
-      <a href="/stats">统计数据</a>
-      <a href="/about">关于</a>
-      <a href="/nodes">节点状态</a>
+  <div class="site-header__left">
+    <div class="site-brand" aria-label="枫源镜像">
+      <img src="/static/public/logo.webp" alt="">
+      <span>枫源镜像</span>
+    </div>
+    <nav class="site-nav" aria-label="主导航">
+      <a href="/" aria-label="首页" title="首页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v9h13v-9M9 19v-5h6v5"/></svg><span>首页</span></a>
+      <a href="/stats" aria-label="数据统计" title="数据统计"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 19V5m0 14h16M8 16V9m4 7V6m4 10v-4"/></svg><span>数据统计</span></a>
+      <a href="/about" aria-label="关于" title="关于"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 17v-6m0-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg><span>关于</span></a>
     </nav>
-    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="切换主题">主题</button>
+  </div>
+  <div class="theme-tools">
+    <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a7 7 0 1 0 11.5 11.5Z"/></svg></button>
+    <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 1.4-3.4l-.3-.3a1.8 1.8 0 0 1 1.3-3.1H18a6 6 0 0 0 0-12h-6Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="14" cy="7.5" r="1"/></svg></button>
+    <div id="palette-menu" class="palette-menu" hidden></div>
   </div>
 </header>
 <main class="site-main">
-  <h1>{{.Title}}</h1>
+  <div class="page-title-row">
+    <h1>{{.Title}}</h1>
+    {{if .Subtitle}}<p class="page-subtitle">{{.Subtitle}}</p>{{end}}
+  </div>
   {{.Body}}
 </main>
 <script src="/static/public/theme.js" defer></script>
