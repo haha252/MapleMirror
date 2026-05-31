@@ -49,6 +49,9 @@
 *::-webkit-scrollbar-thumb:hover { background: var(--accent-hover); }
 body {
   margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text);
   font: 16px/1.5 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -171,7 +174,7 @@ tr:last-child td { border-bottom: 0; }
 .palette-choice span { width: 18px; height: 18px; border-radius: 999px; border: 1px solid color-mix(in srgb, #000 18%, transparent); }
 .palette-choice b { font-size: 13px; font-weight: 600; }
 
-.site-main { width: min(90vw, 1480px); margin: 0 auto; padding: 82px 0 44px; }
+.site-main { flex: 1; width: min(90vw, 1480px); margin: 0 auto; padding: 82px 0 44px; }
 .page-title-row { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 20px; }
 .page-title-row h1 { margin-bottom: 0; font-size: 34px; line-height: 1.15; }
 .page-subtitle { margin-bottom: 0; color: var(--muted); font-size: 16px; }
@@ -200,7 +203,7 @@ tr:last-child td { border-bottom: 0; }
 }
 .site-footer {
   width: min(90vw, 1480px);
-  margin: -16px auto 26px;
+  margin: 0 auto 26px;
   display: flex;
   align-items: center;
   justify-content: space-between;
