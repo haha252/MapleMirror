@@ -49,7 +49,7 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (He
 	}
 }
 
-func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID string) {
+func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID string) error {
 	task, ok, err := s.Repo.NextSyncTask(context.Background(), session.NodeID)
 	if err != nil || !ok {
 		if err != nil && s.Logger != nil {
@@ -58,7 +58,7 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 				slog.String("node_id", session.NodeID),
 				slog.String("error", err.Error()))
 		}
-		return
+		return err
 	}
 	if s.Logger != nil {
 		s.Logger.Debug(context.Background(), "向节点下发同步任务",
@@ -71,17 +71,20 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 			slog.Int64("size_bytes", task.Asset.SizeBytes))
 	}
 	body, _ := json.Marshal(task)
-	_ = protocol.WriteFrame(conn, protocol.Envelope{
+	return writeControlFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: task.TaskID,
 		MessageType: protocol.TypeSyncTask, SentAt: time.Now().UTC(),
 		NodeID: session.NodeID, RequestID: reqID, Payload: body,
 	})
 }
 
-func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) bool {
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {
+	msg, err := readControlFrame(conn, s.HeartbeatTimeout)
 	if err != nil || msg.MessageType != protocol.TypeHello || msg.NodeID != session.NodeID {
-		return false
+		if err != nil {
+			return err
+		}
+		return context.Canceled
 	}
 	body, _ := json.Marshal(protocol.Welcome{
 		SessionID: session.ID, AcceptedSequence: session.AcceptedSequence,
@@ -89,11 +92,10 @@ func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) b
 		HeartbeatTimeoutSecond:  int(s.HeartbeatTimeout.Seconds()),
 		ManagedState:            "syncing", RoutingReady: false,
 	})
-	_ = protocol.WriteFrame(conn, protocol.Envelope{
+	return writeControlFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: protocol.TypeWelcome, SentAt: time.Now().UTC(),
 		NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
 		Payload: body,
 	})
-	return true
 }

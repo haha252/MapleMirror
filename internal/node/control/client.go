@@ -15,6 +15,8 @@ import (
 	"mirror-server/internal/requestid"
 )
 
+const controlIOTimeout = 10 * time.Second
+
 type Client struct {
 	NodeID                string
 	Address               string
@@ -49,7 +51,9 @@ func (c Client) RunOnce() (time.Duration, error) {
 	if err := c.hello(conn, reqID); err != nil {
 		return 0, err
 	}
+	_ = conn.SetReadDeadline(time.Now().Add(controlIOTimeout))
 	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil {
 		return 0, err
 	}
@@ -100,7 +104,7 @@ func (c Client) hello(conn net.Conn, reqID string) error {
 		"capabilities":      []string{"heartbeat.v1", "inventory.report.v1", "pressure.report.v1"},
 		"software_version":  "dev",
 	})
-	return protocol.WriteFrame(conn, protocol.Envelope{
+	return c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: protocol.TypeHello, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: 1, Payload: body,
@@ -119,19 +123,16 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 			slog.String("request_id", reqID),
 			slog.Uint64("sequence", sequence))
 	}
-	if err := protocol.WriteFrame(conn, protocol.Envelope{
+	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: protocol.TypeHeartbeat, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return err
 	}
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	msg, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
 	if err != nil {
 		return err
-	}
-	if msg.MessageType == protocol.TypeProtocolError {
-		return parseRejectionError(msg)
 	}
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点收到心跳确认",
@@ -194,19 +195,13 @@ func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64, res
 			slog.String("asset_id", result.AssetID),
 			slog.String("result", result.Result))
 	}
-	if err := protocol.WriteFrame(conn, protocol.Envelope{
+	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-result",
 		MessageType: protocol.TypeSyncTaskResult, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return err
 	}
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
-	if err != nil {
-		return err
-	}
-	if msg.MessageType == protocol.TypeProtocolError {
-		return parseRejectionError(msg)
-	}
-	return nil
+	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
+	return err
 }

@@ -71,7 +71,7 @@ func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64
 			slog.Int("item_count", len(report.Items)),
 			slog.Bool("complete", report.Complete))
 	}
-	if err := protocol.WriteFrame(conn, protocol.Envelope{
+	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version,
 		MessageID:       report.ReportID,
 		MessageType:     protocol.TypeInventoryReport,
@@ -83,12 +83,9 @@ func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64
 	}); err != nil {
 		return err
 	}
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	msg, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
 	if err != nil {
 		return err
-	}
-	if msg.MessageType == protocol.TypeProtocolError {
-		return parseRejectionError(msg)
 	}
 	if msg.MessageType != protocol.TypeHeartbeatAck {
 		return fmt.Errorf("库存上报收到非预期响应类型: %s", msg.MessageType)

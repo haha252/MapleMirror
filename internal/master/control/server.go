@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net"
 	"time"
@@ -93,8 +92,8 @@ func (s ControlServer) Handle(conn net.Conn) {
 			slog.String("fingerprint", fp),
 			slog.String("remote_addr", remote))
 	}
-	if !s.readHello(conn, session, reqID) {
-		closeReason = "hello 读取失败"
+	if err := s.readHello(conn, session, reqID); err != nil {
+		closeReason = "hello 交换失败: " + err.Error()
 		return
 	}
 	if s.Logger != nil {
@@ -106,7 +105,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 			slog.Int("heartbeat_timeout_seconds", int(s.HeartbeatTimeout.Seconds())))
 	}
 	for {
-		msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+		msg, err := readControlFrame(conn, s.sessionReadTimeout())
 		if err != nil {
 			closeReason = err.Error()
 			if s.Logger != nil {
@@ -199,45 +198,33 @@ func (s ControlServer) Handle(conn net.Conn) {
 				Message:          "流量事件已入账",
 			})
 		}
-		_ = protocol.WriteFrame(conn, protocol.Envelope{
+		if err := writeControlFrame(conn, protocol.Envelope{
 			ProtocolVersion: protocol.Version, MessageID: reqID,
 			MessageType: messageType, SentAt: time.Now().UTC(),
 			NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
 			Payload: payload,
-		})
-		s.writeNextTask(conn, session, reqID)
-	}
-}
-
-func (s ControlServer) writeStartSessionReject(conn net.Conn, tlsConn *tls.Conn, reqID, fingerprint string, err error) {
-	code := "CONTROL_INTERNAL_ERROR"
-	message := err.Error()
-	switch {
-	case errors.Is(err, ErrCertificateNotActive):
-		code = "CERTIFICATE_NOT_ACTIVE"
-	case errors.Is(err, ErrNodeDisabled):
-		code = "NODE_DISABLED"
-	}
-	nodeID := ""
-	if tlsConn != nil && len(tlsConn.ConnectionState().PeerCertificates) > 0 {
-		nodeID = tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName
-	}
-	if nodeID == "" && fingerprint != "" {
-		if resolved, lookupErr := s.Repo.NodeIDByFingerprint(context.Background(), fingerprint); lookupErr == nil {
-			nodeID = resolved
+		}); err != nil {
+			closeReason = "控制响应发送失败: " + err.Error()
+			if s.Logger != nil {
+				s.Logger.Debug(context.Background(), "控制响应发送失败",
+					slog.String("request_id", reqID),
+					slog.String("session_id", session.ID),
+					slog.String("node_id", session.NodeID),
+					slog.String("message_type", messageType),
+					slog.String("error", err.Error()))
+			}
+			return
+		}
+		if err := s.writeNextTask(conn, session, reqID); err != nil {
+			closeReason = "同步任务下发失败: " + err.Error()
+			if s.Logger != nil {
+				s.Logger.Debug(context.Background(), "同步任务下发失败",
+					slog.String("request_id", reqID),
+					slog.String("session_id", session.ID),
+					slog.String("node_id", session.NodeID),
+					slog.String("error", err.Error()))
+			}
+			return
 		}
 	}
-	if nodeID == "" {
-		nodeID = fingerprint
-	}
-	body, _ := json.Marshal(protocol.ProtocolError{Code: code, Message: message})
-	_ = protocol.WriteFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version,
-		MessageID:       reqID,
-		MessageType:     protocol.TypeProtocolError,
-		SentAt:          time.Now().UTC(),
-		NodeID:          nodeID,
-		RequestID:       reqID,
-		Payload:         body,
-	})
 }

@@ -13,25 +13,37 @@ func (c Client) sendPendingTraffic(conn net.Conn, reqID string, sequence uint64)
 	if c.DB == nil {
 		return sequence, nil
 	}
-	rows, err := c.DB.Query(`SELECT event_sequence, authorization_id, node_request_id,
-		master_request_id, sent_bytes, created_at, asset_id, status
-		FROM pending_traffic_events WHERE confirmed_at IS NULL
-		ORDER BY event_sequence LIMIT 20`)
+	events, err := c.loadPendingTrafficEvents()
 	if err != nil {
 		return sequence, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		event, err := scanTraffic(rows)
-		if err != nil {
-			return sequence, err
-		}
+	for _, event := range events {
 		if err := c.sendTrafficEvent(conn, reqID, sequence, event); err != nil {
 			return sequence, err
 		}
 		sequence++
 	}
-	return sequence, rows.Err()
+	return sequence, nil
+}
+
+func (c Client) loadPendingTrafficEvents() ([]protocol.TrafficEvent, error) {
+	rows, err := c.DB.Query(`SELECT event_sequence, authorization_id, node_request_id,
+		master_request_id, sent_bytes, created_at, asset_id, status
+		FROM pending_traffic_events WHERE confirmed_at IS NULL
+		ORDER BY event_sequence LIMIT 20`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var events []protocol.TrafficEvent
+	for rows.Next() {
+		event, err := scanTraffic(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
 }
 
 func scanTraffic(rows *sql.Rows) (protocol.TrafficEvent, error) {
@@ -49,19 +61,16 @@ func scanTraffic(rows *sql.Rows) (protocol.TrafficEvent, error) {
 
 func (c Client) sendTrafficEvent(conn net.Conn, reqID string, sequence uint64, event protocol.TrafficEvent) error {
 	body, _ := json.Marshal(event)
-	if err := protocol.WriteFrame(conn, protocol.Envelope{
+	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID + "-traffic",
 		MessageType: protocol.TypeTrafficEvent, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return err
 	}
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeTrafficEventAck)
 	if err != nil {
 		return err
-	}
-	if msg.MessageType != protocol.TypeTrafficEventAck {
-		return nil
 	}
 	_, err = c.DB.Exec(`UPDATE pending_traffic_events SET confirmed_at = ?
 		WHERE event_sequence = ?`, time.Now().UTC().Format(time.RFC3339Nano),

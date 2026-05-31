@@ -18,6 +18,7 @@ func (c *Client) Run(stop <-chan struct{}) {
 				slog.String("master", c.Address),
 				slog.String("interval", interval.String()))
 		}
+		started := time.Now()
 		nextInterval, err := c.RunOnce()
 		if err != nil {
 			if c.Logger != nil {
@@ -39,7 +40,17 @@ func (c *Client) Run(stop <-chan struct{}) {
 		select {
 		case <-stop:
 			return
-		case <-time.After(interval):
+		case <-time.After(nextDelay(interval, time.Since(started))):
 		}
 	}
+}
+
+func nextDelay(interval, elapsed time.Duration) time.Duration {
+	if interval <= 0 {
+		return 0
+	}
+	if elapsed >= interval {
+		return 0
+	}
+	return interval - elapsed
 }

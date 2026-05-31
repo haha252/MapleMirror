@@ -44,6 +44,7 @@ func (s controlSupervisor) run() {
 				slog.String("master", client.Address),
 				slog.String("interval", interval.String()))
 		}
+		started := time.Now()
 		nextInterval, err := client.RunOnce()
 		if err != nil {
 			if s.handleRecoverableError(client, err) {
@@ -64,8 +65,18 @@ func (s controlSupervisor) run() {
 					slog.String("next_interval", nextInterval.String()))
 			}
 		}
-		time.Sleep(interval)
+		time.Sleep(nextDelay(interval, time.Since(started)))
 	}
+}
+
+func nextDelay(interval, elapsed time.Duration) time.Duration {
+	if interval <= 0 {
+		return 0
+	}
+	if elapsed >= interval {
+		return 0
+	}
+	return interval - elapsed
 }
 
 func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Client, error) {
