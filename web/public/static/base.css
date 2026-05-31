@@ -114,7 +114,8 @@ tr:last-child td { border-bottom: 0; }
 .site-nav a:hover, .icon-button:hover { background: var(--panel-muted); color: var(--text); }
 .page-download .site-nav a[href="/"],
 .page-stats .site-nav a[href="/stats"],
-.page-about .site-nav a[href="/about"] {
+.page-about .site-nav a[href="/about"],
+.page-api-docs .site-nav a[href="/api-docs"] {
   background: var(--panel-muted);
   color: var(--text);
 }
@@ -167,7 +168,6 @@ tr:last-child td { border-bottom: 0; }
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
-
 @media (max-width: 760px) {
   .site-header {
     position: sticky;

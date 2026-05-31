@@ -33,7 +33,7 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.trackPageView(r)
+	s.trackPageView(w, r)
 	projects, err := s.Store.Projects(r.Context())
 	if err != nil {
 		http.Error(w, "项目列表读取失败", http.StatusInternalServerError)

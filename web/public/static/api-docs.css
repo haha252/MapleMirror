@@ -1,0 +1,97 @@
+.page-api-docs {
+  font-family: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.api-docs-list {
+  display: grid;
+  gap: 16px;
+}
+
+.api-endpoint {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, #161616);
+  box-shadow: var(--shadow);
+}
+
+.api-route {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  min-width: 0;
+}
+
+.api-route code,
+.api-endpoint pre,
+.api-endpoint td:first-child {
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+}
+
+.api-route code {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.api-method {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 5px;
+  color: #101010;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.method-get { background: #ffa436; }
+.method-post { background: #27f5b0; }
+.api-endpoint p { color: var(--muted); }
+
+.api-params {
+  margin: 20px 0 14px;
+  font-size: 14px;
+}
+
+.api-params th {
+  color: #ffa436;
+  font-weight: 800;
+}
+
+.api-params td {
+  color: color-mix(in srgb, var(--text) 86%, var(--muted));
+}
+
+.api-params .empty {
+  color: var(--muted);
+}
+
+.api-label {
+  margin: 14px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.api-endpoint pre {
+  margin: 0 0 10px;
+  padding: 14px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel-muted) 40%, #171717);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (max-width: 760px) {
+  .api-endpoint { padding: 16px; }
+  .api-route { align-items: flex-start; }
+}

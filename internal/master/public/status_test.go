@@ -2,6 +2,7 @@ package public
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,6 +21,22 @@ func TestNodesReadsSLAAfterClosingNodeRows(t *testing.T) {
 	}
 	if len(nodes) != 1 || nodes[0].SLA24H != "100.00%" {
 		t.Fatalf("节点 SLA 读取异常：%+v", nodes)
+	}
+}
+
+func TestNodesTableFormatsRecentHeartbeat(t *testing.T) {
+	old := time.Local
+	time.Local = time.FixedZone("CST", 8*60*60)
+	defer func() { time.Local = old }()
+
+	body := nodesTable([]NodeSummary{{
+		PublicName:    "节点一",
+		State:         "syncing",
+		LastHeartbeat: "2026-05-31T04:01:00Z",
+		RoutingReady:  true,
+	}})
+	if !strings.Contains(body, "最近心跳：2026/05/31 12:01") {
+		t.Fatalf("最近心跳格式不正确：%s", body)
 	}
 }
 

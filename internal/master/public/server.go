@@ -24,6 +24,7 @@ type Server struct {
 	Logger           *logging.Logger
 	WebAssets        *webAssets
 	ProjectAssets    map[string]projectAssetConfig
+	PageViews        *pageViewTracker
 }
 
 func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string, projects config.Projects, logger *logging.Logger) (Server, error) {
@@ -52,6 +53,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 		Logger:           logger,
 		WebAssets:        assets,
 		ProjectAssets:    projectAssets,
+		PageViews:        newPageViewTracker(),
 	}, nil
 }
 
@@ -77,6 +79,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/favicon.ico", noContent)
 	mux.HandleFunc("/stats", s.statsPage)
 	mux.HandleFunc("/about", s.aboutPage)
+	mux.HandleFunc("/api-docs", s.apiDocsPage)
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
 	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
 	mux.HandleFunc("/api/public/v1/web/challenges", s.webChallenge)

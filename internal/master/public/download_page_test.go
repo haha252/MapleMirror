@@ -68,6 +68,43 @@ func TestHandlerIgnoresFaviconForPageViews(t *testing.T) {
 	}
 }
 
+func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
+	db := openMaster(t)
+	srv := Server{Store: Store{DB: db}}
+	req := httptest.NewRequest(http.MethodGet, "/api-docs", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
+	}
+	for _, want := range []string{
+		`<body class="page-api-docs">`,
+		`/api/public/v1/projects`,
+		`/api/public/v1/api/challenges`,
+		`/api/public/v1/api/authorizations`,
+		`/downloads/{asset_id}`,
+		`/static/public/api-docs.css`,
+		`class="api-method method-get"`,
+		`class="api-method method-post"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected API docs page to include %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "/api/admin/v1") {
+		t.Fatalf("API docs page must not document admin API: %s", body)
+	}
+	home := strings.Index(body, `href="/"`)
+	stats := strings.Index(body, `href="/stats"`)
+	docs := strings.Index(body, `href="/api-docs"`)
+	about := strings.Index(body, `href="/about"`)
+	if home < 0 || stats < 0 || docs < 0 || about < 0 || !(home < stats && stats < docs && docs < about) {
+		t.Fatalf("expected nav order home, stats, API docs, about: %s", body)
+	}
+}
+
 func TestProjectIconServesConfiguredFile(t *testing.T) {
 	dir := t.TempDir()
 	iconPath := filepath.Join(dir, "icon.svg")

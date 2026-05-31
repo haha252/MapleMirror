@@ -3,6 +3,7 @@ package public
 import (
 	"encoding/json"
 	"html/template"
+	"time"
 )
 
 func statsBody(stats StatsDashboard, nodes []NodeSummary) template.HTML {
@@ -52,13 +53,23 @@ func trendChart(trends []DailyTrend) string {
 func nodesTable(nodes []NodeSummary) string {
 	body := `<div class="node-table panel-card"><table><tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th><th>7天 SLA</th><th>总下载流量</th></tr>`
 	for _, n := range nodes {
-		body += `<tr><td>` + esc(n.PublicName) + renderDetail("最近心跳", n.LastHeartbeat) +
+		body += `<tr><td>` + esc(n.PublicName) + renderDetail("最近心跳", displayTime(n.LastHeartbeat)) +
 			`</td><td>` + esc(stateText(n.State)) + routingDetail(n) + `</td><td>` +
 			esc(n.SLA24H) + `</td><td>` + esc(n.SLA7D) + `</td><td>` +
 			bytesText(n.TotalSentBytes) + `</td></tr>`
 	}
 	body += `</table></div>`
 	return body
+}
+
+func displayTime(value string) string {
+	if value == "" {
+		return ""
+	}
+	if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return parsed.In(time.Local).Format("2006/01/02 15:04")
+	}
+	return value
 }
 
 func routingDetail(n NodeSummary) string {
