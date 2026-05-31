@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"mirror-server/internal/config"
 )
 
 type projectAssetConfig struct {
@@ -25,7 +27,7 @@ func (s Server) projectIcon(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "静态资源读取失败", http.StatusInternalServerError)
 		return
 	}
-	project, ok := s.ProjectAssets[projectID]
+	project, ok := s.currentProjectAssets()[projectID]
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -46,6 +48,21 @@ func (s Server) projectIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeProjectIcon(w, data, filepath.Ext(project.IconPath))
+}
+
+func (s Server) currentProjectAssets() map[string]projectAssetConfig {
+	if strings.TrimSpace(s.ProjectsPath) == "" {
+		return s.ProjectAssets
+	}
+	projects, err := config.LoadProjects(s.ProjectsPath, nil)
+	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(context.Background(), "项目清单热重载失败，项目图标沿用上一次有效配置",
+				slog.String("error", err.Error()))
+		}
+		return s.ProjectAssets
+	}
+	return projectAssetMap(projects)
 }
 
 func writeProjectIcon(w http.ResponseWriter, data []byte, extension string) {

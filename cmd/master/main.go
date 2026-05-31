@@ -93,12 +93,13 @@ func main() {
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
 
 	repo := mastercontrol.Repository{DB: database, Logger: logger}
-	syncService := startMirrorSync(cfg, projects, database, logger)
+	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
+	syncService := startMirrorSync(cfg, projectLoader, database, logger)
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, logger)
 	startConsolePairing(cfg, repo, logger)
 
-	publicHandler, err := publicHandler(cfg, quota, projects, location, database, logger)
+	publicHandler, err := publicHandler(cfg, quota, projects, *projectsPath, location, database, logger)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -124,7 +125,7 @@ func handleLoad(err error, name string, created *bool) bool {
 	return false
 }
 
-func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, logger *logging.Logger) mirrorsync.Service {
+func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *sql.DB, logger *logging.Logger) mirrorsync.Service {
 	interval, _ := time.ParseDuration(cfg.Scan.Interval)
 	token := ""
 	if cfg.Scan.GitHubTokenEnv != "" {
@@ -143,7 +144,7 @@ func startMirrorSync(cfg config.Master, projects config.Projects, db *sql.DB, lo
 	return service
 }
 
-func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, loc *time.Location, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
+func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, projectsPath string, loc *time.Location, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
 	signer, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)
 	if err != nil {
 		return nil, err
@@ -153,7 +154,7 @@ func publicHandler(cfg config.Master, quota config.Quota, projects config.Projec
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
-		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs, projects, logger)
+		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs, projects, projectsPath, logger)
 	if err != nil {
 		return nil, err
 	}

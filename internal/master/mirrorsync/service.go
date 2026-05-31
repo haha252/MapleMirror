@@ -3,6 +3,7 @@ package mirrorsync
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"mirror-server/internal/config"
@@ -12,9 +13,42 @@ import (
 
 type Service struct {
 	Scanner  Scanner
-	Projects config.Projects
+	Projects *ProjectLoader
 	Interval time.Duration
 	Logger   *logging.Logger
+}
+
+type ProjectLoader struct {
+	Path     string
+	Fallback config.Projects
+	mu       sync.RWMutex
+}
+
+func NewProjectLoader(path string, initial config.Projects) *ProjectLoader {
+	return &ProjectLoader{Path: path, Fallback: initial}
+}
+
+func (l *ProjectLoader) Load() (config.Projects, error) {
+	if l == nil || l.Path == "" {
+		return l.Current(), nil
+	}
+	projects, err := config.LoadProjects(l.Path, nil)
+	if err != nil {
+		return l.Current(), err
+	}
+	l.mu.Lock()
+	l.Fallback = projects
+	l.mu.Unlock()
+	return projects, nil
+}
+
+func (l *ProjectLoader) Current() config.Projects {
+	if l == nil {
+		return config.Projects{}
+	}
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.Fallback
 }
 
 func (s Service) Trigger(ctx context.Context, projectID, requestID string) (string, error) {
@@ -26,7 +60,17 @@ func (s Service) Trigger(ctx context.Context, projectID, requestID string) (stri
 			slog.String("request_id", requestID),
 			slog.String("project_id", projectID))
 	}
-	summary, err := s.Scanner.Scan(ctx, s.Projects, projectID, requestID)
+	projects := s.Projects.Current()
+	var loadErr error
+	if s.Projects != nil {
+		projects, loadErr = s.Projects.Load()
+	}
+	if loadErr != nil && s.Logger != nil {
+		s.Logger.Warn(ctx, "项目清单热重载失败，沿用上一次有效配置",
+			slog.String("request_id", requestID),
+			slog.String("error", loadErr.Error()))
+	}
+	summary, err := s.Scanner.Scan(ctx, projects, projectID, requestID)
 	if s.Logger != nil {
 		fields := []slog.Attr{
 			slog.String("request_id", requestID),

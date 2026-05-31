@@ -24,23 +24,17 @@ type Server struct {
 	Logger           *logging.Logger
 	WebAssets        *webAssets
 	ProjectAssets    map[string]projectAssetConfig
+	ProjectsPath     string
 	PageViews        *pageViewTracker
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string, projects config.Projects, logger *logging.Logger) (Server, error) {
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string, projects config.Projects, projectsPath string, logger *logging.Logger) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
 	}
 	challenges := newChallengeMemory()
 	challenges.startCleanup(minDuration(altchaTTL, apiTTL, time.Minute))
-	projectAssets := map[string]projectAssetConfig{}
-	for _, item := range projects.Projects {
-		projectAssets[item.ID] = projectAssetConfig{IconPath: filepath.Clean(item.ResolvedIconPath)}
-		if strings.TrimSpace(item.ResolvedIconPath) == "" {
-			projectAssets[item.ID] = projectAssetConfig{}
-		}
-	}
 	return Server{
 		Store:            Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc, Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota)},
 		Signer:           signer,
@@ -52,9 +46,21 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 		TrustedCIDRs:     trusted,
 		Logger:           logger,
 		WebAssets:        assets,
-		ProjectAssets:    projectAssets,
+		ProjectAssets:    projectAssetMap(projects),
+		ProjectsPath:     projectsPath,
 		PageViews:        newPageViewTracker(),
 	}, nil
+}
+
+func projectAssetMap(projects config.Projects) map[string]projectAssetConfig {
+	projectAssets := map[string]projectAssetConfig{}
+	for _, item := range projects.Projects {
+		projectAssets[item.ID] = projectAssetConfig{IconPath: filepath.Clean(item.ResolvedIconPath)}
+		if strings.TrimSpace(item.ResolvedIconPath) == "" {
+			projectAssets[item.ID] = projectAssetConfig{}
+		}
+	}
+	return projectAssets
 }
 
 func minDuration(values ...time.Duration) time.Duration {
