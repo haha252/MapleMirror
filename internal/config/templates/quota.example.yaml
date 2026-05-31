@@ -21,4 +21,6 @@ daily_traffic:
   ipv6_64: "20 GiB"
 
 blacklist: []
-exemptions: []
+exemptions:
+  - 127.0.0.1
+  - ::1

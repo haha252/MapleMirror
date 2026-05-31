@@ -39,10 +39,14 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 	if quota.buckets == nil {
 		quota = defaultQuota()
 	}
-	if multiplier <= 0 {
-		multiplier = 1
+	requestMultiplier := multiplier
+	if requestMultiplier <= 0 {
+		requestMultiplier = 1
 	}
-	if err := quota.consume(ctx, tx, scopes, multiplier, now); err != nil {
+	if quota.exempt(c.ClientPrefixKey) {
+		requestMultiplier = 0
+	}
+	if err := quota.consume(ctx, tx, scopes, requestMultiplier, now); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	day := statDay(now, s.Location)

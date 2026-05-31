@@ -1,6 +1,11 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"net/netip"
+	"strings"
+)
 
 type Quota struct {
 	RequestBuckets RequestBuckets `yaml:"request_buckets"`
@@ -8,16 +13,19 @@ type Quota struct {
 	Blacklist      []string       `yaml:"blacklist"`
 	Exemptions     []string       `yaml:"exemptions"`
 }
+
 type RequestBuckets struct {
 	IPv432  Bucket `yaml:"ipv4_32"`
 	IPv424  Bucket `yaml:"ipv4_24"`
 	IPv6128 Bucket `yaml:"ipv6_128"`
 	IPv664  Bucket `yaml:"ipv6_64"`
 }
+
 type Bucket struct {
 	Capacity   int    `yaml:"capacity"`
 	FullRefill string `yaml:"full_refill"`
 }
+
 type DailyTraffic struct {
 	IPv432  string `yaml:"ipv4_32"`
 	IPv424  string `yaml:"ipv4_24"`
@@ -70,5 +78,28 @@ func validateQuota(c Quota) error {
 			return err
 		}
 	}
+	for i, raw := range c.Exemptions {
+		if _, err := parseQuotaPrefix(raw); err != nil {
+			return fmt.Errorf("quota.exemptions[%d]: %w", i, err)
+		}
+	}
 	return nil
+}
+
+func parseQuotaPrefix(raw string) (netip.Prefix, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return netip.Prefix{}, errors.New("空白白名单项无效")
+	}
+	if prefix, err := netip.ParsePrefix(raw); err == nil {
+		return prefix.Masked(), nil
+	}
+	addr, err := netip.ParseAddr(raw)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	if addr.Is4() {
+		return netip.PrefixFrom(addr, 32), nil
+	}
+	return netip.PrefixFrom(addr, 128), nil
 }

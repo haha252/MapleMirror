@@ -21,6 +21,15 @@ table{width:100%;border-collapse:collapse;background:#fff}
 th,td{border-bottom:1px solid #e5e9ef;padding:10px;text-align:left;vertical-align:top}
 .muted{color:#667085}.ok{color:#067647}.warn{color:#b54708}
 .sub{display:block;margin-top:4px;font-size:12px;color:#667085;line-height:1.5}
+.status{margin:0 0 16px;padding:12px 14px;border:1px solid #dde3ea;border-radius:10px;background:#fff}
+.project-card{margin:0 0 20px;padding:18px;border:1px solid #dde3ea;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.project-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}
+.project-head h2{margin:0 0 4px;font-size:20px}
+.asset-table{margin-top:12px;background:#fafbfc}
+.asset-table th,.asset-table td{padding:10px 12px}
+.asset-table .download-btn{padding:8px 12px;border:0;border-radius:999px;background:#0b5cad;color:#fff;cursor:pointer;font:inherit}
+.asset-table .download-btn:disabled{opacity:.6;cursor:not-allowed}
+.asset-table .download-btn:hover:not(:disabled){background:#094a94}
 </style>
 </head>
 <body>
@@ -33,26 +42,6 @@ th,td{border-bottom:1px solid #e5e9ef;padding:10px;text-align:left;vertical-alig
 type pageData struct {
 	Title string
 	Body  template.HTML
-}
-
-func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
-	projects, err := s.Store.Projects(r.Context())
-	if err != nil {
-		http.Error(w, "项目列表读取失败", http.StatusInternalServerError)
-		return
-	}
-	body := `<p class="muted">选择可用资产后将通过 ALTCHA 验证领取下载授权。</p><table><tr><th>项目</th><th>仓库</th><th>状态</th></tr>`
-	for _, p := range projects {
-		state := `<span class="warn">暂不可下载</span>`
-		if p.Available {
-			state = `<span class="ok">可下载</span>`
-		} else {
-			state += renderDetail("原因", p.UnavailableReason)
-		}
-		body += `<tr><td>` + esc(p.DisplayName) + `</td><td>` + esc(p.Repository) + `</td><td>` + state + `</td></tr>`
-	}
-	body += `</table>`
-	renderPage(w, "下载", body)
 }
 
 func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {

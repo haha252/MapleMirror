@@ -76,6 +76,55 @@ func TestIssueAuthorizationRejectsRequestQuotaExhausted(t *testing.T) {
 	}
 }
 
+func TestIssueAuthorizationBypassesRequestQuotaForLoopback(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := Store{DB: db, Quota: newQuotaPolicy(config.Quota{
+		RequestBuckets: config.RequestBuckets{
+			IPv432:  config.Bucket{Capacity: 1, FullRefill: "48h"},
+			IPv424:  config.Bucket{Capacity: 10, FullRefill: "48h"},
+			IPv6128: config.Bucket{Capacity: 1, FullRefill: "48h"},
+			IPv664:  config.Bucket{Capacity: 10, FullRefill: "48h"},
+		},
+		DailyTraffic: config.DailyTraffic{
+			IPv432: "3 GiB", IPv424: "20 GiB", IPv6128: "3 GiB", IPv664: "20 GiB",
+		},
+	})}
+
+	challenge1, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "127.0.0.1/32", 4, time.Minute, "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := solveNonce(challenge1)
+	if !validLeadingZeros(challenge1, nonce) {
+		t.Fatal("测试 nonce 未满足 PoW")
+	}
+
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge1, time.Minute, "req-2"); err != nil {
+		t.Fatalf("白名单客户端首次授权失败：%v", err)
+	}
+	challenge2, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "127.0.0.1/32", 4, time.Minute, "req-3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce = solveNonce(challenge2)
+	if !validLeadingZeros(challenge2, nonce) {
+		t.Fatal("第二个测试 nonce 未满足 PoW")
+	}
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge2, time.Minute, "req-4"); err != nil {
+		t.Fatalf("白名单客户端重复授权不应触发请求额度不足：%v", err)
+	}
+
+	var tokens int64
+	err = db.QueryRow(`SELECT tokens_microunits FROM quota_buckets
+		WHERE scope_kind = 'ipv4_32' AND scope_key = '127.0.0.1/32'`).Scan(&tokens)
+	if err != nil || tokens != 1_000_000 {
+		t.Fatalf("白名单客户端请求额度应保持满桶：tokens=%d err=%v", tokens, err)
+	}
+}
+
 func TestCreateChallengeRejectsUnavailableAsset(t *testing.T) {
 	db := openMaster(t)
 	store := Store{DB: db}

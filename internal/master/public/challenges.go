@@ -32,7 +32,8 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	payload := s.altchaPayload(challenge)
 	writeOK(w, r, http.StatusCreated, "挑战已创建", map[string]any{
-		"challenge_id": challenge.ID, "altcha": payload, "expires_at": challenge.ExpiresAt,
+		"challenge_id": challenge.ID, "altcha": payload, "difficulty": challenge.Difficulty,
+		"expires_at": challenge.ExpiresAt,
 	})
 }
 

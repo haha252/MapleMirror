@@ -21,8 +21,9 @@ var (
 )
 
 type quotaPolicy struct {
-	buckets map[string]bucketRule
-	daily   map[string]int64
+	buckets    map[string]bucketRule
+	daily      map[string]int64
+	exemptions []netip.Prefix
 }
 
 type bucketRule struct {
@@ -49,6 +50,7 @@ func newQuotaPolicy(q config.Quota) quotaPolicy {
 			"ipv6_128": gib(q.DailyTraffic.IPv6128),
 			"ipv6_64":  gib(q.DailyTraffic.IPv664),
 		},
+		exemptions: quotaExemptions(q.Exemptions),
 	}
 }
 
