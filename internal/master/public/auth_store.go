@@ -48,15 +48,24 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	if requestMultiplier <= 0 {
 		requestMultiplier = 1
 	}
-	if quota.exempt(c.ClientPrefixKey) {
+	exempt := quota.exempt(c.ClientPrefixKey)
+	if exempt {
 		requestMultiplier = 0
 	}
 	if err := quota.consume(ctx, tx, scopes, requestMultiplier, now); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	day := statDay(now, s.Location)
-	if err := quota.reserve(ctx, tx, day, scopes, maxBytes); err != nil {
-		return IssuedAuthorization{}, AuthorizationDebug{}, err
+	reservedBytes := maxBytes
+	reservationStatus := "active"
+	if exempt {
+		reservedBytes = 0
+		reservationStatus = "exempt"
+	}
+	if !exempt {
+		if err := quota.reserve(ctx, tx, day, scopes, maxBytes); err != nil {
+			return IssuedAuthorization{}, AuthorizationDebug{}, err
+		}
 	}
 	authID, err := requestid.New()
 	if err != nil {
@@ -66,7 +75,7 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	if err := insertAuthorization(ctx, tx, authID, c, nodeID, maxBytes, expires, reqID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
-	if err := insertReservation(ctx, tx, authID, day, maxBytes, now, scopes); err != nil {
+	if err := insertReservation(ctx, tx, authID, day, reservedBytes, reservationStatus, now, scopes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := upsertProjectStats(ctx, tx, day, projectID, 1, 0, 0); err != nil {
@@ -129,13 +138,13 @@ func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge
 	return err
 }
 
-func insertReservation(ctx context.Context, tx *sql.Tx, id, day string, size int64, now time.Time, scopes [2]quotaScope) error {
+func insertReservation(ctx context.Context, tx *sql.Tx, id, day string, size int64, status string, now time.Time, scopes [2]quotaScope) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO traffic_reservations
 		(authorization_id, scope_day, address_reserved_bytes, network_reserved_bytes,
 		settled_bytes, status, created_at, address_scope_kind, address_scope_key,
 		network_scope_kind, network_scope_key)
-		VALUES (?, ?, ?, ?, 0, 'active', ?, ?, ?, ?, ?)`,
-		id, day, size, size, now.Format(time.RFC3339Nano),
+		VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+		id, day, size, size, status, now.Format(time.RFC3339Nano),
 		scopes[0].Kind, scopes[0].Key, scopes[1].Kind, scopes[1].Key)
 	return err
 }

@@ -137,6 +137,39 @@ func TestIssueAuthorizationBypassesRequestQuotaForLoopback(t *testing.T) {
 	}
 }
 
+func TestIssueAuthorizationBypassesTrafficLimitForLoopback(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	_, _ = db.Exec(`UPDATE assets SET size_bytes = ? WHERE id = 'asset-1'`, int64(1<<30))
+	store := Store{DB: db, Quota: newQuotaPolicy(config.Quota{
+		RequestBuckets: config.RequestBuckets{
+			IPv432:  config.Bucket{Capacity: 1, FullRefill: "48h"},
+			IPv424:  config.Bucket{Capacity: 10, FullRefill: "48h"},
+			IPv6128: config.Bucket{Capacity: 1, FullRefill: "48h"},
+			IPv664:  config.Bucket{Capacity: 10, FullRefill: "48h"},
+		},
+		DailyTraffic: config.DailyTraffic{
+			IPv432: "1 GiB", IPv424: "1 GiB", IPv6128: "1 GiB", IPv664: "1 GiB",
+		},
+	})}
+
+	challenge, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "127.0.0.1/32", 4, time.Minute, "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2"); err != nil {
+		t.Fatalf("白名单客户端不应触发每日流量额度不足：%v", err)
+	}
+
+	var reserved int64
+	var status string
+	err = db.QueryRow(`SELECT address_reserved_bytes, status FROM traffic_reservations`).Scan(&reserved, &status)
+	if err != nil || reserved != 0 || status != "exempt" {
+		t.Fatalf("白名单流量预留应标记豁免：reserved=%d status=%q err=%v", reserved, status, err)
+	}
+}
+
 func TestCreateChallengeRejectsUnavailableAsset(t *testing.T) {
 	db := openMaster(t)
 	store := Store{DB: db}

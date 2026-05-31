@@ -83,6 +83,7 @@ type authAccounting struct {
 	NetworkKind      string
 	NetworkKey       string
 	Started          bool
+	Exempt           bool
 	StartedIncrement int64
 }
 
@@ -107,9 +108,10 @@ func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event pro
 	var info authAccounting
 	info.AuthorizationID = event.AuthorizationID
 	var first sql.NullString
+	var status string
 	err := tx.QueryRowContext(ctx, `SELECT r.project_id, tr.scope_day,
 		tr.address_scope_kind, tr.address_scope_key,
-		tr.network_scope_kind, tr.network_scope_key, da.first_transfer_at
+		tr.network_scope_kind, tr.network_scope_key, tr.status, da.first_transfer_at
 		FROM download_authorizations da
 		JOIN assets a ON a.id = da.asset_id
 		JOIN releases r ON r.id = a.release_id
@@ -118,7 +120,7 @@ func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event pro
 		AND da.request_id = ?`,
 		event.AuthorizationID, nodeID, event.AssetID, event.MasterRequestID).
 		Scan(&info.ProjectID, &info.Day, &info.AddressKind, &info.AddressKey,
-			&info.NetworkKind, &info.NetworkKey, &first)
+			&info.NetworkKind, &info.NetworkKey, &status, &first)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return loadLegacyAuthorization(ctx, tx, nodeID, event)
@@ -126,6 +128,7 @@ func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event pro
 		return info, err
 	}
 	info.Started = first.Valid && first.String != ""
+	info.Exempt = status == "exempt"
 	return info, nil
 }
 
@@ -193,6 +196,9 @@ func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, by
 		AND network_scope_kind = ? AND network_scope_key = ?`,
 		bytes, info.AuthorizationID, info.Day, info.AddressKind, info.AddressKey, info.NetworkKind, info.NetworkKey); err != nil {
 		return err
+	}
+	if info.Exempt {
+		return nil
 	}
 	if err := upsertTrafficDay(ctx, tx, info.Day, info.AddressKind, info.AddressKey, bytes, now); err != nil {
 		return err
