@@ -119,12 +119,28 @@ func (s ControlServer) Handle(conn net.Conn) {
 		}
 		if msg.NodeID != session.NodeID {
 			closeReason = "节点标识不匹配"
+			s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
+				"NODE_ID_MISMATCH", closeReason)
 			if s.Logger != nil {
 				s.Logger.Warn(context.Background(), "控制消息节点标识不匹配",
 					slog.String("request_id", reqID),
 					slog.String("session_id", session.ID),
 					slog.String("expected_node_id", session.NodeID),
 					slog.String("message_node_id", msg.NodeID))
+			}
+			return
+		}
+		if err := msg.Validate(protocol.Control); err != nil {
+			closeReason = "控制消息无效: " + err.Error()
+			s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
+				"CONTROL_PROTOCOL_ERROR", closeReason)
+			if s.Logger != nil {
+				s.Logger.Debug(context.Background(), "控制消息校验失败",
+					slog.String("request_id", reqID),
+					slog.String("session_id", session.ID),
+					slog.String("node_id", session.NodeID),
+					slog.String("message_type", msg.MessageType),
+					slog.String("error", err.Error()))
 			}
 			return
 		}
@@ -139,6 +155,8 @@ func (s ControlServer) Handle(conn net.Conn) {
 		result, err := s.handleMessage(session, msg)
 		if err != nil {
 			closeReason = err.Error()
+			s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
+				"CONTROL_MESSAGE_ERROR", err.Error())
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "控制消息处理失败",
 					slog.String("request_id", reqID),

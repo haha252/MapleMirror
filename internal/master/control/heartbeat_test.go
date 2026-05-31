@@ -31,6 +31,32 @@ func TestHeartbeatKeepsNodeNonRoutable(t *testing.T) {
 	}
 }
 
+func TestHeartbeatWithInvalidPublicDownloadURLKeepsControlAlive(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	_, err := repo.DB.Exec(`UPDATE nodes SET public_download_base_url = ?
+		WHERE id = ?`, "https://old.example.com", session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{
+		Status: "syncing", FreeBytes: 100, PublicDownloadBaseURL: "not-a-public-url",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state, downloadURL string
+	err = repo.DB.QueryRow(`SELECT state, public_download_base_url FROM nodes
+		WHERE id = ?`, session.NodeID).Scan(&state, &downloadURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != "syncing" || downloadURL != "" {
+		t.Fatalf("无效公网地址应只清空路由地址并保持连接，state=%q url=%q", state, downloadURL)
+	}
+}
+
 func TestMarkOfflineMasksRouting(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

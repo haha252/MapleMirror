@@ -156,30 +156,13 @@ func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) e
 	if msg.MessageType != protocol.TypeSyncTask {
 		return nil
 	}
-	var task protocol.SyncTask
-	if err := json.Unmarshal(msg.Payload, &task); err != nil {
+	task, err := c.decodeSyncTask(msg, reqID)
+	if err != nil {
 		return err
 	}
-	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点收到同步任务",
-			slog.String("node_id", c.NodeID),
-			slog.String("request_id", reqID),
-			slog.String("task_id", task.TaskID),
-			slog.String("task_type", task.TaskType),
-			slog.String("asset_id", task.Asset.AssetID),
-			slog.String("file_name", task.Asset.FileName))
-	}
 	if c.Executor == nil {
-		if c.Logger != nil {
-			c.Logger.Debug(context.Background(), "节点同步执行器未启用",
-				slog.String("node_id", c.NodeID),
-				slog.String("request_id", reqID),
-				slog.String("task_id", task.TaskID))
-		}
-		return c.sendTaskResult(conn, reqID, sequence, protocol.SyncTaskResult{
-			TaskID: task.TaskID, AssetID: task.Asset.AssetID,
-			Result: "temporary_error", Message: "节点同步执行器未启用",
-		})
+		c.logSyncExecutorDisabled(reqID, task.TaskID)
+		return c.sendTaskResult(conn, reqID, sequence, disabledExecutorResult(task))
 	}
 	c.executeTaskAsync(task)
 	return nil

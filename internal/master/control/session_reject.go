@@ -28,6 +28,10 @@ func (s ControlServer) writeStartSessionReject(conn net.Conn, tlsConn *tls.Conn,
 		code = "NODE_DISABLED"
 	}
 	nodeID := rejectNodeID(s, tlsConn, fingerprint)
+	s.writeProtocolError(conn, nodeID, reqID, "", code, message)
+}
+
+func (s ControlServer) writeProtocolError(conn net.Conn, nodeID, reqID, replyTo, code, message string) {
 	body, _ := json.Marshal(protocol.ProtocolError{Code: code, Message: message})
 	_ = writeControlFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version,
@@ -36,6 +40,7 @@ func (s ControlServer) writeStartSessionReject(conn net.Conn, tlsConn *tls.Conn,
 		SentAt:          time.Now().UTC(),
 		NodeID:          nodeID,
 		RequestID:       reqID,
+		ReplyTo:         replyTo,
 		Payload:         body,
 	})
 }

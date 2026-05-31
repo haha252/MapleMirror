@@ -41,17 +41,30 @@ func (c Client) readExpectedResponse(conn net.Conn, reqID string, expected ...st
 				return msg, nil
 			}
 		}
-		return protocol.Envelope{}, errors.New("涓昏妭鐐硅繑鍥炰簡闈為鏈熺殑鎺у埗鍝嶅簲")
+		return protocol.Envelope{}, errors.New("主节点返回了非预期的控制响应")
 	}
 }
 
 func (c Client) handleSyncTask(msg protocol.Envelope, reqID string) error {
-	var task protocol.SyncTask
-	if err := json.Unmarshal(msg.Payload, &task); err != nil {
+	task, err := c.decodeSyncTask(msg, reqID)
+	if err != nil {
 		return err
 	}
+	if c.Executor == nil {
+		c.logSyncExecutorDisabled(reqID, task.TaskID)
+		return c.storePendingTaskResult(disabledExecutorResult(task))
+	}
+	c.executeTaskAsync(task)
+	return nil
+}
+
+func (c Client) decodeSyncTask(msg protocol.Envelope, reqID string) (protocol.SyncTask, error) {
+	var task protocol.SyncTask
+	if err := json.Unmarshal(msg.Payload, &task); err != nil {
+		return protocol.SyncTask{}, err
+	}
 	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "鑺傜偣鏀跺埌鍚屾浠诲姟",
+		c.Logger.Debug(context.Background(), "节点收到同步任务",
 			slog.String("node_id", c.NodeID),
 			slog.String("request_id", reqID),
 			slog.String("task_id", task.TaskID),
@@ -59,18 +72,22 @@ func (c Client) handleSyncTask(msg protocol.Envelope, reqID string) error {
 			slog.String("asset_id", task.Asset.AssetID),
 			slog.String("file_name", task.Asset.FileName))
 	}
-	if c.Executor == nil {
-		if c.Logger != nil {
-			c.Logger.Debug(context.Background(), "鑺傜偣鍚屾鎵ц鍣ㄦ湭鍚敤",
-				slog.String("node_id", c.NodeID),
-				slog.String("request_id", reqID),
-				slog.String("task_id", task.TaskID))
-		}
-		return c.storePendingTaskResult(protocol.SyncTaskResult{
-			TaskID: task.TaskID, AssetID: task.Asset.AssetID,
-			Result: "temporary_error", Message: "鑺傜偣鍚屾鎵ц鍣ㄦ湭鍚敤",
-		})
+	return task, nil
+}
+
+func (c Client) logSyncExecutorDisabled(reqID, taskID string) {
+	if c.Logger == nil {
+		return
 	}
-	c.executeTaskAsync(task)
-	return nil
+	c.Logger.Debug(context.Background(), "节点同步执行器未启用",
+		slog.String("node_id", c.NodeID),
+		slog.String("request_id", reqID),
+		slog.String("task_id", taskID))
+}
+
+func disabledExecutorResult(task protocol.SyncTask) protocol.SyncTaskResult {
+	return protocol.SyncTaskResult{
+		TaskID: task.TaskID, AssetID: task.Asset.AssetID,
+		Result: "temporary_error", Message: "节点同步执行器未启用",
+	}
 }

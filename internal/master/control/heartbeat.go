@@ -16,9 +16,7 @@ type HeartbeatResult struct {
 }
 
 func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq uint64, hb protocol.Heartbeat) (HeartbeatResult, error) {
-	if !validPublicDownloadBaseURL(hb.PublicDownloadBaseURL) {
-		return HeartbeatResult{}, fmt.Errorf("节点公网下载地址不合法")
-	}
+	downloadBaseURL := normalizedPublicDownloadBaseURL(hb.PublicDownloadBaseURL)
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return HeartbeatResult{}, err
@@ -41,7 +39,7 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
 		last_heartbeat_at = ?, public_download_base_url = ?, updated_at = ? WHERE id = ?`,
-		now, hb.PublicDownloadBaseURL, now, session.NodeID)
+		now, downloadBaseURL, now, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -53,9 +51,12 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
 }
 
-func validPublicDownloadBaseURL(value string) bool {
+func normalizedPublicDownloadBaseURL(value string) string {
 	parsed, err := url.Parse(value)
-	return err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
+	if err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+		return value
+	}
+	return ""
 }
 
 func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int64, error) {
