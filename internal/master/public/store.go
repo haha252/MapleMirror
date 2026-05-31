@@ -3,16 +3,21 @@ package public
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/requestid"
 )
 
+var errChallengeQuota = errors.New("挑战创建过于频繁")
+
 type Store struct {
-	DB       *sql.DB
-	Quota    quotaPolicy
-	Location *time.Location
+	DB         *sql.DB
+	Quota      quotaPolicy
+	Location   *time.Location
+	Challenges *challengeMemory
+	MaxBytes   maxBytesPolicy
 }
 
 type ProjectSummary struct {
@@ -74,9 +79,15 @@ type AuthorizationStatus struct {
 	ExpiresAt       string
 }
 
-func (s Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, requestID string) (Challenge, error) {
+func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, _ string) (Challenge, error) {
 	if _, err := s.routableAsset(ctx, assetID); err != nil {
 		return Challenge{}, err
+	}
+	now := time.Now().UTC()
+	challenges := s.challengeMemory()
+	challenges.cleanup(now)
+	if !challenges.allow(kind, prefix, now) {
+		return Challenge{}, errChallengeQuota
 	}
 	id, err := requestid.New()
 	if err != nil {
@@ -89,24 +100,29 @@ func (s Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string
 		ClientPrefixKey: prefix,
 		Nonce:           randomText(16),
 		Difficulty:      difficulty,
-		ExpiresAt:       expiresAfter(ttl),
+		ExpiresAt:       now.Add(ttl).Format(time.RFC3339Nano),
 	}
-	_, err = s.DB.ExecContext(ctx, `INSERT INTO challenges
-		(id, kind, asset_id, client_prefix_key, nonce_hash, difficulty,
-		expires_at, request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		challenge.ID, challenge.Kind, challenge.AssetID, challenge.ClientPrefixKey,
-		challenge.Nonce, challenge.Difficulty, challenge.ExpiresAt, requestID)
-	return challenge, err
+	challenges.put(challenge, now)
+	return challenge, nil
 }
 
-func (s Store) LoadChallenge(ctx context.Context, id string) (Challenge, error) {
-	var challenge Challenge
-	err := s.DB.QueryRowContext(ctx, `SELECT id, kind, asset_id,
-		client_prefix_key, nonce_hash, COALESCE(difficulty, 0), expires_at
-		FROM challenges WHERE id = ? AND consumed_at IS NULL AND expires_at > ?`,
-		id, nowText()).Scan(&challenge.ID, &challenge.Kind, &challenge.AssetID,
-		&challenge.ClientPrefixKey, &challenge.Nonce, &challenge.Difficulty, &challenge.ExpiresAt)
-	return challenge, err
+func (s *Store) LoadChallenge(_ context.Context, id string) (Challenge, error) {
+	challenge, ok := s.challengeMemory().get(id, time.Now().UTC())
+	if !ok {
+		return Challenge{}, sql.ErrNoRows
+	}
+	return challenge, nil
+}
+
+func (s *Store) consumeChallenge(id string) bool {
+	return s.challengeMemory().consume(id, time.Now().UTC())
+}
+
+func (s *Store) challengeMemory() *challengeMemory {
+	if s.Challenges == nil {
+		s.Challenges = newChallengeMemory()
+	}
+	return s.Challenges
 }
 
 func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {

@@ -8,10 +8,11 @@ import (
 )
 
 type Quota struct {
-	RequestBuckets RequestBuckets `yaml:"request_buckets"`
-	DailyTraffic   DailyTraffic   `yaml:"daily_traffic"`
-	Blacklist      []string       `yaml:"blacklist"`
-	Exemptions     []string       `yaml:"exemptions"`
+	RequestBuckets                  RequestBuckets `yaml:"request_buckets"`
+	DailyTraffic                    DailyTraffic   `yaml:"daily_traffic"`
+	AuthorizationMaxBytesMultiplier int            `yaml:"authorization_max_bytes_multiplier"`
+	Blacklist                       []string       `yaml:"blacklist"`
+	Exemptions                      []string       `yaml:"exemptions"`
 }
 
 type RequestBuckets struct {
@@ -46,6 +47,10 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 	setString(&c.DailyTraffic.IPv424, "20 GiB", "daily_traffic.ipv4_24", warn)
 	setString(&c.DailyTraffic.IPv6128, "3 GiB", "daily_traffic.ipv6_128", warn)
 	setString(&c.DailyTraffic.IPv664, "20 GiB", "daily_traffic.ipv6_64", warn)
+	if c.AuthorizationMaxBytesMultiplier == 0 {
+		c.AuthorizationMaxBytesMultiplier = 2
+		warnDefault(warn, "authorization_max_bytes_multiplier", "2")
+	}
 	return c, validateQuota(c)
 }
 
@@ -77,6 +82,9 @@ func validateQuota(c Quota) error {
 		if _, err := parseGiB("daily_traffic."+field, value); err != nil {
 			return err
 		}
+	}
+	if c.AuthorizationMaxBytesMultiplier <= 0 {
+		return errors.New("authorization_max_bytes_multiplier 必须大于零")
 	}
 	for i, raw := range c.Exemptions {
 		if _, err := parseQuotaPrefix(raw); err != nil {

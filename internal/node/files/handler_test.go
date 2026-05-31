@@ -33,12 +33,40 @@ func TestHandlerServesVerifiedAssetRange(t *testing.T) {
 	if rec.Code != http.StatusPartialContent || rec.Body.String() != "bcd" {
 		t.Fatalf("Range 下载响应不符合预期：code=%d body=%q", rec.Code, rec.Body.String())
 	}
+	if got := rec.Header().Get("Content-Disposition"); got != "attachment; filename=asset.bin" {
+		t.Fatalf("Content-Disposition 不符合预期：%q", got)
+	}
 	var bytes int64
 	var masterReq string
 	err = db.QueryRow(`SELECT sent_bytes, master_request_id FROM pending_traffic_events
 		WHERE authorization_id = 'auth-1'`).Scan(&bytes, &masterReq)
 	if err != nil || bytes != 3 || masterReq != "req-1" {
 		t.Fatalf("真实流量事件未正确记录：bytes=%d req=%q err=%v", bytes, masterReq, err)
+	}
+}
+
+func TestHandlerRejectsAuthorizationMaxBytesExceeded(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	_, err := db.Exec(`INSERT INTO pending_traffic_events
+		(event_sequence, authorization_id, node_request_id, master_request_id,
+		sent_bytes, created_at, asset_id, status)
+		VALUES (1, 'auth-1', 'node-req-1', 'master-req-1', 5, 'now', 'asset-1', 'completed')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
+		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
+		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		MaxBytes: 6, RangeConcurrencyLimit: 2, RequestID: "req-1"}
+	token, _ := signer.Sign(claims)
+	req := httptest.NewRequest(http.MethodGet, "/downloads/asset-1", nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Range", "bytes=1-3")
+	rec := httptest.NewRecorder()
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("超过授权最大字节数应拒绝：%d", rec.Code)
 	}
 }
 

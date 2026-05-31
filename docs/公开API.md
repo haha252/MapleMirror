@@ -120,6 +120,8 @@
 
 `POST /api/public/v1/web/challenges`
 
+挑战保存在主节点内存中，不写入数据库；主节点按客户端前缀和挑战类型执行轻量限流，并定期清理过期挑战。
+
 请求：
 
 ```json
@@ -143,6 +145,7 @@
       "algorithm": "sha256",
       "signature": "服务端签名"
     },
+    "difficulty": 22,
     "expires_at": "2026-05-28T12:00:00Z"
   }
 }
@@ -175,7 +178,7 @@
     "download_token": "短时签名令牌",
     "expires_at": "2026-05-28T12:05:00Z",
     "range_concurrency_limit": 4,
-    "max_bytes": 123456
+    "max_bytes": 246912
   }
 }
 ```
@@ -185,6 +188,8 @@
 ### 5.1 创建 API PoW 挑战
 
 `POST /api/public/v1/api/challenges`
+
+挑战保存在主节点内存中，不写入数据库；主节点按客户端前缀和挑战类型执行轻量限流，并定期清理过期挑战。
 
 请求：
 
@@ -317,7 +322,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 | `node_id` | 是 | 只能由该节点接受 |
 | `client_prefix` | 是 | 客户端 IP 前缀 |
 | `expires_at` | 是 | 短时有效期 |
-| `max_bytes` | 是 | 最大允许发送字节 |
+| `max_bytes` | 是 | 最大允许发送字节，默认等于资产大小乘以 `quota.yaml` 的 `authorization_max_bytes_multiplier` |
 | `range_concurrency_limit` | 是 | 并发 Range 限制 |
 | `request_id` | 是 | 主节点签发请求 ID |
 

@@ -153,7 +153,7 @@ func publicHandler(cfg config.Master, quota config.Quota, projects config.Projec
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
-		cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs, projects, logger)
+		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs, projects, logger)
 	if err != nil {
 		return nil, err
 	}

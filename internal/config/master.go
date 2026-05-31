@@ -48,8 +48,8 @@ type Scan struct {
 	GitHubTokenEnv string `yaml:"github_token_env"`
 }
 type ALTCHA struct {
-	WorkloadProfile string `yaml:"workload_profile"`
-	ChallengeTTL    string `yaml:"challenge_ttl"`
+	Difficulty   int    `yaml:"difficulty"`
+	ChallengeTTL string `yaml:"challenge_ttl"`
 }
 type APIPoW struct {
 	Algorithm       string `yaml:"algorithm"`
@@ -115,7 +115,10 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.RequestID.ParentHeader, "X-Request-ID", "request_id.parent_header", warn)
 	setString(&c.Stats.Timezone, "Asia/Shanghai", "stats.timezone", warn)
 	setString(&c.Scan.Interval, "15m", "scan.interval", warn)
-	setString(&c.ALTCHA.WorkloadProfile, "medium", "altcha.workload_profile", warn)
+	if c.ALTCHA.Difficulty == 0 {
+		c.ALTCHA.Difficulty = 22
+		warnDefault(warn, "altcha.difficulty", "22")
+	}
 	setString(&c.ALTCHA.ChallengeTTL, "2m", "altcha.challenge_ttl", warn)
 	setString(&c.APIPoW.Algorithm, "sha256", "api_pow.algorithm", warn)
 	if c.APIPoW.LeadingZeroBits == 0 {
@@ -187,8 +190,8 @@ func validateMaster(c Master) error {
 	if _, err := time.LoadLocation(c.Stats.Timezone); err != nil {
 		return fmt.Errorf("统计时区 stats.timezone 无效：%w", err)
 	}
-	if c.ALTCHA.WorkloadProfile != "medium" {
-		return errors.New("网页 ALTCHA 默认工作量档位必须为 medium（中等）")
+	if c.ALTCHA.Difficulty <= 0 {
+		return errors.New("网页 ALTCHA 难度必须大于零")
 	}
 	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits <= 0 {
 		return errors.New("公开 API PoW 必须使用 sha256 且前导零位数大于零")

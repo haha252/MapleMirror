@@ -30,6 +30,9 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 	if auth.Claims.AssetID != "asset-1" || auth.Claims.NodeID != "node-1" {
 		t.Fatalf("授权绑定错误：%+v", auth.Claims)
 	}
+	if auth.Claims.MaxBytes != 24 {
+		t.Fatalf("授权最大字节数应按默认 2 倍资产大小计算：%d", auth.Claims.MaxBytes)
+	}
 	if debug.DownloadURL != "https://node-1.example.com/downloads/asset-1" {
 		t.Fatalf("下载地址返回错误：%q", debug.DownloadURL)
 	}
@@ -49,6 +52,12 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		WHERE project_id = 'p1'`).Scan(&authCount)
 	if err != nil || authCount != 1 {
 		t.Fatalf("下载授权次数未入账：count=%d err=%v", authCount, err)
+	}
+	var reserved int64
+	err = db.QueryRow(`SELECT address_reserved_bytes FROM traffic_reservations
+		WHERE authorization_id = ?`, auth.Claims.AuthorizationID).Scan(&reserved)
+	if err != nil || reserved != 24 {
+		t.Fatalf("流量预留应按授权最大字节数计算：reserved=%d err=%v", reserved, err)
 	}
 }
 
@@ -135,5 +144,22 @@ func TestCreateChallengeRejectsUnavailableAsset(t *testing.T) {
 		"missing", "192.0.2.1/32", 4, time.Minute, "req-1")
 	if err == nil {
 		t.Fatal("不存在可路由副本时不应创建挑战")
+	}
+}
+
+func TestCreateChallengeAppliesMemoryRateLimit(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := Store{DB: db}
+	for i := 0; i < challengeBucketCapacity; i++ {
+		if _, err := store.CreateChallenge(context.Background(), "api_pow",
+			"asset-1", "192.0.2.1/32", 4, time.Minute, "req"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req")
+	if err != errChallengeQuota {
+		t.Fatalf("挑战创建限流未生效：%v", err)
 	}
 }

@@ -21,7 +21,10 @@ type AuthorizationDebug struct {
 	TrafficRemainingBytes      map[string]int64
 }
 
-func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string) (IssuedAuthorization, AuthorizationDebug, error) {
+func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string) (IssuedAuthorization, AuthorizationDebug, error) {
+	if !s.consumeChallenge(c.ID) {
+		return IssuedAuthorization{}, AuthorizationDebug{}, sql.ErrNoRows
+	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
@@ -31,6 +34,7 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 	if err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
+	maxBytes := s.maxBytesPolicy().maxBytes(size)
 	now := time.Now().UTC()
 	scopes, err := quotaScopes(c.ClientPrefixKey)
 	if err != nil {
@@ -51,7 +55,7 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	day := statDay(now, s.Location)
-	if err := quota.reserve(ctx, tx, day, scopes, size); err != nil {
+	if err := quota.reserve(ctx, tx, day, scopes, maxBytes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	authID, err := requestid.New()
@@ -59,16 +63,13 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	expires := expiresAfter(ttl)
-	if err := insertAuthorization(ctx, tx, authID, c, nodeID, size, expires, reqID); err != nil {
+	if err := insertAuthorization(ctx, tx, authID, c, nodeID, maxBytes, expires, reqID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
-	if err := insertReservation(ctx, tx, authID, day, size, now, scopes); err != nil {
+	if err := insertReservation(ctx, tx, authID, day, maxBytes, now, scopes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := upsertProjectStats(ctx, tx, day, projectID, 1, 0, 0); err != nil {
-		return IssuedAuthorization{}, AuthorizationDebug{}, err
-	}
-	if err := consumeChallenge(ctx, tx, c.ID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	requestRemaining, trafficRemaining, err := quota.snapshot(ctx, tx, day, scopes)
@@ -77,14 +78,14 @@ func (s Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Dur
 	}
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version, AuthorizationID: authID,
 		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
-		ExpiresAt: expires, MaxBytes: size, RangeConcurrencyLimit: 4, RequestID: reqID}
+		ExpiresAt: expires, MaxBytes: maxBytes, RangeConcurrencyLimit: 4, RequestID: reqID}
 	debug := AuthorizationDebug{
 		ClientPrefix:               c.ClientPrefixKey,
 		NodeID:                     nodeID,
 		ProjectID:                  projectID,
 		DownloadURL:                downloadURL,
 		ExpiresAt:                  expires,
-		MaxBytes:                   size,
+		MaxBytes:                   maxBytes,
 		RangeLimit:                 4,
 		RequestRemainingMicrounits: requestRemaining,
 		TrafficRemainingBytes:      trafficRemaining,
@@ -137,16 +138,4 @@ func insertReservation(ctx context.Context, tx *sql.Tx, id, day string, size int
 		id, day, size, size, now.Format(time.RFC3339Nano),
 		scopes[0].Kind, scopes[0].Key, scopes[1].Kind, scopes[1].Key)
 	return err
-}
-
-func consumeChallenge(ctx context.Context, tx *sql.Tx, id string) error {
-	result, err := tx.ExecContext(ctx, `UPDATE challenges SET consumed_at = ?
-		WHERE id = ? AND consumed_at IS NULL`, nowText(), id)
-	if err != nil {
-		return err
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }

@@ -20,7 +20,7 @@ func TestLoadMasterExample(t *testing.T) {
 	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits != 23 {
 		t.Fatal("公开 API PoW 默认合同被修改")
 	}
-	if c.ALTCHA.WorkloadProfile != "medium" || c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
+	if c.ALTCHA.Difficulty != 22 || c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
 		t.Fatal("验证或管理安全合同被修改")
 	}
 	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" || c.Admin.TokenMinBytes != 32 {
@@ -60,7 +60,7 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 		t.Fatalf("项目默认合同错误：%v", err)
 	}
 	quota, err := LoadQuota(quotaPath, nil)
-	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 || quota.DailyTraffic.IPv664 != "20 GiB" {
+	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 || quota.DailyTraffic.IPv664 != "20 GiB" || quota.AuthorizationMaxBytesMultiplier != 2 {
 		t.Fatalf("额度默认合同错误：%v", err)
 	}
 }

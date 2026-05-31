@@ -38,8 +38,8 @@ scan:
   github_token_env: "MIRROR_GITHUB_TOKEN"
 
 altcha:
-  # 网页验证仅使用 ALTCHA；medium 表示定稿的“中等”工作量档位。
-  workload_profile: "medium"
+  # 网页验证仅使用 ALTCHA；difficulty 表示 SHA-256 前导零位难度。
+  difficulty: 22
   challenge_ttl: "2m"
 
 api_pow:

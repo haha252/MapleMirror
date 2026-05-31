@@ -13,23 +13,26 @@ import (
 )
 
 type Server struct {
-	Store         Store
-	Signer        downloadtoken.Signer
-	ALTCHATTL     time.Duration
-	APITTL        time.Duration
-	TokenTTL      time.Duration
-	APIZeroBits   int
-	TrustedCIDRs  []string
-	Logger        *logging.Logger
-	WebAssets     *webAssets
-	ProjectAssets map[string]projectAssetConfig
+	Store            Store
+	Signer           downloadtoken.Signer
+	ALTCHATTL        time.Duration
+	ALTCHADifficulty int
+	APITTL           time.Duration
+	TokenTTL         time.Duration
+	APIZeroBits      int
+	TrustedCIDRs     []string
+	Logger           *logging.Logger
+	WebAssets        *webAssets
+	ProjectAssets    map[string]projectAssetConfig
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, apiBits int, quota config.Quota, loc *time.Location, trusted []string, projects config.Projects, logger *logging.Logger) (Server, error) {
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string, projects config.Projects, logger *logging.Logger) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
 	}
+	challenges := newChallengeMemory()
+	challenges.startCleanup(minDuration(altchaTTL, apiTTL, time.Minute))
 	projectAssets := map[string]projectAssetConfig{}
 	for _, item := range projects.Projects {
 		projectAssets[item.ID] = projectAssetConfig{IconPath: filepath.Clean(item.ResolvedIconPath)}
@@ -38,17 +41,28 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 		}
 	}
 	return Server{
-		Store:         Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc},
-		Signer:        signer,
-		ALTCHATTL:     altchaTTL,
-		APITTL:        apiTTL,
-		TokenTTL:      tokenTTL,
-		APIZeroBits:   apiBits,
-		TrustedCIDRs:  trusted,
-		Logger:        logger,
-		WebAssets:     assets,
-		ProjectAssets: projectAssets,
+		Store:            Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc, Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota)},
+		Signer:           signer,
+		ALTCHATTL:        altchaTTL,
+		ALTCHADifficulty: altchaDifficulty,
+		APITTL:           apiTTL,
+		TokenTTL:         tokenTTL,
+		APIZeroBits:      apiBits,
+		TrustedCIDRs:     trusted,
+		Logger:           logger,
+		WebAssets:        assets,
+		ProjectAssets:    projectAssets,
 	}, nil
+}
+
+func minDuration(values ...time.Duration) time.Duration {
+	out := time.Duration(0)
+	for _, value := range values {
+		if value > 0 && (out == 0 || value < out) {
+			out = value
+		}
+	}
+	return out
 }
 
 func (s Server) Handler() http.Handler {

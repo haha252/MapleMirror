@@ -25,8 +25,12 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	challenge, err := s.Store.CreateChallenge(r.Context(), "altcha", in.AssetID,
-		s.clientPrefix(r), 10, s.ALTCHATTL, requestID(r))
+		s.clientPrefix(r), s.ALTCHADifficulty, s.ALTCHATTL, requestID(r))
 	if err != nil {
+		if err == errChallengeQuota {
+			writeError(w, r, http.StatusTooManyRequests, "CHALLENGE_RATE_LIMITED", "挑战创建过于频繁，请稍后再试")
+			return
+		}
 		writeError(w, r, http.StatusConflict, "NO_ROUTABLE_NODE", "当前没有可用下载节点")
 		return
 	}
@@ -47,6 +51,10 @@ func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
 	challenge, err := s.Store.CreateChallenge(r.Context(), "api_pow", in.AssetID,
 		s.clientPrefix(r), s.APIZeroBits, s.APITTL, requestID(r))
 	if err != nil {
+		if err == errChallengeQuota {
+			writeError(w, r, http.StatusTooManyRequests, "CHALLENGE_RATE_LIMITED", "挑战创建过于频繁，请稍后再试")
+			return
+		}
 		writeError(w, r, http.StatusConflict, "NO_ROUTABLE_NODE", "当前没有可用下载节点")
 		return
 	}

@@ -20,6 +20,9 @@ daily_traffic:
   ipv6_128: "3 GiB"
   ipv6_64: "20 GiB"
 
+# 单个下载授权最多允许发送的字节数 = 资产大小 * 此倍数，用于 Range 重试和断点续传。
+authorization_max_bytes_multiplier: 2
+
 blacklist: []
 exemptions:
   - 127.0.0.1

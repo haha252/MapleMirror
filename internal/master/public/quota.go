@@ -88,6 +88,7 @@ func defaultQuota() quotaPolicy {
 		DailyTraffic: config.DailyTraffic{
 			IPv432: "3 GiB", IPv424: "20 GiB", IPv6128: "3 GiB", IPv664: "20 GiB",
 		},
+		AuthorizationMaxBytesMultiplier: 2,
 	})
 }
 
