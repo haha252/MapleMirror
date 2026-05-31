@@ -76,7 +76,7 @@ func (s Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("/static/project-icons/", s.projectIcon)
 	mux.HandleFunc("/downloads/", s.downloadMisrouted)
-	mux.HandleFunc("/favicon.ico", noContent)
+	mux.HandleFunc("/favicon.ico", s.favicon)
 	mux.HandleFunc("/stats", s.statsPage)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)

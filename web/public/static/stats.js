@@ -15,7 +15,17 @@
   function bytes(value) {
     if (value < 1024 * 1024) return fmt(value) + " B";
     if (value < 1024 * 1024 * 1024) return (value / 1024 / 1024).toFixed(2) + " MiB";
-    return (value / 1024 / 1024 / 1024).toFixed(2) + " GiB";
+    if (value < 1024 * 1024 * 1024 * 1024) return (value / 1024 / 1024 / 1024).toFixed(2) + " GiB";
+    return (value / 1024 / 1024 / 1024 / 1024).toFixed(2) + " TiB";
+  }
+
+  function moveTooltip(event) {
+    const rect = chart.getBoundingClientRect();
+    const leftHalf = event.clientX < rect.left + rect.width / 2;
+    const tipW = tooltip.offsetWidth || 160;
+    const x = leftHalf ? event.clientX - tipW - 14 : event.clientX + 14;
+    tooltip.style.left = Math.max(8, Math.min(x, window.innerWidth - tipW - 8)) + "px";
+    tooltip.style.top = Math.max(8, event.clientY - tooltip.offsetHeight - 14) + "px";
   }
 
   function smoothPath(points) {
@@ -70,8 +80,7 @@
       tooltip.hidden = false;
       tooltip.innerHTML = "<b>" + item.day.slice(5) + "</b><br>访问量 " + fmt(item.views) +
         "<br>下载量 " + fmt(item.downloads) + "<br>流量 " + bytes(item.sent_bytes);
-      tooltip.style.left = event.clientX + 14 + "px";
-      tooltip.style.top = event.clientY - 16 + "px";
+      moveTooltip(event);
     });
     hit.addEventListener("mouseleave", function () { tooltip.hidden = true; });
   });

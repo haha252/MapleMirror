@@ -64,3 +64,19 @@ func writeProjectIcon(w http.ResponseWriter, data []byte, extension string) {
 	}
 	_, _ = w.Write(data)
 }
+
+func (s Server) favicon(w http.ResponseWriter, r *http.Request) {
+	assets, err := s.assets()
+	if err != nil {
+		noContent(w, r)
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(assets.staticDir, "logo.webp"))
+	if err != nil {
+		noContent(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Content-Type", "image/webp")
+	_, _ = w.Write(data)
+}

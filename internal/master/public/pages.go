@@ -22,8 +22,9 @@ func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
-	body := `<p>本服务提供公开 GitHub Release 文件镜像下载。</p><p class="muted">镜像内容来自公开仓库，本服务不是 GitHub 官方服务。网页下载使用自托管 ALTCHA，公开 API 使用独立 SHA-256 前导零 PoW。</p>`
-	s.renderPage(w, pageData{Title: "关于", BodyClass: "page-about", Body: template.HTML(body)})
+	s.renderPage(w, pageData{Title: "关于本项目", BodyClass: "page-about",
+		Subtitle: "关于枫源镜像，和为本站做出贡献的朋友们",
+		Body:     aboutBody(loadSponsors()), Styles: []string{"/static/public/about.css"}})
 }
 
 func (s Server) nodesPage(w http.ResponseWriter, r *http.Request) {
@@ -53,10 +54,17 @@ func num(value int64) string {
 }
 
 func bytesText(value int64) string {
-	if value < 1024*1024 {
+	units := []string{"B", "KiB", "MiB", "GiB", "TiB"}
+	size := float64(value)
+	unit := 0
+	for size >= 1024 && unit < len(units)-1 {
+		size /= 1024
+		unit++
+	}
+	if unit == 0 {
 		return num(value) + " B"
 	}
-	return template.HTMLEscapeString(fmt.Sprintf("%.2f MiB", float64(value)/(1024*1024)))
+	return template.HTMLEscapeString(fmt.Sprintf("%.2f %s", size, units[unit]))
 }
 
 func (s Server) trackPageView(w http.ResponseWriter, r *http.Request) {

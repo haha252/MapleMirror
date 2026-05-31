@@ -30,8 +30,14 @@
   setOverlay("正在准备挑战...", false);
 
   function bytesText(value) {
-    if (value < 1024 * 1024) return value + " B";
-    return (value / (1024 * 1024)).toFixed(2) + " MiB";
+    const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let size = Number(value) || 0;
+    let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) {
+      size = size / 1024;
+      unit++;
+    }
+    return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
   }
 
   function hasLeadingZeroBits(bytes, bits) {
@@ -94,6 +100,35 @@
     return items.find((item) => item.available) || items[0] || null;
   }
 
+  function userArchitecture() {
+    const values = [navigator.userAgentData && navigator.userAgentData.platform,
+      navigator.userAgentData && navigator.userAgentData.architecture,
+      navigator.platform, navigator.userAgent].filter(Boolean).join(" ").toLowerCase();
+    if (/arm64|aarch64|armv8/.test(values)) return "arm64";
+    if (/amd64|x86_64|x64|wow64|win64/.test(values)) return "amd64";
+    if (/x86|i386|i686|win32/.test(values)) return "x86";
+    return "";
+  }
+
+  function normalizeArch(value) {
+    const text = String(value || "").toLowerCase();
+    if (/arm64|aarch64|armv8/.test(text)) return "arm64";
+    if (/amd64|x86_64|x64|64-bit|64bit/.test(text)) return "amd64";
+    if (/x86|i386|i686|32-bit|32bit/.test(text)) return "x86";
+    if (/\ball\b|universal|any/.test(text)) return "all";
+    return text.trim();
+  }
+
+  function preferredAssetForUser(items) {
+    const available = items.filter((item) => item.available);
+    const list = available.length ? available : items;
+    const wanted = userArchitecture();
+    return list.find((item) => normalizeArch(item.architecture) === wanted) ||
+      list.find((item) => normalizeArch(item.architecture) === "all") ||
+      list.find((item) => !String(item.architecture || "").trim()) ||
+      preferredAsset(list);
+  }
+
   function buildCard(project) {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
     const versions = uniqueVersions(project.assets);
@@ -121,7 +156,7 @@
 
     function refreshArchitectures() {
       const list = project.assets.filter((item) => item.version === versionSelect.value);
-      const choice = preferredAsset(list);
+      const choice = preferredAssetForUser(list);
       archSelect.innerHTML = "";
       list.forEach((item) => {
         const option = document.createElement("option");
