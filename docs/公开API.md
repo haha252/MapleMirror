@@ -87,7 +87,7 @@
 
 `GET /api/public/v1/projects/{project_id}/assets`
 
-返回保留窗口内资产，按版本、预发布标记、架构和可选系统组织。只有至少一个 `routing_ready=true` 节点已验证持有的资产才可标记为 `available=true`。
+返回保留窗口内资产，按版本、预发布标记、架构和可选系统组织。只有至少一个在线、未禁用且有公网下载地址的节点在最近心跳之后已验证持有该资产时，才可标记为 `available=true`。`nodes.routing_ready` 仍表示整节点完成全量目标库存对账，不再作为单个文件公开可下载的必要条件。
 
 ```json
 {

@@ -146,6 +146,7 @@ func TestIssueAuthorizationBypassesTrafficLimitForLoopback(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	_, _ = db.Exec(`UPDATE assets SET size_bytes = ? WHERE id = 'asset-1'`, int64(1<<30))
+	_, _ = db.Exec(`UPDATE node_inventory SET size_bytes = ? WHERE asset_id = 'asset-1'`, int64(1<<30))
 	store := Store{DB: db, Quota: newQuotaPolicy(config.Quota{
 		RequestBuckets: config.RequestBuckets{
 			IPv432:  config.Bucket{Capacity: 1, FullRefill: "48h"},

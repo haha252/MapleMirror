@@ -62,6 +62,7 @@ func TestAssetsUnavailableReasonExplainsNotReadyReplica(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	mustExec(t, db, `UPDATE nodes SET routing_ready = 0 WHERE id = 'node-1'`)
+	mustExec(t, db, `UPDATE nodes SET last_heartbeat_at = '2026-01-01T00:00:03Z' WHERE id = 'node-1'`)
 	store := Store{DB: db}
 
 	assets, err := store.Assets(context.Background(), "p1")
@@ -83,6 +84,7 @@ func TestProjectsUnavailableReasonExplainsNotReadyReplica(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	mustExec(t, db, `UPDATE nodes SET routing_ready = 0 WHERE id = 'node-1'`)
+	mustExec(t, db, `UPDATE nodes SET last_heartbeat_at = '2026-01-01T00:00:03Z' WHERE id = 'node-1'`)
 	store := Store{DB: db}
 
 	projects, err := store.Projects(context.Background())

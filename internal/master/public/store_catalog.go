@@ -4,10 +4,7 @@ import "context"
 
 func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.repository, p.name,
-		EXISTS(SELECT 1 FROM releases r JOIN assets a ON a.release_id = r.id
-			JOIN node_inventory ni ON ni.asset_id = a.id AND ni.state = 'verified'
-			JOIN nodes n ON n.id = ni.node_id AND n.routing_ready = 1 AND n.state != 'disabled'
-			AND n.public_download_base_url != ''
+		EXISTS(SELECT 1 FROM releases r JOIN assets a ON a.release_id = r.id`+routableAssetReplicaSQL+`
 			WHERE r.project_id = p.id AND p.enabled = 1 AND r.selected = 1
 			AND a.service_state = 'candidate') AS available,
 		COALESCE(MAX(CASE WHEN r.selected = 1 THEN r.published_at ELSE '' END), '')
@@ -44,10 +41,16 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.id, r.tag_name, r.prerelease,
 		a.file_name, a.architecture, a.system, a.size_bytes, a.digest_sha256,
-		EXISTS(SELECT 1 FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
+		EXISTS(SELECT 1 FROM node_inventory ni
+			JOIN nodes n ON n.id = ni.node_id
+				AND n.state NOT IN ('disabled', 'offline')
+				AND n.last_heartbeat_at IS NOT NULL
+				AND n.last_heartbeat_at != ''
+				AND n.public_download_base_url != ''
 			WHERE ni.asset_id = a.id AND ni.state = 'verified'
-			AND n.routing_ready = 1 AND n.state != 'disabled'
-			AND n.public_download_base_url != '') AS available,
+			AND ni.local_digest_sha256 = a.digest_sha256
+			AND ni.size_bytes = a.size_bytes
+			AND ni.verified_at >= n.last_heartbeat_at) AS available,
 		COALESCE(r.published_at, '')
 		FROM assets a JOIN releases r ON r.id = a.release_id
 		WHERE r.project_id = ? AND r.selected = 1 AND a.service_state = 'candidate'

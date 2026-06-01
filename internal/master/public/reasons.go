@@ -37,7 +37,9 @@ func (s Store) projectUnavailableInfo(ctx context.Context, projectID string) rea
 		COUNT(ni.asset_id),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state NOT IN ('disabled', 'offline')
-			AND n.routing_ready = 0 THEN 1 ELSE 0 END), 0),
+			AND (n.last_heartbeat_at IS NULL OR n.last_heartbeat_at = ''
+				OR ni.verified_at < n.last_heartbeat_at)
+			THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'offline' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'disabled' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state IS NOT NULL AND ni.state != 'verified' THEN 1 ELSE 0 END), 0)
@@ -85,7 +87,9 @@ func (s Store) assetUnavailableInfo(ctx context.Context, assetID string) reasonI
 		COUNT(*),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state NOT IN ('disabled', 'offline')
-			AND n.routing_ready = 0 THEN 1 ELSE 0 END), 0),
+			AND (n.last_heartbeat_at IS NULL OR n.last_heartbeat_at = ''
+				OR ni.verified_at < n.last_heartbeat_at)
+			THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'offline' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'disabled' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state IS NOT NULL AND ni.state != 'verified' THEN 1 ELSE 0 END), 0)

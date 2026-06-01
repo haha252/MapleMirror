@@ -117,10 +117,7 @@ func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) 
 	err := tx.QueryRowContext(ctx, `SELECT n.id, r.project_id,
 		n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1), a.size_bytes FROM assets a
 		JOIN releases r ON r.id = a.release_id
-		JOIN projects p ON p.id = r.project_id
-		JOIN node_inventory ni ON ni.asset_id = a.id AND ni.state = 'verified'
-		JOIN nodes n ON n.id = ni.node_id AND n.routing_ready = 1 AND n.state != 'disabled'
-		AND n.public_download_base_url != ''
+		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
 		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id LIMIT 1`, assetID).
 		Scan(&nodeID, &projectID, &downloadBaseURL, &multiplier, &size)
