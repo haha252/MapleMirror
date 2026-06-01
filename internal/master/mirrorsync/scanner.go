@@ -33,6 +33,9 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 }
 
 func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID string, summary *ScanSummary) error {
+	if err := s.Store.SyncProjectConfig(ctx, projects); err != nil {
+		return err
+	}
 	for _, project := range projects.Projects {
 		if !project.Enabled || (projectID != "" && project.ID != projectID) {
 			continue

@@ -96,6 +96,65 @@ func TestScanExtractsNormalizedSystemWhenEnabled(t *testing.T) {
 	assertAssetSystem(t, db, "p1:1:3", "darwin")
 }
 
+func TestScanProjectsDisabledConfigImmediately(t *testing.T) {
+	wal := true
+	db, err := storage.OpenMaster(config.Database{
+		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	seedNode(t, db)
+
+	scanner := Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: testReleases()}}
+	enabled := config.Projects{Projects: []config.Project{{
+		ID: "p1", Name: "项目", Repository: "owner/repo", Enabled: true,
+		RetainVersions: 1, ArchitectureRegex: "(amd64)",
+	}}}
+	if _, err := scanner.Scan(context.Background(), enabled, "", "req-enabled"); err != nil {
+		t.Fatal(err)
+	}
+	assertCount(t, db, "projects", 1)
+	assertCount(t, db, "target_inventory", 1)
+
+	disabled := config.Projects{Projects: []config.Project{{
+		ID: "p1", Name: "项目", Repository: "owner/repo", Enabled: false,
+		RetainVersions: 1, ArchitectureRegex: "(amd64)",
+	}}}
+	if _, err := scanner.Scan(context.Background(), disabled, "", "req-disabled"); err != nil {
+		t.Fatal(err)
+	}
+	assertProjectEnabled(t, db, "p1", false)
+	assertTargetState(t, db, "remove")
+}
+
+func TestScanProjectsRemovedConfigDisablesExistingProject(t *testing.T) {
+	wal := true
+	db, err := storage.OpenMaster(config.Database{
+		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	seedNode(t, db)
+
+	scanner := Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: testReleases()}}
+	projects := config.Projects{Projects: []config.Project{{
+		ID: "p1", Name: "项目", Repository: "owner/repo", Enabled: true,
+		RetainVersions: 1, ArchitectureRegex: "(amd64)",
+	}}}
+	if _, err := scanner.Scan(context.Background(), projects, "", "req-enabled"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scanner.Scan(context.Background(), config.Projects{}, "", "req-removed"); err != nil {
+		t.Fatal(err)
+	}
+	assertProjectEnabled(t, db, "p1", false)
+	assertTargetState(t, db, "remove")
+}
+
 func seedNode(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.Exec(`INSERT INTO nodes
@@ -120,5 +179,27 @@ func assertAssetSystem(t *testing.T, db *sql.DB, assetID, want string) {
 	var got string
 	if err := db.QueryRow(`SELECT system FROM assets WHERE id = ?`, assetID).Scan(&got); err != nil || got != want {
 		t.Fatalf("资产系统错误 asset=%s got=%q want=%q err=%v", assetID, got, want, err)
+	}
+}
+
+func assertProjectEnabled(t *testing.T, db *sql.DB, projectID string, want bool) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow(`SELECT enabled FROM projects WHERE id = ?`, projectID).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if (got == 1) != want {
+		t.Fatalf("项目启用状态错误 got=%d want=%v", got, want)
+	}
+}
+
+func assertTargetState(t *testing.T, db *sql.DB, want string) {
+	t.Helper()
+	var got string
+	if err := db.QueryRow(`SELECT desired_state FROM target_inventory LIMIT 1`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("目标库存状态错误 got=%q want=%q", got, want)
 	}
 }

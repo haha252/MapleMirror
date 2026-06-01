@@ -3,6 +3,7 @@ package mirrorsync
 import (
 	"context"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -22,6 +23,12 @@ type ProjectLoader struct {
 	Path     string
 	Fallback config.Projects
 	mu       sync.RWMutex
+}
+
+type projectFileState struct {
+	ModTime time.Time
+	Size    int64
+	Valid   bool
 }
 
 func NewProjectLoader(path string, initial config.Projects) *ProjectLoader {
@@ -97,9 +104,12 @@ func (s Service) Run(ctx context.Context) {
 	if s.Logger != nil {
 		s.Logger.Debug(ctx, "Release 扫描调度器启动", slog.String("interval", s.Interval.String()))
 	}
+	lastProjectState := s.projectFileState()
 	s.runOnce(ctx, "")
 	ticker := time.NewTicker(s.Interval)
+	reloadTicker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
+	defer reloadTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -109,6 +119,16 @@ func (s Service) Run(ctx context.Context) {
 				s.Logger.Debug(ctx, "Release 扫描调度 tick", slog.String("interval", s.Interval.String()))
 			}
 			s.runOnce(ctx, "")
+			lastProjectState = s.projectFileState()
+		case <-reloadTicker.C:
+			nextProjectState := s.projectFileState()
+			if projectFileChanged(lastProjectState, nextProjectState) {
+				if s.Logger != nil {
+					s.Logger.Info(ctx, "检测到项目清单变更，立即触发 Release 扫描")
+				}
+				s.runOnce(ctx, "")
+			}
+			lastProjectState = nextProjectState
 		}
 	}
 }
@@ -119,4 +139,22 @@ func (s Service) runOnce(ctx context.Context, projectID string) {
 		s.Logger.Warn(ctx, "Release 扫描失败", slog.String("request_id", reqID),
 			slog.String("error", err.Error()))
 	}
+}
+
+func (s Service) projectFileState() projectFileState {
+	if s.Projects == nil || s.Projects.Path == "" {
+		return projectFileState{}
+	}
+	info, err := os.Stat(s.Projects.Path)
+	if err != nil {
+		return projectFileState{}
+	}
+	return projectFileState{ModTime: info.ModTime(), Size: info.Size(), Valid: true}
+}
+
+func projectFileChanged(previous, next projectFileState) bool {
+	if !previous.Valid || !next.Valid {
+		return previous.Valid != next.Valid
+	}
+	return !previous.ModTime.Equal(next.ModTime) || previous.Size != next.Size
 }
