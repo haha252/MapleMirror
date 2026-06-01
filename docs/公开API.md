@@ -180,7 +180,7 @@
     "download_url": "https://node.example/downloads/asset_123",
     "download_token": "短时签名令牌",
     "expires_at": "2026-05-28T12:05:00Z",
-    "range_concurrency_limit": 4,
+    "range_concurrency_limit": 32,
     "max_bytes": 246912
   }
 }
@@ -325,8 +325,8 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 | `node_id` | 是 | 只能由该节点接受 |
 | `client_prefix` | 是 | 客户端 IP 前缀 |
 | `expires_at` | 是 | 短时有效期 |
-| `max_bytes` | 是 | 最大允许发送字节，默认等于资产大小乘以 `quota.yaml` 的 `authorization_max_bytes_multiplier` |
-| `range_concurrency_limit` | 是 | 并发 Range 限制 |
+| `max_bytes` | 是 | 最大允许发送字节，默认等于资产大小乘以 `quota.yaml` 的 `authorization_max_bytes_multiplier`；下载节点按真实响应体发送字节累计，不按请求 Range 范围预扣 |
+| `range_concurrency_limit` | 是 | 并发 Range 限制，默认来自 `quota.yaml` 的 `range_concurrency_limit`，默认值 `32` |
 | `request_id` | 是 | 主节点签发请求 ID |
 
 下载令牌使用 Ed25519 非对称签名：主节点持私钥签发，下载节点只持公钥验证。令牌格式仍为 `base64url(payload).base64url(signature)`。伪造、过期、跨节点、跨资产、跨客户端前缀复用的令牌必须被拒绝。
@@ -459,4 +459,4 @@ M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段
 | 跨资产复用 | 请求资产与令牌资产不一致时下载失败 |
 | 跨客户端前缀复用 | 客户端前缀变化时授权提交或节点下载失败 |
 | 并发授权 | 同一地址和网段额度不透支，错误使用 `REQUEST_QUOTA_EXHAUSTED` 或 `TRAFFIC_LIMIT_EXCEEDED` |
-| Range 下载 | 同一令牌多段 Range 不增加下载授权次数，真实字节按事件入账 |
+| Range 下载 | 同一令牌多段 Range 不增加下载授权次数，授权用量和统计均按真实响应体发送字节入账，不按客户端声明的 Range 范围入账 |

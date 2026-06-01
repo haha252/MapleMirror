@@ -33,6 +33,10 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 	if auth.Claims.MaxBytes != 24 {
 		t.Fatalf("授权最大字节数应按默认 2 倍资产大小计算：%d", auth.Claims.MaxBytes)
 	}
+	if auth.Claims.RangeConcurrencyLimit != 32 || debug.RangeLimit != 32 {
+		t.Fatalf("授权 Range 并发默认值应为 32：claims=%d debug=%d",
+			auth.Claims.RangeConcurrencyLimit, debug.RangeLimit)
+	}
 	if debug.DownloadURL != "https://node-1.example.com/downloads/asset-1" {
 		t.Fatalf("下载地址返回错误：%q", debug.DownloadURL)
 	}
@@ -63,6 +67,32 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		WHERE authorization_id = ?`, auth.Claims.AuthorizationID).Scan(&reserved)
 	if err != nil || reserved != 24 {
 		t.Fatalf("流量预留应按授权最大字节数计算：reserved=%d err=%v", reserved, err)
+	}
+	var rangeLimit int
+	err = db.QueryRow(`SELECT range_limit FROM download_authorizations
+		WHERE id = ?`, auth.Claims.AuthorizationID).Scan(&rangeLimit)
+	if err != nil || rangeLimit != 32 {
+		t.Fatalf("授权落库 Range 并发限制错误：limit=%d err=%v", rangeLimit, err)
+	}
+}
+
+func TestIssueAuthorizationUsesConfiguredRangeConcurrencyLimit(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := Store{DB: db, RangeLimit: 16}
+
+	challenge, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth.Claims.RangeConcurrencyLimit != 16 || debug.RangeLimit != 16 {
+		t.Fatalf("授权未使用配置的 Range 并发限制：claims=%d debug=%d",
+			auth.Claims.RangeConcurrencyLimit, debug.RangeLimit)
 	}
 }
 

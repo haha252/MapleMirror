@@ -3,6 +3,7 @@ package public
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -16,9 +17,18 @@ func TestPageViewCookieCountsVisitorOncePerDay(t *testing.T) {
 		t.Fatalf("expected visitor cookie, got %+v", cookies)
 	}
 
+	aboutBody := first.Body.String()
+	if !strings.Contains(aboutBody, `<title>关于本项目 - 枫源镜像</title>`) {
+		t.Fatalf("expected about browser title: %s", aboutBody)
+	}
+
 	secondReq := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	secondReq.AddCookie(cookies[0])
-	srv.statsPage(httptest.NewRecorder(), secondReq)
+	statsRec := httptest.NewRecorder()
+	srv.statsPage(statsRec, secondReq)
+	if !strings.Contains(statsRec.Body.String(), `<title>数据统计 - 枫源镜像</title>`) {
+		t.Fatalf("expected stats browser title: %s", statsRec.Body.String())
+	}
 
 	var views int
 	err := db.QueryRow(`SELECT page_views FROM daily_site_stats`).Scan(&views)

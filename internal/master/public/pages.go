@@ -15,14 +15,14 @@ func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nodes, _ := s.Store.Nodes(r.Context())
-	s.renderPage(w, pageData{Title: "数据洞察", BodyClass: "page-stats",
+	s.renderPage(w, pageData{Title: "数据统计", BrowserTitle: "数据统计 - 枫源镜像", BodyClass: "page-stats",
 		Body: statsBody(stats, nodes), Styles: []string{"/static/public/stats.css"},
 		Scripts: []string{"/static/public/stats.js"}})
 }
 
 func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
-	s.renderPage(w, pageData{Title: "关于本项目", BodyClass: "page-about",
+	s.renderPage(w, pageData{Title: "关于本项目", BrowserTitle: "关于本项目 - 枫源镜像", BodyClass: "page-about",
 		Subtitle: "关于枫源镜像，和为本站做出贡献的朋友们",
 		Body:     aboutBody(loadSponsors()), Styles: []string{"/static/public/about.css"}})
 }

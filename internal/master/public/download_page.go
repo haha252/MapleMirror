@@ -58,12 +58,14 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderPage(w, pageData{
-		Title:     "下载",
-		Subtitle:  "选择版本与架构，开始下载！",
-		BodyClass: "page-download",
-		Body:      body,
-		Styles:    []string{"/static/public/download.css"},
-		Scripts:   []string{"/static/public/download-selectors.js", "/static/public/pow-loader.js", "/static/public/download.js"},
+		Title:        "枫源镜像",
+		BrowserTitle: "枫源镜像",
+		Subtitle:     mirrorDescription,
+		Description:  mirrorDescription,
+		BodyClass:    "page-download",
+		Body:         body,
+		Styles:       []string{"/static/public/download.css"},
+		Scripts:      []string{"/static/public/download-selectors.js", "/static/public/pow-loader.js", "/static/public/download.js"},
 	})
 }
 

@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}}</title>
+<title>{{if .BrowserTitle}}{{.BrowserTitle}}{{else}}{{.Title}}{{end}}</title>
+{{if .Description}}<meta name="description" content="{{.Description}}">{{end}}
 <script>
 (function () {
   var root = document.documentElement;

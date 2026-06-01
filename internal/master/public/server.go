@@ -36,7 +36,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 	challenges := newChallengeMemory()
 	challenges.startCleanup(minDuration(altchaTTL, apiTTL, time.Minute))
 	return Server{
-		Store:            Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc, Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota)},
+		Store:            Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc, Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota), RangeLimit: quota.RangeConcurrencyLimit},
 		Signer:           signer,
 		ALTCHATTL:        altchaTTL,
 		ALTCHADifficulty: altchaDifficulty,

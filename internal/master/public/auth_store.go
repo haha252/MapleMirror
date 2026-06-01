@@ -35,6 +35,7 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	maxBytes := s.maxBytesPolicy().maxBytes(size)
+	rangeLimit := s.rangeConcurrencyLimit()
 	now := time.Now().UTC()
 	scopes, err := quotaScopes(c.ClientPrefixKey)
 	if err != nil {
@@ -70,7 +71,7 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	expires := expiresAfter(ttl)
-	if err := insertAuthorization(ctx, tx, authID, c, nodeID, maxBytes, expires, reqID); err != nil {
+	if err := insertAuthorization(ctx, tx, authID, c, nodeID, maxBytes, rangeLimit, expires, reqID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := insertReservation(ctx, tx, authID, day, maxBytes, reservationStatus, now, scopes); err != nil {
@@ -88,7 +89,7 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	}
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version, AuthorizationID: authID,
 		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
-		ExpiresAt: expires, MaxBytes: maxBytes, RangeConcurrencyLimit: 4, RequestID: reqID}
+		ExpiresAt: expires, MaxBytes: maxBytes, RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
 	debug := AuthorizationDebug{
 		ClientPrefix:               c.ClientPrefixKey,
 		NodeID:                     nodeID,
@@ -96,7 +97,7 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		DownloadURL:                downloadURL,
 		ExpiresAt:                  expires,
 		MaxBytes:                   maxBytes,
-		RangeLimit:                 4,
+		RangeLimit:                 rangeLimit,
 		RequestRemainingMicrounits: requestRemaining,
 		TrafficRemainingBytes:      trafficRemaining,
 	}
@@ -127,12 +128,19 @@ func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) 
 	return nodeID, projectID, joinDownloadURL(downloadBaseURL, assetID), multiplier, size, err
 }
 
-func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge, nodeID string, size int64, expires, reqID string) error {
+func (s Store) rangeConcurrencyLimit() int {
+	if s.RangeLimit <= 0 {
+		return 32
+	}
+	return s.RangeLimit
+}
+
+func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge, nodeID string, size int64, rangeLimit int, expires, reqID string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO download_authorizations
 		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at,
 		max_bytes, range_limit, status, request_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
-		id, c.AssetID, nodeID, c.ClientPrefixKey, nowText(), expires, size, 4, reqID)
+		id, c.AssetID, nodeID, c.ClientPrefixKey, nowText(), expires, size, rangeLimit, reqID)
 	return err
 }
 

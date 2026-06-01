@@ -33,8 +33,8 @@ self.onmessage = async (event) => {
     const exports = loaded.instance.exports;
     const ptr = exports.get_buffer();
     const inputLen = writeInput(exports.memory, ptr, data.challenge + ":");
-    let start = Number(data.start) || 0;
-    const step = Number(data.step) || 1;
+    let start = BigInt(data.start || 0);
+    const step = BigInt(data.step || 1);
     const batch = Number(data.batch) || 32768;
     for (;;) {
       const tried = exports.solve_pow(inputLen, data.difficulty, start, step, batch);
@@ -43,7 +43,7 @@ self.onmessage = async (event) => {
         self.postMessage({type: "found", nonce: readCString(exports.memory, ptr)});
         return;
       }
-      start += step * batch;
+      start += step * BigInt(batch);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   } catch (err) {

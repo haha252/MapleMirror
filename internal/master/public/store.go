@@ -18,6 +18,7 @@ type Store struct {
 	Location   *time.Location
 	Challenges *challengeMemory
 	MaxBytes   maxBytesPolicy
+	RangeLimit int
 }
 
 type ProjectSummary struct {

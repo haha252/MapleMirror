@@ -11,6 +11,7 @@ type Quota struct {
 	RequestBuckets                  RequestBuckets `yaml:"request_buckets"`
 	DailyTraffic                    DailyTraffic   `yaml:"daily_traffic"`
 	AuthorizationMaxBytesMultiplier int            `yaml:"authorization_max_bytes_multiplier"`
+	RangeConcurrencyLimit           int            `yaml:"range_concurrency_limit"`
 	Blacklist                       []string       `yaml:"blacklist"`
 	Exemptions                      []string       `yaml:"exemptions"`
 }
@@ -51,6 +52,10 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 		c.AuthorizationMaxBytesMultiplier = 2
 		warnDefault(warn, "authorization_max_bytes_multiplier", "2")
 	}
+	if c.RangeConcurrencyLimit == 0 {
+		c.RangeConcurrencyLimit = 32
+		warnDefault(warn, "range_concurrency_limit", "32")
+	}
 	return c, validateQuota(c)
 }
 
@@ -85,6 +90,9 @@ func validateQuota(c Quota) error {
 	}
 	if c.AuthorizationMaxBytesMultiplier <= 0 {
 		return errors.New("authorization_max_bytes_multiplier 必须大于零")
+	}
+	if c.RangeConcurrencyLimit <= 0 {
+		return errors.New("range_concurrency_limit 必须大于零")
 	}
 	for i, raw := range c.Exemptions {
 		if _, err := parseQuotaPrefix(raw); err != nil {

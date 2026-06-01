@@ -1,5 +1,7 @@
 (function () {
   const encoder = new TextEncoder();
+  let wasmBytesPromise;
+  let workerURL;
 
   function hasLeadingZeroBits(bytes, bits) {
     for (const byte of bytes) {
@@ -28,8 +30,64 @@
     return Math.min(count, 32);
   }
 
-  function solveWithWorkers(challenge, difficulty) {
+  function loadWASMBytes() {
+    if (!wasmBytesPromise) {
+      wasmBytesPromise = fetch("/static/public/pow.wasm")
+        .then((resp) => {
+          if (!resp.ok) throw new Error("wasm not found");
+          return resp.arrayBuffer();
+        });
+    }
+    return wasmBytesPromise;
+  }
+
+  function makeWorkerURL() {
+    if (workerURL) return workerURL;
+    const source = `
+      function writeInput(memory, ptr, text) {
+        const bytes = new TextEncoder().encode(text);
+        if (bytes.length > 120) throw new Error("challenge too long");
+        new Uint8Array(memory.buffer, ptr, bytes.length).set(bytes);
+        return bytes.length;
+      }
+      function readCString(memory, ptr) {
+        const bytes = new Uint8Array(memory.buffer, ptr, 32);
+        let end = 0;
+        while (end < bytes.length && bytes[end] !== 0) end++;
+        return new TextDecoder().decode(bytes.slice(0, end));
+      }
+      self.onmessage = async (event) => {
+        const data = event.data || {};
+        try {
+          const loaded = await WebAssembly.instantiate(data.wasmBytes, {});
+          const exports = loaded.instance.exports;
+          const ptr = exports.get_buffer();
+          const inputLen = writeInput(exports.memory, ptr, data.challenge + ":");
+          let start = BigInt(data.start || 0);
+          const step = BigInt(data.step || 1);
+          const batch = Number(data.batch) || 32768;
+          for (;;) {
+            const tried = exports.solve_pow(inputLen, data.difficulty, start, step, batch);
+            if (tried < 0) throw new Error("invalid pow input");
+            if (tried > 0) {
+              self.postMessage({type: "found", nonce: readCString(exports.memory, ptr)});
+              return;
+            }
+            start += step * BigInt(batch);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        } catch (err) {
+          self.postMessage({type: "error", message: err && err.message ? err.message : "wasm failed"});
+        }
+      };
+    `;
+    workerURL = URL.createObjectURL(new Blob([source], {type: "text/javascript"}));
+    return workerURL;
+  }
+
+  async function solveWithWorkers(challenge, difficulty) {
     if (!window.Worker) return Promise.reject(new Error("worker unavailable"));
+    const wasmBytes = await loadWASMBytes();
     return new Promise((resolve, reject) => {
       const total = workerCount();
       const workers = [];
@@ -42,7 +100,7 @@
         fn(value);
       }
       for (let i = 0; i < total; i++) {
-        const worker = new Worker("/static/public/pow-worker.js");
+        const worker = new Worker(makeWorkerURL());
         workers.push(worker);
         worker.onmessage = (event) => {
           const data = event.data || {};
@@ -61,7 +119,8 @@
           difficulty,
           start: i,
           step: total,
-          batch: 262144
+          batch: 262144,
+          wasmBytes
         });
       }
     });
@@ -73,6 +132,7 @@
       try {
         return await solveWithWorkers(challenge, difficulty);
       } catch (err) {
+        console.warn("PoW worker failed; falling back to single-threaded Web Crypto.", err);
         return solveWithSubtle(challenge, difficulty);
       }
     }

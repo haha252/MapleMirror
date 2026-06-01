@@ -63,7 +63,10 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 		t.Fatal("项目默认不应启用系统匹配")
 	}
 	quota, err := LoadQuota(quotaPath, nil)
-	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 || quota.DailyTraffic.IPv664 != "20 GiB" || quota.AuthorizationMaxBytesMultiplier != 2 {
+	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 ||
+		quota.DailyTraffic.IPv664 != "20 GiB" ||
+		quota.AuthorizationMaxBytesMultiplier != 2 ||
+		quota.RangeConcurrencyLimit != 32 {
 		t.Fatalf("额度默认合同错误：%v", err)
 	}
 }

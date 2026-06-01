@@ -23,6 +23,9 @@ daily_traffic:
 # 单个下载授权最多允许发送的字节数 = 资产大小 * 此倍数，用于 Range 重试和断点续传。
 authorization_max_bytes_multiplier: 2
 
+# 单个下载授权允许同时存在的 Range 请求数。
+range_concurrency_limit: 32
+
 blacklist: []
 exemptions:
   - 127.0.0.1

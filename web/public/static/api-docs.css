@@ -5,6 +5,7 @@
 .api-docs-list {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .api-endpoint {
@@ -13,6 +14,8 @@
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .api-route {
@@ -21,6 +24,7 @@
   gap: 12px;
   margin-bottom: 14px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .api-route code,
@@ -30,10 +34,13 @@
 }
 
 .api-route code {
+  flex: 1 1 auto;
   color: var(--text);
   font-size: 15px;
   font-weight: 700;
+  min-width: 0;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .api-method {
@@ -56,13 +63,47 @@
 .api-endpoint p { color: var(--muted); }
 
 .api-params {
+  display: block;
+  width: 100%;
   margin: 20px 0 14px;
+  overflow-x: auto;
   font-size: 14px;
+  border-collapse: collapse;
+}
+
+.api-params thead,
+.api-params tbody {
+  display: table;
+  width: 100%;
+  min-width: 520px;
+  table-layout: auto;
+}
+
+.api-params tr {
+  display: table-row;
+}
+
+.api-params th,
+.api-params td {
+  display: table-cell;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
 }
 
 .api-params th {
   color: #ffa436;
   font-weight: 800;
+}
+
+.api-params th:first-child,
+.api-params td:first-child {
+  width: 24%;
+}
+
+.api-params th:nth-child(2),
+.api-params td:nth-child(2) {
+  width: 18%;
 }
 
 .api-params td {
@@ -80,6 +121,7 @@
 }
 
 .api-endpoint pre {
+  max-width: 100%;
   margin: 0 0 10px;
   padding: 14px;
   overflow-x: auto;
@@ -93,5 +135,15 @@
 
 @media (max-width: 760px) {
   .api-endpoint { padding: 16px; }
-  .api-route { align-items: flex-start; }
+  .api-route {
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .api-endpoint pre {
+    padding: 12px;
+    font-size: 12px;
+  }
+  .api-params {
+    font-size: 13px;
+  }
 }

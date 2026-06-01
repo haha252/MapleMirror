@@ -45,7 +45,7 @@ func TestHandlerServesVerifiedAssetRange(t *testing.T) {
 	}
 }
 
-func TestHandlerRejectsAuthorizationMaxBytesExceeded(t *testing.T) {
+func TestHandlerAllowsLargeRequestedRangeWhenActualBytesFit(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	_, err := db.Exec(`INSERT INTO pending_traffic_events
 		(event_sequence, authorization_id, node_request_id, master_request_id,
@@ -62,11 +62,42 @@ func TestHandlerRejectsAuthorizationMaxBytesExceeded(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/downloads/asset-1", nil)
 	req.RemoteAddr = "192.0.2.1:12345"
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Range", "bytes=1-3")
+	req.Header.Set("Range", "bytes=5-")
+	rec := httptest.NewRecorder()
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent || rec.Body.String() != "f" {
+		t.Fatalf("实际发送字节未超限时应允许：code=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var bytes int64
+	err = db.QueryRow(`SELECT COALESCE(SUM(sent_bytes), 0)
+		FROM pending_traffic_events WHERE authorization_id = 'auth-1'`).Scan(&bytes)
+	if err != nil || bytes != 6 {
+		t.Fatalf("应按真实发送字节累计授权用量：bytes=%d err=%v", bytes, err)
+	}
+}
+
+func TestHandlerRejectsAuthorizationWhenActualBytesAlreadyExhausted(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	_, err := db.Exec(`INSERT INTO pending_traffic_events
+		(event_sequence, authorization_id, node_request_id, master_request_id,
+		sent_bytes, created_at, asset_id, status)
+		VALUES (1, 'auth-1', 'node-req-1', 'master-req-1', 6, 'now', 'asset-1', 'completed')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
+		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
+		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		MaxBytes: 6, RangeConcurrencyLimit: 2, RequestID: "req-1"}
+	token, _ := signer.Sign(claims)
+	req := httptest.NewRequest(http.MethodGet, "/downloads/asset-1", nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Range", "bytes=5-")
 	rec := httptest.NewRecorder()
 	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}).ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("超过授权最大字节数应拒绝：%d", rec.Code)
+		t.Fatalf("真实发送字节已达上限时应拒绝：%d", rec.Code)
 	}
 }
 

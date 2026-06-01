@@ -3,12 +3,10 @@ package files
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -61,16 +59,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusNotFound, "本地资产不可用")
 		return
 	}
-	plannedBytes, err := requestedBytes(r.Header.Get("Range"), asset.SizeBytes)
-	if err != nil {
-		httpError(w, r, http.StatusRequestedRangeNotSatisfiable, "Range 不合法")
-		return
-	}
-	if r.Method == http.MethodHead {
-		plannedBytes = 0
-	}
 	sent, err := h.authorizationBytes(claims.AuthorizationID)
-	if err != nil || sent+plannedBytes > claims.MaxBytes {
+	if err != nil || (r.Method != http.MethodHead && sent >= claims.MaxBytes) {
 		httpError(w, r, http.StatusForbidden, "授权可发送字节数不足")
 		return
 	}
@@ -101,49 +91,6 @@ func (h *Handler) authorizationBytes(id string) (int64, error) {
 	err := h.DB.QueryRow(`SELECT COALESCE(SUM(sent_bytes), 0)
 		FROM pending_traffic_events WHERE authorization_id = ?`, id).Scan(&sent)
 	return sent, err
-}
-
-func requestedBytes(header string, size int64) (int64, error) {
-	if strings.TrimSpace(header) == "" {
-		return size, nil
-	}
-	if !strings.HasPrefix(header, "bytes=") || strings.Contains(header, ",") {
-		return 0, fmt.Errorf("不支持的 Range")
-	}
-	spec := strings.TrimPrefix(header, "bytes=")
-	startText, endText, ok := strings.Cut(spec, "-")
-	if !ok {
-		return 0, fmt.Errorf("Range 格式不合法")
-	}
-	if startText == "" {
-		n, err := strconv.ParseInt(endText, 10, 64)
-		if err != nil || n <= 0 {
-			return 0, fmt.Errorf("Range 格式不合法")
-		}
-		return minInt64(n, size), nil
-	}
-	start, err := strconv.ParseInt(startText, 10, 64)
-	if err != nil || start < 0 || start >= size {
-		return 0, fmt.Errorf("Range 起点不合法")
-	}
-	end := size - 1
-	if endText != "" {
-		end, err = strconv.ParseInt(endText, 10, 64)
-		if err != nil || end < start {
-			return 0, fmt.Errorf("Range 终点不合法")
-		}
-		if end >= size {
-			end = size - 1
-		}
-	}
-	return end - start + 1, nil
-}
-
-func minInt64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func (h *Handler) localAsset(assetID string) (localAsset, error) {

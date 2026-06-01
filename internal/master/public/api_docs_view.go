@@ -8,11 +8,12 @@ import (
 func (s Server) apiDocsPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
 	s.renderPage(w, pageData{
-		Title:     "API 文档",
-		Subtitle:  "面向用户的公共 API",
-		BodyClass: "page-api-docs",
-		Body:      template.HTML(apiDocsBody),
-		Styles:    []string{"/static/public/api-docs.css"},
+		Title:        "API 文档",
+		BrowserTitle: "API 文档 - 枫源镜像",
+		Subtitle:     "面向用户的公共 API",
+		BodyClass:    "page-api-docs",
+		Body:         template.HTML(apiDocsBody),
+		Styles:       []string{"/static/public/api-docs.css"},
 	})
 }
 
