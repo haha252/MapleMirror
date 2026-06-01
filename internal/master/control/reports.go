@@ -30,7 +30,13 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `INSERT INTO node_inventory_reports
 		(id, node_id, revision, complete, item_count, result, request_id, reported_at)
-		VALUES (?, ?, ?, ?, ?, 'accepted', ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, 'accepted', ?, ?)
+		ON CONFLICT(node_id, revision) DO UPDATE SET
+		complete = excluded.complete,
+		item_count = excluded.item_count,
+		result = excluded.result,
+		request_id = excluded.request_id,
+		reported_at = excluded.reported_at`,
 		mustID(), session.NodeID, report.Revision, boolInt(report.Complete),
 		len(report.Items), session.RequestID, now)
 	if err != nil {

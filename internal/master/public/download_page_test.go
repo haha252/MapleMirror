@@ -37,8 +37,45 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `"system_match_enabled":false`) {
 		t.Fatalf("expected disabled system matching in payload: %s", body)
 	}
+	if !strings.Contains(body, `"default_version":"v1"`) {
+		t.Fatalf("expected default version in payload: %s", body)
+	}
 	if !strings.Contains(body, `"asset_id":"asset-1"`) {
 		t.Fatalf("expected download data payload in page: %s", body)
+	}
+}
+
+func TestDownloadPageDefaultsToLatestVersion(t *testing.T) {
+	db := openMaster(t)
+	mustExec(t, db, `INSERT INTO projects
+		(id, name, repository, enabled, retain_versions, include_prerelease,
+		download_multiplier, config_hash, updated_at)
+		VALUES ('p1', '项目一', 'owner/repo', 1, 1, 0, 1, 'hash', 'now')`)
+	mustExec(t, db, `INSERT INTO releases
+		(id, project_id, github_release_id, tag_name, prerelease, published_at, selected, created_at)
+		VALUES ('rel-old', 'p1', 1, 'v1.0.0', 0, '2026-01-01T00:00:00Z', 1, '2026-01-01T00:00:00Z')`)
+	mustExec(t, db, `INSERT INTO releases
+		(id, project_id, github_release_id, tag_name, prerelease, published_at, selected, created_at)
+		VALUES ('rel-new', 'p1', 2, 'v2.0.0', 0, '2026-02-01T00:00:00Z', 1, '2026-02-01T00:00:00Z')`)
+	mustExec(t, db, `INSERT INTO assets
+		(id, release_id, github_asset_id, file_name, architecture, size_bytes,
+		source_url, digest_sha256, service_state, created_at)
+		VALUES ('asset-old', 'rel-old', 1, 'old.zip', 'amd64', 12,
+		'https://example.test/old.zip', 'sha256:old', 'candidate', '2026-01-01T00:00:00Z')`)
+	mustExec(t, db, `INSERT INTO assets
+		(id, release_id, github_asset_id, file_name, architecture, size_bytes,
+		source_url, digest_sha256, service_state, created_at)
+		VALUES ('asset-new', 'rel-new', 2, 'new.zip', 'amd64', 12,
+		'https://example.test/new.zip', 'sha256:new', 'candidate', '2026-02-01T00:00:00Z')`)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `"default_version":"v2.0.0"`) {
+		t.Fatalf("expected latest version to be selected by default: %s", body)
 	}
 }
 

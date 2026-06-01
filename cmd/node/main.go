@@ -67,7 +67,7 @@ func main() {
 	}
 	defer database.Close()
 	logger.Info(context.Background(), "下载节点本地状态库迁移已完成")
-	if err := interactiveEnrollIfNeeded(&cfg, database); err != nil {
+	if err := interactiveEnrollIfNeeded(*path, &cfg, database); err != nil {
 		logger.Error(context.Background(), "下载节点首次交互登记失败", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
@@ -129,7 +129,7 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 	}()
 }
 
-func interactiveEnrollIfNeeded(cfg *config.Node, db *sql.DB) error {
+func interactiveEnrollIfNeeded(path string, cfg *config.Node, db *sql.DB) error {
 	if _, err := (nodecontrol.IdentityStore{DB: db}).NodeID(); err == nil {
 		return nil
 	}
@@ -141,6 +141,9 @@ func interactiveEnrollIfNeeded(cfg *config.Node, db *sql.DB) error {
 	cfg.Master.ControlAddress = answers.ControlAddress
 	cfg.Master.EnrollmentAddress = answers.EnrollmentAddress
 	cfg.TLS.ServerName = answers.ServerName
+	if err := config.SaveNodeFirstRun(path, *cfg); err != nil {
+		return err
+	}
 	if err := bootstrap.WritePairingCode(cfg.Pairing.CodeFile, answers.PairingCode); err != nil {
 		return err
 	}

@@ -62,6 +62,18 @@ func LoadNode(path string, warn WarnFunc) (Node, error) {
 	return c, validateNode(c)
 }
 
+func SaveNodeFirstRun(path string, c Node) error {
+	if err := validateNode(c); err != nil {
+		return err
+	}
+	return updateYAMLScalars(path, map[string]string{
+		"node.name":                 c.Node.Name,
+		"master.control_address":    c.Master.ControlAddress,
+		"master.enrollment_address": c.Master.EnrollmentAddress,
+		"tls.server_name":           c.TLS.ServerName,
+	})
+}
+
 func applyNodeDefaults(c *Node, warn WarnFunc) {
 	applyLoggingDefaults(&c.Logging, "logs/node", warn)
 	setString(&c.Storage.Directory, "data/assets", "storage.directory", warn)

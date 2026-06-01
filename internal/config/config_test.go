@@ -162,6 +162,35 @@ tls:
 	}
 }
 
+func TestSaveNodeFirstRunPersistsInteractiveAnswers(t *testing.T) {
+	dir := t.TempDir()
+	nodePath := filepath.Join(dir, "node.yaml")
+	if err := os.WriteFile(nodePath, NodeExample, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadNode(nodePath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Node.Name = "华东下载节点"
+	cfg.Master.ControlAddress = "https://162.14.72.24:10001"
+	cfg.Master.EnrollmentAddress = "https://162.14.72.24:10002"
+	cfg.TLS.ServerName = "master.example.com"
+	if err := SaveNodeFirstRun(nodePath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadNode(nodePath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Node.Name != cfg.Node.Name ||
+		loaded.Master.ControlAddress != cfg.Master.ControlAddress ||
+		loaded.Master.EnrollmentAddress != cfg.Master.EnrollmentAddress ||
+		loaded.TLS.ServerName != cfg.TLS.ServerName {
+		t.Fatalf("首次交互配置未持久化：%+v", loaded)
+	}
+}
+
 func TestWriteExamplesKeepsEmbeddedUTF8Content(t *testing.T) {
 	dir := t.TempDir()
 	if err := WriteExamples(dir); err != nil {

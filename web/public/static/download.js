@@ -84,7 +84,7 @@
   function buildCard(project) {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
     const versions = uniqueVersions(project.assets);
-    const defaultVersion = (project.assets.find((item) => item.available) || project.assets[0] || {}).version || "";
+    const defaultVersion = project.default_version || (versions[0] || "");
     card.querySelector(".project-card__icon").src = project.icon_url;
     card.querySelector(".project-card__icon").alt = project.display_name + " 图标";
     card.querySelector(".project-name").textContent = project.display_name;
@@ -100,6 +100,11 @@
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
     const badge = card.querySelector(".version-badge");
+    function setAvailability(selected) {
+      const available = !!(selected && selected.available);
+      availability.textContent = available ? "可下载" : "暂不可下载";
+      availability.className = "project-availability " + (available ? "ok" : "warn");
+    }
     versions.forEach((version) => {
       const option = document.createElement("option");
       option.value = version;
@@ -150,11 +155,13 @@
         preferredAsset(project.assets);
       badge.textContent = selected ? " " + selected.version : "";
       if (!selected) {
+        setAvailability(null);
         sizeText.textContent = "暂无可下载文件";
         sizeText.className = "project-card__size warn";
         button.disabled = true;
         return;
       }
+      setAvailability(selected);
       sizeText.textContent = bytesText(selected.size_bytes);
       sizeText.className = "project-card__size " + (selected.available ? "muted" : "warn");
       button.disabled = !selected.available;
@@ -166,7 +173,9 @@
     }
 
     if (project.system_match_enabled) systemField.hidden = false;
-    versionSelect.addEventListener("change", refreshSystems);
+    versionSelect.addEventListener("change", function () {
+      refreshSystems();
+    });
     systemSelect.addEventListener("change", refreshArchitectures);
     archSelect.addEventListener("change", refreshDetails);
     button.addEventListener("click", function () { startDownload(button); });

@@ -24,8 +24,8 @@
   }
 
   function workerCount() {
-    const count = Math.max(1, Math.floor((navigator.hardwareConcurrency || 2) - 1));
-    return Math.min(count, 8);
+    const count = Math.max(1, Math.floor(navigator.hardwareConcurrency || 4));
+    return Math.min(count, 32);
   }
 
   function solveWithWorkers(challenge, difficulty) {
@@ -61,13 +61,14 @@
           difficulty,
           start: i,
           step: total,
-          batch: 32768
+          batch: 262144
         });
       }
     });
   }
 
   window.PowSolver = {
+    threads: workerCount,
     async solve(challenge, difficulty) {
       try {
         return await solveWithWorkers(challenge, difficulty);

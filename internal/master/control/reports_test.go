@@ -96,6 +96,39 @@ func TestReconnectResetsReadyUntilCompleteInventoryReportArrives(t *testing.T) {
 	}
 }
 
+func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	report := protocol.InventoryReport{
+		ReportID: "r-ready", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-1", SizeBytes: 10,
+			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			LocalState:   "reported",
+		}},
+	}
+	if _, err := repo.AcceptInventoryReport(context.Background(), session, 1, report); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := repo.StartSession(context.Background(), "sha256:aa", "req-reconnect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	report.ReportID = "r-ready-retry"
+	if _, err := repo.AcceptInventoryReport(context.Background(), restarted, 1, report); err != nil {
+		t.Fatal(err)
+	}
+	var reportCount, ready int
+	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory_reports WHERE node_id = ?", session.NodeID).
+		Scan(&reportCount)
+	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
+	if reportCount != 1 || ready != 1 {
+		t.Fatalf("重复库存修订应幂等并恢复就绪，reports=%d ready=%d", reportCount, ready)
+	}
+}
+
 func TestPressureReportReplayHasNoDuplicateSideEffect(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

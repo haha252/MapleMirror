@@ -16,6 +16,7 @@ type downloadProjectView struct {
 	IconURL            string            `json:"icon_url"`
 	SystemMatchEnabled bool              `json:"system_match_enabled"`
 	LatestPublishedAt  string            `json:"latest_published_at"`
+	DefaultVersion     string            `json:"default_version"`
 	Assets             []downloadAssetUI `json:"assets"`
 }
 
@@ -77,6 +78,9 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 		SystemMatchEnabled: config.SystemMatchEnabled,
 		LatestPublishedAt:  displayDate(project.LatestPublishedAt),
 		Assets:             make([]downloadAssetUI, 0, len(assets)),
+	}
+	if len(assets) > 0 {
+		view.DefaultVersion = assets[0].Version
 	}
 	for _, asset := range assets {
 		view.Assets = append(view.Assets, downloadAssetUI{
