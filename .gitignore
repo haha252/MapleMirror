@@ -2,6 +2,7 @@
 /.cache/
 /.gocache/
 /dist/
+/web/public/static/pow.wasm
 
 # 运行期数据、日志与本地确认后的配置
 /data/

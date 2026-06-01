@@ -62,7 +62,7 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		BodyClass: "page-download",
 		Body:      body,
 		Styles:    []string{"/static/public/download.css"},
-		Scripts:   []string{"/static/public/download-selectors.js", "/static/public/download.js"},
+		Scripts:   []string{"/static/public/download-selectors.js", "/static/public/pow-loader.js", "/static/public/download.js"},
 	})
 }
 

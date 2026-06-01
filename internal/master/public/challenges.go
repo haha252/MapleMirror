@@ -77,7 +77,7 @@ func (s Server) webAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	var payload altchaPayload
 	if err := json.Unmarshal(in.AltchaPayload, &payload); err != nil {
-		writeError(w, r, http.StatusBadRequest, "INVALID_REQUEST", "ALTCHA 提交内容不合法")
+		writeError(w, r, http.StatusBadRequest, "INVALID_REQUEST", "网页挑战提交内容不合法")
 		return
 	}
 	s.authorize(w, r, challengeSubmit{Kind: "altcha", ChallengeID: in.ChallengeID,

@@ -3,14 +3,18 @@ package public
 import (
 	"errors"
 	"html/template"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"mirror-server/web"
 )
 
 type webAssets struct {
 	templateDir  string
 	staticDir    string
+	staticFS     fs.FS
 	pageTemplate *template.Template
 	downloadTmpl *template.Template
 	placeholder  []byte
@@ -24,14 +28,42 @@ var (
 
 func loadDefaultWebAssets() (*webAssets, error) {
 	defaultAssetsOnce.Do(func() {
-		root, err := findRepoResource("web", "public")
-		if err != nil {
-			defaultAssetsErr = err
-			return
-		}
-		defaultAssets, defaultAssetsErr = loadWebAssets(root)
+		defaultAssets, defaultAssetsErr = loadEmbeddedWebAssets()
 	})
 	return defaultAssets, defaultAssetsErr
+}
+
+func loadEmbeddedWebAssets() (*webAssets, error) {
+	staticFS, err := fs.Sub(web.Assets, "public/static")
+	if err != nil {
+		return nil, err
+	}
+	pageTemplate, err := template.ParseFS(web.Assets, "public/templates/page.html")
+	if err != nil {
+		return nil, err
+	}
+	downloadTmpl, err := template.ParseFS(web.Assets, "public/templates/download.html")
+	if err != nil {
+		return nil, err
+	}
+	placeholder, err := fs.ReadFile(staticFS, "placeholder-project.svg")
+	if err != nil {
+		return nil, err
+	}
+	return &webAssets{
+		staticFS:     staticFS,
+		pageTemplate: pageTemplate,
+		downloadTmpl: downloadTmpl,
+		placeholder:  placeholder,
+	}, nil
+}
+
+func loadDefaultWebAssetsFromDisk() (*webAssets, error) {
+	root, err := findRepoResource("web", "public")
+	if err != nil {
+		return nil, err
+	}
+	return loadWebAssets(root)
 }
 
 func loadWebAssets(root string) (*webAssets, error) {

@@ -2,6 +2,7 @@ package public
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -89,7 +90,7 @@ func (s Server) favicon(w http.ResponseWriter, r *http.Request) {
 		noContent(w, r)
 		return
 	}
-	data, err := os.ReadFile(filepath.Join(assets.staticDir, "logo.webp"))
+	data, err := assets.readStatic("logo.webp")
 	if err != nil {
 		noContent(w, r)
 		return
@@ -97,4 +98,11 @@ func (s Server) favicon(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Header().Set("Content-Type", "image/webp")
 	_, _ = w.Write(data)
+}
+
+func (assets *webAssets) readStatic(name string) ([]byte, error) {
+	if assets.staticFS != nil {
+		return fs.ReadFile(assets.staticFS, name)
+	}
+	return os.ReadFile(filepath.Join(assets.staticDir, name))
 }

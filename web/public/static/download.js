@@ -6,7 +6,6 @@
   const overlay = document.getElementById("challenge-overlay");
   const overlayText = document.getElementById("challenge-overlay-text");
   if (!statusBox || !container || !source || !cardTemplate || !overlay || !overlayText) return;
-  const encoder = new TextEncoder();
   const projects = JSON.parse(source.textContent || "[]");
   const selectors = window.DownloadSelectors || {
     preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
@@ -43,28 +42,6 @@
       unit++;
     }
     return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
-  }
-
-  function hasLeadingZeroBits(bytes, bits) {
-    for (const byte of bytes) {
-      if (bits <= 0) return true;
-      if (bits >= 8) {
-        if (byte !== 0) return false;
-        bits -= 8;
-        continue;
-      }
-      return (byte >> (8 - bits)) === 0;
-    }
-    return bits <= 0;
-  }
-
-  async function solveChallenge(challenge, difficulty) {
-    for (let i = 0; ; i++) {
-      const data = encoder.encode(challenge + ":" + i);
-      const digest = await crypto.subtle.digest("SHA-256", data);
-      if (hasLeadingZeroBits(new Uint8Array(digest), difficulty)) return i;
-      if ((i & 1023) === 0) await new Promise((resolve) => setTimeout(resolve, 0));
-    }
   }
 
   async function postJSON(url, payload) {
@@ -216,9 +193,10 @@
       const altcha = challengeData.altcha || {};
       if (!challengeData.challenge_id || !altcha.challenge) throw new Error("挑战数据缺失");
       const challengeStartedAt = Date.now();
-      setOverlay("正在完成 ALTCHA 验证，请稍候...", true);
+      setOverlay("正在完成下载验证，请稍候...", true);
       setStatus("正在计算验证答案...", "muted");
-      const number = await solveChallenge(altcha.challenge, challengeData.difficulty || 10);
+      if (!window.PowSolver) throw new Error("下载验证组件缺失");
+      const number = await window.PowSolver.solve(altcha.challenge, challengeData.difficulty || 10);
       const elapsed = Date.now() - challengeStartedAt;
       if (elapsed < 900) await sleep(900 - elapsed);
       setOverlay("正在领取下载授权...", true);

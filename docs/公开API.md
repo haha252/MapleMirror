@@ -3,14 +3,14 @@
 > 状态：已实现，进入 M6 前评估
 > 版本前缀：`/api/public/v1`
 > 需求基线：`docs/开发要求.md` 定稿 v1.1（2026-05-27）
-> 阶段边界：本文记录项目查询、网页 ALTCHA 下载授权、公开 API SHA-256 前导零 PoW、节点绑定令牌、Range 下载、M5 额度扣减、流量入账、统计聚合、SLA 和错误格式。
+> 阶段边界：本文记录项目查询、网页下载挑战授权、公开 API SHA-256 前导零 PoW、节点绑定令牌、Range 下载、M5 额度扣减、流量入账、统计聚合、SLA 和错误格式。
 
 ## 1. 通用原则
 
 | 主题 | 规则 |
 | --- | --- |
 | 身份 | 公开 API 不使用账号、API Key 或管理令牌 |
-| 网页验证 | 网页端只使用自托管 ALTCHA，不叠加滑块或网页自研 PoW |
+| 网页验证 | 网页端使用自研 SHA-256 前导零挑战，不叠加滑块 |
 | API 验证 | 公开 API 使用独立 SHA-256 前导零 PoW，默认前导 `23` 个二进制零位 |
 | 参数隔离 | `altcha.*` 与 `api_pow.*` 不得混用或互相解释 |
 | 授权 | 所有下载必须先由主节点签发短时、单节点绑定下载令牌 |
@@ -47,7 +47,7 @@
 | `400` | `INVALID_REQUEST` | 参数或 JSON 不合法 |
 | `401` | `CHALLENGE_REQUIRED` | 需要先完成挑战 |
 | `401` | `DOWNLOAD_TOKEN_INVALID` | 下载令牌无效、过期或签名不符 |
-| `403` | `CHALLENGE_FAILED` | ALTCHA 或 PoW 校验失败 |
+| `403` | `CHALLENGE_FAILED` | 网页挑战或 PoW 校验失败 |
 | `403` | `CLIENT_PREFIX_MISMATCH` | 客户端 IP 前缀与挑战或令牌不一致 |
 | `404` | `ASSET_NOT_FOUND` | 项目、版本或资产不存在 |
 | `409` | `CHALLENGE_CONSUMED` | 挑战已被使用 |
@@ -115,11 +115,11 @@
 
 `system` 为空字符串表示该项目未启用系统区分；启用后只返回规范化值 `win`、`linux` 或 `darwin`。
 
-## 4. 网页 ALTCHA 授权接口
+## 4. 网页下载挑战授权接口
 
-网页页面可以使用公开 API 下的 ALTCHA 接口；这些接口仅服务浏览器下载链路。
+网页页面可以使用公开 API 下的下载挑战接口；这些接口仅服务浏览器下载链路。当前响应仍兼容旧的 `altcha` 字段，浏览器端优先使用自研 WASM/Worker 前导零求解器。
 
-### 4.1 创建 ALTCHA 挑战
+### 4.1 创建网页挑战
 
 `POST /api/public/v1/web/challenges`
 
@@ -143,8 +143,8 @@
   "data": {
     "challenge_id": "挑战标识",
     "altcha": {
-      "challenge": "ALTCHA挑战字段",
-      "salt": "ALTCHA盐值",
+      "challenge": "网页挑战字段",
+      "salt": "兼容字段",
       "algorithm": "sha256",
       "signature": "服务端签名"
     },
@@ -154,7 +154,7 @@
 }
 ```
 
-### 4.2 提交 ALTCHA 并领取授权
+### 4.2 提交网页挑战并领取授权
 
 `POST /api/public/v1/web/authorizations`
 
@@ -164,7 +164,7 @@
 {
   "challenge_id": "挑战标识",
   "asset_id": "asset_123",
-  "altcha_payload": "ALTCHA组件提交内容"
+  "altcha_payload": {"number": 456789}
 }
 ```
 
@@ -358,13 +358,13 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 ## 11. 脱敏与兼容
 
 - 公共 API 响应不得包含节点内部地址、控制端口、证书、磁盘路径、GitHub Token 或完整客户端 IP。
-- 日志不得记录完整 `download_token`、完整 ALTCHA payload、完整 PoW 规范字符串或完整 URL 查询令牌。
+- 日志不得记录完整 `download_token`、完整网页挑战 payload、完整 PoW 规范字符串或完整 URL 查询令牌。
 - JSON 字段新增必须保持向后兼容；删除或重命名字段前必须更新本文并经过阶段确认。
 - 所有中文错误、页面文案和文档使用 UTF-8。
 
 ## 12. M5 额度与统计接口变化
 
-M5 启用后，公开 API 不再使用 `QUOTA_NOT_ENABLED` 占位错误。网页 ALTCHA 授权和公开 API PoW 授权在签发下载令牌前必须完成真实请求额度扣减和每日流量预算预留。
+M5 启用后，公开 API 不再使用 `QUOTA_NOT_ENABLED` 占位错误。网页挑战授权和公开 API PoW 授权在签发下载令牌前必须完成真实请求额度扣减和每日流量预算预留。
 
 ### 12.1 新增或变更错误码
 
@@ -434,7 +434,7 @@ M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段
 | --- | --- |
 | 项目列表 | `project_id`、`repository`、`display_name`、`available` |
 | 项目资产 | `asset_id`、`version`、`prerelease`、`file_name`、`architecture`、`system`、`size_bytes`、`digest_sha256`、`available`、`unavailable_reason` |
-| ALTCHA 挑战 | `challenge_id`、ALTCHA 组件字段、`expires_at` |
+| 网页挑战 | `challenge_id`、兼容挑战字段、`expires_at` |
 | API PoW 挑战 | `challenge_id`、`asset_id`、`nonce_seed`、`algorithm`、`leading_zero_bits`、`expires_at`、`canonical_format` |
 | 授权领取 | `authorization_id`、`download_url`、`download_token`、`expires_at`、`range_concurrency_limit`、`max_bytes` |
 | 授权查询 | `authorization_id`、`asset_id`、脱敏节点标识、`state`、`expires_at`、`bytes_accounting_enabled`、`sent_bytes`、`first_transfer_at` |
@@ -447,7 +447,7 @@ M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段
 - 完整客户端 IP、完整客户端网段、额度桶精确余额、黑名单和豁免规则明细。
 - 节点内部地址、控制端口、管理监听地址、本地磁盘路径、临时文件路径。
 - GitHub Token、源站敏感请求头、同步任务内部错误全文。
-- 单个流量事件完整明细、完整请求 URL 查询令牌、可绕过挑战的 PoW 或 ALTCHA 内部材料。
+- 单个流量事件完整明细、完整请求 URL 查询令牌、可绕过挑战的 PoW 或网页挑战内部材料。
 
 ### 13.3 M6 安全和负载验收
 

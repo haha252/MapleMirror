@@ -12,6 +12,20 @@ if not exist "%OUT%" mkdir "%OUT%"
 powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\check-file-lines.ps1"
 if errorlevel 1 goto :failed
 
+where clang >nul 2>nul
+if not errorlevel 1 (
+  clang --target=wasm32 -O3 -nostdlib "-Wl,--no-entry" "-Wl,--export-memory" "-Wl,--export=get_buffer" "-Wl,--export=solve_pow" "-Wl,--initial-memory=2097152" "-Wl,--max-memory=2097152" -o "web\public\static\pow.wasm" "web\wasm\pow.c"
+  if errorlevel 1 goto :failed
+) else (
+  where zig >nul 2>nul
+  if not errorlevel 1 (
+    zig cc -target wasm32-freestanding -O3 -nostdlib "-Wl,--no-entry" "-Wl,--export-memory" "-Wl,--export=get_buffer" "-Wl,--export=solve_pow" "-Wl,--initial-memory=2097152" "-Wl,--max-memory=2097152" -o "web\public\static\pow.wasm" "web\wasm\pow.c"
+    if errorlevel 1 goto :failed
+  ) else (
+    powershell -NoProfile -Command "$m=ConvertFrom-Json '\"未找到 clang 或 zig，跳过网页 PoW WASM 构建，将使用浏览器 JS 回退。\"'; Write-Host $m"
+  )
+)
+
 go test ./...
 if errorlevel 1 goto :failed
 
@@ -30,7 +44,6 @@ if errorlevel 1 goto :failed
 if exist "%OUT%\configs" rmdir /s /q "%OUT%\configs"
 xcopy /e /i /y "configs" "%OUT%\configs" >nul
 if exist "%OUT%\web" rmdir /s /q "%OUT%\web"
-xcopy /e /i /y "web" "%OUT%\web" >nul
 powershell -NoProfile -Command "$m=ConvertFrom-Json '\"Windows amd64 \u6784\u5efa\u5b8c\u6210\uff1a\"'; Write-Host ($m + '%OUT%')"
 if errorlevel 1 goto :failed
 popd

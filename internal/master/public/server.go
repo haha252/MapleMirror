@@ -78,10 +78,12 @@ func minDuration(values ...time.Duration) time.Duration {
 
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	if s.WebAssets != nil {
+	if s.WebAssets != nil && s.WebAssets.staticFS != nil {
+		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(s.WebAssets.staticFS)))))
+	} else if s.WebAssets != nil {
 		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.Dir(s.WebAssets.staticDir)))))
 	} else if assets, err := loadDefaultWebAssets(); err == nil {
-		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.Dir(assets.staticDir)))))
+		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(assets.staticFS)))))
 	}
 	mux.HandleFunc("/static/project-icons/", s.projectIcon)
 	mux.HandleFunc("/downloads/", s.downloadMisrouted)

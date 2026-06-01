@@ -191,7 +191,7 @@ func validateMaster(c Master) error {
 		return fmt.Errorf("统计时区 stats.timezone 无效：%w", err)
 	}
 	if c.ALTCHA.Difficulty <= 0 {
-		return errors.New("网页 ALTCHA 难度必须大于零")
+		return errors.New("网页挑战难度必须大于零")
 	}
 	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits <= 0 {
 		return errors.New("公开 API PoW 必须使用 sha256 且前导零位数大于零")

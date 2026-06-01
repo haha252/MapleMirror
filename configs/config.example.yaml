@@ -38,12 +38,12 @@ scan:
   github_token_env: "MIRROR_GITHUB_TOKEN"
 
 altcha:
-  # 网页验证仅使用 ALTCHA；difficulty 表示 SHA-256 前导零位难度。
+  # 网页验证使用自研 SHA-256 前导零挑战；difficulty 表示前导零位难度。
   difficulty: 22
   challenge_ttl: "2m"
 
 api_pow:
-  # 公开 API 独立使用 SHA-256 前导零挑战，不与 ALTCHA 参数混用。
+  # 公开 API 独立使用 SHA-256 前导零挑战，不与网页挑战参数混用。
   algorithm: "sha256"
   leading_zero_bits: 23
   challenge_ttl: "2m"
