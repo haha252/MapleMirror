@@ -55,9 +55,12 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 func projectAssetMap(projects config.Projects) map[string]projectAssetConfig {
 	projectAssets := map[string]projectAssetConfig{}
 	for _, item := range projects.Projects {
-		projectAssets[item.ID] = projectAssetConfig{IconPath: filepath.Clean(item.ResolvedIconPath)}
+		projectAssets[item.ID] = projectAssetConfig{
+			IconPath:           filepath.Clean(item.ResolvedIconPath),
+			SystemMatchEnabled: item.SystemMatchEnabled,
+		}
 		if strings.TrimSpace(item.ResolvedIconPath) == "" {
-			projectAssets[item.ID] = projectAssetConfig{}
+			projectAssets[item.ID] = projectAssetConfig{SystemMatchEnabled: item.SystemMatchEnabled}
 		}
 	}
 	return projectAssets

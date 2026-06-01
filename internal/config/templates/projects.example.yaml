@@ -16,3 +16,6 @@ projects:
       - "*.zip"
     asset_exclude: []
     architecture_regex: "(?i)(amd64|arm64|x86_64)"
+    # 默认不区分系统；启用后 system_regex 从文件名提取系统并规范化为 win/linux/darwin。
+    system_match_enabled: false
+    system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"

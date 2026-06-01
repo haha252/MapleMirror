@@ -11,7 +11,7 @@
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 92%, #161616);
+  background: var(--panel);
   box-shadow: var(--shadow);
 }
 
@@ -85,7 +85,7 @@
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--panel-muted) 40%, #171717);
+  background: var(--panel-muted);
   color: var(--text);
   font-size: 13px;
   line-height: 1.55;

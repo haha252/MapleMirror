@@ -12,7 +12,8 @@ import (
 )
 
 type projectAssetConfig struct {
-	IconPath string
+	IconPath           string
+	SystemMatchEnabled bool
 }
 
 func (s Server) projectIcon(w http.ResponseWriter, r *http.Request) {

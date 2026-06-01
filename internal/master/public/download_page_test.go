@@ -31,8 +31,50 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `/static/public/download.js`) || !strings.Contains(body, `id="palette-toggle"`) {
 		t.Fatalf("expected themed assets in page: %s", body)
 	}
+	if !strings.Contains(body, `/static/public/download-selectors.js`) {
+		t.Fatalf("expected selector helper in page: %s", body)
+	}
+	if !strings.Contains(body, `"system_match_enabled":false`) {
+		t.Fatalf("expected disabled system matching in payload: %s", body)
+	}
 	if !strings.Contains(body, `"asset_id":"asset-1"`) {
 		t.Fatalf("expected download data payload in page: %s", body)
+	}
+}
+
+func TestDownloadPageIncludesSystemSelectorWhenEnabled(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	mustExec(t, db, `UPDATE assets SET system = 'win' WHERE id = 'asset-1'`)
+	srv := Server{Store: Store{DB: db}, ProjectAssets: map[string]projectAssetConfig{
+		"p1": {SystemMatchEnabled: true},
+	}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="system-select"`) ||
+		!strings.Contains(body, `"system_match_enabled":true`) ||
+		!strings.Contains(body, `"system":"win"`) {
+		t.Fatalf("expected system selector and system payload: %s", body)
+	}
+}
+
+func TestProjectAssetsAPIIncludesSystemField(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	mustExec(t, db, `UPDATE assets SET system = 'linux' WHERE id = 'asset-1'`)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/public/v1/projects/p1/assets", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `"system":"linux"`) {
+		t.Fatalf("expected system field in API response, code=%d body=%s", rec.Code, body)
 	}
 }
 

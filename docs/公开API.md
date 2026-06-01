@@ -87,7 +87,7 @@
 
 `GET /api/public/v1/projects/{project_id}/assets`
 
-返回保留窗口内资产，按版本、预发布标记和架构组织。只有至少一个 `routing_ready=true` 节点已验证持有的资产才可标记为 `available=true`。
+返回保留窗口内资产，按版本、预发布标记、架构和可选系统组织。只有至少一个 `routing_ready=true` 节点已验证持有的资产才可标记为 `available=true`。
 
 ```json
 {
@@ -101,7 +101,8 @@
         "version": "v1.2.3",
         "prerelease": false,
         "file_name": "example-windows-amd64.zip",
-        "architecture": "windows-amd64",
+        "architecture": "amd64",
+        "system": "win",
         "size_bytes": 123456,
         "digest_sha256": "sha256:64位十六进制摘要",
         "available": true,
@@ -111,6 +112,8 @@
   }
 }
 ```
+
+`system` 为空字符串表示该项目未启用系统区分；启用后只返回规范化值 `win`、`linux` 或 `darwin`。
 
 ## 4. 网页 ALTCHA 授权接口
 
@@ -430,7 +433,7 @@ M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段
 | 接口或页面 | 可公开字段 |
 | --- | --- |
 | 项目列表 | `project_id`、`repository`、`display_name`、`available` |
-| 项目资产 | `asset_id`、`version`、`prerelease`、`file_name`、`architecture`、`size_bytes`、`digest_sha256`、`available`、`unavailable_reason` |
+| 项目资产 | `asset_id`、`version`、`prerelease`、`file_name`、`architecture`、`system`、`size_bytes`、`digest_sha256`、`available`、`unavailable_reason` |
 | ALTCHA 挑战 | `challenge_id`、ALTCHA 组件字段、`expires_at` |
 | API PoW 挑战 | `challenge_id`、`asset_id`、`nonce_seed`、`algorithm`、`leading_zero_bits`、`expires_at`、`canonical_format` |
 | 授权领取 | `authorization_id`、`download_url`、`download_token`、`expires_at`、`range_concurrency_limit`、`max_bytes` |

@@ -43,7 +43,7 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 
 func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.id, r.tag_name, r.prerelease,
-		a.file_name, a.architecture, a.size_bytes, a.digest_sha256,
+		a.file_name, a.architecture, a.system, a.size_bytes, a.digest_sha256,
 		EXISTS(SELECT 1 FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
 			WHERE ni.asset_id = a.id AND ni.state = 'verified'
 			AND n.routing_ready = 1 AND n.state != 'disabled'
@@ -62,7 +62,7 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 		var item AssetSummary
 		var prerelease, available int
 		if err := rows.Scan(&item.AssetID, &item.Version, &prerelease, &item.FileName,
-			&item.Architecture, &item.SizeBytes, &item.DigestSHA256, &available, &item.PublishedAt); err != nil {
+			&item.Architecture, &item.System, &item.SizeBytes, &item.DigestSHA256, &available, &item.PublishedAt); err != nil {
 			return nil, err
 		}
 		item.Prerelease = prerelease == 1

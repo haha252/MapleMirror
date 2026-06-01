@@ -36,6 +36,7 @@ type AssetSummary struct {
 	Prerelease         bool   `json:"prerelease"`
 	FileName           string `json:"file_name"`
 	Architecture       string `json:"architecture"`
+	System             string `json:"system"`
 	SizeBytes          int64  `json:"size_bytes"`
 	DigestSHA256       string `json:"digest_sha256"`
 	Available          bool   `json:"available"`

@@ -127,7 +127,7 @@ M3 在管理 API 中提供手动扫描入口，但它只面向管理网络、Bea
 
 ### 5.2 资产过滤和架构
 
-资产先按文件名应用 `asset_exclude`，再应用 `asset_include`；排除优先。未命中包含规则的资产不进入候选。`architecture_regex` 用于从文件名提取展示架构，提取失败时该资产拒绝进入可服务候选并写中文告警。
+资产先按文件名应用 `asset_exclude`，再应用 `asset_include`；排除优先。未命中包含规则的资产不进入候选。`architecture_regex` 用于从文件名提取展示架构，提取失败时该资产拒绝进入可服务候选并写中文告警。项目启用 `system_match_enabled` 后，还需用 `system_regex` 提取并规范化系统为 `win`、`linux` 或 `darwin`；未匹配或无法规范化时同样拒绝进入候选。
 
 资产必须记录：
 

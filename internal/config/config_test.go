@@ -59,9 +59,32 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 	if err != nil || projects.Projects[0].RetainVersions != 3 || projects.Projects[0].DownloadMultiplier != 1 {
 		t.Fatalf("项目默认合同错误：%v", err)
 	}
+	if projects.Projects[0].SystemMatchEnabled || projects.Projects[0].SystemRegex != "" {
+		t.Fatal("项目默认不应启用系统匹配")
+	}
 	quota, err := LoadQuota(quotaPath, nil)
 	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 || quota.DailyTraffic.IPv664 != "20 GiB" || quota.AuthorizationMaxBytesMultiplier != 2 {
 		t.Fatalf("额度默认合同错误：%v", err)
+	}
+}
+
+func TestProjectsValidateSystemRegexWhenEnabled(t *testing.T) {
+	cases := []string{
+		"system_match_enabled: true\n",
+		"system_match_enabled: true\n    system_regex: '('\n",
+	}
+	for _, extra := range cases {
+		t.Run(extra, func(t *testing.T) {
+			dir := t.TempDir()
+			projectsPath := filepath.Join(dir, "projects.yaml")
+			body := "projects:\n  - id: a\n    name: 示例\n    repository: owner/repo\n    enabled: true\n    architecture_regex: '(amd64)'\n    " + extra
+			if err := os.WriteFile(projectsPath, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadProjects(projectsPath, nil); err == nil {
+				t.Fatalf("启用系统匹配时应校验 system_regex：%s", extra)
+			}
+		})
 	}
 }
 

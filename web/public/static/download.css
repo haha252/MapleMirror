@@ -65,6 +65,8 @@
   font-size: 14px;
 }
 
+.field[hidden] { display: none; }
+
 .project-card__actions {
   grid-column: 1 / -1;
   display: flex;

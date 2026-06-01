@@ -39,7 +39,7 @@ const apiDocsBody = `
 
   <section class="api-endpoint">
     <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/projects/{project_id}/assets</code></div>
-    <p>查询项目资产，返回版本、文件名、架构、大小、SHA-256 摘要和可用状态。</p>
+    <p>查询项目资产，返回版本、文件名、架构、可选系统、大小、SHA-256 摘要和可用状态。</p>
     <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>project_id</td><td>Path</td><td>项目标识</td></tr></tbody></table>
     <p class="api-label">Example Request</p>
     <pre><code>GET /api/public/v1/projects/example/assets</code></pre>
@@ -48,7 +48,7 @@ const apiDocsBody = `
   "status": "success",
   "data": {
     "assets": [
-      {"asset_id": "asset_123", "file_name": "example.zip", "available": true}
+      {"asset_id": "asset_123", "file_name": "example.zip", "architecture": "amd64", "system": "win", "available": true}
     ]
   }
 }</code></pre>

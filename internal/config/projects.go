@@ -24,6 +24,8 @@ type Project struct {
 	AssetInclude       []string `yaml:"asset_include"`
 	AssetExclude       []string `yaml:"asset_exclude"`
 	ArchitectureRegex  string   `yaml:"architecture_regex"`
+	SystemMatchEnabled bool     `yaml:"system_match_enabled"`
+	SystemRegex        string   `yaml:"system_regex"`
 	ResolvedIconPath   string   `yaml:"-"`
 }
 
@@ -70,6 +72,14 @@ func validateProject(p Project, known map[string]bool) error {
 	}
 	if _, err := regexp.Compile(p.ArchitectureRegex); err != nil {
 		return fmt.Errorf("项目 %s 的架构提取正则无效：%w", p.ID, err)
+	}
+	if p.SystemMatchEnabled {
+		if strings.TrimSpace(p.SystemRegex) == "" {
+			return fmt.Errorf("项目 %s 启用系统匹配时必须配置 system_regex", p.ID)
+		}
+		if _, err := regexp.Compile(p.SystemRegex); err != nil {
+			return fmt.Errorf("项目 %s 的系统提取正则无效：%w", p.ID, err)
+		}
 	}
 	return nil
 }

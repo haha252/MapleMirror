@@ -21,6 +21,10 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 	if err != nil {
 		return 0, 0, err
 	}
+	systemRE, err := compileSystemRegex(project)
+	if err != nil {
+		return 0, 0, err
+	}
 	var accepted, rejected int
 	for _, asset := range assets {
 		if !assetAllowed(asset.Name, project.AssetInclude, project.AssetExclude) {
@@ -52,16 +56,29 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 			continue
 		}
 		arch := matches[len(matches)-1]
+		system, ok := assetSystem(asset.Name, systemRE)
+		if !ok {
+			if logger != nil {
+				logger.Debug(ctx, "资产未进入镜像流程",
+					slog.String("project_id", project.ID),
+					slog.String("release_id", releaseID),
+					slog.String("asset_name", asset.Name),
+					slog.String("reason", "system mismatch"))
+			}
+			rejected++
+			continue
+		}
 		assetID := fmt.Sprintf("%s:%d", releaseID, asset.ID)
 		_, err = tx.ExecContext(ctx, `INSERT INTO assets
-			(id, release_id, github_asset_id, file_name, architecture, size_bytes,
+			(id, release_id, github_asset_id, file_name, architecture, system, size_bytes,
 			source_url, digest_sha256, service_state, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?)
 			ON CONFLICT(release_id, github_asset_id) DO UPDATE SET
 			file_name = excluded.file_name, architecture = excluded.architecture,
+			system = excluded.system,
 			size_bytes = excluded.size_bytes, source_url = excluded.source_url,
 			digest_sha256 = excluded.digest_sha256, service_state = 'candidate'`,
-			assetID, releaseID, asset.ID, asset.Name, arch, asset.Size,
+			assetID, releaseID, asset.ID, asset.Name, arch, system, asset.Size,
 			asset.URL, digest, now)
 		if err != nil {
 			return accepted, rejected, err
@@ -73,6 +90,7 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 				slog.String("asset_id", assetID),
 				slog.String("asset_name", asset.Name),
 				slog.String("architecture", arch),
+				slog.String("system", system),
 				slog.String("digest_sha256", digest))
 		}
 		accepted++
@@ -125,8 +143,41 @@ func projectHash(project config.Project) string {
 		strings.Join(project.AssetInclude, ","),
 		strings.Join(project.AssetExclude, ","),
 		project.ArchitectureRegex,
+		fmt.Sprint(project.SystemMatchEnabled),
+		project.SystemRegex,
 	}, "|")))
 	return hex.EncodeToString(sum[:])
+}
+
+func compileSystemRegex(project config.Project) (*regexp.Regexp, error) {
+	if !project.SystemMatchEnabled {
+		return nil, nil
+	}
+	return regexp.Compile(project.SystemRegex)
+}
+
+func assetSystem(name string, systemRE *regexp.Regexp) (string, bool) {
+	if systemRE == nil {
+		return "", true
+	}
+	matches := systemRE.FindStringSubmatch(name)
+	if len(matches) == 0 {
+		return "", false
+	}
+	return normalizeSystem(matches[len(matches)-1])
+}
+
+func normalizeSystem(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "win", "windows", "win32", "win64":
+		return "win", true
+	case "linux":
+		return "linux", true
+	case "darwin", "macos", "osx":
+		return "darwin", true
+	default:
+		return "", false
+	}
 }
 
 func boolInt(v bool) int {

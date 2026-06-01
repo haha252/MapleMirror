@@ -8,6 +8,11 @@
   if (!statusBox || !container || !source || !cardTemplate || !overlay || !overlayText) return;
   const encoder = new TextEncoder();
   const projects = JSON.parse(source.textContent || "[]");
+  const selectors = window.DownloadSelectors || {
+    preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
+    preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
+    userSystem: () => ""
+  };
   let downloadFrame = document.getElementById("download-frame");
   if (!downloadFrame) {
     downloadFrame = document.createElement("iframe");
@@ -96,38 +101,8 @@
     }).map((item) => item.version);
   }
 
-  function preferredAsset(items) {
-    return items.find((item) => item.available) || items[0] || null;
-  }
-
-  function userArchitecture() {
-    const values = [navigator.userAgentData && navigator.userAgentData.platform,
-      navigator.userAgentData && navigator.userAgentData.architecture,
-      navigator.platform, navigator.userAgent].filter(Boolean).join(" ").toLowerCase();
-    if (/arm64|aarch64|armv8/.test(values)) return "arm64";
-    if (/amd64|x86_64|x64|wow64|win64/.test(values)) return "amd64";
-    if (/x86|i386|i686|win32/.test(values)) return "x86";
-    return "";
-  }
-
-  function normalizeArch(value) {
-    const text = String(value || "").toLowerCase();
-    if (/arm64|aarch64|armv8/.test(text)) return "arm64";
-    if (/amd64|x86_64|x64|64-bit|64bit/.test(text)) return "amd64";
-    if (/x86|i386|i686|32-bit|32bit/.test(text)) return "x86";
-    if (/\ball\b|universal|any/.test(text)) return "all";
-    return text.trim();
-  }
-
-  function preferredAssetForUser(items) {
-    const available = items.filter((item) => item.available);
-    const list = available.length ? available : items;
-    const wanted = userArchitecture();
-    return list.find((item) => normalizeArch(item.architecture) === wanted) ||
-      list.find((item) => normalizeArch(item.architecture) === "all") ||
-      list.find((item) => !String(item.architecture || "").trim()) ||
-      preferredAsset(list);
-  }
+  function preferredAsset(items) { return selectors.preferredAsset(items); }
+  function preferredAssetForUser(items) { return selectors.preferredAssetForUser(items); }
 
   function buildCard(project) {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
@@ -142,6 +117,8 @@
     availability.textContent = project.available ? "可下载" : "暂不可下载";
     availability.className = "project-availability " + (project.available ? "ok" : "warn");
     const versionSelect = card.querySelector(".version-select");
+    const systemField = card.querySelector(".system-field");
+    const systemSelect = card.querySelector(".system-select");
     const archSelect = card.querySelector(".architecture-select");
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
@@ -155,7 +132,10 @@
     });
 
     function refreshArchitectures() {
-      const list = project.assets.filter((item) => item.version === versionSelect.value);
+      let list = project.assets.filter((item) => item.version === versionSelect.value);
+      if (project.system_match_enabled) {
+        list = list.filter((item) => item.system === systemSelect.value);
+      }
       const choice = preferredAssetForUser(list);
       archSelect.innerHTML = "";
       list.forEach((item) => {
@@ -168,8 +148,29 @@
       refreshDetails();
     }
 
+    function refreshSystems() {
+      if (!project.system_match_enabled) {
+        refreshArchitectures();
+        return;
+      }
+      const list = project.assets.filter((item) => item.version === versionSelect.value);
+      const systems = Array.from(new Set(list.map((item) => item.system).filter(Boolean)));
+      const wanted = selectors.userSystem ? selectors.userSystem() : "";
+      const choice = systems.includes(wanted) ? wanted : systems[0] || "";
+      systemSelect.innerHTML = "";
+      systems.forEach((system) => {
+        const option = document.createElement("option");
+        option.value = system;
+        option.textContent = system;
+        if (system === choice) option.selected = true;
+        systemSelect.appendChild(option);
+      });
+      refreshArchitectures();
+    }
+
     function refreshDetails() {
-      const selected = project.assets.find((item) => item.asset_id === archSelect.value) || preferredAsset(project.assets);
+      const selected = project.assets.find((item) => item.asset_id === archSelect.value) ||
+        preferredAsset(project.assets);
       badge.textContent = selected ? " " + selected.version : "";
       if (!selected) {
         sizeText.textContent = "暂无可下载文件";
@@ -187,10 +188,12 @@
       else button.removeAttribute("title");
     }
 
-    versionSelect.addEventListener("change", refreshArchitectures);
+    if (project.system_match_enabled) systemField.hidden = false;
+    versionSelect.addEventListener("change", refreshSystems);
+    systemSelect.addEventListener("change", refreshArchitectures);
     archSelect.addEventListener("change", refreshDetails);
     button.addEventListener("click", function () { startDownload(button); });
-    refreshArchitectures();
+    refreshSystems();
     return card;
   }
 
@@ -243,6 +246,5 @@
     button.disabled = false;
     button.textContent = oldText;
   }
-
   projects.forEach((project) => container.appendChild(buildCard(project)));
 })();

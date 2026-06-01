@@ -8,14 +8,15 @@ import (
 )
 
 type downloadProjectView struct {
-	ProjectID         string            `json:"project_id"`
-	DisplayName       string            `json:"display_name"`
-	Repository        string            `json:"repository"`
-	Available         bool              `json:"available"`
-	UnavailableReason string            `json:"unavailable_reason"`
-	IconURL           string            `json:"icon_url"`
-	LatestPublishedAt string            `json:"latest_published_at"`
-	Assets            []downloadAssetUI `json:"assets"`
+	ProjectID          string            `json:"project_id"`
+	DisplayName        string            `json:"display_name"`
+	Repository         string            `json:"repository"`
+	Available          bool              `json:"available"`
+	UnavailableReason  string            `json:"unavailable_reason"`
+	IconURL            string            `json:"icon_url"`
+	SystemMatchEnabled bool              `json:"system_match_enabled"`
+	LatestPublishedAt  string            `json:"latest_published_at"`
+	Assets             []downloadAssetUI `json:"assets"`
 }
 
 type downloadAssetUI struct {
@@ -23,6 +24,7 @@ type downloadAssetUI struct {
 	Version           string `json:"version"`
 	FileName          string `json:"file_name"`
 	Architecture      string `json:"architecture"`
+	System            string `json:"system"`
 	SizeBytes         int64  `json:"size_bytes"`
 	Available         bool   `json:"available"`
 	UnavailableReason string `json:"unavailable_reason"`
@@ -40,13 +42,14 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	views := make([]downloadProjectView, 0, len(projects))
+	projectAssets := s.currentProjectAssets()
 	for _, project := range projects {
 		assets, err := s.Store.Assets(r.Context(), project.ProjectID)
 		if err != nil {
 			http.Error(w, "资产列表读取失败", http.StatusInternalServerError)
 			return
 		}
-		views = append(views, buildDownloadProjectView(project, assets))
+		views = append(views, buildDownloadProjectView(project, assets, projectAssets[project.ProjectID]))
 	}
 	body, err := s.renderDownloadBody(views)
 	if err != nil {
@@ -59,20 +62,21 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		BodyClass: "page-download",
 		Body:      body,
 		Styles:    []string{"/static/public/download.css"},
-		Scripts:   []string{"/static/public/download.js"},
+		Scripts:   []string{"/static/public/download-selectors.js", "/static/public/download.js"},
 	})
 }
 
-func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary) downloadProjectView {
+func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, config projectAssetConfig) downloadProjectView {
 	view := downloadProjectView{
-		ProjectID:         project.ProjectID,
-		DisplayName:       project.DisplayName,
-		Repository:        project.Repository,
-		Available:         project.Available,
-		UnavailableReason: project.UnavailableReason,
-		IconURL:           "/static/project-icons/" + project.ProjectID,
-		LatestPublishedAt: displayDate(project.LatestPublishedAt),
-		Assets:            make([]downloadAssetUI, 0, len(assets)),
+		ProjectID:          project.ProjectID,
+		DisplayName:        project.DisplayName,
+		Repository:         project.Repository,
+		Available:          project.Available,
+		UnavailableReason:  project.UnavailableReason,
+		IconURL:            "/static/project-icons/" + project.ProjectID,
+		SystemMatchEnabled: config.SystemMatchEnabled,
+		LatestPublishedAt:  displayDate(project.LatestPublishedAt),
+		Assets:             make([]downloadAssetUI, 0, len(assets)),
 	}
 	for _, asset := range assets {
 		view.Assets = append(view.Assets, downloadAssetUI{
@@ -80,6 +84,7 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary) dow
 			Version:           asset.Version,
 			FileName:          asset.FileName,
 			Architecture:      asset.Architecture,
+			System:            asset.System,
 			SizeBytes:         asset.SizeBytes,
 			Available:         asset.Available,
 			UnavailableReason: asset.UnavailableReason,
