@@ -65,7 +65,39 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		BodyClass:    "page-download",
 		Body:         body,
 		Styles:       []string{"/static/public/download.css"},
-		Scripts:      []string{"/static/public/download-selectors.js", "/static/public/pow-loader.js", "/static/public/download.js"},
+		Scripts:      []string{"/static/public/download-selectors.js", "/static/public/download.js"},
+	})
+}
+
+func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	assetID := strings.TrimPrefix(r.URL.Path, "/download/")
+	if assetID == "" || strings.Contains(assetID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := s.Store.DownloadAsset(r.Context(), assetID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	body, err := s.renderDownloadPowBody(asset)
+	if err != nil {
+		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
+		return
+	}
+	s.renderPage(w, pageData{
+		Title:        "下载验证",
+		BrowserTitle: asset.FileName + " - 下载验证",
+		Subtitle:     "完成浏览器验证后将自动开始下载。",
+		Description:  "枫源镜像下载验证页",
+		BodyClass:    "page-download-pow",
+		Body:         body,
+		Styles:       []string{"/static/public/download.css"},
+		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
 	})
 }
 
@@ -109,6 +141,18 @@ func (s Server) renderDownloadBody(projects []downloadProjectView) (template.HTM
 	}
 	body.ProjectsJSON = template.JS(string(data))
 	return s.renderTemplateBody("download", body)
+}
+
+func (s Server) renderDownloadPowBody(asset DownloadAssetSummary) (template.HTML, error) {
+	body := struct {
+		AssetJSON template.JS
+	}{AssetJSON: template.JS("{}")}
+	data, err := json.Marshal(asset)
+	if err != nil {
+		return "", err
+	}
+	body.AssetJSON = template.JS(string(data))
+	return s.renderTemplateBody("download_pow", body)
 }
 
 func displayDate(value string) string {

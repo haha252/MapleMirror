@@ -43,6 +43,8 @@ func (s Server) renderTemplateBody(name string, payload any) (template.HTML, err
 	switch name {
 	case "download":
 		err = assets.downloadTmpl.Execute(&buf, payload)
+	case "download_pow":
+		err = assets.downloadPowTmpl.Execute(&buf, payload)
 	default:
 		err = assets.pageTemplate.ExecuteTemplate(&buf, name, payload)
 	}

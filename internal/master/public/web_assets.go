@@ -12,12 +12,13 @@ import (
 )
 
 type webAssets struct {
-	templateDir  string
-	staticDir    string
-	staticFS     fs.FS
-	pageTemplate *template.Template
-	downloadTmpl *template.Template
-	placeholder  []byte
+	templateDir     string
+	staticDir       string
+	staticFS        fs.FS
+	pageTemplate    *template.Template
+	downloadTmpl    *template.Template
+	downloadPowTmpl *template.Template
+	placeholder     []byte
 }
 
 var (
@@ -46,15 +47,20 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	downloadPowTmpl, err := template.ParseFS(web.Assets, "public/templates/download_pow.html")
+	if err != nil {
+		return nil, err
+	}
 	placeholder, err := fs.ReadFile(staticFS, "placeholder-project.svg")
 	if err != nil {
 		return nil, err
 	}
 	return &webAssets{
-		staticFS:     staticFS,
-		pageTemplate: pageTemplate,
-		downloadTmpl: downloadTmpl,
-		placeholder:  placeholder,
+		staticFS:        staticFS,
+		pageTemplate:    pageTemplate,
+		downloadTmpl:    downloadTmpl,
+		downloadPowTmpl: downloadPowTmpl,
+		placeholder:     placeholder,
 	}, nil
 }
 
@@ -77,16 +83,21 @@ func loadWebAssets(root string) (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	downloadPowTmpl, err := template.ParseFiles(filepath.Join(templateDir, "download_pow.html"))
+	if err != nil {
+		return nil, err
+	}
 	placeholder, err := os.ReadFile(filepath.Join(staticDir, "placeholder-project.svg"))
 	if err != nil {
 		return nil, err
 	}
 	return &webAssets{
-		templateDir:  templateDir,
-		staticDir:    staticDir,
-		pageTemplate: pageTemplate,
-		downloadTmpl: downloadTmpl,
-		placeholder:  placeholder,
+		templateDir:     templateDir,
+		staticDir:       staticDir,
+		pageTemplate:    pageTemplate,
+		downloadTmpl:    downloadTmpl,
+		downloadPowTmpl: downloadPowTmpl,
+		placeholder:     placeholder,
 	}, nil
 }
 

@@ -40,6 +40,9 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `/static/public/download-selectors.js`) {
 		t.Fatalf("expected selector helper in page: %s", body)
 	}
+	if strings.Contains(body, `/static/public/pow-loader.js`) || strings.Contains(body, `challenge-overlay`) {
+		t.Fatalf("home page should link to standalone download verification page: %s", body)
+	}
 	if !strings.Contains(body, `"system_match_enabled":false`) {
 		t.Fatalf("expected disabled system matching in payload: %s", body)
 	}

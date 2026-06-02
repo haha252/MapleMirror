@@ -3,35 +3,19 @@
   const container = document.getElementById("project-cards");
   const source = document.getElementById("download-projects");
   const cardTemplate = document.getElementById("project-card-template");
-  const overlay = document.getElementById("challenge-overlay");
-  const overlayText = document.getElementById("challenge-overlay-text");
-  if (!statusBox || !container || !source || !cardTemplate || !overlay || !overlayText) return;
+  if (!statusBox || !container || !source || !cardTemplate) return;
   const projects = JSON.parse(source.textContent || "[]");
   const selectors = window.DownloadSelectors || {
     preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
     preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
     userSystem: () => ""
   };
-  let downloadFrame = document.getElementById("download-frame");
-  if (!downloadFrame) {
-    downloadFrame = document.createElement("iframe");
-    downloadFrame.id = "download-frame";
-    downloadFrame.hidden = true;
-    document.body.appendChild(downloadFrame);
-  }
 
   function setStatus(message, level) {
     statusBox.textContent = message;
     statusBox.className = "status " + (level || "muted");
     statusBox.hidden = !message;
   }
-
-  function setOverlay(message, visible) {
-    overlayText.textContent = message;
-    overlay.hidden = !visible;
-  }
-
-  setOverlay("正在准备挑战...", false);
 
   function bytesText(value) {
     const units = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -42,31 +26,6 @@
       unit++;
     }
     return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
-  }
-
-  async function postJSON(url, payload) {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
-    });
-    const text = await resp.text();
-    let body = {message: text};
-    try { body = JSON.parse(text); } catch (err) {}
-    if (!resp.ok) throw new Error(body.message || "请求失败");
-    return body;
-  }
-
-  async function sleep(ms) {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async function probeDownload(url) {
-    const target = new URL(url, window.location.href);
-    if (target.origin !== window.location.origin) return;
-    const resp = await fetch(target.toString(), {method: "HEAD", credentials: "same-origin"});
-    if (resp.ok) return;
-    throw new Error("下载入口当前没有到达下载节点，请把 /downloads/ 路径反向代理到下载节点。");
   }
 
   function uniqueVersions(items) {
@@ -91,8 +50,6 @@
     card.querySelector(".project-repository").textContent = project.repository;
     card.querySelector(".project-updated").textContent = "最近更新：" + (project.latest_published_at || "暂无");
     const availability = card.querySelector(".project-availability");
-    availability.textContent = project.available ? "可下载" : "暂不可下载";
-    availability.className = "project-availability " + (project.available ? "ok" : "warn");
     const versionSelect = card.querySelector(".version-select");
     const systemField = card.querySelector(".system-field");
     const systemSelect = card.querySelector(".system-select");
@@ -100,11 +57,13 @@
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
     const badge = card.querySelector(".version-badge");
+
     function setAvailability(selected) {
       const available = !!(selected && selected.available);
       availability.textContent = available ? "可下载" : "暂不可下载";
       availability.className = "project-availability " + (available ? "ok" : "warn");
     }
+
     versions.forEach((version) => {
       const option = document.createElement("option");
       option.value = version;
@@ -166,16 +125,12 @@
       sizeText.className = "project-card__size " + (selected.available ? "muted" : "warn");
       button.disabled = !selected.available;
       button.dataset.assetId = selected.asset_id;
-      button.dataset.assetName = selected.file_name;
-      button.dataset.downloadUrl = "";
       if (selected.unavailable_reason) button.title = selected.unavailable_reason;
       else button.removeAttribute("title");
     }
 
     if (project.system_match_enabled) systemField.hidden = false;
-    versionSelect.addEventListener("change", function () {
-      refreshSystems();
-    });
+    versionSelect.addEventListener("change", refreshSystems);
     systemSelect.addEventListener("change", refreshArchitectures);
     archSelect.addEventListener("change", refreshDetails);
     button.addEventListener("click", function () { startDownload(button); });
@@ -183,55 +138,14 @@
     return card;
   }
 
-  async function startDownload(button) {
-    if (!window.crypto || !window.crypto.subtle) {
-      setStatus("当前浏览器不支持下载验证所需的加密能力。", "warn");
-      return;
-    }
+  function startDownload(button) {
     const assetId = button.dataset.assetId;
-    const assetName = button.dataset.assetName || assetId;
-    const oldText = button.textContent;
-    button.disabled = true;
-    button.textContent = "验证中...";
-    setOverlay("正在准备挑战...", false);
-    try {
-      setOverlay("正在创建挑战...", true);
-      setStatus("正在创建下载挑战...", "muted");
-      const challengeResp = await postJSON("/api/public/v1/web/challenges", {asset_id: assetId});
-      const challengeData = challengeResp.data || {};
-      const altcha = challengeData.altcha || {};
-      if (!challengeData.challenge_id || !altcha.challenge) throw new Error("挑战数据缺失");
-      const challengeStartedAt = Date.now();
-      setOverlay("正在完成下载验证，请稍候...", true);
-      setStatus("正在计算验证答案...", "muted");
-      if (!window.PowSolver) throw new Error("下载验证组件缺失");
-      const number = await window.PowSolver.solve(altcha.challenge, challengeData.difficulty || 10);
-      const elapsed = Date.now() - challengeStartedAt;
-      if (elapsed < 900) await sleep(900 - elapsed);
-      setOverlay("正在领取下载授权...", true);
-      setStatus("正在领取下载授权...", "muted");
-      const authResp = await postJSON("/api/public/v1/web/authorizations", {
-        challenge_id: challengeData.challenge_id,
-        asset_id: assetId,
-        altcha_payload: {number: number}
-      });
-      const authData = authResp.data || {};
-      if (!authData.download_url || !authData.download_token) throw new Error("授权数据缺失");
-      const downloadURL = authData.download_url + "?token=" + encodeURIComponent(authData.download_token);
-      setOverlay("正在检查下载入口...", true);
-      await probeDownload(downloadURL);
-      setStatus("授权已签发，正在开始下载 " + assetName + "。", "ok");
-      downloadFrame.src = downloadURL;
-    } catch (err) {
-      setStatus(err && err.message ? err.message : "下载失败", "warn");
-      button.disabled = false;
-      button.textContent = oldText;
-      setOverlay("", false);
+    if (!assetId) {
+      setStatus("下载资产缺失，请刷新后重试。", "warn");
       return;
     }
-    setOverlay("", false);
-    button.disabled = false;
-    button.textContent = oldText;
+    window.location.href = "/download/" + encodeURIComponent(assetId);
   }
+
   projects.forEach((project) => container.appendChild(buildCard(project)));
 })();

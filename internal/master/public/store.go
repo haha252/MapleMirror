@@ -46,6 +46,21 @@ type AssetSummary struct {
 	UnavailableDetails string `json:"-"`
 }
 
+type DownloadAssetSummary struct {
+	ProjectID          string `json:"project_id"`
+	ProjectName        string `json:"project_name"`
+	Repository         string `json:"repository"`
+	AssetID            string `json:"asset_id"`
+	Version            string `json:"version"`
+	FileName           string `json:"file_name"`
+	Architecture       string `json:"architecture"`
+	System             string `json:"system"`
+	SizeBytes          int64  `json:"size_bytes"`
+	Available          bool   `json:"available"`
+	UnavailableReason  string `json:"unavailable_reason"`
+	UnavailableDetails string `json:"-"`
+}
+
 type NodeSummary struct {
 	NodeID              string `json:"node_id"`
 	PublicName          string `json:"public_name"`
