@@ -89,6 +89,8 @@ type PressureReport struct {
 
 type SyncAsset struct {
 	AssetID      string `json:"asset_id"`
+	ProjectID    string `json:"project_id,omitempty"`
+	Version      string `json:"version,omitempty"`
 	FileName     string `json:"file_name"`
 	SizeBytes    int64  `json:"size_bytes"`
 	DownloadURL  string `json:"download_url"`

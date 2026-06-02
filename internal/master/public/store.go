@@ -36,6 +36,7 @@ type ProjectSummary struct {
 type AssetSummary struct {
 	AssetID            string `json:"asset_id"`
 	Version            string `json:"version"`
+	DownloadPath       string `json:"download_path"`
 	Prerelease         bool   `json:"prerelease"`
 	FileName           string `json:"file_name"`
 	Architecture       string `json:"architecture"`
@@ -54,6 +55,7 @@ type DownloadAssetSummary struct {
 	Repository         string `json:"repository"`
 	AssetID            string `json:"asset_id"`
 	Version            string `json:"version"`
+	DownloadPath       string `json:"download_path"`
 	FileName           string `json:"file_name"`
 	Architecture       string `json:"architecture"`
 	System             string `json:"system"`

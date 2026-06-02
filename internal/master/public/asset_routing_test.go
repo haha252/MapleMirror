@@ -44,7 +44,7 @@ func TestIssueAuthorizationAllowsFileReadyReplicaWhenNodeRoutingReadyFalse(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if auth.Claims.NodeID != "node-1" || debug.DownloadURL != "https://node-1.example.com/downloads/asset-1" {
+	if auth.Claims.NodeID != "node-1" || debug.DownloadURL != "https://node-1.example.com/p1/v1/a.zip" {
 		t.Fatalf("授权未绑定当前文件已就绪的节点：claims=%+v debug=%+v", auth.Claims, debug)
 	}
 }

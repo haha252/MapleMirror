@@ -14,10 +14,11 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 	var task protocol.SyncTask
 	var attempts int
 	var retryAfter string
-	err := r.DB.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, a.file_name,
-		a.size_bytes, a.source_url, a.digest_sha256, COALESCE(t.attempts, 0),
+	err := r.DB.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, r.project_id,
+		r.tag_name, a.file_name, a.size_bytes, a.source_url, a.digest_sha256, COALESCE(t.attempts, 0),
 		COALESCE(t.retry_after, '')
 		FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id
+		LEFT JOIN releases r ON r.id = a.release_id
 		WHERE t.node_id = ?
 		AND (
 			t.state = 'pending'
@@ -25,7 +26,7 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 		)
 		ORDER BY t.created_at LIMIT 1`, nodeID, time.Now().UTC().Format(time.RFC3339Nano)).
 		Scan(&task.TaskID, &task.TaskType, &task.Asset.AssetID,
-			&task.Asset.FileName, &task.Asset.SizeBytes,
+			&task.Asset.ProjectID, &task.Asset.Version, &task.Asset.FileName, &task.Asset.SizeBytes,
 			&task.Asset.DownloadURL, &task.Asset.DigestSHA256,
 			&attempts, &retryAfter)
 	if err == sql.ErrNoRows {

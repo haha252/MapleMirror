@@ -86,7 +86,7 @@ const apiDocsBody = `
   "status": "success",
   "data": {
     "authorization_id": "auth_123",
-    "download_url": "https://node.example/downloads/asset_123",
+    "download_url": "https://node.example/example/v1.2.3/example-windows-amd64.zip",
     "expires_at": "2026-05-28T12:05:00Z"
   }
 }</code></pre>
@@ -111,11 +111,11 @@ const apiDocsBody = `
   </section>
 
   <section class="api-endpoint">
-    <div class="api-route"><span class="api-method method-get">GET</span><code>/downloads/{asset_id}</code></div>
+    <div class="api-route"><span class="api-method method-get">GET</span><code>/{project_id}/{version}/{file_name}</code></div>
     <p>下载节点文件服务地址由授权响应的 <code>download_url</code> 决定，支持单段 HTTP Range。</p>
     <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>Authorization</td><td>Header</td><td><code>Bearer &lt;download_token&gt;</code></td></tr><tr><td>Range</td><td>Header</td><td>可选，例如 <code>bytes=0-1048575</code></td></tr></tbody></table>
     <p class="api-label">Example Request</p>
-    <pre><code>GET /downloads/asset_123
+    <pre><code>GET /example/v1.2.3/example-windows-amd64.zip
 Authorization: Bearer &lt;download_token&gt;
 Range: bytes=0-1048575</code></pre>
   </section>

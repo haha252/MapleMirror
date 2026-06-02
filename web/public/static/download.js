@@ -132,6 +132,7 @@
       sizeText.className = "project-card__size " + (selected.available ? "muted" : "warn");
       button.disabled = !selected.available;
       button.dataset.assetId = selected.asset_id;
+      button.dataset.downloadPath = selected.download_path || "";
       if (selected.unavailable_reason) button.title = selected.unavailable_reason;
       else button.removeAttribute("title");
     }
@@ -147,11 +148,12 @@
 
   function startDownload(button) {
     const assetId = button.dataset.assetId;
-    if (!assetId) {
+    const downloadPath = button.dataset.downloadPath;
+    if (!assetId || !downloadPath) {
       setStatus("下载资产缺失，请刷新后重试。", "warn");
       return;
     }
-    window.location.href = "/download/" + encodeURIComponent(assetId);
+    window.location.href = downloadPath;
   }
 
   projects.forEach((project) => container.appendChild(buildCard(project)));

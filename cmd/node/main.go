@@ -79,6 +79,7 @@ func main() {
 	}, "X-Request-ID", "X-Request-ID"))
 	if handler := fileHandler(cfg, database, logger); handler != nil {
 		mux.Handle("/downloads/", requestid.Middleware(handler, "X-Request-ID", "X-Request-ID"))
+		mux.Handle("/", requestid.Middleware(handler, "X-Request-ID", "X-Request-ID"))
 	}
 	runServer(cfg.Server.Listen, mux, logger)
 }

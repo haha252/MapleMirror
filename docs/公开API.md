@@ -119,7 +119,7 @@
 
 网页页面可以使用公开 API 下的下载挑战接口；这些接口仅服务浏览器下载链路。当前响应仍兼容旧的 `altcha` 字段，浏览器端优先使用自研 WASM/Worker 前导零求解器。
 
-浏览器推荐入口为 `GET /download/{asset_id}`。首页下载按钮和外部网站都应跳转到该独立验证页，由页面完成网页挑战、领取下载授权并跳转到节点 `download_url` 发起下载；外部网站不要直接拼接节点下载 URL 或调用公开 API PoW 授权接口替代网页下载入口。网页验证与公开 API PoW 是两套独立合同，`altcha.*` 与 `api_pow.*` 参数仍不得混用。
+浏览器推荐入口为 `GET /{project_id}/{version}/{file_name}`，例如 `/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk`。首页下载按钮和外部网站都应跳转到该独立验证页，由页面完成网页挑战、领取下载授权并跳转到节点 `download_url` 发起下载；外部网站不要直接拼接节点下载 URL 或调用公开 API PoW 授权接口替代网页下载入口。旧版 `GET /download/{asset_id}` 暂时保留为兼容入口。网页验证与公开 API PoW 是两套独立合同，`altcha.*` 与 `api_pow.*` 参数仍不得混用。
 
 ### 4.1 创建网页挑战
 
@@ -179,7 +179,7 @@
   "request_id": "请求标识",
   "data": {
     "authorization_id": "授权标识",
-    "download_url": "https://node.example/downloads/asset_123",
+    "download_url": "https://node.example/example/v1.2.3/example-windows-amd64.zip",
     "download_token": "短时签名令牌",
     "expires_at": "2026-05-28T12:05:00Z",
     "range_concurrency_limit": 32,
@@ -275,12 +275,12 @@ M5 返回授权基本状态和已由主节点幂等入账的真实发送字节�
 节点文件服务路径由主节点返回的 `download_url` 决定。推荐形式：
 
 ```text
-GET /downloads/{asset_id}
+GET /{project_id}/{version}/{file_name}
 Authorization: Bearer <download_token>
 Range: bytes=0-1048575
 ```
 
-也可在浏览器下载场景使用一次性查询参数传递令牌，但节点日志必须脱敏并避免把完整 URL 写入普通日志。
+浏览器下载场景可使用一次性查询参数传递令牌，例如 `?token=<download_token>`；节点日志必须脱敏并避免把完整 URL 写入普通日志。旧 `/downloads/{asset_id}` 路径仅用于兼容已签发或外部缓存的旧链接。
 
 ### 7.1 成功响应头
 
@@ -298,7 +298,7 @@ Range: bytes=0-1048575
 请求：
 
 ```text
-GET /downloads/asset_123 HTTP/1.1
+GET /example/v1.2.3/example-windows-amd64.zip HTTP/1.1
 Authorization: Bearer <download_token>
 Range: bytes=1048576-2097151
 ```
@@ -351,7 +351,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 ## 10. M4 实现说明
 
 - 主节点公共接口挂载在 `server.public_listen`。
-- 下载节点文件服务挂载在 `/downloads/{asset_id}`。
+- 下载节点文件服务挂载在 `/{project_id}/{version}/{file_name}`；旧 `/downloads/{asset_id}` 仅作为兼容路径保留。
 - 主节点必须配置 `download_token.signing_private_key_file` 和 `download_token.verify_public_key_file`；下载节点只配置 `download_token.verify_public_key_file`。
 - 旧版 `download_token.signing_key_file` HMAC 共享密钥已废弃，启动时不得继续使用；升级后旧 `download.v1` 令牌需要重新签发。
 - `download_url` 返回主节点当前选定下载节点的完整公网下载地址；浏览器和 API 客户端应直接向该地址发起下载，请勿再经主节点转发文件流量。

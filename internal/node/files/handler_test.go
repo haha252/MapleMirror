@@ -33,7 +33,7 @@ func TestHandlerServesVerifiedAssetRange(t *testing.T) {
 	if rec.Code != http.StatusPartialContent || rec.Body.String() != "bcd" {
 		t.Fatalf("Range 下载响应不符合预期：code=%d body=%q", rec.Code, rec.Body.String())
 	}
-	if got := rec.Header().Get("Content-Disposition"); got != "attachment; filename=asset.bin" {
+	if got := rec.Header().Get("Content-Disposition"); got != "attachment; filename=a.zip" {
 		t.Fatalf("Content-Disposition 不符合预期：%q", got)
 	}
 	var bytes int64
@@ -42,6 +42,27 @@ func TestHandlerServesVerifiedAssetRange(t *testing.T) {
 		WHERE authorization_id = 'auth-1'`).Scan(&bytes, &masterReq)
 	if err != nil || bytes != 3 || masterReq != "req-1" {
 		t.Fatalf("真实流量事件未正确记录：bytes=%d req=%q err=%v", bytes, masterReq, err)
+	}
+}
+
+func TestHandlerServesReadableAssetPathWithQueryToken(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
+		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
+		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
+	token, err := signer.Sign(claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/p1/v1/a.zip?token="+token, nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	req.Header.Set("Range", "bytes=1-3")
+	rec := httptest.NewRecorder()
+	handler := &Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent || rec.Body.String() != "bcd" {
+		t.Fatalf("可读路径 Range 下载响应不符合预期：code=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
@@ -168,12 +189,16 @@ func prepareNodeFile(t *testing.T) (*sql.DB, string, downloadtoken.Signer) {
 	if err := os.MkdirAll(storageDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(storageDir, "asset.bin"), []byte("abcdef"), 0o600); err != nil {
+	assetPath := filepath.Join(storageDir, "p1", "v1", "a.zip")
+	if err := os.MkdirAll(filepath.Dir(assetPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(assetPath, []byte("abcdef"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err = db.Exec(`INSERT INTO local_assets
 		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
-		VALUES ('asset-1', 'asset.bin', 'sha256:aa', 6, 'now', 'verified')`)
+		VALUES ('asset-1', ?, 'sha256:aa', 6, 'now', 'verified')`, filepath.Join("p1", "v1", "a.zip"))
 	if err != nil {
 		t.Fatal(err)
 	}

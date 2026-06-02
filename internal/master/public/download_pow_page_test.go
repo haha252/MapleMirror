@@ -33,12 +33,51 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 	}
 }
 
+func TestReadableDownloadPowPageIncludesAssetPayload(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/p1/v1/a.zip", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
+	}
+	for _, want := range []string{
+		`<title>a.zip - 下载验证</title>`,
+		`"asset_id":"asset-1"`,
+		`"download_path":"/p1/v1/a.zip"`,
+		`/static/public/download-pow.js`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected readable download page to include %q: %s", want, body)
+		}
+	}
+}
+
 func TestDownloadPowPageRejectsMissingAsset(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	srv := Server{Store: Store{DB: db}}
 
 	req := httptest.NewRequest(http.MethodGet, "/download/missing", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestReadableDownloadPowPageRejectsMissingAsset(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/p1/v1/missing.zip", nil)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 

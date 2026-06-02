@@ -88,15 +88,17 @@ func (s Store) LatestScan(ctx context.Context, projectID string) (ScanSummary, e
 func (s Store) NextTask(ctx context.Context, nodeID string) (protocol.SyncTask, bool, error) {
 	var task protocol.SyncTask
 	err := s.DB.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id,
-		a.file_name, a.size_bytes, a.source_url, a.digest_sha256
+		r.project_id, r.tag_name, a.file_name, a.size_bytes, a.source_url, a.digest_sha256
 		FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id
+		LEFT JOIN releases r ON r.id = a.release_id
 		WHERE t.node_id = ?
 		AND (
 			t.state = 'pending'
 			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
 		)
 		ORDER BY t.created_at LIMIT 1`, nodeID, nowText()).
-		Scan(&task.TaskID, &task.TaskType, &task.Asset.AssetID, &task.Asset.FileName,
+		Scan(&task.TaskID, &task.TaskType, &task.Asset.AssetID, &task.Asset.ProjectID,
+			&task.Asset.Version, &task.Asset.FileName,
 			&task.Asset.SizeBytes, &task.Asset.DownloadURL, &task.Asset.DigestSHA256)
 	if err == sql.ErrNoRows {
 		return protocol.SyncTask{}, false, nil

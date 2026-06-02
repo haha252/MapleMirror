@@ -118,8 +118,19 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 		}
 		return taskResult(task, "size_mismatch", digest, size, "资产大小不匹配")
 	}
-	rel := safeName(task.Asset.AssetID, task.Asset.FileName)
+	rel := relativeAssetPath(task.Asset)
 	finalPath := filepath.Join(e.Storage, rel)
+	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+		_ = os.Remove(tmpPath)
+		if e.Logger != nil {
+			e.Logger.Warn(context.Background(), "节点创建资产目录失败",
+				slog.String("task_id", task.TaskID),
+				slog.String("asset_id", task.Asset.AssetID),
+				slog.String("path", filepath.Dir(finalPath)),
+				slog.String("error", err.Error()))
+		}
+		return taskResult(task, "temporary_error", digest, size, "创建资产目录失败")
+	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		_ = os.Remove(tmpPath)
 		if e.Logger != nil {

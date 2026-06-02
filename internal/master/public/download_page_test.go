@@ -181,7 +181,7 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/api/public/v1/projects`,
 		`/api/public/v1/api/challenges`,
 		`/api/public/v1/api/authorizations`,
-		`/downloads/{asset_id}`,
+		`/{project_id}/{version}/{file_name}`,
 		`/static/public/api-docs.css`,
 		`class="api-method method-get"`,
 		`class="api-method method-post"`,

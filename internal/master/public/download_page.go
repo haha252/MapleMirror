@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+
+	"mirror-server/internal/assetpath"
 )
 
 type downloadProjectView struct {
@@ -24,6 +26,7 @@ type downloadProjectView struct {
 type downloadAssetUI struct {
 	AssetID           string `json:"asset_id"`
 	Version           string `json:"version"`
+	DownloadPath      string `json:"download_path"`
 	FileName          string `json:"file_name"`
 	Architecture      string `json:"architecture"`
 	System            string `json:"system"`
@@ -34,7 +37,7 @@ type downloadAssetUI struct {
 
 func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		s.downloadReadablePowPage(w, r)
 		return
 	}
 	s.trackPageView(w, r)
@@ -103,6 +106,37 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	if _, err := assetpath.ParsePublicPath(r.URL.EscapedPath()); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := s.Store.DownloadAssetByPath(r.Context(), r.URL.EscapedPath())
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	body, err := s.renderDownloadPowBody(asset)
+	if err != nil {
+		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
+		return
+	}
+	s.renderPage(w, pageData{
+		Title:        "下载验证",
+		BrowserTitle: asset.FileName + " - 下载验证",
+		Subtitle:     "完成浏览器验证后将自动开始下载。",
+		Description:  "枫源镜像下载验证页",
+		BodyClass:    "page-download-pow",
+		Body:         body,
+		Styles:       []string{"/static/public/download.css"},
+		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
+	})
+}
+
 func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, config projectAssetConfig) downloadProjectView {
 	view := downloadProjectView{
 		ProjectID:                  project.ProjectID,
@@ -123,6 +157,7 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 		view.Assets = append(view.Assets, downloadAssetUI{
 			AssetID:           asset.AssetID,
 			Version:           asset.Version,
+			DownloadPath:      asset.DownloadPath,
 			FileName:          asset.FileName,
 			Architecture:      asset.Architecture,
 			System:            asset.System,

@@ -126,6 +126,8 @@ type routableAssetInfo struct {
 	NodeID       string
 	NodeName     string
 	ProjectID    string
+	Version      string
+	FileName     string
 	DownloadURL  string
 	System       string
 	Architecture string
@@ -137,18 +139,18 @@ func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) 
 	var out routableAssetInfo
 	var downloadBaseURL string
 	err := tx.QueryRowContext(ctx, `SELECT n.id, n.public_name, r.project_id,
-		n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1),
+		r.tag_name, a.file_name, n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1),
 		a.size_bytes, a.architecture, a.system FROM assets a
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
 		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id LIMIT 1`, assetID).
-		Scan(&out.NodeID, &out.NodeName, &out.ProjectID, &downloadBaseURL, &out.Multiplier,
-			&out.SizeBytes, &out.Architecture, &out.System)
+		Scan(&out.NodeID, &out.NodeName, &out.ProjectID, &out.Version, &out.FileName,
+			&downloadBaseURL, &out.Multiplier, &out.SizeBytes, &out.Architecture, &out.System)
 	if err != nil {
 		return out, err
 	}
-	out.DownloadURL = joinDownloadURL(downloadBaseURL, assetID)
+	out.DownloadURL = joinDownloadURL(downloadBaseURL, out.ProjectID, out.Version, out.FileName)
 	return out, nil
 }
 

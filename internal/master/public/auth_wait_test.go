@@ -35,7 +35,7 @@ func TestIssueAuthorizationWaitsForRouteRecovery(t *testing.T) {
 	if time.Since(started) < time.Second {
 		t.Fatal("授权应等待路由恢复后再签发")
 	}
-	if auth.Claims.NodeID != "node-1" || debug.DownloadURL != "https://node-1.example.com/downloads/asset-1" {
+	if auth.Claims.NodeID != "node-1" || debug.DownloadURL != "https://node-1.example.com/p1/v1/a.zip" {
 		t.Fatalf("授权未绑定恢复后的节点：claims=%+v debug=%+v", auth.Claims, debug)
 	}
 }

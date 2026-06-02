@@ -46,7 +46,7 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		t.Fatalf("授权 Range 并发默认值应为 32：claims=%d debug=%d",
 			auth.Claims.RangeConcurrencyLimit, debug.RangeLimit)
 	}
-	if debug.DownloadURL != "https://node-1.example.com/downloads/asset-1" {
+	if debug.DownloadURL != "https://node-1.example.com/p1/v1/a.zip" {
 		t.Fatalf("下载地址返回错误：%q", debug.DownloadURL)
 	}
 	if _, err := store.LoadChallenge(context.Background(), challenge.ID); err == nil {

@@ -8,9 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 
+	"mirror-server/internal/assetpath"
 	"mirror-server/internal/protocol"
 )
 
@@ -55,31 +54,11 @@ func taskResult(task protocol.SyncTask, result, digest string, size int64, msg s
 	}
 }
 
-func safeName(assetID, name string) string {
-	assetID = sanitizeNamePart(assetID)
-	name = sanitizeNamePart(filepath.Base(strings.ReplaceAll(name, "\\", "/")))
-	if name == "" || name == "." || name == string(filepath.Separator) {
-		name = "asset.bin"
+func relativeAssetPath(asset protocol.SyncAsset) string {
+	if asset.ProjectID == "" || asset.Version == "" {
+		return assetpath.SafeRelativePath(asset.AssetID, "legacy", asset.FileName)
 	}
-	return assetID + "-" + name
-}
-
-func sanitizeNamePart(value string) string {
-	value = strings.Map(func(r rune) rune {
-		switch r {
-		case '<', '>', ':', '"', '/', '\\', '|', '?', '*':
-			return '_'
-		}
-		if r < 32 {
-			return '_'
-		}
-		return r
-	}, value)
-	value = strings.TrimRight(value, ". ")
-	if value == "" {
-		return "asset"
-	}
-	return value
+	return assetpath.SafeRelativePath(asset.ProjectID, asset.Version, asset.FileName)
 }
 
 func nullable(value string) any {
