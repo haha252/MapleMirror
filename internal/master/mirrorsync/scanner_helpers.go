@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -27,25 +26,12 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 	}
 	var accepted, rejected int
 	for _, asset := range assets {
-		if !assetAllowed(asset.Name, project.AssetInclude, project.AssetExclude) {
-			if logger != nil {
-				logger.Debug(ctx, "资产未进入镜像流程",
-					slog.String("project_id", project.ID),
-					slog.String("release_id", releaseID),
-					slog.String("asset_name", asset.Name),
-					slog.String("reason", "asset exclude"))
-			}
-			rejected++
-			continue
+		allowed, reason, err := assetAllowed(asset.Name, project.AssetInclude, project.AssetExclude)
+		if err != nil {
+			return accepted, rejected, err
 		}
-		digest, err := normalizeDigest(asset.Digest)
-		matches := archRE.FindStringSubmatch(asset.Name)
-		if err != nil || len(matches) == 0 {
+		if !allowed {
 			if logger != nil {
-				reason := "architecture mismatch"
-				if err != nil {
-					reason = "digest invalid"
-				}
 				logger.Debug(ctx, "资产未进入镜像流程",
 					slog.String("project_id", project.ID),
 					slog.String("release_id", releaseID),
@@ -55,19 +41,24 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 			rejected++
 			continue
 		}
-		arch := matches[len(matches)-1]
-		system, ok := assetSystem(asset.Name, systemRE)
-		if !ok {
+		digest, err := normalizeDigest(asset.Digest)
+		if err != nil {
 			if logger != nil {
 				logger.Debug(ctx, "资产未进入镜像流程",
 					slog.String("project_id", project.ID),
 					slog.String("release_id", releaseID),
 					slog.String("asset_name", asset.Name),
-					slog.String("reason", "system mismatch"))
+					slog.String("reason", "digest invalid"))
 			}
 			rejected++
 			continue
 		}
+		matches := archRE.FindStringSubmatch(asset.Name)
+		arch := "None"
+		if len(matches) > 0 {
+			arch = matches[len(matches)-1]
+		}
+		system := assetSystem(asset.Name, systemRE)
 		assetID := fmt.Sprintf("%s:%d", releaseID, asset.ID)
 		_, err = tx.ExecContext(ctx, `INSERT INTO assets
 			(id, release_id, github_asset_id, file_name, architecture, system, size_bytes,
@@ -118,31 +109,15 @@ func selectReleases(releases []GitHubRelease, includePrerelease bool, keep int) 
 	return selected
 }
 
-func assetAllowed(name string, includes, excludes []string) bool {
-	for _, pattern := range excludes {
-		if matched, _ := path.Match(pattern, name); matched {
-			return false
-		}
-	}
-	if len(includes) == 0 {
-		return true
-	}
-	for _, pattern := range includes {
-		if matched, _ := path.Match(pattern, name); matched {
-			return true
-		}
-	}
-	return false
-}
-
 func projectHash(project config.Project) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		project.ID, project.Repository,
 		fmt.Sprint(project.Enabled), fmt.Sprint(project.RetainVersions),
 		fmt.Sprint(project.IncludePrerelease), fmt.Sprint(project.DownloadMultiplier),
-		strings.Join(project.AssetInclude, ","),
-		strings.Join(project.AssetExclude, ","),
+		assetRulesHash(project.AssetInclude),
+		assetRulesHash(project.AssetExclude),
 		project.ArchitectureRegex,
+		fmt.Sprint(project.ArchitectureDefaultEnabled),
 		fmt.Sprint(project.SystemMatchEnabled),
 		project.SystemRegex,
 	}, "|")))
@@ -156,15 +131,19 @@ func compileSystemRegex(project config.Project) (*regexp.Regexp, error) {
 	return regexp.Compile(project.SystemRegex)
 }
 
-func assetSystem(name string, systemRE *regexp.Regexp) (string, bool) {
+func assetSystem(name string, systemRE *regexp.Regexp) string {
 	if systemRE == nil {
-		return "", true
+		return ""
 	}
 	matches := systemRE.FindStringSubmatch(name)
 	if len(matches) == 0 {
-		return "", false
+		return "None"
 	}
-	return normalizeSystem(matches[len(matches)-1])
+	system, ok := normalizeSystem(matches[len(matches)-1])
+	if !ok {
+		return "None"
+	}
+	return system
 }
 
 func normalizeSystem(value string) (string, bool) {

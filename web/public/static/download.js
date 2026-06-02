@@ -58,6 +58,13 @@
     const button = card.querySelector(".download-button");
     const badge = card.querySelector(".version-badge");
 
+    function architectureLabel(item) {
+      if (project.architecture_default_enabled && !String(item.architecture || "").trim()) {
+        return "None";
+      }
+      return item.architecture;
+    }
+
     function setAvailability(selected) {
       const available = !!(selected && selected.available);
       availability.textContent = available ? "可下载" : "暂不可下载";
@@ -82,7 +89,7 @@
       list.forEach((item) => {
         const option = document.createElement("option");
         option.value = item.asset_id;
-        option.textContent = item.architecture;
+        option.textContent = architectureLabel(item);
         if (choice && choice.asset_id === item.asset_id) option.selected = true;
         archSelect.appendChild(option);
       });

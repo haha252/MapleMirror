@@ -12,10 +12,30 @@ projects:
     include_prerelease: false
     # 倍率仅扣减请求额度，不放大实际流量统计或每日流量限额。
     download_multiplier: 1
+    # 资产入选规则，只有通过 asset_include 且未命中 asset_exclude 的资产才会进入镜像。
+    # 每条规则可以写成旧格式字符串，例如 "*.zip"；旧格式等同于 type: glob、required: false。
+    # 推荐写成对象，字段说明：
+    # - pattern：匹配文件名的字符串，不能为空。
+    # - type：glob 或 regex；glob 支持 "*.zip"，regex 支持 Go 正则和 (?i) 大小写选项。
+    # - required：true 表示必选规则；false 表示可选规则。
+    # include 语义：所有 required=true 必须命中；如果存在 required=false，则还要至少命中一条可选规则。
+    # 没有 include 规则时，默认允许所有资产进入下一步。
     asset_include:
-      - "*.zip"
-    asset_exclude: []
+      - pattern: "\\.zip$"
+        type: regex
+        required: false
+    # 排除规则优先于包含规则。
+    # exclude 语义：任意 required=false 命中就排除；required=true 用于组合排除，只有所有必选排除规则都命中才排除。
+    asset_exclude:
+      - pattern: "(?i)(debug|source|unsigned)"
+        type: regex
+        required: false
+    # 架构正则只用于从已入选资产文件名提取展示架构，不再作为资产入选条件。
+    # 未命中时，数据库和下载页使用 None。
     architecture_regex: "(?i)(amd64|arm64|x86_64)"
-    # 默认不区分系统；启用后 system_regex 从文件名提取系统并规范化为 win/linux/darwin。
+    # 兼容旧配置字段；当前架构正则未命中也会保留资产，因此通常不需要开启。
+    architecture_default_enabled: false
+    # 默认不区分系统；启用后 system_regex 只负责从文件名提取系统并规范化为 win/linux/darwin。
+    # 未命中或无法规范化时，system 填充为 None；未启用 system_match_enabled 时 system 保持空字符串。
     system_match_enabled: false
     system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"

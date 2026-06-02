@@ -49,6 +49,9 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `"system_match_enabled":false`) {
 		t.Fatalf("expected disabled system matching in payload: %s", body)
 	}
+	if !strings.Contains(body, `"architecture_default_enabled":false`) {
+		t.Fatalf("expected disabled architecture default in payload: %s", body)
+	}
 	if !strings.Contains(body, `"default_version":"v1"`) {
 		t.Fatalf("expected default version in payload: %s", body)
 	}
