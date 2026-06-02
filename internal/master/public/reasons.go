@@ -203,6 +203,9 @@ func (s Store) loadNodeReadyState(ctx context.Context, nodeID string) (nodeReady
 }
 
 func (s Store) hasActiveSession(ctx context.Context, nodeID string) (bool, error) {
+	if s.Runtime != nil {
+		return s.Runtime.ActiveSession(nodeID), nil
+	}
 	var activeSession int
 	err := s.DB.QueryRowContext(ctx, `SELECT EXISTS(
 		SELECT 1 FROM node_control_sessions
@@ -227,6 +230,10 @@ func (s Store) latestCloseReason(ctx context.Context, nodeID string) string {
 }
 
 func (s Store) latestInventoryReportComplete(ctx context.Context, nodeID string) (sql.NullBool, error) {
+	if s.Runtime != nil {
+		_, complete, ok := s.Runtime.LatestInventoryState(nodeID)
+		return sql.NullBool{Bool: complete, Valid: ok}, nil
+	}
 	var complete sql.NullInt64
 	err := s.DB.QueryRowContext(ctx, `SELECT complete
 		FROM node_inventory_reports

@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -190,6 +191,10 @@ func (s Server) latestReport(w http.ResponseWriter, r *http.Request, nodeID, act
 		return
 	}
 	if err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "暂无运行时样本")
+			return
+		}
 		writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "报告不存在")
 		return
 	}

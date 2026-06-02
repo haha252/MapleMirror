@@ -54,7 +54,7 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	defer tx.Rollback()
-	last, err := currentSequence(ctx, tx, session.ID)
+	last, err := r.currentSequence(session)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -75,8 +75,7 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	if err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
 		return HeartbeatResult{}, err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET
-		last_message_sequence = ? WHERE id = ?`, seq, session.ID)
+	err = r.updateSequence(session, seq)
 	if err == nil && r.Logger != nil {
 		r.Logger.Debug(ctx, "同步任务结果已处理",
 			slog.String("node_id", session.NodeID),
@@ -164,14 +163,19 @@ func readySnapshot(ctx context.Context, tx *sql.Tx, nodeID string) (missing, run
 	return missing, running, readyInt == 1
 }
 
-func currentSequence(ctx context.Context, tx *sql.Tx, sessionID string) (uint64, error) {
-	var last uint64
-	err := tx.QueryRowContext(ctx, `SELECT last_message_sequence FROM node_control_sessions
-		WHERE id = ? AND disconnected_at IS NULL`, sessionID).Scan(&last)
+func (r Repository) currentSequence(session Session) (uint64, error) {
+	last, err := r.runtime().CurrentSequence(session)
 	if err != nil {
-		return 0, fmt.Errorf("控制会话不可用")
+		return 0, fmt.Errorf("%w", ErrSessionUnavailable)
 	}
 	return last, nil
+}
+
+func (r Repository) updateSequence(session Session, seq uint64) error {
+	if err := r.runtime().UpdateSequence(session, seq); err != nil {
+		return fmt.Errorf("%w", ErrSessionUnavailable)
+	}
+	return nil
 }
 
 func nullable(value string) any {

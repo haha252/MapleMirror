@@ -3,6 +3,7 @@ package files
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"sync"
 
 	"mirror-server/internal/downloadtoken"
+	"mirror-server/internal/logging"
 	"mirror-server/internal/requestid"
 )
 
@@ -20,6 +22,7 @@ type Handler struct {
 	NodeID       string
 	Signer       downloadtoken.Signer
 	TrustedCIDRs []string
+	Logger       *logging.Logger
 	mu           sync.Mutex
 	active       map[string]int
 }
@@ -48,6 +51,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if claims.ClientPrefix != h.clientPrefix(r) {
 		httpError(w, r, http.StatusForbidden, "客户端网络前缀不匹配")
 		return
+	}
+	if h.Logger != nil {
+		h.Logger.Info(r.Context(), "下载节点收到下载令牌",
+			slog.String("request_id", requestid.FromContext(r.Context())),
+			slog.String("authorization_id", claims.AuthorizationID),
+			slog.String("asset_id", claims.AssetID),
+			slog.String("client_ip", h.clientIP(r)),
+			slog.String("project_id", claims.ProjectID),
+			slog.String("system", claims.System),
+			slog.String("architecture", claims.Architecture))
 	}
 	if !h.enter(claims.AuthorizationID, claims.RangeConcurrencyLimit) {
 		httpError(w, r, http.StatusTooManyRequests, "Range 并发数超过授权限制")

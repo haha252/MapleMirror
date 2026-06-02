@@ -30,6 +30,15 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 	if auth.Claims.AssetID != "asset-1" || auth.Claims.NodeID != "node-1" {
 		t.Fatalf("授权绑定错误：%+v", auth.Claims)
 	}
+	if auth.Claims.ProjectID != "p1" || auth.Claims.Architecture != "amd64" || auth.Claims.System != "" {
+		t.Fatalf("授权令牌资产元数据错误：%+v", auth.Claims)
+	}
+	if debug.ProjectID != "p1" || debug.Architecture != "amd64" || debug.System != "" {
+		t.Fatalf("授权日志调试元数据错误：%+v", debug)
+	}
+	if debug.NodeName != "节点一" {
+		t.Fatalf("授权日志节点名称错误：%+v", debug)
+	}
 	if auth.Claims.MaxBytes != 24 {
 		t.Fatalf("授权最大字节数应按默认 2 倍资产大小计算：%d", auth.Claims.MaxBytes)
 	}

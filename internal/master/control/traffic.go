@@ -17,7 +17,7 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		return HeartbeatResult{}, err
 	}
 	defer tx.Rollback()
-	last, err := currentSequence(ctx, tx, session.ID)
+	last, err := r.currentSequence(session)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -37,7 +37,7 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	dup, err := existingTraffic(ctx, tx, session.NodeID, event)
 	if err != nil || dup {
 		if err == nil {
-			err = updateSequence(ctx, tx, session.ID, seq)
+			err = r.updateSequence(session, seq)
 		}
 		return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
 	}
@@ -68,7 +68,7 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	if err := updateTrafficStats(ctx, tx, info, event.SentBytes, now); err != nil {
 		return HeartbeatResult{}, err
 	}
-	if err := updateSequence(ctx, tx, session.ID, seq); err != nil {
+	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
 	}
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, tx.Commit()
@@ -214,10 +214,4 @@ func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, by
 		return err
 	}
 	return upsertNodeTraffic(ctx, tx, info.Day, info.NodeID, bytes, now)
-}
-
-func updateSequence(ctx context.Context, tx *sql.Tx, sessionID string, seq uint64) error {
-	_, err := tx.ExecContext(ctx, `UPDATE node_control_sessions SET
-		last_message_sequence = ? WHERE id = ?`, seq, sessionID)
-	return err
 }

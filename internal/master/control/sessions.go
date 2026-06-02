@@ -10,6 +10,7 @@ import (
 var (
 	ErrCertificateNotActive = errors.New("证书未批准或已失效")
 	ErrNodeDisabled         = errors.New("节点已禁用")
+	ErrSessionUnavailable   = errors.New("控制会话不可用")
 )
 
 type Session struct {
@@ -63,12 +64,17 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 	if err != nil {
 		return Session{}, err
 	}
-	return session, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return Session{}, err
+	}
+	r.runtime().StartSession(session)
+	return session, nil
 }
 
 func (r Repository) CloseSession(ctx context.Context, sessionID, reason string) error {
 	_, err := r.DB.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
 		close_reason = ? WHERE id = ? AND disconnected_at IS NULL`,
 		time.Now().UTC().Format(time.RFC3339Nano), reason, sessionID)
+	r.runtime().CloseSession(sessionID)
 	return err
 }

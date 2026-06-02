@@ -2,13 +2,14 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
 	"mirror-server/internal/protocol"
 )
 
-func TestReportsDoNotWriteFormalInventory(t *testing.T) {
+func TestReportsKeepInventorySummaryInRuntimeOnly(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
@@ -22,8 +23,12 @@ func TestReportsDoNotWriteFormalInventory(t *testing.T) {
 	var reportCount, formalCount int
 	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory_reports").Scan(&reportCount)
 	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory").Scan(&formalCount)
-	if reportCount != 1 || formalCount != 0 {
-		t.Fatalf("M2 只能保存报告骨架，reports=%d formal=%d", reportCount, formalCount)
+	if reportCount != 0 || formalCount != 0 {
+		t.Fatalf("库存摘要应只留在内存，reports=%d formal=%d", reportCount, formalCount)
+	}
+	latest, err := repo.LatestInventoryReport(context.Background(), session.NodeID)
+	if err != nil || latest["revision"] != 1 || latest["complete"] != true {
+		t.Fatalf("runtime 库存摘要不符合预期 latest=%v err=%v", latest, err)
 	}
 }
 
@@ -124,7 +129,7 @@ func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
 	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory_reports WHERE node_id = ?", session.NodeID).
 		Scan(&reportCount)
 	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
-	if reportCount != 1 || ready != 1 {
+	if reportCount != 0 || ready != 1 {
 		t.Fatalf("重复库存修订应幂等并恢复就绪，reports=%d ready=%d", reportCount, ready)
 	}
 }
@@ -145,8 +150,33 @@ func TestPressureReportReplayHasNoDuplicateSideEffect(t *testing.T) {
 	}
 	var count int
 	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_pressure_reports").Scan(&count)
-	if count != 1 {
-		t.Fatalf("重复压力报告不应产生副作用，count=%d", count)
+	if count != 0 {
+		t.Fatalf("压力报告不应写入 SQLite 历史表，count=%d", count)
+	}
+	latest, err := repo.LatestPressureReport(context.Background(), session.NodeID)
+	if err != nil || latest["pressure_ratio"] != 0.5 {
+		t.Fatalf("runtime 压力报告不符合预期 latest=%v err=%v", latest, err)
+	}
+}
+
+func TestRuntimeLatestReportsAreEmptyAfterRuntimeReset(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	_, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{
+		Status: "syncing", FreeBytes: 100, PublicDownloadBaseURL: "https://node-1.example.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted := Repository{DB: repo.DB, Runtime: NewRuntimeStore()}
+	if _, err := restarted.LatestHeartbeat(context.Background(), session.NodeID); err != sql.ErrNoRows {
+		t.Fatalf("重启式 runtime 不应返回旧心跳样本 err=%v", err)
+	}
+	var heartbeat string
+	if err := restarted.DB.QueryRow(`SELECT COALESCE(last_heartbeat_at, '')
+		FROM nodes WHERE id = ?`, session.NodeID).Scan(&heartbeat); err != nil || heartbeat == "" {
+		t.Fatalf("节点路由所需最近心跳字段应保留在 SQLite heartbeat=%q err=%v", heartbeat, err)
 	}
 }
 

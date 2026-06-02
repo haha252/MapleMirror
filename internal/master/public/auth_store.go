@@ -12,7 +12,10 @@ import (
 type AuthorizationDebug struct {
 	ClientPrefix               string
 	NodeID                     string
+	NodeName                   string
 	ProjectID                  string
+	System                     string
+	Architecture               string
 	DownloadURL                string
 	ExpiresAt                  string
 	MaxBytes                   int64
@@ -33,11 +36,11 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	defer tx.Rollback()
-	nodeID, projectID, downloadURL, multiplier, size, err := s.routableAssetTx(ctx, tx, c.AssetID)
+	asset, err := s.routableAssetTx(ctx, tx, c.AssetID)
 	if err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
-	maxBytes := s.maxBytesPolicy().maxBytes(size)
+	maxBytes := s.maxBytesPolicy().maxBytes(asset.SizeBytes)
 	rangeLimit := s.rangeConcurrencyLimit()
 	now := time.Now().UTC()
 	scopes, err := quotaScopes(c.ClientPrefixKey)
@@ -48,7 +51,7 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	if quota.buckets == nil {
 		quota = defaultQuota()
 	}
-	requestMultiplier := multiplier
+	requestMultiplier := asset.Multiplier
 	if requestMultiplier <= 0 {
 		requestMultiplier = 1
 	}
@@ -74,13 +77,13 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	expires := expiresAfter(ttl)
-	if err := insertAuthorization(ctx, tx, authID, c, nodeID, maxBytes, rangeLimit, expires, reqID); err != nil {
+	if err := insertAuthorization(ctx, tx, authID, c, asset.NodeID, maxBytes, rangeLimit, expires, reqID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := insertReservation(ctx, tx, authID, day, maxBytes, reservationStatus, now, scopes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
-	if err := upsertProjectStats(ctx, tx, day, projectID, 1, 0, 0); err != nil {
+	if err := upsertProjectStats(ctx, tx, day, asset.ProjectID, 1, 0, 0); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	if err := upsertAssetStats(ctx, tx, day, c.AssetID, 1, 0, 0, nowText()); err != nil {
@@ -91,13 +94,17 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		return IssuedAuthorization{}, AuthorizationDebug{}, err
 	}
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version, AuthorizationID: authID,
-		AssetID: c.AssetID, NodeID: nodeID, ClientPrefix: c.ClientPrefixKey,
+		AssetID: c.AssetID, NodeID: asset.NodeID, ProjectID: asset.ProjectID,
+		System: asset.System, Architecture: asset.Architecture, ClientPrefix: c.ClientPrefixKey,
 		ExpiresAt: expires, MaxBytes: maxBytes, RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
 	debug := AuthorizationDebug{
 		ClientPrefix:               c.ClientPrefixKey,
-		NodeID:                     nodeID,
-		ProjectID:                  projectID,
-		DownloadURL:                downloadURL,
+		NodeID:                     asset.NodeID,
+		NodeName:                   asset.NodeName,
+		ProjectID:                  asset.ProjectID,
+		System:                     asset.System,
+		Architecture:               asset.Architecture,
+		DownloadURL:                asset.DownloadURL,
 		ExpiresAt:                  expires,
 		MaxBytes:                   maxBytes,
 		RangeLimit:                 rangeLimit,
@@ -115,20 +122,34 @@ func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatu
 	return out, err
 }
 
-func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (string, string, string, int64, int64, error) {
-	var nodeID, projectID, downloadBaseURL string
-	var size, multiplier int64
-	err := tx.QueryRowContext(ctx, `SELECT n.id, r.project_id,
-		n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1), a.size_bytes FROM assets a
+type routableAssetInfo struct {
+	NodeID       string
+	NodeName     string
+	ProjectID    string
+	DownloadURL  string
+	System       string
+	Architecture string
+	Multiplier   int64
+	SizeBytes    int64
+}
+
+func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (routableAssetInfo, error) {
+	var out routableAssetInfo
+	var downloadBaseURL string
+	err := tx.QueryRowContext(ctx, `SELECT n.id, n.public_name, r.project_id,
+		n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1),
+		a.size_bytes, a.architecture, a.system FROM assets a
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
 		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id LIMIT 1`, assetID).
-		Scan(&nodeID, &projectID, &downloadBaseURL, &multiplier, &size)
+		Scan(&out.NodeID, &out.NodeName, &out.ProjectID, &downloadBaseURL, &out.Multiplier,
+			&out.SizeBytes, &out.Architecture, &out.System)
 	if err != nil {
-		return "", "", "", 0, 0, err
+		return out, err
 	}
-	return nodeID, projectID, joinDownloadURL(downloadBaseURL, assetID), multiplier, size, err
+	out.DownloadURL = joinDownloadURL(downloadBaseURL, assetID)
+	return out, nil
 }
 
 func (s Store) rangeConcurrencyLimit() int {

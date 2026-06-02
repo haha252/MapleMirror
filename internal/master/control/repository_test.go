@@ -99,5 +99,5 @@ func testRepo(t *testing.T) (Repository, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Repository{DB: db}, func() { _ = db.Close() }
+	return Repository{DB: db, Runtime: NewRuntimeStore()}, func() { _ = db.Close() }
 }

@@ -7,6 +7,17 @@ import (
 )
 
 func Prefix(r *http.Request, trustedCIDRs []string) string {
+	ip := Address(r, trustedCIDRs)
+	if ip == "unknown" {
+		return ip
+	}
+	if strings.Contains(ip, ":") {
+		return ip + "/128"
+	}
+	return ip + "/32"
+}
+
+func Address(r *http.Request, trustedCIDRs []string) string {
 	ip := remoteIP(r.RemoteAddr)
 	if ip == nil {
 		return "unknown"
@@ -17,9 +28,9 @@ func Prefix(r *http.Request, trustedCIDRs []string) string {
 		}
 	}
 	if v4 := ip.To4(); v4 != nil {
-		return v4.String() + "/32"
+		return v4.String()
 	}
-	return ip.String() + "/128"
+	return ip.String()
 }
 
 func remoteIP(addr string) net.IP {

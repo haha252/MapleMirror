@@ -27,6 +27,9 @@ type Claims struct {
 	AuthorizationID       string `json:"authorization_id"`
 	AssetID               string `json:"asset_id"`
 	NodeID                string `json:"node_id"`
+	ProjectID             string `json:"project_id,omitempty"`
+	System                string `json:"system,omitempty"`
+	Architecture          string `json:"architecture,omitempty"`
 	ClientPrefix          string `json:"client_prefix"`
 	ExpiresAt             string `json:"expires_at"`
 	MaxBytes              int64  `json:"max_bytes"`

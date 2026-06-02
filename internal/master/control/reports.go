@@ -19,29 +19,14 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		return HeartbeatResult{}, err
 	}
 	defer tx.Rollback()
-	var last uint64
-	if err := tx.QueryRowContext(ctx, `SELECT last_message_sequence FROM node_control_sessions
-		WHERE id = ? AND disconnected_at IS NULL`, session.ID).Scan(&last); err != nil {
+	last, err := r.currentSequence(session)
+	if err != nil {
 		return HeartbeatResult{}, err
 	}
 	if seq <= last {
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_inventory_reports
-		(id, node_id, revision, complete, item_count, result, request_id, reported_at)
-		VALUES (?, ?, ?, ?, ?, 'accepted', ?, ?)
-		ON CONFLICT(node_id, revision) DO UPDATE SET
-		complete = excluded.complete,
-		item_count = excluded.item_count,
-		result = excluded.result,
-		request_id = excluded.request_id,
-		reported_at = excluded.reported_at`,
-		mustID(), session.NodeID, report.Revision, boolInt(report.Complete),
-		len(report.Items), session.RequestID, now)
-	if err != nil {
-		return HeartbeatResult{}, err
-	}
 	for _, item := range report.Items {
 		if err := acceptInventoryItem(ctx, tx, session.NodeID, item, now); err != nil {
 			return HeartbeatResult{}, err
@@ -63,9 +48,18 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 				slog.Bool("routing_ready", ready))
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET
-		last_message_sequence = ? WHERE id = ?`, seq, session.ID)
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
+	if err := r.updateSequence(session, seq); err != nil {
+		return HeartbeatResult{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return HeartbeatResult{}, err
+	}
+	r.runtime().MarkInventory(session.NodeID, runtimeInventoryReport{
+		Revision: int(report.Revision), Complete: report.Complete,
+		ItemCount: len(report.Items), Result: "accepted",
+		RequestID: session.RequestID, Reported: now, Valid: true,
+	})
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, nil
 }
 
 func acceptInventoryItem(ctx context.Context, tx interface {
@@ -110,44 +104,33 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	defer tx.Rollback()
-	var last uint64
-	if err := tx.QueryRowContext(ctx, `SELECT last_message_sequence FROM node_control_sessions
-		WHERE id = ? AND disconnected_at IS NULL`, session.ID).Scan(&last); err != nil {
+	last, err := r.currentSequence(session)
+	if err != nil {
 		return HeartbeatResult{}, err
 	}
 	if seq <= last {
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_pressure_reports
-		(id, node_id, pressure_ratio, active_downloads, free_bytes, request_id, reported_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		mustID(), session.NodeID, ratio, report.ActiveDownloads,
-		report.FreeBytes, session.RequestID, now)
-	if err != nil {
-		return HeartbeatResult{}, err
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_heartbeats
-		(id, node_id, state, pressure_ratio, active_downloads, free_bytes, reported_at)
-		VALUES (?, ?, 'syncing', ?, ?, ?, ?)`,
-		mustID(), session.NodeID, ratio, report.ActiveDownloads, report.FreeBytes, now)
-	if err != nil {
-		return HeartbeatResult{}, err
-	}
-	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET
-		last_message_sequence = ?, last_heartbeat_at = ? WHERE id = ?`, seq, now, session.ID)
-	if err != nil {
+	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
 		last_heartbeat_at = ?, updated_at = ? WHERE id = ?`,
 		now, now, session.NodeID)
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
-}
-
-func boolInt(v bool) int {
-	if v {
-		return 1
+	if err != nil {
+		return HeartbeatResult{}, err
 	}
-	return 0
+	if err := tx.Commit(); err != nil {
+		return HeartbeatResult{}, err
+	}
+	r.runtime().MarkPressure(session.NodeID, runtimePressureReport{
+		PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
+		FreeBytes: report.FreeBytes, RequestID: session.RequestID, ReportedAt: now, Valid: true,
+	})
+	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
+		State: "syncing", PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
+		FreeBytes: report.FreeBytes, ReportedAt: now, Valid: true,
+	})
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, nil
 }

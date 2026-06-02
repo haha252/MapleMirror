@@ -14,8 +14,18 @@ import (
 )
 
 type Repository struct {
-	DB     *sql.DB
-	Logger *logging.Logger
+	DB      *sql.DB
+	Logger  *logging.Logger
+	Runtime *RuntimeStore
+}
+
+var defaultRuntime = NewRuntimeStore()
+
+func (r Repository) runtime() *RuntimeStore {
+	if r.Runtime != nil {
+		return r.Runtime
+	}
+	return defaultRuntime
 }
 
 type PairingCode struct {

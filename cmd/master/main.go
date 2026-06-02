@@ -92,14 +92,15 @@ func main() {
 	defer database.Close()
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
 
-	repo := mastercontrol.Repository{DB: database, Logger: logger}
+	runtime := mastercontrol.NewRuntimeStore()
+	repo := mastercontrol.Repository{DB: database, Logger: logger, Runtime: runtime}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
-	syncService := startMirrorSync(cfg, projectLoader, database, logger)
+	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, logger)
 	startConsolePairing(cfg, repo, logger)
 
-	publicHandler, err := publicHandler(cfg, quota, projects, *projectsPath, location, database, logger)
+	publicHandler, err := publicHandler(cfg, quota, projects, *projectsPath, location, database, runtime, logger)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -125,13 +126,13 @@ func handleLoad(err error, name string, created *bool) bool {
 	return false
 }
 
-func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *sql.DB, logger *logging.Logger) mirrorsync.Service {
+func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger) mirrorsync.Service {
 	interval, _ := time.ParseDuration(cfg.Scan.Interval)
 	token := ""
 	if cfg.Scan.GitHubTokenEnv != "" {
 		token = os.Getenv(cfg.Scan.GitHubTokenEnv)
 	}
-	store := mirrorsync.Store{DB: db}
+	store := mirrorsync.Store{DB: db, Runtime: runtime}
 	service := mirrorsync.Service{
 		Scanner: mirrorsync.Scanner{
 			Store: store, GitHub: mirrorsync.HTTPGitHubClient{Token: token}, Logger: logger,
@@ -144,7 +145,7 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *
 	return service
 }
 
-func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, projectsPath string, loc *time.Location, db *sql.DB, logger *logging.Logger) (http.Handler, error) {
+func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, projectsPath string, loc *time.Location, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger) (http.Handler, error) {
 	signer, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)
 	if err != nil {
 		return nil, err
@@ -154,7 +155,8 @@ func publicHandler(cfg config.Master, quota config.Quota, projects config.Projec
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
-		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc, cfg.Proxy.TrustedCIDRs, projects, projectsPath, logger)
+		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
+		cfg.Proxy.TrustedCIDRs, projects, projectsPath, runtime, logger)
 	if err != nil {
 		return nil, err
 	}

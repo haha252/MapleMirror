@@ -123,6 +123,7 @@ func seedTrafficAuth(t *testing.T, repo Repository) {
 	exec(`INSERT INTO node_control_sessions
 		(id, node_id, certificate_id, request_id, connected_at, last_message_sequence)
 		VALUES ('sess-1', 'node-1', 'cert-1', 'req', ?, 1)`, now)
+	repo.runtime().StartSession(Session{ID: "sess-1", NodeID: "node-1", CertificateID: "cert-1", RequestID: "req"})
 	exec(`INSERT INTO download_authorizations
 		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at,
 		max_bytes, range_limit, status, request_id)

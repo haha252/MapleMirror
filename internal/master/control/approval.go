@@ -160,7 +160,11 @@ func (r Repository) RotateCertificate(ctx context.Context, nodeID, requestID, ad
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	r.runtime().CloseNodeSessions(nodeID)
+	return nil
 }
 
 func CertRecord(nodeID, certID string, cert *x509.Certificate, pemText, caChain string) SignedCertificate {

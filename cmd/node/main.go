@@ -95,7 +95,7 @@ func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger) http.Handl
 		return nil
 	}
 	return &files.Handler{DB: db, Storage: cfg.Storage.Directory, NodeID: nodeID,
-		Signer: signer, TrustedCIDRs: cfg.Proxy.TrustedCIDRs}
+		Signer: signer, TrustedCIDRs: cfg.Proxy.TrustedCIDRs, Logger: logger}
 }
 
 func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {

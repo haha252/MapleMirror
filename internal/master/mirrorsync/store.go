@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"time"
 
+	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/protocol"
 )
 
-type Store struct{ DB *sql.DB }
+type Store struct {
+	DB      *sql.DB
+	Runtime *mastercontrol.RuntimeStore
+}
 
 type ScanSummary struct {
 	ScanID           string `json:"scan_id"`
@@ -130,15 +134,24 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 		WHERE node_id = ? AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`, nodeID)
 	out.FailedTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND state = 'failed'`, nodeID)
-	var latestComplete int
-	_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(revision, 0), COALESCE(complete, 0)
-		FROM node_inventory_reports WHERE node_id = ?
-		ORDER BY reported_at DESC LIMIT 1`, nodeID).
-		Scan(&out.LatestInventoryRevision, &latestComplete)
-	out.LatestInventoryComplete = latestComplete == 1
-	out.HasInventoryReport = out.LatestInventoryRevision > 0
-	out.ActiveControlSession = exists(ctx, s.DB, `SELECT 1 FROM node_control_sessions
-		WHERE node_id = ? AND disconnected_at IS NULL`, nodeID)
+	if s.Runtime != nil {
+		out.LatestInventoryRevision, out.LatestInventoryComplete, out.HasInventoryReport =
+			s.Runtime.LatestInventoryState(nodeID)
+	} else {
+		var latestComplete int
+		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(revision, 0), COALESCE(complete, 0)
+			FROM node_inventory_reports WHERE node_id = ?
+			ORDER BY reported_at DESC LIMIT 1`, nodeID).
+			Scan(&out.LatestInventoryRevision, &latestComplete)
+		out.LatestInventoryComplete = latestComplete == 1
+		out.HasInventoryReport = out.LatestInventoryRevision > 0
+	}
+	if s.Runtime != nil {
+		out.ActiveControlSession = s.Runtime.ActiveSession(nodeID)
+	} else {
+		out.ActiveControlSession = exists(ctx, s.DB, `SELECT 1 FROM node_control_sessions
+			WHERE node_id = ? AND disconnected_at IS NULL`, nodeID)
+	}
 	out.RoutingReadyReason, out.RoutingReadyDetail = syncStatusReason(out)
 	return out, nil
 }

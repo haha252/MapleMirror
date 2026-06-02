@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"mirror-server/internal/downloadtoken"
+	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/requestid"
 )
 
@@ -19,6 +20,7 @@ type Store struct {
 	Challenges *challengeMemory
 	MaxBytes   maxBytesPolicy
 	RangeLimit int
+	Runtime    *mastercontrol.RuntimeStore
 }
 
 type ProjectSummary struct {

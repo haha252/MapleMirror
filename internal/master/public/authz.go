@@ -74,16 +74,21 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		return
 	}
 	if s.Logger != nil {
-		s.Logger.Debug(r.Context(), "下载令牌已签发",
+		s.Logger.Info(r.Context(), "下载令牌已签发",
 			slog.String("request_id", requestID(r)),
 			slog.String("authorization_id", auth.Claims.AuthorizationID),
 			slog.String("asset_id", in.AssetID),
+			slog.String("client_ip", s.clientIP(r)),
 			slog.String("node_id", debug.NodeID),
+			slog.String("node_name", debug.NodeName),
 			slog.String("project_id", debug.ProjectID),
+			slog.String("system", debug.System),
+			slog.String("architecture", debug.Architecture),
 			slog.String("client_prefix", debug.ClientPrefix),
 			slog.String("expires_at", debug.ExpiresAt),
 			slog.Int64("max_bytes", debug.MaxBytes),
 			slog.Int("range_limit", debug.RangeLimit),
+			slog.Any("request_remaining_tokens", remainingTokens(debug.RequestRemainingMicrounits)),
 			slog.Any("request_remaining_microunits", debug.RequestRemainingMicrounits),
 			slog.Any("traffic_remaining_bytes", debug.TrafficRemainingBytes))
 	}
@@ -103,6 +108,14 @@ func (s Server) validSolution(c Challenge, solution string) bool {
 	}
 	n, err := strconv.Atoi(solution)
 	return err == nil && n >= 0 && validAltchaSolution(c, solution)
+}
+
+func remainingTokens(microunits map[string]int64) map[string]int64 {
+	out := make(map[string]int64, len(microunits))
+	for scope, value := range microunits {
+		out[scope] = value / tokenUnit
+	}
+	return out
 }
 
 func (s Server) authorization(w http.ResponseWriter, r *http.Request) {

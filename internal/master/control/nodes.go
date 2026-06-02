@@ -44,6 +44,7 @@ func (r Repository) DisableNode(ctx context.Context, nodeID, requestID, reason s
 		revoked_at = ? WHERE node_id = ? AND status = 'active'`, now, nodeID)
 	_, _ = r.DB.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
 		close_reason = '管理员禁用' WHERE node_id = ? AND disconnected_at IS NULL`, now, nodeID)
+	r.runtime().CloseNodeSessions(nodeID)
 	return r.Audit(ctx, "node.disable", "node", nodeID, "success", requestID, reason, "")
 }
 
@@ -77,37 +78,13 @@ func (r Repository) Audit(ctx context.Context, op, targetType, targetID, result,
 }
 
 func (r Repository) LatestHeartbeat(ctx context.Context, nodeID string) (map[string]any, error) {
-	var state, reported string
-	var pressure float64
-	var active, free int64
-	err := r.DB.QueryRowContext(ctx, `SELECT state, pressure_ratio,
-		active_downloads, free_bytes, reported_at FROM node_heartbeats
-		WHERE node_id = ? ORDER BY reported_at DESC LIMIT 1`, nodeID).
-		Scan(&state, &pressure, &active, &free, &reported)
-	return map[string]any{"state": state, "pressure_ratio": pressure,
-		"active_downloads": active, "free_bytes": free, "reported_at": reported}, err
+	return r.runtime().LatestHeartbeat(nodeID)
 }
 
 func (r Repository) LatestInventoryReport(ctx context.Context, nodeID string) (map[string]any, error) {
-	var revision, complete, count int
-	var result, requestID, reported string
-	err := r.DB.QueryRowContext(ctx, `SELECT revision, complete, item_count,
-		result, request_id, reported_at FROM node_inventory_reports
-		WHERE node_id = ? ORDER BY reported_at DESC LIMIT 1`, nodeID).
-		Scan(&revision, &complete, &count, &result, &requestID, &reported)
-	return map[string]any{"revision": revision, "complete": complete == 1,
-		"item_count": count, "result": result, "request_id": requestID,
-		"reported_at": reported}, err
+	return r.runtime().LatestInventoryReport(nodeID)
 }
 
 func (r Repository) LatestPressureReport(ctx context.Context, nodeID string) (map[string]any, error) {
-	var pressure float64
-	var active, free int64
-	var requestID, reported string
-	err := r.DB.QueryRowContext(ctx, `SELECT pressure_ratio, active_downloads,
-		free_bytes, request_id, reported_at FROM node_pressure_reports
-		WHERE node_id = ? ORDER BY reported_at DESC LIMIT 1`, nodeID).
-		Scan(&pressure, &active, &free, &requestID, &reported)
-	return map[string]any{"pressure_ratio": pressure, "active_downloads": active,
-		"free_bytes": free, "request_id": requestID, "reported_at": reported}, err
+	return r.runtime().LatestPressureReport(nodeID)
 }

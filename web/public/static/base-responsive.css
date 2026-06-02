@@ -1,0 +1,33 @@
+@media (max-width: 760px) {
+  .site-header {
+    position: sticky;
+    inset: auto;
+    top: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px;
+    background: var(--bg);
+    pointer-events: auto;
+  }
+  .site-header__left {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 6px;
+    padding: 7px;
+  }
+  .theme-tools {
+    flex: 0 0 auto;
+    gap: 4px;
+    padding: 7px;
+  }
+  .site-brand { gap: 7px; }
+  .site-brand span { max-width: 74px; overflow: hidden; text-overflow: ellipsis; }
+  .site-nav { flex: 0 1 auto; min-width: 0; }
+  .site-nav a { min-width: 32px; width: 32px; height: 32px; padding: 0; }
+  .icon-button { width: 32px; height: 32px; }
+  .site-nav span { display: none; }
+  .site-main { padding-top: 20px; }
+  .site-footer { align-items: flex-start; flex-direction: column; margin-top: 0; }
+}

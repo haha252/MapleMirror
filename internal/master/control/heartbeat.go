@@ -22,9 +22,7 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		return HeartbeatResult{}, err
 	}
 	defer tx.Rollback()
-	var last uint64
-	err = tx.QueryRowContext(ctx, `SELECT last_message_sequence FROM node_control_sessions
-		WHERE id = ? AND disconnected_at IS NULL`, session.ID).Scan(&last)
+	last, err := r.currentSequence(session)
 	if err != nil {
 		return HeartbeatResult{}, fmt.Errorf("控制会话不可用")
 	}
@@ -32,23 +30,24 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET
-		last_message_sequence = ?, last_heartbeat_at = ? WHERE id = ?`, seq, now, session.ID)
-	if err != nil {
-		return HeartbeatResult{}, err
-	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
 		last_heartbeat_at = ?, public_download_base_url = ?, updated_at = ? WHERE id = ?`,
 		now, downloadBaseURL, now, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_heartbeats
-		(id, node_id, state, pressure_ratio, active_downloads, free_bytes, reported_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		mustID(), session.NodeID, hb.Status, hb.Pressure.Ratio,
-		hb.ActiveDownloads, hb.FreeBytes, now)
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
+	if err := r.updateSequence(session, seq); err != nil {
+		return HeartbeatResult{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return HeartbeatResult{}, err
+	}
+	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
+		State: hb.Status, PressureRatio: hb.Pressure.Ratio,
+		ActiveDownloads: int64(hb.ActiveDownloads), FreeBytes: hb.FreeBytes,
+		ReportedAt: now, Valid: true,
+	})
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, nil
 }
 
 func normalizedPublicDownloadBaseURL(value string) string {
@@ -101,6 +100,9 @@ func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
+	}
+	for _, id := range ids {
+		r.runtime().CloseNodeSessions(id)
 	}
 	return int64(len(ids)), nil
 }

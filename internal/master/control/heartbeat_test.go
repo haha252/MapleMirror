@@ -29,6 +29,15 @@ func TestHeartbeatKeepsNodeNonRoutable(t *testing.T) {
 	if err := repo.DB.QueryRow("SELECT public_download_base_url FROM nodes WHERE id = ?", session.NodeID).Scan(&downloadURL); err != nil || downloadURL != "https://node-1.example.com" {
 		t.Fatalf("节点公网下载地址未写入：url=%q err=%v", downloadURL, err)
 	}
+	var heartbeatRows int
+	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_heartbeats").Scan(&heartbeatRows)
+	if heartbeatRows != 0 {
+		t.Fatalf("心跳摘要不应写入 SQLite 历史表，rows=%d", heartbeatRows)
+	}
+	latest, err := repo.LatestHeartbeat(ctx, session.NodeID)
+	if err != nil || latest["free_bytes"] != int64(100) {
+		t.Fatalf("runtime 心跳摘要不符合预期 latest=%v err=%v", latest, err)
+	}
 }
 
 func TestHeartbeatWithInvalidPublicDownloadURLKeepsControlAlive(t *testing.T) {

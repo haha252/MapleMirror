@@ -10,6 +10,7 @@ import (
 	"mirror-server/internal/config"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
+	mastercontrol "mirror-server/internal/master/control"
 )
 
 type Server struct {
@@ -28,7 +29,10 @@ type Server struct {
 	PageViews        *pageViewTracker
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration, altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string, projects config.Projects, projectsPath string, logger *logging.Logger) (Server, error) {
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration,
+	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
+	projects config.Projects, projectsPath string, runtime *mastercontrol.RuntimeStore,
+	logger *logging.Logger) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
@@ -36,7 +40,9 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 	challenges := newChallengeMemory()
 	challenges.startCleanup(minDuration(altchaTTL, apiTTL, time.Minute))
 	return Server{
-		Store:            Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc, Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota), RangeLimit: quota.RangeConcurrencyLimit},
+		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
+			Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota),
+			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime},
 		Signer:           signer,
 		ALTCHATTL:        altchaTTL,
 		ALTCHADifficulty: altchaDifficulty,
