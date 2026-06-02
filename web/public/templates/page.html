@@ -48,6 +48,7 @@
     <h1>{{.Title}}</h1>
     {{if .Subtitle}}<p class="page-subtitle">{{.Subtitle}}</p>{{end}}
   </div>
+  {{if .Notice}}<div class="page-notice" role="status" aria-live="polite">{{.Notice}}</div>{{end}}
   {{.Body}}
 </main>
 <footer class="site-footer">

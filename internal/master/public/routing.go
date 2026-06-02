@@ -9,5 +9,4 @@ const routableAssetReplicaSQL = `
 			AND n.state NOT IN ('disabled', 'offline')
 			AND n.last_heartbeat_at IS NOT NULL
 			AND n.last_heartbeat_at != ''
-			AND n.public_download_base_url != ''
-			AND ni.verified_at >= n.last_heartbeat_at`
+			AND n.public_download_base_url != ''`

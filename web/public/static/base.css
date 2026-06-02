@@ -178,6 +178,20 @@ tr:last-child td { border-bottom: 0; }
 .page-title-row { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 20px; }
 .page-title-row h1 { margin-bottom: 0; font-size: 34px; line-height: 1.15; }
 .page-subtitle { margin-bottom: 0; color: var(--muted); font-size: 16px; }
+.page-notice {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, #f5c542 70%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #fff4c2 72%, var(--panel));
+  color: #8a5600;
+  box-shadow: var(--shadow);
+}
+:root[data-theme="dark"] .page-notice {
+  border-color: color-mix(in srgb, #f5c542 58%, var(--border));
+  background: color-mix(in srgb, #3a2b06 82%, var(--panel));
+  color: #ffd98a;
+}
 .theme-toggle, .download-button {
   border: 0;
   border-radius: 8px;

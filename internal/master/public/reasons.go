@@ -38,7 +38,7 @@ func (s Store) projectUnavailableInfo(ctx context.Context, projectID string) rea
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state NOT IN ('disabled', 'offline')
 			AND (n.last_heartbeat_at IS NULL OR n.last_heartbeat_at = ''
-				OR ni.verified_at < n.last_heartbeat_at)
+				OR n.public_download_base_url = '')
 			THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'offline' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'disabled' THEN 1 ELSE 0 END), 0),
@@ -88,7 +88,7 @@ func (s Store) assetUnavailableInfo(ctx context.Context, assetID string) reasonI
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state NOT IN ('disabled', 'offline')
 			AND (n.last_heartbeat_at IS NULL OR n.last_heartbeat_at = ''
-				OR ni.verified_at < n.last_heartbeat_at)
+				OR n.public_download_base_url = '')
 			THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'offline' THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN ni.state = 'verified' AND n.state = 'disabled' THEN 1 ELSE 0 END), 0),

@@ -25,6 +25,9 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	if !s.consumeChallenge(c.ID) {
 		return IssuedAuthorization{}, AuthorizationDebug{}, sql.ErrNoRows
 	}
+	if err := s.waitForRoutableAsset(ctx, c.AssetID); err != nil {
+		return IssuedAuthorization{}, AuthorizationDebug{}, err
+	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, err

@@ -10,6 +10,7 @@ type pageData struct {
 	Title        string
 	BrowserTitle string
 	Subtitle     string
+	Notice       string
 	Description  string
 	BodyClass    string
 	Body         template.HTML

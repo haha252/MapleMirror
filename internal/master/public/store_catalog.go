@@ -49,8 +49,7 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 				AND n.public_download_base_url != ''
 			WHERE ni.asset_id = a.id AND ni.state = 'verified'
 			AND ni.local_digest_sha256 = a.digest_sha256
-			AND ni.size_bytes = a.size_bytes
-			AND ni.verified_at >= n.last_heartbeat_at) AS available,
+			AND ni.size_bytes = a.size_bytes) AS available,
 		COALESCE(r.published_at, '')
 		FROM assets a JOIN releases r ON r.id = a.release_id
 		WHERE r.project_id = ? AND r.selected = 1 AND a.service_state = 'candidate'
@@ -98,8 +97,7 @@ func (s Store) DownloadAsset(ctx context.Context, assetID string) (DownloadAsset
 				AND n.public_download_base_url != ''
 			WHERE ni.asset_id = a.id AND ni.state = 'verified'
 			AND ni.local_digest_sha256 = a.digest_sha256
-			AND ni.size_bytes = a.size_bytes
-			AND ni.verified_at >= n.last_heartbeat_at) AS available
+			AND ni.size_bytes = a.size_bytes) AS available
 		FROM assets a JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id
 		WHERE a.id = ? AND p.enabled = 1 AND r.selected = 1
