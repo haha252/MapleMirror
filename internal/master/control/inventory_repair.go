@@ -15,8 +15,12 @@ func markMissingInventory(ctx context.Context, tx *sql.Tx, nodeID, now string, r
 	if err != nil {
 		return err
 	}
+	current, err := loadInventoryAt(ctx, tx, nodeID, now)
+	if err != nil {
+		return err
+	}
 	for _, assetID := range targets {
-		if reported[assetID] {
+		if reported[assetID] || current[assetID] {
 			continue
 		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO node_inventory
@@ -31,6 +35,24 @@ func markMissingInventory(ctx context.Context, tx *sql.Tx, nodeID, now string, r
 		}
 	}
 	return nil
+}
+
+func loadInventoryAt(ctx context.Context, tx *sql.Tx, nodeID, verifiedAt string) (map[string]bool, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT asset_id FROM node_inventory
+		WHERE node_id = ? AND verified_at = ?`, nodeID, verifiedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var assetID string
+		if err := rows.Scan(&assetID); err != nil {
+			return nil, err
+		}
+		out[assetID] = true
+	}
+	return out, rows.Err()
 }
 
 func createRepairTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
@@ -49,6 +71,22 @@ func createRepairTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int
 		}
 	}
 	return generated, nil
+}
+
+func clearSatisfiedDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
+	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'cancelled',
+		error_message = '库存已验证，无需重新下载', updated_at = ?
+		WHERE node_id = ? AND task_type = 'asset_download'
+		AND state IN ('pending', 'retry_wait', 'failed')
+		AND asset_id IN (
+			SELECT asset_id FROM node_inventory
+			WHERE node_id = ? AND state = 'verified'
+		)`, now, nodeID, nodeID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
 }
 
 func loadRepairTargets(ctx context.Context, tx *sql.Tx, nodeID string) ([]repairTarget, error) {
@@ -100,6 +138,17 @@ func insertRepairTask(ctx context.Context, tx *sql.Tx, target repairTarget, now 
 		target.NodeID, target.AssetID).Scan(&exists)
 	if err != nil || exists > 0 {
 		return false, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+		error_message = NULL, attempts = 0, retry_after = NULL, completed_at = NULL,
+		updated_at = ? WHERE node_id = ? AND asset_id = ?
+		AND task_type = 'asset_download' AND state = 'failed'`,
+		now, target.NodeID, target.AssetID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := result.RowsAffected(); n > 0 {
+		return true, nil
 	}
 	id, err := newID()
 	if err != nil {

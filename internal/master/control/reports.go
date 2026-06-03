@@ -26,7 +26,11 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	if seq <= last {
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	reportedAt := report.GeneratedAt.UTC()
+	if reportedAt.IsZero() {
+		reportedAt = time.Now().UTC()
+	}
+	now := reportedAt.Format(time.RFC3339Nano)
 	reported := make(map[string]bool, len(report.Items))
 	for _, item := range report.Items {
 		reported[item.AssetID] = true
@@ -36,6 +40,10 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	}
 	if report.Complete {
 		if err := markMissingInventory(ctx, tx, session.NodeID, now, reported); err != nil {
+			return HeartbeatResult{}, err
+		}
+		clearedTasks, err := clearSatisfiedDownloadTasks(ctx, tx, session.NodeID, now)
+		if err != nil {
 			return HeartbeatResult{}, err
 		}
 		generatedTasks, err := createRepairTasks(ctx, tx, session.NodeID, now)
@@ -55,6 +63,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 				slog.Int("missing_targets", missing),
 				slog.Int("running_tasks", running),
 				slog.Int("generated_repair_tasks", generatedTasks),
+				slog.Int("cleared_satisfied_tasks", clearedTasks),
 				slog.Bool("routing_ready", ready))
 		}
 	}

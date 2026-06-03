@@ -26,7 +26,9 @@ type MetricStat struct {
 type ResourceRank struct {
 	ProjectName   string
 	Version       string
+	FileName      string
 	Architecture  string
+	System        string
 	DownloadCount int64
 }
 

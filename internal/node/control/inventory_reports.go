@@ -39,26 +39,26 @@ func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence ui
 		revision = 1
 	}
 	chunks := inventoryChunks(items)
+	generatedAt := time.Now().UTC()
 	for i, chunk := range chunks {
 		reportID, _ := requestid.New()
 		report := protocol.InventoryReport{
 			ReportID:    reportID,
 			Revision:    revision,
-			GeneratedAt: time.Now().UTC(),
+			GeneratedAt: generatedAt,
 			Complete:    i == len(chunks)-1,
 			Items:       chunk,
 		}
 		if err := c.sendInventoryReport(conn, reqID, sequence, report); err != nil {
 			return sequence, err
 		}
-		if err := c.storeInventoryCursor(inventoryCursor{
-			NextRevision:      revision + 1,
-			LastAckedRevision: revision,
-		}); err != nil {
-			return sequence, err
-		}
 		sequence++
-		revision++
+	}
+	if err := c.storeInventoryCursor(inventoryCursor{
+		NextRevision:      revision + 1,
+		LastAckedRevision: revision,
+	}); err != nil {
+		return sequence, err
 	}
 	return sequence, nil
 }

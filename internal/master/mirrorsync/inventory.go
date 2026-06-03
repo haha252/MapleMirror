@@ -58,6 +58,16 @@ func insertTask(ctx context.Context, tx *sql.Tx, nodeID, assetID, taskType, now 
 	if err != nil || exists > 0 {
 		return err
 	}
+	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+		error_message = NULL, attempts = 0, retry_after = NULL, completed_at = NULL,
+		updated_at = ? WHERE node_id = ? AND asset_id = ? AND task_type = ?
+		AND state = 'failed'`, now, nodeID, assetID, taskType)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n > 0 {
+		return nil
+	}
 	id, err := newID()
 	if err != nil {
 		return err

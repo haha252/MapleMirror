@@ -39,15 +39,16 @@ func (s Store) loadMetric(ctx context.Context, kind, previousStart, start, end s
 }
 
 func (s Store) TopResources(ctx context.Context, start, end string, limit int) ([]ResourceRank, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT p.name, r.tag_name, a.architecture,
+	rows, err := s.DB.QueryContext(ctx, `SELECT p.name, r.tag_name, a.file_name, a.architecture,
+		COALESCE(a.system, '') AS system,
 		COALESCE(SUM(das.authorization_count), 0) AS downloads
 		FROM daily_asset_stats das
 		JOIN assets a ON a.id = das.asset_id
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id
 		WHERE das.stat_day BETWEEN ? AND ?
-		GROUP BY das.asset_id, p.name, r.tag_name, a.architecture
-		ORDER BY downloads DESC, p.name, r.tag_name, a.architecture LIMIT ?`, start, end, limit)
+		GROUP BY p.id, p.name, r.tag_name, a.file_name, a.architecture, COALESCE(a.system, '')
+		ORDER BY downloads DESC, p.name, r.tag_name, a.architecture, a.file_name LIMIT ?`, start, end, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +56,8 @@ func (s Store) TopResources(ctx context.Context, start, end string, limit int) (
 	var out []ResourceRank
 	for rows.Next() {
 		var item ResourceRank
-		if err := rows.Scan(&item.ProjectName, &item.Version, &item.Architecture, &item.DownloadCount); err != nil {
+		if err := rows.Scan(&item.ProjectName, &item.Version, &item.FileName,
+			&item.Architecture, &item.System, &item.DownloadCount); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

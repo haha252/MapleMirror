@@ -110,6 +110,10 @@ func TestSendFullInventoryReportSplitsIntoChunks(t *testing.T) {
 				t.Errorf("chunk %d expected %d items, got %d", idx, expected, len(report.Items))
 				return
 			}
+			if report.Revision != 1 {
+				t.Errorf("chunk %d expected revision 1, got %d", idx, report.Revision)
+				return
+			}
 			if report.Complete != (idx == 1) {
 				t.Errorf("chunk %d complete mismatch", idx)
 				return
