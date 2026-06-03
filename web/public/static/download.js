@@ -38,7 +38,9 @@
   }
 
   function preferredAsset(items) { return selectors.preferredAsset(items); }
-  function preferredAssetForUser(items) { return selectors.preferredAssetForUser(items); }
+  function preferredAssetForUser(items, useArchitecture) {
+    return selectors.preferredAssetForUser(items, useArchitecture);
+  }
 
   function buildCard(project) {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
@@ -53,6 +55,7 @@
     const versionSelect = card.querySelector(".version-select");
     const systemField = card.querySelector(".system-field");
     const systemSelect = card.querySelector(".system-select");
+    const archField = card.querySelector(".architecture-field");
     const archSelect = card.querySelector(".architecture-select");
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
@@ -84,8 +87,12 @@
       if (project.system_match_enabled) {
         list = list.filter((item) => item.system === systemSelect.value);
       }
-      const choice = preferredAssetForUser(list);
+      const choice = preferredAssetForUser(list, !!project.architecture_match_enabled);
       archSelect.innerHTML = "";
+      if (!project.architecture_match_enabled) {
+        refreshDetails(choice);
+        return;
+      }
       list.forEach((item) => {
         const option = document.createElement("option");
         option.value = item.asset_id;
@@ -93,7 +100,7 @@
         if (choice && choice.asset_id === item.asset_id) option.selected = true;
         archSelect.appendChild(option);
       });
-      refreshDetails();
+      refreshDetails(choice);
     }
 
     function refreshSystems() {
@@ -116,8 +123,9 @@
       refreshArchitectures();
     }
 
-    function refreshDetails() {
-      const selected = project.assets.find((item) => item.asset_id === archSelect.value) ||
+    function refreshDetails(preferred) {
+      const selected = preferred ||
+        project.assets.find((item) => item.asset_id === archSelect.value) ||
         preferredAsset(project.assets);
       badge.textContent = selected ? " " + selected.version : "";
       if (!selected) {
@@ -138,9 +146,10 @@
     }
 
     if (project.system_match_enabled) systemField.hidden = false;
+    if (project.architecture_match_enabled) archField.hidden = false;
     versionSelect.addEventListener("change", refreshSystems);
     systemSelect.addEventListener("change", refreshArchitectures);
-    archSelect.addEventListener("change", refreshDetails);
+    archSelect.addEventListener("change", function () { refreshDetails(); });
     button.addEventListener("click", function () { startDownload(button); });
     refreshSystems();
     return card;

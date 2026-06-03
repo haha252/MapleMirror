@@ -20,6 +20,9 @@ func (s Store) SyncProjectConfig(ctx context.Context, projects config.Projects) 
 		if err := upsertProjectConfig(ctx, tx, project, now); err != nil {
 			return err
 		}
+		if err := upsertProjectScanState(ctx, tx, project, now); err != nil {
+			return err
+		}
 		seen = append(seen, project.ID)
 		if !project.Enabled {
 			if err := disableProjectTargets(ctx, tx, project.ID, now); err != nil {
@@ -91,9 +94,39 @@ func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now 
 			updated_at = ? WHERE id = ?`, now, id); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `UPDATE project_scan_state SET enabled = 0,
+			updated_at = ? WHERE project_id = ?`, now, id); err != nil {
+			return err
+		}
 		if err := disableProjectTargets(ctx, tx, id, now); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func upsertProjectScanState(ctx context.Context, tx *sql.Tx, project config.Project, now string) error {
+	hash := projectHash(project)
+	exists, previousHash, err := projectScanStateExists(ctx, tx, project.ID)
+	if err != nil {
+		return err
+	}
+	nextScan := any(nil)
+	if project.Enabled && (!exists || previousHash != hash) {
+		nextScan = now
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO project_scan_state
+		(project_id, enabled, config_hash, next_scan_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(project_id) DO UPDATE SET
+		enabled = excluded.enabled,
+		config_hash = excluded.config_hash,
+		next_scan_at = CASE
+			WHEN excluded.enabled = 0 THEN NULL
+			WHEN project_scan_state.config_hash != excluded.config_hash THEN excluded.next_scan_at
+			ELSE project_scan_state.next_scan_at
+		END,
+		updated_at = excluded.updated_at`,
+		project.ID, boolInt(project.Enabled), hash, nextScan, now)
+	return err
 }

@@ -77,7 +77,10 @@ func (s Service) Trigger(ctx context.Context, projectID, requestID string) (stri
 			slog.String("request_id", requestID),
 			slog.String("error", loadErr.Error()))
 	}
-	summary, err := s.Scanner.Scan(ctx, projects, projectID, requestID)
+	if projectID == "" {
+		return s.triggerAll(ctx, projects, requestID)
+	}
+	summary, err := s.scanProject(ctx, projects, projectID, requestID)
 	if s.Logger != nil {
 		fields := []slog.Attr{
 			slog.String("request_id", requestID),
@@ -97,39 +100,93 @@ func (s Service) Trigger(ctx context.Context, projectID, requestID string) (stri
 	return summary.ScanID, err
 }
 
+func (s Service) triggerAll(ctx context.Context, projects config.Projects, requestID string) (string, error) {
+	var firstScanID string
+	for _, project := range projects.Projects {
+		if !project.Enabled {
+			continue
+		}
+		summary, err := s.scanProject(ctx, projects, project.ID, requestID)
+		if firstScanID == "" {
+			firstScanID = summary.ScanID
+		}
+		if err != nil {
+			return firstScanID, err
+		}
+	}
+	return firstScanID, nil
+}
+
+func (s Service) scanProject(ctx context.Context, projects config.Projects, projectID, requestID string) (ScanSummary, error) {
+	summary, err := s.Scanner.Scan(ctx, projects, projectID, requestID)
+	s.scheduleNextScan(ctx, summary.ProjectID, err)
+	return summary, err
+}
+
+func (s Service) scheduleNextScan(ctx context.Context, projectID string, scanErr error) {
+	if projectID == "" || s.Interval <= 0 {
+		return
+	}
+	delay := s.Interval + stableProjectJitter(projectID, s.Interval)
+	if scanErr != nil {
+		delay = time.Minute
+		if s.Interval < delay {
+			delay = s.Interval
+		}
+	}
+	next := time.Now().UTC().Add(delay).Format(time.RFC3339Nano)
+	if err := s.Scanner.Store.SetProjectNextScan(ctx, projectID, next); err != nil && s.Logger != nil {
+		s.Logger.Warn(ctx, "更新项目下次扫描时间失败",
+			slog.String("project_id", projectID),
+			slog.String("next_scan_at", next),
+			slog.String("error", err.Error()))
+	}
+}
+
 func (s Service) Run(ctx context.Context) {
 	if s.Interval <= 0 {
 		return
 	}
 	if s.Logger != nil {
-		s.Logger.Debug(ctx, "Release 扫描调度器启动", slog.String("interval", s.Interval.String()))
+		s.Logger.Debug(ctx, "Release 扫描调度器启动",
+			slog.String("project_interval", s.Interval.String()))
 	}
 	lastProjectState := s.projectFileState()
-	s.runOnce(ctx, "")
-	ticker := time.NewTicker(s.Interval)
-	reloadTicker := time.NewTicker(2 * time.Second)
+	s.runDue(ctx)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
-	defer reloadTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if s.Logger != nil {
-				s.Logger.Debug(ctx, "Release 扫描调度 tick", slog.String("interval", s.Interval.String()))
-			}
-			s.runOnce(ctx, "")
-			lastProjectState = s.projectFileState()
-		case <-reloadTicker.C:
 			nextProjectState := s.projectFileState()
 			if projectFileChanged(lastProjectState, nextProjectState) {
 				if s.Logger != nil {
 					s.Logger.Info(ctx, "检测到项目清单变更，立即触发 Release 扫描")
 				}
-				s.runOnce(ctx, "")
+				s.reloadProjects(ctx)
 			}
 			lastProjectState = nextProjectState
+			s.runDue(ctx)
 		}
+	}
+}
+
+func (s Service) runDue(ctx context.Context) {
+	if err := s.reloadProjects(ctx); err != nil {
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	ids, err := s.Scanner.Store.DueProjects(ctx, now)
+	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(ctx, "查询到期项目扫描失败", slog.String("error", err.Error()))
+		}
+		return
+	}
+	for _, projectID := range ids {
+		s.runOnce(ctx, projectID)
 	}
 }
 
@@ -139,6 +196,28 @@ func (s Service) runOnce(ctx context.Context, projectID string) {
 		s.Logger.Warn(ctx, "Release 扫描失败", slog.String("request_id", reqID),
 			slog.String("error", err.Error()))
 	}
+}
+
+func (s Service) reloadProjects(ctx context.Context) error {
+	if s.Projects == nil {
+		return nil
+	}
+	projects, err := s.Projects.Load()
+	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(ctx, "项目清单热重载失败，沿用上一次有效配置",
+				slog.String("error", err.Error()))
+		}
+		projects = s.Projects.Current()
+	}
+	if syncErr := s.Scanner.Store.SyncProjectConfig(ctx, projects); syncErr != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(ctx, "项目扫描状态同步失败",
+				slog.String("error", syncErr.Error()))
+		}
+		return syncErr
+	}
+	return nil
 }
 
 func (s Service) projectFileState() projectFileState {

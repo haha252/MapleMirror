@@ -16,7 +16,7 @@ import (
 )
 
 func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releaseID string, assets []GitHubAsset, logger *logging.Logger, now string) (int, int, error) {
-	archRE, err := regexp.Compile(project.ArchitectureRegex)
+	archRE, err := compileArchitectureRegex(project)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -53,11 +53,7 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 			rejected++
 			continue
 		}
-		matches := archRE.FindStringSubmatch(asset.Name)
-		arch := "None"
-		if len(matches) > 0 {
-			arch = matches[len(matches)-1]
-		}
+		arch := assetArchitecture(asset.Name, archRE)
 		system := assetSystem(asset.Name, systemRE)
 		assetID := fmt.Sprintf("%s:%d", releaseID, asset.ID)
 		_, err = tx.ExecContext(ctx, `INSERT INTO assets
@@ -117,11 +113,30 @@ func projectHash(project config.Project) string {
 		assetRulesHash(project.AssetInclude),
 		assetRulesHash(project.AssetExclude),
 		project.ArchitectureRegex,
+		fmt.Sprint(project.ArchitectureMatchEnabled),
 		fmt.Sprint(project.ArchitectureDefaultEnabled),
 		fmt.Sprint(project.SystemMatchEnabled),
 		project.SystemRegex,
 	}, "|")))
 	return hex.EncodeToString(sum[:])
+}
+
+func compileArchitectureRegex(project config.Project) (*regexp.Regexp, error) {
+	if !project.ArchitectureMatchEnabled {
+		return nil, nil
+	}
+	return regexp.Compile(project.ArchitectureRegex)
+}
+
+func assetArchitecture(name string, archRE *regexp.Regexp) string {
+	if archRE == nil {
+		return ""
+	}
+	matches := archRE.FindStringSubmatch(name)
+	if len(matches) == 0 {
+		return "None"
+	}
+	return matches[len(matches)-1]
 }
 
 func compileSystemRegex(project config.Project) (*regexp.Regexp, error) {

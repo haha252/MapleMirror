@@ -16,6 +16,7 @@ type downloadProjectView struct {
 	Available                  bool              `json:"available"`
 	UnavailableReason          string            `json:"unavailable_reason"`
 	IconURL                    string            `json:"icon_url"`
+	ArchitectureMatchEnabled   bool              `json:"architecture_match_enabled"`
 	ArchitectureDefaultEnabled bool              `json:"architecture_default_enabled"`
 	SystemMatchEnabled         bool              `json:"system_match_enabled"`
 	LatestPublishedAt          string            `json:"latest_published_at"`
@@ -145,6 +146,7 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 		Available:                  project.Available,
 		UnavailableReason:          project.UnavailableReason,
 		IconURL:                    "/static/project-icons/" + project.ProjectID,
+		ArchitectureMatchEnabled:   config.ArchitectureMatchEnabled,
 		ArchitectureDefaultEnabled: config.ArchitectureDefaultEnabled,
 		SystemMatchEnabled:         config.SystemMatchEnabled,
 		LatestPublishedAt:          displayDate(project.LatestPublishedAt),

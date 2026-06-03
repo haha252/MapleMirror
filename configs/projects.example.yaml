@@ -30,10 +30,12 @@ projects:
       - pattern: "(?i)(debug|source|unsigned)"
         type: regex
         required: false
-    # 架构正则只用于从已入选资产文件名提取展示架构，不再作为资产入选条件。
-    # 未命中时，数据库和下载页使用 None。
+    # 默认不区分架构；启用后 architecture_regex 只负责从已入选资产文件名提取展示架构。
+    # 未启用 architecture_match_enabled 时，architecture 保持空字符串，下载页不显示架构选择器。
+    # 启用后未命中时，数据库和下载页使用 None。
+    architecture_match_enabled: false
     architecture_regex: "(?i)(amd64|arm64|x86_64)"
-    # 兼容旧配置字段；当前架构正则未命中也会保留资产，因此通常不需要开启。
+    # 兼容旧配置字段；不决定是否识别或显示架构。
     architecture_default_enabled: false
     # 默认不区分系统；启用后 system_regex 只负责从文件名提取系统并规范化为 win/linux/darwin。
     # 未命中或无法规范化时，system 填充为 None；未启用 system_match_enabled 时 system 保持空字符串。

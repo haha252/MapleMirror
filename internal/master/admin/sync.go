@@ -18,7 +18,7 @@ func (s Server) syncScans(w http.ResponseWriter, r *http.Request) {
 			s.latestScan(w, r)
 			return
 		}
-		writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "接口不存在")
+		s.listScanStates(w, r)
 	default:
 		writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "接口不存在")
 	}
@@ -77,6 +77,22 @@ func (s Server) latestScan(w http.ResponseWriter, r *http.Request) {
 			slog.String("state", item.State))
 	}
 	writeOK(w, r, http.StatusOK, "最近扫描", item)
+}
+
+func (s Server) listScanStates(w http.ResponseWriter, r *http.Request) {
+	if s.SyncStore.DB == nil {
+		writeError(w, r, http.StatusConflict, "STATE_CONFLICT", "扫描服务未启用")
+		return
+	}
+	if _, ok := s.require(w, r, false); !ok {
+		return
+	}
+	items, err := s.SyncStore.ListProjectScanStates(r.Context())
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "CONTROL_INTERNAL_ERROR", "查询扫描状态失败")
+		return
+	}
+	writeOK(w, r, http.StatusOK, "项目扫描状态", map[string]any{"projects": items})
 }
 
 func (s Server) syncStatus(w http.ResponseWriter, r *http.Request, nodeID string) {

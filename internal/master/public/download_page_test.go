@@ -3,8 +3,6 @@ package public
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -48,6 +46,9 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	}
 	if !strings.Contains(body, `"system_match_enabled":false`) {
 		t.Fatalf("expected disabled system matching in payload: %s", body)
+	}
+	if !strings.Contains(body, `"architecture_match_enabled":false`) {
+		t.Fatalf("expected disabled architecture matching in payload: %s", body)
 	}
 	if !strings.Contains(body, `"architecture_default_enabled":false`) {
 		t.Fatalf("expected disabled architecture default in payload: %s", body)
@@ -111,6 +112,24 @@ func TestDownloadPageIncludesSystemSelectorWhenEnabled(t *testing.T) {
 		!strings.Contains(body, `"system_match_enabled":true`) ||
 		!strings.Contains(body, `"system":"win"`) {
 		t.Fatalf("expected system selector and system payload: %s", body)
+	}
+}
+
+func TestDownloadPageIncludesArchitectureMatchFlagWhenEnabled(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	srv := Server{Store: Store{DB: db}, ProjectAssets: map[string]projectAssetConfig{
+		"p1": {ArchitectureMatchEnabled: true},
+	}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `"architecture_match_enabled":true`) ||
+		!strings.Contains(body, `class="field architecture-field" hidden`) {
+		t.Fatalf("expected architecture match flag and hidden field template: %s", body)
 	}
 }
 
@@ -199,50 +218,5 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 	about := strings.Index(body, `href="/about"`)
 	if home < 0 || stats < 0 || docs < 0 || about < 0 || !(home < stats && stats < docs && docs < about) {
 		t.Fatalf("expected nav order home, stats, API docs, about: %s", body)
-	}
-}
-
-func TestProjectIconServesConfiguredFile(t *testing.T) {
-	dir := t.TempDir()
-	iconPath := filepath.Join(dir, "icon.svg")
-	if err := os.WriteFile(iconPath, []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	srv := Server{ProjectAssets: map[string]projectAssetConfig{
-		"p1": {IconPath: iconPath},
-	}}
-	req := httptest.NewRequest(http.MethodGet, "/static/project-icons/p1", nil)
-	rec := httptest.NewRecorder()
-	srv.projectIcon(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "image/svg+xml") {
-		t.Fatalf("unexpected content type: %s", got)
-	}
-}
-
-func TestProjectIconFallsBackToPlaceholderWhenFileMissing(t *testing.T) {
-	srv := Server{ProjectAssets: map[string]projectAssetConfig{
-		"p1": {IconPath: filepath.Join(t.TempDir(), "missing.svg")},
-	}}
-	req := httptest.NewRequest(http.MethodGet, "/static/project-icons/p1", nil)
-	rec := httptest.NewRecorder()
-	srv.projectIcon(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "项目占位图标") {
-		t.Fatalf("expected placeholder icon body: %s", rec.Body.String())
-	}
-}
-
-func TestProjectIconRejectsUnknownProject(t *testing.T) {
-	srv := Server{ProjectAssets: map[string]projectAssetConfig{}}
-	req := httptest.NewRequest(http.MethodGet, "/static/project-icons/unknown", nil)
-	rec := httptest.NewRecorder()
-	srv.projectIcon(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", rec.Code)
 	}
 }

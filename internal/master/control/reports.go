@@ -27,12 +27,21 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	reported := make(map[string]bool, len(report.Items))
 	for _, item := range report.Items {
+		reported[item.AssetID] = true
 		if err := acceptInventoryItem(ctx, tx, session.NodeID, item, now); err != nil {
 			return HeartbeatResult{}, err
 		}
 	}
 	if report.Complete {
+		if err := markMissingInventory(ctx, tx, session.NodeID, now, reported); err != nil {
+			return HeartbeatResult{}, err
+		}
+		generatedTasks, err := createRepairTasks(ctx, tx, session.NodeID, now)
+		if err != nil {
+			return HeartbeatResult{}, err
+		}
 		if err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
 			return HeartbeatResult{}, err
 		}
@@ -45,6 +54,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 				slog.Bool("complete", report.Complete),
 				slog.Int("missing_targets", missing),
 				slog.Int("running_tasks", running),
+				slog.Int("generated_repair_tasks", generatedTasks),
 				slog.Bool("routing_ready", ready))
 		}
 	}
@@ -76,9 +86,21 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 	if err != nil {
 		return err
 	}
+	localDigest := item.DigestSHA256
+	localSize := item.SizeBytes
 	state := "verified"
-	if item.DigestSHA256 != expectedDigest || item.SizeBytes != expectedSize {
+	switch item.LocalState {
+	case "missing":
+		state = "missing"
+		if localDigest == "" {
+			localSize = 0
+		}
+	case "mismatch":
 		state = "mismatch"
+	default:
+		if localDigest != expectedDigest || localSize != expectedSize {
+			state = "mismatch"
+		}
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
@@ -87,7 +109,7 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 		local_digest_sha256 = excluded.local_digest_sha256,
 		size_bytes = excluded.size_bytes, verified_at = excluded.verified_at,
 		state = excluded.state`,
-		nodeID, item.AssetID, item.DigestSHA256, item.SizeBytes, now, state)
+		nodeID, item.AssetID, localDigest, localSize, now, state)
 	return err
 }
 

@@ -373,7 +373,7 @@ M3 已在现有管理 API 上增加 Release 扫描、同步任务和库存对账
 
 字段规则：
 
-- `project_id` 可选；为空表示扫描 `projects.yaml` 中全部启用项目。
+- `project_id` 可选；为空表示按项目逐个扫描 `projects.yaml` 中全部启用项目，并为每个项目生成独立扫描记录。
 - 不允许传入任意仓库地址。
 - 不允许临时覆盖 `include_prerelease`、`retain_versions` 或资产过滤规则。
 
@@ -409,10 +409,17 @@ M3 已在现有管理 API 上增加 Release 扫描、同步任务和库存对账
 | `selected_releases` | 本轮选中的 Release 数 |
 | `accepted_assets` | 通过摘要门禁的资产数 |
 | `rejected_assets` | 摘要缺失、算法不符或过滤拒绝的资产数 |
-| `next_allowed_scan_at` | GitHub 限频退避时间，可空 |
+| `started_at` | 本次扫描开始时间 |
+| `completed_at` | 本次扫描完成时间，可空 |
+| `next_scan_at` | 该项目下一次自动扫描时间，可空 |
+| `last_scan_started_at` | 该项目最近一次扫描开始时间 |
+| `last_scan_completed_at` | 该项目最近一次扫描完成时间，可空 |
+| `last_error_message` | 最近失败摘要，可空 |
 | `request_id` | 任务关联请求 ID |
 
 响应不得返回 GitHub Token、完整外部错误正文或敏感请求头。
+
+`GET /api/admin/v1/sync/scans` 返回每个项目的扫描调度状态，响应数据包含 `projects` 数组。数组元素至少包含 `project_id`、`enabled`、`last_scan_started_at`、`last_scan_completed_at`、`last_scan_id`、`last_scan_state`、`next_scan_at`、`last_error_message` 和 `updated_at`。自动扫描以 `project_scan_state.next_scan_at` 为准，不再把所有启用项目集中到同一个全局 tick 扫描。
 
 ### 11.3 查询节点同步状态
 
@@ -444,7 +451,7 @@ M3 管理 API 可以展示同步就绪状态，但不得返回公共下载 URL�
 | `POST /api/admin/v1/nodes/{node_id}/sync-tasks/{task_id}/retry` | 高风险 | 重试失败或等待中的同步任务 |
 | `POST /api/admin/v1/nodes/{node_id}/sync-tasks/{task_id}/cancel` | 高风险 | 取消尚未完成且已因目标库存变化失效的任务 |
 
-这些操作只影响 M3 同步任务和最终对账，不执行 M4 下载授权、M5 额度扣减或流量入账。
+完整库存报告会反映下载节点磁盘上的真实文件状态。若报告显示目标资产缺失、摘要不一致、大小不一致，或完整报告未包含某个必需目标资产，主节点必须把该副本标记为不可用并立即补建 `asset_download` 任务。这些操作只影响 M3 同步任务和最终对账，不执行 M4 下载授权、M5 额度扣减或流量入账。
 
 ### 11.5 M3 审计
 

@@ -21,6 +21,7 @@ type Client struct {
 	NodeID                string
 	Address               string
 	PublicDownloadBaseURL string
+	Storage               string
 	TLSConfig             *tls.Config
 	HeartbeatInterval     time.Duration
 	Logger                *logging.Logger

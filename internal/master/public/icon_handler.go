@@ -14,6 +14,7 @@ import (
 
 type projectAssetConfig struct {
 	IconPath                   string
+	ArchitectureMatchEnabled   bool
 	ArchitectureDefaultEnabled bool
 	SystemMatchEnabled         bool
 }

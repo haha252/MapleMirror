@@ -91,6 +91,7 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 	}
 	return &nodecontrol.Client{
 		NodeID: nodeID, Address: s.address, PublicDownloadBaseURL: s.cfg.Server.PublicDownloadBaseURL, TLSConfig: tlsCfg,
+		Storage:           s.cfg.Storage.Directory,
 		HeartbeatInterval: interval, Logger: s.logger, Executor: s.executor, DB: s.db,
 	}, nil
 }

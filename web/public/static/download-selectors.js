@@ -34,13 +34,14 @@
     return items.find((item) => item.available) || items[0] || null;
   }
 
-  function preferredAssetForUser(items) {
+  function preferredAssetForUser(items, useArchitecture) {
     const available = items.filter((item) => item.available);
     const list = available.length ? available : items;
     const wantedSystem = userSystem();
     const systemList = wantedSystem ?
       list.filter((item) => String(item.system || "") === wantedSystem) : [];
     const systemMatched = systemList.length ? systemList : list;
+    if (!useArchitecture) return preferredAsset(systemMatched);
     const wantedArch = userArchitecture();
     return systemMatched.find((item) => normalizeArch(item.architecture) === wantedArch) ||
       systemMatched.find((item) => normalizeArch(item.architecture) === "all") ||

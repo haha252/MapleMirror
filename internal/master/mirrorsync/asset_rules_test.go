@@ -11,6 +11,32 @@ import (
 	"mirror-server/internal/storage"
 )
 
+func TestScanLeavesArchitectureEmptyWhenMatchingDisabled(t *testing.T) {
+	db := openScannerTestDB(t)
+	defer db.Close()
+	seedNode(t, db)
+	good := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	scanner := Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: []GitHubRelease{{
+		ID: 1, TagName: "v1", PublishedAt: time.Now(),
+		Assets: []GitHubAsset{
+			{ID: 1, Name: "app-amd64.zip", Size: 10, URL: "https://example.invalid/a", Digest: good},
+		},
+	}}}}
+	projects := config.Projects{Projects: []config.Project{{
+		ID: "p1", Name: "项目", Repository: "owner/repo", Enabled: true,
+		RetainVersions: 1, AssetInclude: config.AssetRules{{Pattern: "*.zip", Type: "glob"}},
+		ArchitectureRegex: "(amd64)",
+	}}}
+	summary, err := scanner.Scan(context.Background(), projects, "", "req-scan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.AcceptedAssets != 1 || summary.RejectedAssets != 0 {
+		t.Fatalf("架构关闭统计错误 accepted=%d rejected=%d", summary.AcceptedAssets, summary.RejectedAssets)
+	}
+	assertAssetArchitecture(t, db, "p1:1:1", "")
+}
+
 func TestScanKeepsAssetWhenArchitectureMissing(t *testing.T) {
 	db := openScannerTestDB(t)
 	defer db.Close()
@@ -30,7 +56,8 @@ func TestScanKeepsAssetWhenArchitectureMissing(t *testing.T) {
 			Pattern: `\.apk$`,
 			Type:    "regex",
 		}},
-		ArchitectureRegex: `(?i)(?:^|[-_])(all|arm64-v8a|armeabi-v7a|x86_64|x86)(?:\.apk$|[-_.])`,
+		ArchitectureRegex:        `(?i)(?:^|[-_])(all|arm64-v8a|armeabi-v7a|x86_64|x86)(?:\.apk$|[-_.])`,
+		ArchitectureMatchEnabled: true,
 	}}}
 	summary, err := scanner.Scan(context.Background(), projects, "", "req-scan")
 	if err != nil {
@@ -61,7 +88,8 @@ func TestScanExtractsNormalizedSystemWhenEnabled(t *testing.T) {
 	}}}}
 	projects := config.Projects{Projects: []config.Project{{
 		ID: "p1", Name: "项目", Repository: "owner/repo", Enabled: true,
-		RetainVersions: 1, AssetInclude: config.AssetRules{{Pattern: "*.zip", Type: "glob"}}, ArchitectureRegex: "(amd64|arm64)",
+		RetainVersions: 1, AssetInclude: config.AssetRules{{Pattern: "*.zip", Type: "glob"}},
+		ArchitectureMatchEnabled: true, ArchitectureRegex: "(amd64|arm64)",
 		SystemMatchEnabled: true, SystemRegex: "(windows|linux|darwin|freebsd)",
 	}}}
 	summary, err := scanner.Scan(context.Background(), projects, "", "req-scan")

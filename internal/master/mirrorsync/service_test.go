@@ -2,6 +2,7 @@ package mirrorsync
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,73 @@ func TestServiceReloadsProjectsBeforeTrigger(t *testing.T) {
 	assertCount(t, db, "projects", 2)
 }
 
+func TestTriggerAllCreatesPerProjectScanRows(t *testing.T) {
+	wal := true
+	db, err := storage.OpenMaster(config.Database{
+		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	projects := config.Projects{Projects: []config.Project{
+		testProject("p1", "owner/one", true),
+		testProject("p2", "owner/two", true),
+	}}
+	service := Service{
+		Scanner:  Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: testReleases()}},
+		Projects: NewProjectLoader("", projects),
+		Interval: time.Minute,
+	}
+	if _, err := service.Trigger(context.Background(), "", "req-all"); err != nil {
+		t.Fatal(err)
+	}
+	assertScanRows(t, db, "p1", 1)
+	assertScanRows(t, db, "p2", 1)
+	assertProjectNextScan(t, db, "p1")
+	assertProjectNextScan(t, db, "p2")
+}
+
+func TestSyncProjectConfigMarksChangedProjectDue(t *testing.T) {
+	wal := true
+	db, err := storage.OpenMaster(config.Database{
+		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := Store{DB: db}
+	initial := config.Projects{Projects: []config.Project{testProject("p1", "owner/one", true)}}
+	if err := store.SyncProjectConfig(context.Background(), initial); err != nil {
+		t.Fatal(err)
+	}
+	due, err := store.DueProjects(context.Background(), time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil || len(due) != 1 || due[0] != "p1" {
+		t.Fatalf("new project should be due, due=%v err=%v", due, err)
+	}
+	if err := store.SetProjectNextScan(context.Background(), "p1",
+		time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	unchanged := config.Projects{Projects: []config.Project{testProject("p1", "owner/one", true)}}
+	if err := store.SyncProjectConfig(context.Background(), unchanged); err != nil {
+		t.Fatal(err)
+	}
+	due, err = store.DueProjects(context.Background(), time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil || len(due) != 0 {
+		t.Fatalf("unchanged project should not be due, due=%v err=%v", due, err)
+	}
+	changed := config.Projects{Projects: []config.Project{testProject("p1", "owner/two", true)}}
+	if err := store.SyncProjectConfig(context.Background(), changed); err != nil {
+		t.Fatal(err)
+	}
+	due, err = store.DueProjects(context.Background(), time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil || len(due) != 1 || due[0] != "p1" {
+		t.Fatalf("changed project should be due, due=%v err=%v", due, err)
+	}
+}
+
 func writeProjectConfig(t *testing.T, path, id, repo string) {
 	t.Helper()
 	body := `projects:
@@ -70,4 +138,34 @@ func testReleases() []GitHubRelease {
 			Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}},
 	}}
+}
+
+func testProject(id, repo string, enabled bool) config.Project {
+	return config.Project{
+		ID: id, Name: id, Repository: repo, Enabled: enabled,
+		RetainVersions: 1, ArchitectureRegex: "(amd64)",
+	}
+}
+
+func assertScanRows(t *testing.T, db interface {
+	QueryRow(string, ...any) *sql.Row
+}, projectID string, want int) {
+	t.Helper()
+	var got int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sync_scans WHERE project_id = ?`, projectID).Scan(&got)
+	if err != nil || got != want {
+		t.Fatalf("scan rows for %s got=%d want=%d err=%v", projectID, got, want, err)
+	}
+}
+
+func assertProjectNextScan(t *testing.T, db interface {
+	QueryRow(string, ...any) *sql.Row
+}, projectID string) {
+	t.Helper()
+	var next string
+	err := db.QueryRow(`SELECT COALESCE(next_scan_at, '') FROM project_scan_state
+		WHERE project_id = ?`, projectID).Scan(&next)
+	if err != nil || next == "" {
+		t.Fatalf("next scan missing for %s next=%q err=%v", projectID, next, err)
+	}
 }

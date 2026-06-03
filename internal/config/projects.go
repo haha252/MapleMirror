@@ -26,6 +26,7 @@ type Project struct {
 	DownloadMultiplier         int        `yaml:"download_multiplier"`
 	AssetInclude               AssetRules `yaml:"asset_include"`
 	AssetExclude               AssetRules `yaml:"asset_exclude"`
+	ArchitectureMatchEnabled   bool       `yaml:"architecture_match_enabled"`
 	ArchitectureRegex          string     `yaml:"architecture_regex"`
 	ArchitectureDefaultEnabled bool       `yaml:"architecture_default_enabled"`
 	SystemMatchEnabled         bool       `yaml:"system_match_enabled"`
@@ -119,8 +120,13 @@ func validateProject(p Project, known map[string]bool) error {
 	if p.RetainVersions <= 0 || p.DownloadMultiplier <= 0 {
 		return errors.New("项目保留版本数和下载倍率必须大于零")
 	}
-	if _, err := regexp.Compile(p.ArchitectureRegex); err != nil {
-		return fmt.Errorf("项目 %s 的架构提取正则无效：%w", p.ID, err)
+	if p.ArchitectureMatchEnabled {
+		if strings.TrimSpace(p.ArchitectureRegex) == "" {
+			return fmt.Errorf("项目 %s 启用架构匹配时必须配置 architecture_regex", p.ID)
+		}
+		if _, err := regexp.Compile(p.ArchitectureRegex); err != nil {
+			return fmt.Errorf("项目 %s 的架构提取正则无效：%w", p.ID, err)
+		}
 	}
 	if err := validateAssetRules(p.ID, "asset_include", p.AssetInclude); err != nil {
 		return err

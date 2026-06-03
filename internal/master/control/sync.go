@@ -68,7 +68,7 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
-	if result.Result == "succeeded" {
+	if result.Result == "succeeded" && result.AssetID != "" {
 		if err := upsertVerifiedInventory(ctx, tx, session.NodeID, result, now); err != nil {
 			return HeartbeatResult{}, err
 		}

@@ -59,8 +59,9 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 	if err != nil || projects.Projects[0].RetainVersions != 3 || projects.Projects[0].DownloadMultiplier != 1 {
 		t.Fatalf("项目默认合同错误：%v", err)
 	}
-	if projects.Projects[0].ArchitectureDefaultEnabled || projects.Projects[0].SystemMatchEnabled || projects.Projects[0].SystemRegex != "" {
-		t.Fatal("项目默认不应启用架构兜底或系统匹配")
+	if projects.Projects[0].ArchitectureMatchEnabled || projects.Projects[0].ArchitectureDefaultEnabled ||
+		projects.Projects[0].SystemMatchEnabled || projects.Projects[0].SystemRegex != "" {
+		t.Fatal("项目默认不应启用架构匹配、架构兜底或系统匹配")
 	}
 	quota, err := LoadQuota(quotaPath, nil)
 	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 ||
@@ -68,22 +69,6 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 		quota.AuthorizationMaxBytesMultiplier != 2 ||
 		quota.RangeConcurrencyLimit != 32 {
 		t.Fatalf("额度默认合同错误：%v", err)
-	}
-}
-
-func TestProjectsLoadArchitectureDefaultEnabled(t *testing.T) {
-	dir := t.TempDir()
-	projectsPath := filepath.Join(dir, "projects.yaml")
-	body := "projects:\n  - id: a\n    name: 示例\n    repository: owner/repo\n    enabled: true\n    architecture_regex: '(amd64)'\n    architecture_default_enabled: true\n"
-	if err := os.WriteFile(projectsPath, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	projects, err := LoadProjects(projectsPath, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !projects.Projects[0].ArchitectureDefaultEnabled {
-		t.Fatal("架构兜底开关未正确加载")
 	}
 }
 

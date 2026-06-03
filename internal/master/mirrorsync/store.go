@@ -16,13 +16,19 @@ type Store struct {
 }
 
 type ScanSummary struct {
-	ScanID           string `json:"scan_id"`
-	ProjectID        string `json:"project_id,omitempty"`
-	State            string `json:"state"`
-	SelectedReleases int    `json:"selected_releases"`
-	AcceptedAssets   int    `json:"accepted_assets"`
-	RejectedAssets   int    `json:"rejected_assets"`
-	RequestID        string `json:"request_id"`
+	ScanID              string `json:"scan_id"`
+	ProjectID           string `json:"project_id,omitempty"`
+	State               string `json:"state"`
+	SelectedReleases    int    `json:"selected_releases"`
+	AcceptedAssets      int    `json:"accepted_assets"`
+	RejectedAssets      int    `json:"rejected_assets"`
+	RequestID           string `json:"request_id"`
+	StartedAt           string `json:"started_at,omitempty"`
+	CompletedAt         string `json:"completed_at,omitempty"`
+	NextScanAt          string `json:"next_scan_at,omitempty"`
+	LastScanStartedAt   string `json:"last_scan_started_at,omitempty"`
+	LastScanCompletedAt string `json:"last_scan_completed_at,omitempty"`
+	LastErrorMessage    string `json:"last_error_message,omitempty"`
 }
 
 type SyncStatus struct {
@@ -49,10 +55,14 @@ func (s Store) StartScan(ctx context.Context, projectID, requestID string) (stri
 	if err != nil {
 		return "", err
 	}
+	started := nowText()
 	_, err = s.DB.ExecContext(ctx, `INSERT INTO sync_scans
 		(id, project_id, state, request_id, started_at)
 		VALUES (?, ?, 'running', ?, ?)`,
-		id, nullable(projectID), requestID, nowText())
+		id, nullable(projectID), requestID, started)
+	if err == nil && projectID != "" {
+		err = s.MarkProjectScanStarted(ctx, projectID, id, started)
+	}
 	return id, err
 }
 
@@ -61,27 +71,38 @@ func (s Store) FinishScan(ctx context.Context, scanID string, summary ScanSummar
 	if errText != "" {
 		state = "failed"
 	}
+	completed := nowText()
 	_, err := s.DB.ExecContext(ctx, `UPDATE sync_scans SET state = ?,
 		selected_releases = ?, accepted_assets = ?, rejected_assets = ?,
 		error_message = ?, completed_at = ? WHERE id = ?`,
 		state, summary.SelectedReleases, summary.AcceptedAssets,
-		summary.RejectedAssets, nullable(errText), nowText(), scanID)
+		summary.RejectedAssets, nullable(errText), completed, scanID)
+	if err == nil && summary.ProjectID != "" {
+		err = s.MarkProjectScanFinished(ctx, summary.ProjectID, scanID, state, completed, errText)
+	}
 	return err
 }
 
 func (s Store) LatestScan(ctx context.Context, projectID string) (ScanSummary, error) {
-	query := `SELECT id, COALESCE(project_id, ''), state, selected_releases,
-		accepted_assets, rejected_assets, request_id FROM sync_scans`
+	query := `SELECT sc.id, COALESCE(sc.project_id, ''), sc.state,
+		sc.selected_releases, sc.accepted_assets, sc.rejected_assets,
+		sc.request_id, sc.started_at, COALESCE(sc.completed_at, ''),
+		COALESCE(ps.next_scan_at, ''), COALESCE(ps.last_scan_started_at, ''),
+		COALESCE(ps.last_scan_completed_at, ''), COALESCE(ps.last_error_message, '')
+		FROM sync_scans sc LEFT JOIN project_scan_state ps
+		ON ps.project_id = sc.project_id`
 	args := []any{}
 	if projectID != "" {
-		query += ` WHERE project_id = ?`
+		query += ` WHERE sc.project_id = ?`
 		args = append(args, projectID)
 	}
-	query += ` ORDER BY started_at DESC LIMIT 1`
+	query += ` ORDER BY sc.started_at DESC LIMIT 1`
 	var out ScanSummary
 	err := s.DB.QueryRowContext(ctx, query, args...).Scan(&out.ScanID, &out.ProjectID,
 		&out.State, &out.SelectedReleases, &out.AcceptedAssets,
-		&out.RejectedAssets, &out.RequestID)
+		&out.RejectedAssets, &out.RequestID, &out.StartedAt, &out.CompletedAt,
+		&out.NextScanAt, &out.LastScanStartedAt, &out.LastScanCompletedAt,
+		&out.LastErrorMessage)
 	return out, err
 }
 

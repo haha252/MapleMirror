@@ -23,7 +23,10 @@ func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence ui
 	if c.DB == nil {
 		return sequence, nil
 	}
-	items, err := c.loadVerifiedInventoryItems()
+	if err := c.refreshLocalInventory(); err != nil {
+		return sequence, err
+	}
+	items, err := c.loadInventoryItems()
 	if err != nil {
 		return sequence, err
 	}
@@ -93,9 +96,9 @@ func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64
 	return nil
 }
 
-func (c Client) loadVerifiedInventoryItems() ([]protocol.InventoryItem, error) {
-	rows, err := c.DB.Query(`SELECT asset_id, size_bytes, digest_sha256
-		FROM local_assets WHERE state = 'verified' ORDER BY asset_id`)
+func (c Client) loadInventoryItems() ([]protocol.InventoryItem, error) {
+	rows, err := c.DB.Query(`SELECT asset_id, size_bytes, digest_sha256, state
+		FROM local_assets ORDER BY asset_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -103,10 +106,9 @@ func (c Client) loadVerifiedInventoryItems() ([]protocol.InventoryItem, error) {
 	var items []protocol.InventoryItem
 	for rows.Next() {
 		var item protocol.InventoryItem
-		if err := rows.Scan(&item.AssetID, &item.SizeBytes, &item.DigestSHA256); err != nil {
+		if err := rows.Scan(&item.AssetID, &item.SizeBytes, &item.DigestSHA256, &item.LocalState); err != nil {
 			return nil, err
 		}
-		item.LocalState = "verified"
 		items = append(items, item)
 	}
 	return items, rows.Err()
