@@ -90,6 +90,7 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	s.trackPageView(w, r)
 	body, err := s.renderDownloadPowBody(asset)
 	if err != nil {
 		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
@@ -121,6 +122,7 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+	s.trackPageView(w, r)
 	body, err := s.renderDownloadPowBody(asset)
 	if err != nil {
 		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
