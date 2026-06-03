@@ -29,7 +29,8 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		if !dup {
 			return HeartbeatResult{}, fmt.Errorf("流量事件序号已确认但事件不存在")
 		}
-		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
+		ready := routingReady(ctx, tx, session.NodeID)
+		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	if event.SentBytes < 0 {
 		return HeartbeatResult{}, fmt.Errorf("流量字节数不合法")
@@ -39,7 +40,8 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		if err == nil {
 			err = r.updateSequence(session, seq)
 		}
-		return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
+		ready := routingReady(ctx, tx, session.NodeID)
+		return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, finish(tx, err)
 	}
 	info, err := loadAuthorization(ctx, tx, session.NodeID, event)
 	if err != nil {
@@ -71,7 +73,8 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
 	}
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, tx.Commit()
+	ready := routingReady(ctx, tx, session.NodeID)
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 }
 
 type authAccounting struct {

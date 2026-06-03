@@ -32,7 +32,8 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (He
 		}
 		return s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
 	case protocol.TypeSyncTaskAck:
-		return HeartbeatResult{AcceptedSequence: msg.Sequence, ManagedState: "syncing"}, nil
+		ready := s.Repo.nodeRoutingReady(context.Background(), session.NodeID)
+		return HeartbeatResult{AcceptedSequence: msg.Sequence, ManagedState: managedState(ready), RoutingReady: ready}, nil
 	case protocol.TypeSyncTaskResult:
 		var result protocol.SyncTaskResult
 		if err := json.Unmarshal(msg.Payload, &result); err != nil {
@@ -101,11 +102,13 @@ func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) e
 			"CONTROL_PROTOCOL_ERROR", err.Error())
 		return err
 	}
+	ready := s.Repo.nodeRoutingReady(context.Background(), session.NodeID)
 	body, _ := json.Marshal(protocol.Welcome{
 		SessionID: session.ID, AcceptedSequence: session.AcceptedSequence,
 		HeartbeatIntervalSecond: int(s.HeartbeatInterval.Seconds()),
 		HeartbeatTimeoutSecond:  int(s.HeartbeatTimeout.Seconds()),
-		ManagedState:            "syncing", RoutingReady: false,
+		ManagedState:            managedState(ready),
+		RoutingReady:            ready,
 	})
 	return writeControlFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,

@@ -23,9 +23,6 @@ func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence ui
 	if c.DB == nil {
 		return sequence, nil
 	}
-	if err := c.refreshLocalInventory(); err != nil {
-		return sequence, err
-	}
 	items, err := c.loadInventoryItems()
 	if err != nil {
 		return sequence, err

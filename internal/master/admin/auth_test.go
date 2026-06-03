@@ -41,3 +41,39 @@ func TestAuthReadsTokenFileAndEnvOverride(t *testing.T) {
 		t.Fatal("环境变量管理令牌应优先于文件")
 	}
 }
+
+func TestAuthAllowsLoopbackHighRiskWithoutMTLS(t *testing.T) {
+	t.Setenv("MIRROR_TEST_ADMIN_TOKEN", "abcdefghijklmnopqrstuvwxyz123456")
+	auth, err := NewAuth(config.Administration{
+		AllowedCIDRs:  []string{"127.0.0.0/8", "::1/128"},
+		TokenEnv:      "MIRROR_TEST_ADMIN_TOKEN",
+		TokenMinBytes: 32,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Authorization", "Bearer abcdefghijklmnopqrstuvwxyz123456")
+	if _, ok := auth.Check(req, true); !ok {
+		t.Fatal("回环地址的高风险管理请求应允许在无 mTLS 时通过")
+	}
+}
+
+func TestAuthRejectsNonLoopbackHighRiskWithoutMTLS(t *testing.T) {
+	t.Setenv("MIRROR_TEST_ADMIN_TOKEN", "abcdefghijklmnopqrstuvwxyz123456")
+	auth, err := NewAuth(config.Administration{
+		AllowedCIDRs:  []string{"10.0.0.0/8"},
+		TokenEnv:      "MIRROR_TEST_ADMIN_TOKEN",
+		TokenMinBytes: 32,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("Authorization", "Bearer abcdefghijklmnopqrstuvwxyz123456")
+	if _, ok := auth.Check(req, true); ok {
+		t.Fatal("非回环地址的高风险管理请求仍应要求 mTLS")
+	}
+}

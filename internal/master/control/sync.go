@@ -60,7 +60,8 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	if seq <= last {
-		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
+		ready := routingReady(ctx, tx, session.NodeID)
+		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	nowValue := time.Now().UTC()
 	now := nowValue.Format(time.RFC3339Nano)
@@ -73,7 +74,8 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 			return HeartbeatResult{}, err
 		}
 	}
-	if err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
+	ready, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now)
+	if err != nil {
 		return HeartbeatResult{}, err
 	}
 	err = r.updateSequence(session, seq)
@@ -88,7 +90,7 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 			slog.String("retry_after", retryAfter),
 			slog.String("message", result.Message))
 	}
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, finish(tx, err)
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, finish(tx, err)
 }
 
 func upsertVerifiedInventory(ctx context.Context, tx *sql.Tx, nodeID string, result protocol.SyncTaskResult, now string) error {
@@ -114,22 +116,22 @@ func upsertVerifiedInventory(ctx context.Context, tx *sql.Tx, nodeID string, res
 	return err
 }
 
-func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
+func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) (bool, error) {
 	var previousReady int
 	if err := tx.QueryRowContext(ctx, `SELECT routing_ready FROM nodes WHERE id = ?`, nodeID).Scan(&previousReady); err != nil {
-		return err
+		return false, err
 	}
 	var missing, running int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM target_inventory ti
 		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
 		WHERE ti.node_id = ? AND ti.desired_state = 'required'
 		AND (ni.asset_id IS NULL OR ni.state != 'verified')`, nodeID).Scan(&missing); err != nil {
-		return err
+		return false, err
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`,
 		nodeID).Scan(&running); err != nil {
-		return err
+		return false, err
 	}
 	ready := 0
 	state := "syncing"
@@ -148,7 +150,7 @@ func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, 
 			slog.Int("running_tasks", running),
 			slog.String("state", state))
 	}
-	return err
+	return ready == 1, err
 }
 
 func readySnapshot(ctx context.Context, tx *sql.Tx, nodeID string) (missing, running int, ready bool) {

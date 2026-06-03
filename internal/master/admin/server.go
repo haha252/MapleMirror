@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"mirror-server/internal/config"
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/control"
 	"mirror-server/internal/master/mirrorsync"
@@ -20,7 +21,11 @@ type Server struct {
 		Trigger(context.Context, string, string) (string, error)
 	}
 	SyncStore mirrorsync.Store
-	Logger    *logging.Logger
+	Projects  interface {
+		Load() (config.Projects, error)
+		Current() config.Projects
+	}
+	Logger *logging.Logger
 }
 
 type response struct {
@@ -39,6 +44,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/admin/v1/pairing-requests/", s.pairingRequestByID)
 	mux.HandleFunc("/api/admin/v1/nodes", s.nodes)
 	mux.HandleFunc("/api/admin/v1/nodes/", s.nodeByID)
+	mux.HandleFunc("/api/admin/v1/projects/", s.projectByID)
 	mux.HandleFunc("/api/admin/v1/stats/overview", s.statsOverview)
 	mux.HandleFunc("/api/admin/v1/stats/projects", s.projectStats)
 	mux.HandleFunc("/api/admin/v1/authorizations/", s.authorization)

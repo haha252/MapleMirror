@@ -51,6 +51,9 @@ func (a Auth) Check(r *http.Request, highRisk bool) (string, bool) {
 		return "", false
 	}
 	if highRisk {
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			return "", true
+		}
 		identity, ok := adminIdentity(r)
 		return identity, ok
 	}

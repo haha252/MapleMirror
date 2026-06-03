@@ -2,6 +2,8 @@ package control
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +72,7 @@ func TestMarkOfflineMasksRouting(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
+	repo.runtime().CloseSession(session.ID)
 	_, err := repo.DB.Exec(`UPDATE nodes SET last_heartbeat_at = ? WHERE id = ?`,
 		time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano), session.NodeID)
 	if err != nil {
@@ -83,6 +86,40 @@ func TestMarkOfflineMasksRouting(t *testing.T) {
 	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
 	if ready != 0 {
 		t.Fatal("离线节点必须保持不可路由")
+	}
+}
+
+func TestMarkOfflineSkipsNodeWithActiveControlSession(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	_, err := repo.DB.Exec(`UPDATE nodes SET routing_ready = 1, last_heartbeat_at = ?
+		WHERE id = ?`, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano), session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := repo.SweepOffline(context.Background(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.OfflineNodes != 0 || result.ActiveDelayedNodes != 1 {
+		t.Fatalf("活动会话节点不应离线：result=%+v", result)
+	}
+	var ready int
+	var state string
+	_ = repo.DB.QueryRow("SELECT routing_ready, state FROM nodes WHERE id = ?", session.NodeID).Scan(&ready, &state)
+	if ready != 1 || state != "syncing" {
+		t.Fatalf("活动会话节点不应清空同步就绪 ready=%d state=%s", ready, state)
+	}
+}
+
+func TestHeartbeatAckUsesActualRoutingReady(t *testing.T) {
+	body := HeartbeatAck(HeartbeatResult{AcceptedSequence: 7, ManagedState: "syncing", RoutingReady: true})
+	if !json.Valid(body) {
+		t.Fatalf("ack json invalid: %s", string(body))
+	}
+	if !strings.Contains(string(body), `"routing_ready":true`) {
+		t.Fatalf("ack should expose actual routing_ready: %s", string(body))
 	}
 }
 

@@ -97,7 +97,7 @@ func main() {
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
 	startControlServices(cfg, repo, logger)
-	startAdminService(cfg, repo, syncService, logger)
+	startAdminService(cfg, repo, syncService, projectLoader, logger)
 	startConsolePairing(cfg, repo, logger)
 
 	publicHandler, err := publicHandler(cfg, quota, projects, *projectsPath, location, database, runtime, logger)
@@ -170,7 +170,7 @@ func publicHandler(cfg config.Master, quota config.Quota, projects config.Projec
 	return server.Handler(), nil
 }
 
-func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, logger *logging.Logger) {
+func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, projectLoader *mirrorsync.ProjectLoader, logger *logging.Logger) {
 	if cfg.Admin.TLS.CertFile == "" || cfg.Admin.TLS.KeyFile == "" {
 		logger.Warn(context.Background(), "管理 API TLS 材料未配置，管理服务未启动")
 		return
@@ -192,7 +192,7 @@ func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncSer
 	}
 	handler := requestid.Middleware(admin.Server{
 		Auth: auth, Repo: repo, Signer: loaded.Sign,
-		Sync: syncService, SyncStore: syncService.Scanner.Store, Logger: logger,
+		Sync: syncService, SyncStore: syncService.Scanner.Store, Projects: projectLoader, Logger: logger,
 	}.Handler(), cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader)
 	tlsCfg, err := controltls.AdminServer(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile, cfg.Admin.TLS.ClientCAFile)
 	if err != nil {

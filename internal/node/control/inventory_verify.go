@@ -18,6 +18,10 @@ type localInventoryRecord struct {
 	State        string
 }
 
+func (c Client) RefreshLocalInventory() error {
+	return c.refreshLocalInventory()
+}
+
 func (c Client) refreshLocalInventory() error {
 	if c.DB == nil || c.Storage == "" {
 		return nil

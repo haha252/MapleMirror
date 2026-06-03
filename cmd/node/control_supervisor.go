@@ -27,6 +27,7 @@ type controlSupervisor struct {
 
 func (s controlSupervisor) run() {
 	interval := 5 * time.Second
+	go s.verifyLocalInventoryLoop()
 	for {
 		client, err := s.buildClient(interval)
 		if err != nil {
@@ -66,6 +67,35 @@ func (s controlSupervisor) run() {
 			}
 		}
 		time.Sleep(nextDelay(interval, time.Since(started)))
+	}
+}
+
+func (s controlSupervisor) verifyLocalInventoryLoop() {
+	interval := time.Minute
+	for {
+		client, err := s.buildClient(interval)
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Debug(context.Background(), "节点本地库存校验暂不可用",
+					slog.String("master", s.address),
+					slog.String("error", err.Error()))
+			}
+			time.Sleep(interval)
+			continue
+		}
+		started := time.Now()
+		if err := client.RefreshLocalInventory(); err != nil {
+			if s.logger != nil {
+				s.logger.Warn(context.Background(), "节点本地库存校验失败",
+					slog.String("node_id", client.NodeID),
+					slog.String("error", err.Error()))
+			}
+		} else if s.logger != nil {
+			s.logger.Debug(context.Background(), "节点本地库存校验完成",
+				slog.String("node_id", client.NodeID),
+				slog.String("elapsed", time.Since(started).String()))
+		}
+		time.Sleep(interval)
 	}
 }
 

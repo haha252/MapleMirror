@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 type HeartbeatResult struct {
 	AcceptedSequence uint64
 	ManagedState     string
+	RoutingReady     bool
 }
 
 func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq uint64, hb protocol.Heartbeat) (HeartbeatResult, error) {
@@ -27,7 +29,8 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		return HeartbeatResult{}, fmt.Errorf("控制会话不可用")
 	}
 	if seq <= last {
-		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
+		ready := routingReady(ctx, tx, session.NodeID)
+		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
@@ -42,12 +45,18 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	if err := tx.Commit(); err != nil {
 		return HeartbeatResult{}, err
 	}
+	ready := r.nodeRoutingReady(ctx, session.NodeID)
 	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
 		State: hb.Status, PressureRatio: hb.Pressure.Ratio,
 		ActiveDownloads: int64(hb.ActiveDownloads), FreeBytes: hb.FreeBytes,
 		ReportedAt: now, Valid: true,
 	})
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, nil
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
+}
+
+type OfflineSweepResult struct {
+	OfflineNodes       int64
+	ActiveDelayedNodes int64
 }
 
 func normalizedPublicDownloadBaseURL(value string) string {
@@ -59,52 +68,65 @@ func normalizedPublicDownloadBaseURL(value string) string {
 }
 
 func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int64, error) {
+	result, err := r.SweepOffline(ctx, timeout)
+	return result.OfflineNodes, err
+}
+
+func (r Repository) SweepOffline(ctx context.Context, timeout time.Duration) (OfflineSweepResult, error) {
 	cutoff := time.Now().UTC().Add(-timeout).Format(time.RFC3339Nano)
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return OfflineSweepResult{}, err
 	}
 	defer tx.Rollback()
 	rows, err := tx.QueryContext(ctx, `SELECT id FROM nodes WHERE state NOT IN ('disabled', 'offline')
 		AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)`, cutoff)
 	if err != nil {
-		return 0, err
+		return OfflineSweepResult{}, err
 	}
 	defer rows.Close()
 	var ids []string
+	var active int64
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return 0, err
+			return OfflineSweepResult{}, err
+		}
+		if r.runtime().ActiveSession(id) {
+			active++
+			continue
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return 0, err
+		return OfflineSweepResult{}, err
+	}
+	if err := rows.Close(); err != nil {
+		return OfflineSweepResult{}, err
 	}
 	if len(ids) == 0 {
-		return 0, tx.Commit()
+		return OfflineSweepResult{ActiveDelayedNodes: active}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
 		routing_ready = 0, updated_at = ? WHERE id IN (`+placeholders(len(ids))+`)`,
 		append([]any{now}, stringArgs(ids)...)...)
 	if err != nil {
-		return 0, err
+		return OfflineSweepResult{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
 		close_reason = '心跳超时' WHERE node_id IN (`+placeholders(len(ids))+`) AND disconnected_at IS NULL`,
 		append([]any{now}, stringArgs(ids)...)...)
 	if err != nil {
-		return 0, err
+		return OfflineSweepResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, err
+		return OfflineSweepResult{}, err
 	}
 	for _, id := range ids {
 		r.runtime().CloseNodeSessions(id)
 	}
-	return int64(len(ids)), nil
+	return OfflineSweepResult{OfflineNodes: int64(len(ids)), ActiveDelayedNodes: active}, nil
 }
 
 func placeholders(n int) string {
@@ -131,9 +153,28 @@ func HeartbeatAck(result HeartbeatResult) json.RawMessage {
 		"accepted_sequence": result.AcceptedSequence,
 		"server_time":       time.Now().UTC(),
 		"managed_state":     result.ManagedState,
-		"routing_ready":     result.ManagedState == "ready",
+		"routing_ready":     result.RoutingReady,
 	})
 	return body
+}
+
+func (r Repository) nodeRoutingReady(ctx context.Context, nodeID string) bool {
+	return routingReady(ctx, r.DB, nodeID)
+}
+
+func routingReady(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, nodeID string) bool {
+	var ready int
+	_ = q.QueryRowContext(ctx, `SELECT routing_ready FROM nodes WHERE id = ?`, nodeID).Scan(&ready)
+	return ready == 1
+}
+
+func managedState(ready bool) string {
+	if ready {
+		return "ready"
+	}
+	return "syncing"
 }
 
 func mustID() string {

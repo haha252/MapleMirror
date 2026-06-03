@@ -14,7 +14,7 @@
 | 传输保护 | M2 管理 API 使用 HTTPS，防止管理令牌明文传输 |
 | 网络限制 | 来源必须属于显式管理网络范围；不以公共代理转发头扩大允许范围 |
 | 管理令牌 | 每个请求必须携带强随机 Bearer 令牌；令牌默认从配置指定文件读取，可由配置指定环境变量覆盖 |
-| 高风险认证 | 配对码创建/撤销、配对审批/拒绝、证书轮换、节点禁用/启用、同步强制重置必须额外验证管理员 mTLS |
+| 高风险认证 | 配对码创建/撤销、配对审批/拒绝、证书轮换、节点禁用/启用、同步强制重置必须额外验证管理员 mTLS；回环来源的本机维护请求可豁免 |
 | 日志脱敏 | 管理令牌、配对码明文、私钥、完整客户端 IP 和完整证书/CSR 正文不得写入普通日志 |
 | 请求关联 | 每个管理请求生成新的请求 ID，响应返回 `X-Request-ID`，状态变更写入审计 |
 | 阶段限制 | M2 不能把任何新节点或恢复节点标为在线可路由 |
@@ -40,7 +40,7 @@
 1. 接收 HTTPS 请求并生成新的主节点请求 ID；任何客户端传入的同名值只能作为校验后的父关联信息。
 2. 根据 TCP 对端来源检查 `admin.allowed_cidrs`。M2 管理 API 不信任代理头作为开放管理来源的依据。
 3. 读取 `Authorization: Bearer <token>`，与 `admin.token_env` 对应环境变量或 `admin.token_file` 文件内容恒定时间比较。
-4. 若路由为高风险操作，校验 TLS 客户端证书链、用途、有效期及管理员允许身份。
+4. 若路由为高风险操作，非回环来源必须校验 TLS 客户端证书链、用途、有效期及管理员允许身份；回环来源的本机维护请求可免 mTLS。
 5. 校验 JSON 请求体并执行事务。
 6. 状态变更操作写审计；响应返回 `X-Request-ID` 与 JSON 中的 `request_id`。
 
@@ -453,7 +453,43 @@ M3 管理 API 可以展示同步就绪状态，但不得返回公共下载 URL�
 
 完整库存报告会反映下载节点磁盘上的真实文件状态。若报告显示目标资产缺失、摘要不一致、大小不一致，或完整报告未包含某个必需目标资产，主节点必须把该副本标记为不可用并立即补建 `asset_download` 任务。这些操作只影响 M3 同步任务和最终对账，不执行 M4 下载授权、M5 额度扣减或流量入账。
 
-### 11.5 M3 审计
+### 11.5 项目数据重置
+
+`POST /api/admin/v1/projects/{project_id}/reset`
+
+鉴权：高风险。
+
+请求体可选：
+
+```json
+{
+  "reason": "修正了项目配置并重新恢复"
+}
+```
+
+接口行为：
+
+1. 先校验项目在当前有效 `projects.yaml` 中存在且处于启用状态。
+2. 事务性清空该项目的派生数据，包括 `releases`、`assets`、`target_inventory`、`node_tasks`、`node_inventory`、`sync_scans`、`project_scan_state`、`daily_project_stats`、`daily_asset_stats`、`download_authorizations`、`traffic_reservations`、`traffic_events` 和 `challenges`。
+3. 保留 `projects` 项目定义、节点身份、证书、全局配额、`daily_traffic_stats`、`daily_site_stats` 和节点级历史表。
+4. 重置完成后立刻按同一 `project_id` 触发一次新的 Release 扫描，并在响应中返回本次 `scan_id`。
+5. 写入高风险审计，摘要只记录项目 ID、结果、请求 ID 和非敏感原因。
+
+成功响应：
+
+```json
+{
+  "status": "success",
+  "message": "项目数据已重置并重新扫描",
+  "request_id": "请求标识",
+  "data": {
+    "project_id": "example",
+    "scan_id": "scan-123"
+  }
+}
+```
+
+### 11.6 M3 审计
 
 以下操作必须写入 `admin_audit_events`：
 

@@ -21,7 +21,7 @@ func startHeartbeatSweep(repo mastercontrol.Repository, timeout time.Duration, l
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			changed, err := repo.MarkOffline(context.Background(), timeout)
+			result, err := repo.SweepOffline(context.Background(), timeout)
 			if err != nil {
 				if logger != nil {
 					logger.Warn(context.Background(), "节点离线巡检失败",
@@ -33,15 +33,17 @@ func startHeartbeatSweep(repo mastercontrol.Repository, timeout time.Duration, l
 			if logger == nil {
 				continue
 			}
-			if changed == 0 {
+			if result.OfflineNodes == 0 {
 				logger.Debug(context.Background(), "节点离线巡检完成",
 					slog.String("heartbeat_timeout", timeout.String()),
-					slog.Int64("offline_nodes", 0))
+					slog.Int64("offline_nodes", 0),
+					slog.Int64("active_delayed_nodes", result.ActiveDelayedNodes))
 				continue
 			}
 			logger.Warn(context.Background(), "节点心跳超时，已标记离线",
 				slog.String("heartbeat_timeout", timeout.String()),
-				slog.Int64("offline_nodes", changed))
+				slog.Int64("offline_nodes", result.OfflineNodes),
+				slog.Int64("active_delayed_nodes", result.ActiveDelayedNodes))
 		}
 	}()
 }

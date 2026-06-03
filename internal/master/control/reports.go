@@ -24,7 +24,8 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		return HeartbeatResult{}, err
 	}
 	if seq <= last {
-		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
+		ready := routingReady(ctx, tx, session.NodeID)
+		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	reportedAt := report.GeneratedAt.UTC()
 	if reportedAt.IsZero() {
@@ -50,7 +51,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		if err != nil {
 			return HeartbeatResult{}, err
 		}
-		if err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
+		if _, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
 			return HeartbeatResult{}, err
 		}
 		if r.Logger != nil {
@@ -78,7 +79,8 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		ItemCount: len(report.Items), Result: "accepted",
 		RequestID: session.RequestID, Reported: now, Valid: true,
 	})
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, nil
+	ready := r.nodeRoutingReady(ctx, session.NodeID)
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
 }
 
 func acceptInventoryItem(ctx context.Context, tx interface {
@@ -140,7 +142,8 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	if seq <= last {
-		return HeartbeatResult{AcceptedSequence: last, ManagedState: "syncing"}, tx.Commit()
+		ready := routingReady(ctx, tx, session.NodeID)
+		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if err := r.updateSequence(session, seq); err != nil {
@@ -163,5 +166,6 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 		State: "syncing", PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
 		FreeBytes: report.FreeBytes, ReportedAt: now, Valid: true,
 	})
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: "syncing"}, nil
+	ready := r.nodeRoutingReady(ctx, session.NodeID)
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
 }
