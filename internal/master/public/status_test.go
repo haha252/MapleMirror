@@ -150,6 +150,21 @@ func TestNodesExposeDownloadReadyReasonWhenPublicUrlMissing(t *testing.T) {
 	}
 }
 
+func TestNodesHideDisabledNodes(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	mustExec(t, db, `UPDATE nodes SET state = 'disabled' WHERE id = 'node-1'`)
+	store := Store{DB: db}
+
+	nodes, err := store.Nodes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 0 {
+		t.Fatalf("disabled nodes should not be listed publicly: %+v", nodes)
+	}
+}
+
 func TestNodesExposeDownloadReadyReasons(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -170,7 +185,7 @@ func TestNodesExposeDownloadReadyReasons(t *testing.T) {
 				"UPDATE nodes SET routing_ready = 0 WHERE id = 'node-1'",
 				"UPDATE node_inventory SET local_digest_sha256 = 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' WHERE node_id = 'node-1' AND asset_id = 'asset-1'",
 			},
-			reason: "副本校验未通过",
+			reason: "副本暂不可下载",
 		},
 		{
 			name: "missing public url",
@@ -205,6 +220,9 @@ func TestNodesExposeDownloadReadyReasons(t *testing.T) {
 			}
 			if nodes[0].DownloadReadyDetails == "" {
 				t.Fatal("expected download-ready details")
+			}
+			if strings.Contains(nodes[0].DownloadReadyReason+nodes[0].DownloadReadyDetails, "校验失败") {
+				t.Fatalf("public node reason should not expose validation failure: %+v", nodes[0])
 			}
 		})
 	}

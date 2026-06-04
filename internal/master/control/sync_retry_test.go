@@ -63,6 +63,35 @@ func TestNextSyncTaskSkipsRetryWaitBeforeDeadline(t *testing.T) {
 	}
 }
 
+func TestDigestMismatchTaskResultRetriesWithoutQuarantine(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+
+	start := time.Now().UTC()
+	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
+		TaskID:            "task-1",
+		AssetID:           "asset-1",
+		Result:            "digest_mismatch",
+		LocalDigestSHA256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		SizeBytes:         10,
+		Message:           "资产摘要不匹配",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTaskRetryState(t, repo, "task-1", "retry_wait", 1, start, 4*time.Second, 6*time.Second)
+	var state, certStatus string
+	_ = repo.DB.QueryRow("SELECT state FROM nodes WHERE id = ?", session.NodeID).Scan(&state)
+	_ = repo.DB.QueryRow("SELECT status FROM node_certificates WHERE id = 'cert-1'").Scan(&certStatus)
+	if state == "disabled" || certStatus != "active" {
+		t.Fatalf("下载阶段摘要不一致不应隔离节点 state=%s cert=%s", state, certStatus)
+	}
+}
+
 func TestNextSyncTaskDispatchesRetryWaitAfterDeadline(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

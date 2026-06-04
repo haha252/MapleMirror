@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -69,7 +70,13 @@ func (r Repository) SyncReset(ctx context.Context, nodeID, requestID, admin stri
 }
 
 func (r Repository) Audit(ctx context.Context, op, targetType, targetID, result, requestID, summary, admin string) error {
-	_, err := r.DB.ExecContext(ctx, `INSERT INTO admin_audit_events
+	return auditTx(ctx, r.DB, op, targetType, targetID, result, requestID, summary, admin)
+}
+
+func auditTx(ctx context.Context, exec interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, op, targetType, targetID, result, requestID, summary, admin string) error {
+	_, err := exec.ExecContext(ctx, `INSERT INTO admin_audit_events
 		(id, operation, target_type, target_id, result, request_id, created_at,
 		admin_identity, details_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mustID(), op, targetType, targetID, result, requestID,

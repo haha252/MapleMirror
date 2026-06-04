@@ -5,7 +5,7 @@ import "context"
 func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, public_name, state,
 		routing_ready, COALESCE(last_heartbeat_at, ''), COALESCE(public_download_base_url, '')
-		FROM nodes ORDER BY public_name, id`)
+		FROM nodes WHERE state != 'disabled' ORDER BY public_name, id`)
 	if err != nil {
 		return nil, err
 	}

@@ -33,13 +33,22 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	}
 	now := reportedAt.Format(time.RFC3339Nano)
 	reported := make(map[string]bool, len(report.Items))
+	quarantined := false
 	for _, item := range report.Items {
 		reported[item.AssetID] = true
-		if err := acceptInventoryItem(ctx, tx, session.NodeID, item, now); err != nil {
+		result, err := acceptInventoryItem(ctx, tx, session.NodeID, item, now)
+		if err != nil {
 			return HeartbeatResult{}, err
 		}
+		if result.PublicAsset && result.State == "mismatch" {
+			if err := r.quarantineNodeForPublicAssetMismatch(ctx, tx, session, result, now); err != nil {
+				return HeartbeatResult{}, err
+			}
+			quarantined = true
+			break
+		}
 	}
-	if report.Complete {
+	if report.Complete && !quarantined {
 		if err := markMissingInventory(ctx, tx, session.NodeID, now, reported); err != nil {
 			return HeartbeatResult{}, err
 		}
@@ -79,6 +88,10 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		ItemCount: len(report.Items), Result: "accepted",
 		RequestID: session.RequestID, Reported: now, Valid: true,
 	})
+	if quarantined {
+		r.runtime().CloseNodeSessions(session.NodeID)
+		return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(false), RoutingReady: false}, nil
+	}
 	ready := r.nodeRoutingReady(ctx, session.NodeID)
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
 }
@@ -86,17 +99,25 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 func acceptInventoryItem(ctx context.Context, tx interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
-}, nodeID string, item protocol.InventoryItem, now string) error {
+}, nodeID string, item protocol.InventoryItem, now string) (inventoryAcceptResult, error) {
+	result := inventoryAcceptResult{
+		AssetID:     item.AssetID,
+		LocalDigest: item.DigestSHA256,
+		LocalSize:   item.SizeBytes,
+	}
 	var expectedDigest string
 	var expectedSize int64
 	err := tx.QueryRowContext(ctx, `SELECT digest_sha256, size_bytes FROM assets
 		WHERE id = ?`, item.AssetID).Scan(&expectedDigest, &expectedSize)
 	if err == sql.ErrNoRows {
-		return nil
+		return result, nil
 	}
 	if err != nil {
-		return err
+		return result, err
 	}
+	result.ExpectedDigest = expectedDigest
+	result.ExpectedSize = expectedSize
+	result.PublicAsset = publicCandidateAsset(ctx, tx, item.AssetID)
 	localDigest := item.DigestSHA256
 	localSize := item.SizeBytes
 	state := "verified"
@@ -121,7 +142,10 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 		size_bytes = excluded.size_bytes, verified_at = excluded.verified_at,
 		state = excluded.state`,
 		nodeID, item.AssetID, localDigest, localSize, now, state)
-	return err
+	result.State = state
+	result.LocalDigest = localDigest
+	result.LocalSize = localSize
+	return result, err
 }
 
 func (r Repository) AcceptPressureReport(ctx context.Context, session Session, seq uint64, report protocol.PressureReport) (HeartbeatResult, error) {

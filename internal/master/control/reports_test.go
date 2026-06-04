@@ -226,3 +226,10 @@ func seedAssetTarget(t *testing.T, repo Repository, nodeID string) {
 		t.Fatal(err)
 	}
 }
+
+func mustExecControl(t *testing.T, db *sql.DB, stmt string, args ...any) {
+	t.Helper()
+	if _, err := db.Exec(stmt, args...); err != nil {
+		t.Fatal(err)
+	}
+}

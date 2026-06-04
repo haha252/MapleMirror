@@ -29,7 +29,7 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 			WHERE id = ? AND node_id = ?`,
 			nullable(result.Message), nowText, nowText, result.TaskID, nodeID)
 		return "succeeded", attempts, "", err
-	case "temporary_error":
+	case "temporary_error", "digest_mismatch", "size_mismatch":
 		nextAttempts := attempts + 1
 		if nextAttempts > len(retryBackoffSchedule) {
 			_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'failed',
