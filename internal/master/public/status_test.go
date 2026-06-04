@@ -33,10 +33,13 @@ func TestNodesTableFormatsRecentHeartbeat(t *testing.T) {
 		PublicName:    "节点一",
 		State:         "syncing",
 		LastHeartbeat: "2026-05-31T04:01:00Z",
-		RoutingReady:  true,
+		DownloadReady: true,
 	}})
 	if !strings.Contains(body, "最近心跳：2026/05/31 12:01") {
 		t.Fatalf("最近心跳格式不正确：%s", body)
+	}
+	if !strings.Contains(body, "下载就绪：是") {
+		t.Fatalf("下载就绪标签不正确：%s", body)
 	}
 }
 
@@ -72,7 +75,7 @@ func TestAssetsUnavailableReasonExplainsNotReadyReplica(t *testing.T) {
 	if len(assets) != 1 {
 		t.Fatalf("expected 1 asset, got %d", len(assets))
 	}
-	if assets[0].UnavailableReason != "持有副本的节点尚未同步就绪" {
+	if assets[0].UnavailableReason != "持有副本的节点尚未下载就绪" {
 		t.Fatalf("unexpected unavailable reason: %q", assets[0].UnavailableReason)
 	}
 	if assets[0].UnavailableDetails == "" {
@@ -94,7 +97,7 @@ func TestProjectsUnavailableReasonExplainsNotReadyReplica(t *testing.T) {
 	if len(projects) != 1 {
 		t.Fatalf("expected 1 project, got %d", len(projects))
 	}
-	if projects[0].UnavailableReason != "项目副本已存在，但节点尚未同步就绪" {
+	if projects[0].UnavailableReason != "项目副本已存在，但节点尚未下载就绪" {
 		t.Fatalf("unexpected project reason: %q", projects[0].UnavailableReason)
 	}
 	if projects[0].UnavailableDetails == "" {
@@ -102,17 +105,10 @@ func TestProjectsUnavailableReasonExplainsNotReadyReplica(t *testing.T) {
 	}
 }
 
-func TestNodesExposeRoutingReadyReason(t *testing.T) {
+func TestNodesExposeDownloadReadyIndependentlyOfRoutingReady(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	mustExec(t, db, `UPDATE nodes SET routing_ready = 0 WHERE id = 'node-1'`)
-	mustExec(t, db, `UPDATE node_inventory SET state = 'mismatch' WHERE node_id = 'node-1' AND asset_id = 'asset-1'`)
-	mustExec(t, db, `INSERT INTO node_control_sessions
-		(id, node_id, certificate_id, request_id, connected_at, last_message_sequence)
-		VALUES ('sess-1', 'node-1', NULL, 'req-1', 'now', 0)`)
-	mustExec(t, db, `INSERT INTO target_inventory
-		(node_id, asset_id, desired_state, updated_at)
-		VALUES ('node-1', 'asset-1', 'required', 'now')`)
 	store := Store{DB: db}
 
 	nodes, err := store.Nodes(context.Background())
@@ -122,21 +118,18 @@ func TestNodesExposeRoutingReadyReason(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
-	if nodes[0].RoutingReadyReason != "尚未上报完整库存，未完成最终对账" {
-		t.Fatalf("unexpected routing-ready reason: %q", nodes[0].RoutingReadyReason)
+	if !nodes[0].DownloadReady {
+		t.Fatal("expected download-ready to remain true when routing_ready is false")
 	}
-	if nodes[0].RoutingReadyDetails == "" {
-		t.Fatal("expected routing-ready details")
+	if nodes[0].RoutingReady {
+		t.Fatal("expected routing_ready to remain false")
 	}
 }
 
-func TestNodesDoNotClaimDisconnectedWhenHeartbeatExists(t *testing.T) {
+func TestNodesExposeDownloadReadyReasonWhenPublicUrlMissing(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
-	mustExec(t, db, `UPDATE nodes SET routing_ready = 0, last_heartbeat_at = 'now' WHERE id = 'node-1'`)
-	mustExec(t, db, `INSERT INTO target_inventory
-		(node_id, asset_id, desired_state, updated_at)
-		VALUES ('node-1', 'asset-1', 'required', 'now')`)
+	mustExec(t, db, `UPDATE nodes SET routing_ready = 0, public_download_base_url = '' WHERE id = 'node-1'`)
 	store := Store{DB: db}
 
 	nodes, err := store.Nodes(context.Background())
@@ -146,7 +139,73 @@ func TestNodesDoNotClaimDisconnectedWhenHeartbeatExists(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(nodes))
 	}
-	if nodes[0].RoutingReadyReason == "控制连接当前未建立" {
-		t.Fatalf("unexpected disconnected reason: %q", nodes[0].RoutingReadyReason)
+	if nodes[0].DownloadReady {
+		t.Fatal("expected download-ready to be false when public URL is missing")
+	}
+	if nodes[0].DownloadReadyReason != "节点尚未提供公网下载地址" {
+		t.Fatalf("unexpected download-ready reason: %q", nodes[0].DownloadReadyReason)
+	}
+	if nodes[0].DownloadReadyDetails == "" {
+		t.Fatal("expected download-ready details")
+	}
+}
+
+func TestNodesExposeDownloadReadyReasons(t *testing.T) {
+	cases := []struct {
+		name     string
+		setupSQL []string
+		reason   string
+	}{
+		{
+			name: "no public copies",
+			setupSQL: []string{
+				"UPDATE nodes SET routing_ready = 0 WHERE id = 'node-1'",
+				"DELETE FROM node_inventory WHERE node_id = 'node-1' AND asset_id = 'asset-1'",
+			},
+			reason: "暂无可公开下载的资产副本",
+		},
+		{
+			name: "digest mismatch",
+			setupSQL: []string{
+				"UPDATE nodes SET routing_ready = 0 WHERE id = 'node-1'",
+				"UPDATE node_inventory SET local_digest_sha256 = 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' WHERE node_id = 'node-1' AND asset_id = 'asset-1'",
+			},
+			reason: "副本校验未通过",
+		},
+		{
+			name: "missing public url",
+			setupSQL: []string{
+				"UPDATE nodes SET routing_ready = 0, public_download_base_url = '' WHERE id = 'node-1'",
+			},
+			reason: "节点尚未提供公网下载地址",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openMaster(t)
+			seedRoutableAsset(t, db)
+			for _, stmt := range tc.setupSQL {
+				mustExec(t, db, stmt)
+			}
+			store := Store{DB: db}
+
+			nodes, err := store.Nodes(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(nodes) != 1 {
+				t.Fatalf("expected 1 node, got %d", len(nodes))
+			}
+			if nodes[0].DownloadReady {
+				t.Fatalf("expected download-ready to be false for %s", tc.name)
+			}
+			if nodes[0].DownloadReadyReason != tc.reason {
+				t.Fatalf("unexpected download-ready reason: %q", nodes[0].DownloadReadyReason)
+			}
+			if nodes[0].DownloadReadyDetails == "" {
+				t.Fatal("expected download-ready details")
+			}
+		})
 	}
 }

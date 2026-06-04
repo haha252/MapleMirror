@@ -19,3 +19,10 @@ func yesNo(v bool) string {
 	}
 	return "否"
 }
+
+func blankAsDash(v string) string {
+	if v == "" {
+		return "-"
+	}
+	return v
+}

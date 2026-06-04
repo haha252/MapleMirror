@@ -66,17 +66,21 @@ type DownloadAssetSummary struct {
 }
 
 type NodeSummary struct {
-	NodeID              string `json:"node_id"`
-	PublicName          string `json:"public_name"`
-	State               string `json:"state"`
-	RoutingReady        bool   `json:"routing_ready"`
-	RoutingReadyReason  string `json:"-"`
-	RoutingReadyDetails string `json:"-"`
-	LastHeartbeat       string `json:"last_heartbeat_at,omitempty"`
-	SLA24H              string `json:"sla_24h"`
-	SLA7D               string `json:"sla_7d"`
-	SLA30D              string `json:"sla_30d"`
-	TotalSentBytes      int64  `json:"total_sent_bytes"`
+	NodeID                string `json:"node_id"`
+	PublicName            string `json:"public_name"`
+	State                 string `json:"state"`
+	DownloadReady         bool   `json:"download_ready"`
+	DownloadReadyReason   string `json:"-"`
+	DownloadReadyDetails  string `json:"-"`
+	RoutingReady          bool   `json:"routing_ready"`
+	RoutingReadyReason    string `json:"-"`
+	RoutingReadyDetails   string `json:"-"`
+	LastHeartbeat         string `json:"last_heartbeat_at,omitempty"`
+	SLA24H                string `json:"sla_24h"`
+	SLA7D                 string `json:"sla_7d"`
+	SLA30D                string `json:"sla_30d"`
+	TotalSentBytes        int64  `json:"total_sent_bytes"`
+	PublicDownloadBaseURL string `json:"-"`
 }
 
 type Challenge struct {

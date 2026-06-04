@@ -30,6 +30,13 @@ type nodeReadyState struct {
 	LastReportComplete sql.NullBool
 }
 
+type nodeDownloadReadyState struct {
+	PublicCopies           int
+	DownloadableCopies     int
+	VerifiedMismatchCopies int
+	UnverifiedCopies       int
+}
+
 func (s Store) projectUnavailableInfo(ctx context.Context, projectID string) reasonInfo {
 	var counts replicaCounts
 	err := s.DB.QueryRowContext(ctx, `SELECT
@@ -68,7 +75,7 @@ func projectReasonFromCounts(counts replicaCounts) reasonInfo {
 	case counts.VerifiedCopies == 0:
 		return reasonInfo{Summary: "项目副本尚未同步到节点", Detail: detail}
 	case counts.NotReadyCopies > 0:
-		return reasonInfo{Summary: "项目副本已存在，但节点尚未同步就绪", Detail: detail}
+		return reasonInfo{Summary: "项目副本已存在，但节点尚未下载就绪", Detail: detail}
 	case counts.OfflineCopies > 0 && counts.DisabledCopies == 0:
 		return reasonInfo{Summary: "持有项目副本的节点当前离线", Detail: detail}
 	case counts.DisabledCopies > 0 && counts.OfflineCopies == 0:
@@ -112,7 +119,7 @@ func (s Store) assetUnavailableInfo(ctx context.Context, assetID string) reasonI
 	case counts.VerifiedCopies == 0:
 		return reasonInfo{Summary: "暂无节点副本", Detail: detail}
 	case counts.NotReadyCopies > 0:
-		return reasonInfo{Summary: "持有副本的节点尚未同步就绪", Detail: detail}
+		return reasonInfo{Summary: "持有副本的节点尚未下载就绪", Detail: detail}
 	case counts.OfflineCopies > 0 && counts.DisabledCopies == 0:
 		return reasonInfo{Summary: "持有副本的节点当前离线", Detail: detail}
 	case counts.DisabledCopies > 0 && counts.OfflineCopies == 0:
@@ -166,6 +173,36 @@ func (s Store) nodeRoutingReadyInfo(ctx context.Context, nodeID, state, lastHear
 	}
 }
 
+func (s Store) nodeDownloadReadyInfo(ctx context.Context, nodeID, state, lastHeartbeat, downloadURL string, status nodeDownloadReadyState) reasonInfo {
+	switch state {
+	case "disabled":
+		return reasonInfo{Summary: "节点已被管理员禁用"}
+	case "offline":
+		if reason := s.latestCloseReason(ctx, nodeID); reason != "" {
+			return reasonInfo{Summary: reason}
+		}
+		return reasonInfo{Summary: "节点离线或心跳超时"}
+	}
+
+	detail := fmt.Sprintf("公开副本 %d 项，可下载副本 %d 项，校验失败副本 %d 项，未完成校验副本 %d 项，最近心跳 %s，公网下载地址 %s",
+		status.PublicCopies, status.DownloadableCopies, status.VerifiedMismatchCopies,
+		status.UnverifiedCopies, blankAsDash(lastHeartbeat), yesNo(downloadURL != ""))
+	switch {
+	case status.PublicCopies == 0:
+		return reasonInfo{Summary: "暂无可公开下载的资产副本", Detail: detail}
+	case downloadURL == "":
+		return reasonInfo{Summary: "节点尚未提供公网下载地址", Detail: detail}
+	case lastHeartbeat == "":
+		return reasonInfo{Summary: "节点尚未上报心跳，不能提供下载", Detail: detail}
+	case status.VerifiedMismatchCopies > 0:
+		return reasonInfo{Summary: "副本校验未通过", Detail: detail}
+	case status.DownloadableCopies > 0:
+		return reasonInfo{Summary: "下载就绪", Detail: detail}
+	default:
+		return reasonInfo{Summary: "副本尚未完成校验", Detail: detail}
+	}
+}
+
 func (s Store) loadNodeReadyState(ctx context.Context, nodeID string) (nodeReadyState, error) {
 	activeSession, err := s.hasActiveSession(ctx, nodeID)
 	if err != nil {
@@ -198,6 +235,27 @@ func (s Store) loadNodeReadyState(ctx context.Context, nodeID string) (nodeReady
 	status.LastReportComplete, err = s.latestInventoryReportComplete(ctx, nodeID)
 	if err != nil {
 		return nodeReadyState{}, err
+	}
+	return status, nil
+}
+
+func (s Store) loadNodeDownloadReadyState(ctx context.Context, nodeID string) (nodeDownloadReadyState, error) {
+	var status nodeDownloadReadyState
+	if err := s.DB.QueryRowContext(ctx, `SELECT
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN ni.state = 'verified'
+			AND ni.local_digest_sha256 = a.digest_sha256
+			AND ni.size_bytes = a.size_bytes THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN ni.state = 'verified'
+			AND (ni.local_digest_sha256 != a.digest_sha256 OR ni.size_bytes != a.size_bytes) THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN ni.state IS NOT NULL AND ni.state != 'verified' THEN 1 ELSE 0 END), 0)
+		FROM node_inventory ni
+		JOIN assets a ON a.id = ni.asset_id AND a.service_state = 'candidate'
+		JOIN releases r ON r.id = a.release_id AND r.selected = 1
+		JOIN projects p ON p.id = r.project_id AND p.enabled = 1
+		WHERE ni.node_id = ?`, nodeID).
+		Scan(&status.PublicCopies, &status.DownloadableCopies, &status.VerifiedMismatchCopies, &status.UnverifiedCopies); err != nil {
+		return nodeDownloadReadyState{}, err
 	}
 	return status, nil
 }

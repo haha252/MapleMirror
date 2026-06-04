@@ -54,7 +54,7 @@ func nodesTable(nodes []NodeSummary) string {
 	body := `<div class="node-table panel-card"><table><tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th><th>7天 SLA</th><th>总下载流量</th></tr>`
 	for _, n := range nodes {
 		body += `<tr><td>` + esc(n.PublicName) + renderDetail("最近心跳", displayTime(n.LastHeartbeat)) +
-			`</td><td>` + esc(stateText(n.State)) + routingDetail(n) + `</td><td>` +
+			`</td><td>` + esc(stateText(n.State)) + downloadDetail(n) + `</td><td>` +
 			esc(n.SLA24H) + `</td><td>` + esc(n.SLA7D) + `</td><td>` +
 			bytesText(n.TotalSentBytes) + `</td></tr>`
 	}
@@ -72,9 +72,9 @@ func displayTime(value string) string {
 	return value
 }
 
-func routingDetail(n NodeSummary) string {
-	if n.RoutingReady {
-		return renderDetail("同步就绪", "是")
+func downloadDetail(n NodeSummary) string {
+	if n.DownloadReady {
+		return renderDetail("下载就绪", "是")
 	}
-	return renderDetail("同步就绪", "否 "+n.RoutingReadyReason)
+	return renderDetail("下载就绪", "否 "+n.DownloadReadyReason)
 }

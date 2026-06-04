@@ -4,7 +4,8 @@ import "context"
 
 func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, public_name, state,
-		routing_ready, COALESCE(last_heartbeat_at, '') FROM nodes ORDER BY public_name, id`)
+		routing_ready, COALESCE(last_heartbeat_at, ''), COALESCE(public_download_base_url, '')
+		FROM nodes ORDER BY public_name, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -13,17 +14,29 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 	var out []NodeSummary
 	for rows.Next() {
 		var item NodeSummary
-		var ready int
-		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State, &ready, &item.LastHeartbeat); err != nil {
+		var routingReady int
+		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State, &routingReady, &item.LastHeartbeat, &item.PublicDownloadBaseURL); err != nil {
 			return nil, err
 		}
-		item.RoutingReady = ready == 1
+		item.RoutingReady = routingReady == 1
 		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	for i := range out {
+		status, err := s.loadNodeDownloadReadyState(ctx, out[i].NodeID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].DownloadReady = status.DownloadableCopies > 0 &&
+			out[i].State != "disabled" && out[i].State != "offline" &&
+			out[i].LastHeartbeat != "" && out[i].PublicDownloadBaseURL != ""
+		if !out[i].DownloadReady {
+			info := s.nodeDownloadReadyInfo(ctx, out[i].NodeID, out[i].State, out[i].LastHeartbeat, out[i].PublicDownloadBaseURL, status)
+			out[i].DownloadReadyReason = info.Summary
+			out[i].DownloadReadyDetails = info.Detail
+		}
 		if !out[i].RoutingReady {
 			info := s.nodeRoutingReadyInfo(ctx, out[i].NodeID, out[i].State, out[i].LastHeartbeat)
 			out[i].RoutingReadyReason = info.Summary
