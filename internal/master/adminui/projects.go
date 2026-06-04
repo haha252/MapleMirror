@@ -1,9 +1,7 @@
 package adminui
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,8 +32,7 @@ func (s *Server) saveProjects(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]string{"message": "项目配置路径未配置"})
 		return
 	}
-	if !loopbackRemote(r.RemoteAddr) && !hasClientAuth(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"message": "保存项目配置需要管理员 mTLS"})
+	if _, ok := s.requireHighRisk(w, r); !ok {
 		return
 	}
 	var incoming config.Projects
@@ -74,25 +71,4 @@ func writeProjectsFile(path string, projects config.Projects) error {
 		return err
 	}
 	return os.Rename(tmp, path)
-}
-
-func loopbackRemote(remote string) bool {
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		host = remote
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
-func hasClientAuth(r *http.Request) bool {
-	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		return false
-	}
-	for _, usage := range r.TLS.PeerCertificates[0].ExtKeyUsage {
-		if usage == x509.ExtKeyUsageClientAuth {
-			return true
-		}
-	}
-	return false
 }

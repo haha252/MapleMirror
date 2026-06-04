@@ -84,6 +84,8 @@ admin:
     # 管理面板只挂载在 HTTPS 管理监听器；启用前请先生成 users_file 中的密码哈希。
     enabled: false
     users_file: "secrets/admin-users.yaml"
+    # users_file 不存在且该环境变量存在时，启动时自动生成 admin 用户密码哈希。
+    bootstrap_password_env: "MIRROR_ADMIN_WEB_PASSWORD"
     session_secret_file: "secrets/admin-web-session.key"
     session_ttl: "12h"
     # 同一来源 1 天内密码错误 3 次，封禁 7 天。

@@ -1,0 +1,143 @@
+package adminui
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"strings"
+)
+
+func (s *Server) nodesAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
+		return
+	}
+	items, err := s.repo.ListNodes(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "节点列表查询失败"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": items})
+}
+
+func (s *Server) nodeActionAPI(w http.ResponseWriter, r *http.Request) {
+	nodeID, action := splitAdminPath(r.URL.Path, "/admin/api/nodes/")
+	if nodeID == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "节点不存在"})
+		return
+	}
+	switch {
+	case r.Method == http.MethodGet && action == "sync-status":
+		s.nodeSyncStatus(w, r, nodeID)
+	case r.Method == http.MethodGet && action == "reports":
+		s.nodeReports(w, r, nodeID)
+	case r.Method == http.MethodGet && action == "sla":
+		s.nodeSLA(w, r, nodeID)
+	case r.Method == http.MethodPost && action == "disable":
+		s.disableNode(w, r, nodeID)
+	case r.Method == http.MethodPost && action == "enable":
+		s.enableNode(w, r, nodeID)
+	case r.Method == http.MethodPost && action == "sync-reset":
+		s.syncReset(w, r, nodeID)
+	case r.Method == http.MethodPost && strings.HasPrefix(action, "sync-tasks/"):
+		s.syncTask(w, r, nodeID, action)
+	default:
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
+	}
+}
+
+func (s *Server) nodeSyncStatus(w http.ResponseWriter, r *http.Request, nodeID string) {
+	item, err := s.syncStore.SyncStatus(r.Context(), nodeID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "同步状态不存在"})
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) nodeReports(w http.ResponseWriter, r *http.Request, nodeID string) {
+	data := map[string]any{}
+	if item, err := s.repo.LatestHeartbeat(r.Context(), nodeID); err == nil {
+		data["heartbeat"] = item
+	}
+	if item, err := s.repo.LatestInventoryReport(r.Context(), nodeID); err == nil {
+		data["inventory"] = item
+	}
+	if item, err := s.repo.LatestPressureReport(r.Context(), nodeID); err == nil {
+		data["pressure"] = item
+	}
+	writeJSON(w, http.StatusOK, data)
+}
+
+func (s *Server) nodeSLA(w http.ResponseWriter, r *http.Request, nodeID string) {
+	items := []map[string]any{
+		slaWindow(s.repo.DB, r, nodeID, "24h", 24),
+		slaWindow(s.repo.DB, r, nodeID, "7d", 24*7),
+		slaWindow(s.repo.DB, r, nodeID, "30d", 24*30),
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"node_id": nodeID, "windows": items})
+}
+
+func (s *Server) disableNode(w http.ResponseWriter, r *http.Request, nodeID string) {
+	admin, ok := s.requireHighRisk(w, r)
+	if !ok {
+		return
+	}
+	var body struct{ Reason string }
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := s.repo.DisableNode(r.Context(), nodeID, requestID(r), body.Reason); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "禁用节点失败"})
+		return
+	}
+	_ = s.repo.Audit(r.Context(), "node.disable.mtls", "node", nodeID, "success", requestID(r), "管理者mTLS 已校验", admin)
+	writeJSON(w, http.StatusOK, map[string]any{"message": "节点已禁用", "node_id": nodeID})
+}
+
+func (s *Server) enableNode(w http.ResponseWriter, r *http.Request, nodeID string) {
+	admin, ok := s.requireHighRisk(w, r)
+	if !ok {
+		return
+	}
+	if err := s.repo.EnableNode(r.Context(), nodeID, requestID(r), admin); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "启用节点失败"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"message": "节点已启用", "node_id": nodeID})
+}
+
+func (s *Server) syncReset(w http.ResponseWriter, r *http.Request, nodeID string) {
+	admin, ok := s.requireHighRisk(w, r)
+	if !ok {
+		return
+	}
+	if err := s.repo.SyncReset(r.Context(), nodeID, requestID(r), admin); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步状态重置失败"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"message": "同步状态已重置", "node_id": nodeID})
+}
+
+func (s *Server) syncTask(w http.ResponseWriter, r *http.Request, nodeID, action string) {
+	if _, ok := s.requireHighRisk(w, r); !ok {
+		return
+	}
+	taskID, op := splitTaskAction(action)
+	var err error
+	if op == "retry" {
+		err = s.syncStore.RetryTask(r.Context(), nodeID, taskID)
+	} else if op == "cancel" {
+		err = s.syncStore.CancelTask(r.Context(), nodeID, taskID)
+	} else {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
+		return
+	}
+	if err == sql.ErrNoRows {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "同步任务不存在"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务操作失败"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"message": "同步任务已更新", "task_id": taskID})
+}

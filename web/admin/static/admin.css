@@ -64,6 +64,19 @@
   font-weight: 700;
 }
 
+.admin-secondary {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .admin-status {
   padding: 12px 14px;
   border-radius: 8px;
@@ -150,6 +163,10 @@
   margin-top: 16px;
 }
 
+.admin-extra {
+  margin-top: 16px;
+}
+
 .admin-editor {
   width: 100%;
   min-height: 360px;
@@ -160,6 +177,43 @@
   background: var(--panel-muted);
   color: var(--text);
   font: 13px/1.55 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.admin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, .38);
+}
+
+.admin-modal[hidden] {
+  display: none;
+}
+
+.admin-modal__box {
+  width: min(92vw, 460px);
+  padding: 18px;
+}
+
+.admin-modal__box h2 {
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+
+.admin-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .admin-badge {

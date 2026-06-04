@@ -102,6 +102,62 @@ func TestSaveProjectsWritesFileAndSyncsState(t *testing.T) {
 	}
 }
 
+func TestBootstrapPasswordEnvCreatesUsersFile(t *testing.T) {
+	dir := t.TempDir()
+	db, err := storage.OpenMaster(config.Database{
+		Path: filepath.Join(dir, "master.db"), BusyTimeout: "5s", WAL: boolPtr(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	t.Setenv("MIRROR_ADMIN_WEB_PASSWORD", "created-password")
+	enabled := true
+	usersPath := filepath.Join(dir, "users.yaml")
+	server, err := New(config.Administration{
+		AllowedCIDRs: []string{"127.0.0.0/8"},
+		Web: config.AdminWeb{
+			Enabled: &enabled, UsersFile: usersPath,
+			BootstrapPasswordEnv: "MIRROR_ADMIN_WEB_PASSWORD",
+			SessionSecretFile:    filepath.Join(dir, "session.key"),
+			SessionTTL:           "12h", LoginFailureWindow: "24h",
+			LoginFailureLimit: 3, LoginBanDuration: "168h",
+		},
+	}, mastercontrol.Repository{DB: db}, mirrorsync.Store{DB: db}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, loginRequest("admin", "created-password"))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("login status = %d", rec.Code)
+	}
+	if _, err := os.Stat(usersPath); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSaveProjectsRequiresMTLSOutsideLoopback(t *testing.T) {
+	server, _ := newTestServer(t)
+	projectsPath := filepath.Join(t.TempDir(), "projects.yaml")
+	initial := config.Projects{Projects: []config.Project{{
+		ID: "demo", Name: "演示项目", Repository: "owner/demo",
+		Enabled: true, RetainVersions: 1, DownloadMultiplier: 1,
+	}}}
+	if err := writeProjectsFile(projectsPath, initial); err != nil {
+		t.Fatal(err)
+	}
+	server.projects = mirrorsync.NewProjectLoader(projectsPath, initial)
+	body, _ := json.Marshal(initial)
+	req := httptest.NewRequest(http.MethodPut, "/admin/api/projects", strings.NewReader(string(body)))
+	req.RemoteAddr = "192.0.2.10:55000"
+	rec := httptest.NewRecorder()
+	server.saveProjects(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("save status = %d, want 403", rec.Code)
+	}
+}
+
 func newTestServer(t *testing.T) (*Server, *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
@@ -127,7 +183,7 @@ func newTestServer(t *testing.T) (*Server, *sql.DB) {
 			SessionTTL:        "12h", LoginFailureWindow: "24h",
 			LoginFailureLimit: 3, LoginBanDuration: "168h",
 		},
-	}, mastercontrol.Repository{DB: db}, mirrorsync.Store{DB: db}, nil)
+	}, mastercontrol.Repository{DB: db}, mirrorsync.Store{DB: db}, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

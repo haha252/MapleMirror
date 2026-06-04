@@ -6,6 +6,7 @@
     status.textContent = text;
     status.hidden = !text;
   }
+  window.adminSetStatus = setStatus;
 
   function text(id, value) {
     var el = document.getElementById(id);
@@ -40,7 +41,11 @@
       return "<tr><td><strong>" + esc(node.public_name || node.node_id) +
         '</strong><span class="sub">' + esc(node.node_id) + "</span></td><td>" +
         badge(node.state) + "</td><td>" + badge(node.routing_ready ? "可路由" : "不可路由") +
-        "</td><td>" + esc(node.last_heartbeat_at || "暂无") + "</td></tr>";
+        "</td><td>" + esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
+        '<button class="admin-secondary" data-node-action="sync-status" data-node="' + esc(node.node_id) + '">诊断</button>' +
+        '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + esc(node.node_id) + '">重置</button>' +
+        '<button class="admin-secondary" data-node-action="' + (node.state === "disabled" ? "enable" : "disable") +
+        '" data-node="' + esc(node.node_id) + '">' + (node.state === "disabled" ? "启用" : "禁用") + "</button></div></td></tr>";
     }).join("");
     text("node-summary", (nodes || []).length + " 个节点");
   }
@@ -67,6 +72,7 @@
         if (editor) editor.value = JSON.stringify(data, null, 2);
       });
   }
+  window.adminLoadProjects = loadProjects;
 
   function saveProjects() {
     var editor = document.getElementById("projects-editor");
@@ -91,7 +97,9 @@
       });
     }).then(function () {
       setStatus("项目配置已保存，并已同步运行状态。");
-      return loadProjects();
+      return loadProjects().then(function () {
+        if (window.adminLoadActions) window.adminLoadActions();
+      });
     }).catch(function (err) {
       setStatus(err.message || "项目配置保存失败");
     });

@@ -62,7 +62,11 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 	}.Handler()
 	handler := http.Handler(apiHandler)
 	if cfg.Admin.Web.Enabled != nil && *cfg.Admin.Web.Enabled {
-		ui, uiErr := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, projectLoader)
+		ui, uiErr := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
+			Projects: projectLoader,
+			Signer:   loaded.Sign,
+			Sync:     syncService,
+		})
 		if uiErr != nil {
 			logger.Error(context.Background(), "管理面板初始化失败", slog.String("error", uiErr.Error()))
 		} else {

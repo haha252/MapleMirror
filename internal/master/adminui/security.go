@@ -24,10 +24,22 @@ type userRecord struct {
 	Role         string `yaml:"role"`
 }
 
-func loadUsers(path string) (map[string]userRecord, error) {
+func loadUsers(path, bootstrapEnv string) (map[string]userRecord, error) {
 	var file userFile
 	if err := readYAMLFile(path, &file); err != nil {
-		return nil, err
+		if bootstrapEnv == "" || !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		password := os.Getenv(bootstrapEnv)
+		if password == "" {
+			return nil, err
+		}
+		if err := writeBootstrapUser(path, password); err != nil {
+			return nil, err
+		}
+		if err := readYAMLFile(path, &file); err != nil {
+			return nil, err
+		}
 	}
 	users := map[string]userRecord{}
 	for _, item := range file.Users {
@@ -40,6 +52,28 @@ func loadUsers(path string) (map[string]userRecord, error) {
 		return nil, errors.New("管理面板用户文件至少需要一个用户")
 	}
 	return users, nil
+}
+
+func writeBootstrapUser(path, password string) error {
+	hash, err := hashPassword(password)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dirName(path), 0o700); err != nil {
+		return err
+	}
+	body := "users:\n  - username: \"admin\"\n    password_hash: \"" + hash + "\"\n    role: \"owner\"\n"
+	return os.WriteFile(path, []byte(body), 0o600)
+}
+
+func hashPassword(password string) (string, error) {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return "", err
+	}
+	key := pbkdf2SHA256([]byte(password), salt, 210000, sha256.Size)
+	return "pbkdf2-sha256$210000$" + base64.RawStdEncoding.EncodeToString(salt) +
+		"$" + base64.RawStdEncoding.EncodeToString(key), nil
 }
 
 func verifyPassword(encoded, password string) bool {

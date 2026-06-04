@@ -2,7 +2,7 @@ package adminui
 
 import (
 	"context"
-	"database/sql"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -23,6 +23,10 @@ type Server struct {
 	repo      mastercontrol.Repository
 	syncStore mirrorsync.Store
 	projects  *mirrorsync.ProjectLoader
+	signer    func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
+	sync      interface {
+		Trigger(context.Context, string, string) (string, error)
+	}
 	users     map[string]userRecord
 	store     loginStore
 	networks  []*net.IPNet
@@ -31,8 +35,16 @@ type Server struct {
 	publicFS  fs.FS
 }
 
-func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mirrorsync.Store, projects *mirrorsync.ProjectLoader) (*Server, error) {
-	users, err := loadUsers(cfg.Web.UsersFile)
+type Options struct {
+	Projects *mirrorsync.ProjectLoader
+	Signer   func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
+	Sync     interface {
+		Trigger(context.Context, string, string) (string, error)
+	}
+}
+
+func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mirrorsync.Store, opts Options) (*Server, error) {
+	users, err := loadUsers(cfg.Web.UsersFile, cfg.Web.BootstrapPasswordEnv)
 	if err != nil {
 		return nil, fmt.Errorf("读取管理面板用户文件失败：%w", err)
 	}
@@ -60,7 +72,8 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		return nil, err
 	}
 	return &Server{
-		repo: repo, syncStore: syncStore, projects: projects, users: users, networks: networks,
+		repo: repo, syncStore: syncStore, projects: opts.Projects,
+		signer: opts.Signer, sync: opts.Sync, users: users, networks: networks,
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
 			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
@@ -75,6 +88,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/logout", s.logout)
 	mux.HandleFunc("/admin/api/overview", s.requireSession(s.overview))
 	mux.HandleFunc("/admin/api/projects", s.requireSession(s.projectsAPI))
+	mux.HandleFunc("/admin/api/projects/", s.requireSession(s.projectActionAPI))
+	mux.HandleFunc("/admin/api/nodes", s.requireSession(s.nodesAPI))
+	mux.HandleFunc("/admin/api/nodes/", s.requireSession(s.nodeActionAPI))
+	mux.HandleFunc("/admin/api/sync/scans", s.requireSession(s.scanAPI))
+	mux.HandleFunc("/admin/api/pairing-codes", s.requireSession(s.pairingCodesAPI))
+	mux.HandleFunc("/admin/api/pairing-requests", s.requireSession(s.pairingRequestsAPI))
+	mux.HandleFunc("/admin/api/pairing-requests/", s.requireSession(s.pairingRequestActionAPI))
+	mux.HandleFunc("/admin/api/security/blocks", s.requireSession(s.securityBlocksAPI))
+	mux.HandleFunc("/admin/api/security/blocks/", s.requireSession(s.securityBlockActionAPI))
 	mux.HandleFunc("/admin/", s.requireSession(s.shell))
 	return s.networkGuard(mux)
 }
@@ -206,28 +228,4 @@ func writeJSON(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(data)
-}
-
-func remoteIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
-func setSessionCookie(w http.ResponseWriter, token, expires string) {
-	exp, _ := time.Parse(time.RFC3339Nano, expires)
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/admin",
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, Expires: exp})
-}
-
-func clearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/admin",
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode,
-		Expires: time.Unix(0, 0), MaxAge: -1})
-}
-
-type dbQueryer interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
 }

@@ -142,6 +142,7 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 		warnDefault(warn, "admin.web.enabled", "false")
 	}
 	setString(&c.Admin.Web.UsersFile, "secrets/admin-users.yaml", "admin.web.users_file", warn)
+	setString(&c.Admin.Web.BootstrapPasswordEnv, "MIRROR_ADMIN_WEB_PASSWORD", "admin.web.bootstrap_password_env", warn)
 	setString(&c.Admin.Web.SessionSecretFile, "secrets/admin-web-session.key", "admin.web.session_secret_file", warn)
 	setString(&c.Admin.Web.SessionTTL, "12h", "admin.web.session_ttl", warn)
 	setString(&c.Admin.Web.LoginFailureWindow, "24h", "admin.web.login_failure_window", warn)
