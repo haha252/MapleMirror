@@ -26,7 +26,19 @@ authorization_max_bytes_multiplier: 2
 # 单个下载授权允许同时存在的 Range 请求数。
 range_concurrency_limit: 32
 
+# 兼容旧格式的静态黑名单；推荐新配置使用 blocklist.static。
 blacklist: []
+
+# 黑名单命中后会拒绝挑战创建和下载授权签发；exemptions 优先于黑名单。
+blocklist:
+  static: []
+  # 本站因请求令牌或每日流量额度耗尽写入的自动封禁时长，默认 7 天。
+  auto_ban_duration: "168h"
+  feeds:
+    # - url: "https://bcr.pbh-btn.ghorg.ghostchu-services.top/combine/all.txt"
+    #   refresh_interval: "1h"
+    #   timeout: "10s"
+
 exemptions:
   - 127.0.0.1
   - ::1

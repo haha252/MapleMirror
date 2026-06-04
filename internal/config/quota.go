@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"strings"
 )
 
@@ -13,7 +14,20 @@ type Quota struct {
 	AuthorizationMaxBytesMultiplier int            `yaml:"authorization_max_bytes_multiplier"`
 	RangeConcurrencyLimit           int            `yaml:"range_concurrency_limit"`
 	Blacklist                       []string       `yaml:"blacklist"`
+	Blocklist                       Blocklist      `yaml:"blocklist"`
 	Exemptions                      []string       `yaml:"exemptions"`
+}
+
+type Blocklist struct {
+	Static          []string        `yaml:"static"`
+	Feeds           []BlocklistFeed `yaml:"feeds"`
+	AutoBanDuration string          `yaml:"auto_ban_duration"`
+}
+
+type BlocklistFeed struct {
+	URL             string `yaml:"url"`
+	RefreshInterval string `yaml:"refresh_interval"`
+	Timeout         string `yaml:"timeout"`
 }
 
 type RequestBuckets struct {
@@ -56,6 +70,7 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 		c.RangeConcurrencyLimit = 32
 		warnDefault(warn, "range_concurrency_limit", "32")
 	}
+	setString(&c.Blocklist.AutoBanDuration, "168h", "blocklist.auto_ban_duration", warn)
 	return c, validateQuota(c)
 }
 
@@ -99,13 +114,51 @@ func validateQuota(c Quota) error {
 			return fmt.Errorf("quota.exemptions[%d]: %w", i, err)
 		}
 	}
+	for i, raw := range c.Blacklist {
+		if _, err := parseQuotaPrefix(raw); err != nil {
+			return fmt.Errorf("quota.blacklist[%d]: %w", i, err)
+		}
+	}
+	for i, raw := range c.Blocklist.Static {
+		if _, err := parseQuotaPrefix(raw); err != nil {
+			return fmt.Errorf("quota.blocklist.static[%d]: %w", i, err)
+		}
+	}
+	for i, feed := range c.Blocklist.Feeds {
+		if err := validateBlocklistFeed(i, feed); err != nil {
+			return err
+		}
+	}
+	if err := validDuration("quota.blocklist.auto_ban_duration", c.Blocklist.AutoBanDuration); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateBlocklistFeed(index int, feed BlocklistFeed) error {
+	parsed, err := url.Parse(strings.TrimSpace(feed.URL))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("quota.blocklist.feeds[%d].url 必须是 http/https URL", index)
+	}
+	if feed.RefreshInterval != "" {
+		if err := validDuration(fmt.Sprintf("quota.blocklist.feeds[%d].refresh_interval", index),
+			feed.RefreshInterval); err != nil {
+			return err
+		}
+	}
+	if feed.Timeout != "" {
+		if err := validDuration(fmt.Sprintf("quota.blocklist.feeds[%d].timeout", index),
+			feed.Timeout); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func parseQuotaPrefix(raw string) (netip.Prefix, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return netip.Prefix{}, errors.New("空白白名单项无效")
+		return netip.Prefix{}, errors.New("空白 IP/CIDR 项无效")
 	}
 	if prefix, err := netip.ParsePrefix(raw); err == nil {
 		return prefix.Masked(), nil

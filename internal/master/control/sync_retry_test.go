@@ -27,7 +27,9 @@ func TestAcceptSyncTaskResultAppliesRetryBackoff(t *testing.T) {
 		{sequence: 1, state: "retry_wait", attempts: 1, minWait: 4 * time.Second, maxWait: 6 * time.Second},
 		{sequence: 2, state: "retry_wait", attempts: 2, minWait: 9 * time.Second, maxWait: 11 * time.Second},
 		{sequence: 3, state: "retry_wait", attempts: 3, minWait: 29 * time.Second, maxWait: 31 * time.Second},
-		{sequence: 4, state: "failed", attempts: 4},
+		{sequence: 4, state: "retry_wait", attempts: 4, minWait: 59 * time.Second, maxWait: 61 * time.Second},
+		{sequence: 5, state: "retry_wait", attempts: 5, minWait: 179 * time.Second, maxWait: 181 * time.Second},
+		{sequence: 6, state: "failed", attempts: 6},
 	}
 
 	for _, item := range expected {
@@ -89,6 +91,36 @@ func TestDigestMismatchTaskResultRetriesWithoutQuarantine(t *testing.T) {
 	_ = repo.DB.QueryRow("SELECT status FROM node_certificates WHERE id = 'cert-1'").Scan(&certStatus)
 	if state == "disabled" || certStatus != "active" {
 		t.Fatalf("下载阶段摘要不一致不应隔离节点 state=%s cert=%s", state, certStatus)
+	}
+}
+
+func TestTemporaryErrorWithVerifiedPeerRetriesImmediately(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+	seedPeerNode(t, repo, "node-2", "源节点", "https://node-2.example.com")
+	seedVerifiedPeerAsset(t, repo, "node-2", "asset-1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+
+	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
+		TaskID:  "task-1",
+		AssetID: "asset-1",
+		Result:  "temporary_error",
+		Message: "源站不可用",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	var retryAfter sql.NullString
+	err = repo.DB.QueryRow(`SELECT state, retry_after FROM node_tasks WHERE id = 'task-1'`).
+		Scan(&state, &retryAfter)
+	if err != nil || state != "pending" || (retryAfter.Valid && retryAfter.String != "") {
+		t.Fatalf("verified peer should retry immediately, state=%s retry=%q err=%v",
+			state, retryAfter.String, err)
 	}
 }
 

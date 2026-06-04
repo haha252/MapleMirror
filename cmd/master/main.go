@@ -93,14 +93,23 @@ func main() {
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
 
 	runtime := mastercontrol.NewRuntimeStore()
-	repo := mastercontrol.Repository{DB: database, Logger: logger, Runtime: runtime}
+	tokenSigner, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)
+	if err != nil {
+		logger.Error(context.Background(), "下载令牌签发私钥加载失败", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
+	repo := mastercontrol.Repository{
+		DB: database, Logger: logger, Runtime: runtime,
+		ReplicationSigner: tokenSigner, ReplicationTokenTTL: tokenTTL,
+	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, projectLoader, logger)
 	startConsolePairing(cfg, repo, logger)
 
-	publicHandler, err := publicHandler(cfg, quota, projects, *projectsPath, location, database, runtime, logger)
+	publicHandler, err := publicHandler(cfg, quota, projects, *projectsPath, location, database, runtime, logger, tokenSigner)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -145,11 +154,7 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *
 	return service
 }
 
-func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, projectsPath string, loc *time.Location, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger) (http.Handler, error) {
-	signer, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)
-	if err != nil {
-		return nil, err
-	}
+func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, projectsPath string, loc *time.Location, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger, signer downloadtoken.Signer) (http.Handler, error) {
 	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)

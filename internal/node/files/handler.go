@@ -41,6 +41,10 @@ type assetRequest struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/internal/replication/") {
+		h.serveReplication(w, r)
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		httpError(w, r, http.StatusMethodNotAllowed, "请求方法不支持")
 		return

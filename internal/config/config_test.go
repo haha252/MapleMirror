@@ -67,7 +67,8 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 ||
 		quota.DailyTraffic.IPv664 != "20 GiB" ||
 		quota.AuthorizationMaxBytesMultiplier != 2 ||
-		quota.RangeConcurrencyLimit != 32 {
+		quota.RangeConcurrencyLimit != 32 ||
+		quota.Blocklist.AutoBanDuration != "168h" {
 		t.Fatalf("额度默认合同错误：%v", err)
 	}
 }

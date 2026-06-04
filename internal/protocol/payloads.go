@@ -97,11 +97,19 @@ type SyncAsset struct {
 	DigestSHA256 string `json:"digest_sha256"`
 }
 
+type SyncFallbackSource struct {
+	NodeID      string `json:"node_id"`
+	NodeName    string `json:"node_name,omitempty"`
+	DownloadURL string `json:"download_url"`
+	Token       string `json:"token"`
+}
+
 type SyncTask struct {
-	TaskID            string    `json:"task_id"`
-	TaskType          string    `json:"task_type"`
-	Asset             SyncAsset `json:"asset"`
-	RetryAfterSeconds int       `json:"retry_after_seconds"`
+	TaskID            string               `json:"task_id"`
+	TaskType          string               `json:"task_type"`
+	Asset             SyncAsset            `json:"asset"`
+	FallbackSources   []SyncFallbackSource `json:"fallback_sources,omitempty"`
+	RetryAfterSeconds int                  `json:"retry_after_seconds"`
 }
 
 type SyncTaskAck struct {

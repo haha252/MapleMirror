@@ -19,6 +19,7 @@ type Executor struct {
 	TempDir string
 	Client  *http.Client
 	Logger  *logging.Logger
+	Probe   *SourceProbe
 }
 
 func (e Executor) Execute(ctx context.Context, task protocol.SyncTask) protocol.SyncTaskResult {
@@ -85,16 +86,29 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 		return taskResult(task, "temporary_error", "", 0, "创建临时目录失败")
 	}
 	tmpPath := filepath.Join(e.TempDir, task.TaskID+".tmp")
-	digest, size, err := e.fetch(ctx, task.Asset.DownloadURL, tmpPath)
+	digest, size, err := e.fetchPrimary(ctx, task, tmpPath)
 	if err != nil {
-		_ = os.Remove(tmpPath)
 		if e.Logger != nil {
-			e.Logger.Warn(context.Background(), "节点下载资产失败",
+			message := "节点下载资产失败"
+			if len(task.FallbackSources) > 0 {
+				message = "节点源站下载失败，准备尝试其他节点复制"
+			}
+			e.Logger.Warn(context.Background(), message,
 				slog.String("task_id", task.TaskID),
 				slog.String("asset_id", task.Asset.AssetID),
+				slog.Int("fallback_sources", len(task.FallbackSources)),
 				slog.String("error", err.Error()))
 		}
-		return taskResult(task, "temporary_error", digest, size, "下载资产失败")
+		digest, size, err = e.fetchFallback(ctx, task, tmpPath)
+		if err != nil {
+			if e.Logger != nil && len(task.FallbackSources) == 0 {
+				e.Logger.Warn(context.Background(), "节点源站不可用且没有可用节点副本，等待主节点重试",
+					slog.String("task_id", task.TaskID),
+					slog.String("asset_id", task.Asset.AssetID))
+			}
+			_ = os.Remove(tmpPath)
+			return taskResult(task, "temporary_error", digest, size, "下载资产失败")
+		}
 	}
 	if digest != task.Asset.DigestSHA256 {
 		_ = os.Remove(tmpPath)

@@ -24,6 +24,9 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	if s.rejectBlockedDownload(w, r, in.AssetID, "web_challenge") {
+		return
+	}
 	challenge, err := s.Store.CreateChallenge(r.Context(), "altcha", in.AssetID,
 		s.clientPrefix(r), s.ALTCHADifficulty, s.ALTCHATTL, requestID(r))
 	if err != nil {
@@ -46,6 +49,9 @@ func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
 		AssetID string `json:"asset_id"`
 	}
 	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if s.rejectBlockedDownload(w, r, in.AssetID, "api_challenge") {
 		return
 	}
 	challenge, err := s.Store.CreateChallenge(r.Context(), "api_pow", in.AssetID,
@@ -80,6 +86,9 @@ func (s Server) webAuthorize(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "INVALID_REQUEST", "网页挑战提交内容不合法")
 		return
 	}
+	if s.rejectBlockedDownload(w, r, in.AssetID, "web_authorization") {
+		return
+	}
 	s.authorize(w, r, challengeSubmit{Kind: "altcha", ChallengeID: in.ChallengeID,
 		AssetID: in.AssetID, Solution: strconv.Itoa(payload.Number)})
 }
@@ -91,6 +100,9 @@ func (s Server) apiAuthorize(w http.ResponseWriter, r *http.Request) {
 		Nonce       string `json:"nonce"`
 	}
 	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if s.rejectBlockedDownload(w, r, in.AssetID, "api_authorization") {
 		return
 	}
 	s.authorize(w, r, challengeSubmit{Kind: "api_pow", ChallengeID: in.ChallengeID,

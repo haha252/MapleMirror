@@ -14,6 +14,10 @@ import (
 )
 
 func (e Executor) fetch(ctx context.Context, url, tmpPath string) (string, int64, error) {
+	return e.fetchWithToken(ctx, url, tmpPath, "")
+}
+
+func (e Executor) fetchWithToken(ctx context.Context, url, tmpPath, token string) (string, int64, error) {
 	client := e.Client
 	if client == nil {
 		client = http.DefaultClient
@@ -21,6 +25,9 @@ func (e Executor) fetch(ctx context.Context, url, tmpPath string) (string, int64
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", 0, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := client.Do(req)
 	if err != nil {

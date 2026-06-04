@@ -44,10 +44,12 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		if err == errRequestQuota {
 			code, stable = http.StatusTooManyRequests, "REQUEST_QUOTA_EXHAUSTED"
 			message = "请求额度不足，请稍后再试"
+			s.autoBlockAfterQuotaError(r, loaded.ClientPrefixKey, in.AssetID, err)
 		}
 		if err == errTrafficLimit {
 			code, stable = http.StatusTooManyRequests, "TRAFFIC_LIMIT_EXCEEDED"
 			message = "今日流量额度不足，请稍后再试"
+			s.autoBlockAfterQuotaError(r, loaded.ClientPrefixKey, in.AssetID, err)
 		}
 		if s.Logger != nil {
 			s.Logger.Debug(r.Context(), "下载授权签发失败",

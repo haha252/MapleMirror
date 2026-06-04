@@ -27,6 +27,7 @@ type Server struct {
 	ProjectAssets    map[string]projectAssetConfig
 	ProjectsPath     string
 	PageViews        *pageViewTracker
+	Blocklist        *blocklistPolicy
 }
 
 func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration,
@@ -39,6 +40,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 	}
 	challenges := newChallengeMemory()
 	challenges.startCleanup(minDuration(altchaTTL, apiTTL, time.Minute))
+	blocklist := newBlocklistPolicy(quota, logger)
+	blocklist.start()
 	return Server{
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
 			Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota),
@@ -55,6 +58,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 		ProjectAssets:    projectAssetMap(projects),
 		ProjectsPath:     projectsPath,
 		PageViews:        newPageViewTracker(),
+		Blocklist:        blocklist,
 	}, nil
 }
 

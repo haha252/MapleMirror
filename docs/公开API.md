@@ -49,6 +49,7 @@
 | `401` | `DOWNLOAD_TOKEN_INVALID` | 下载令牌无效、过期或签名不符 |
 | `403` | `CHALLENGE_FAILED` | 网页挑战或 PoW 校验失败 |
 | `403` | `CLIENT_PREFIX_MISMATCH` | 客户端 IP 前缀与挑战或令牌不一致 |
+| `403` | `CLIENT_BLOCKED` | 客户端命中静态或订阅黑名单 |
 | `404` | `ASSET_NOT_FOUND` | 项目、版本或资产不存在 |
 | `409` | `CHALLENGE_CONSUMED` | 挑战已被使用 |
 | `409` | `NO_ROUTABLE_NODE` | 当前没有可用下载节点 |
@@ -126,6 +127,8 @@
 `POST /api/public/v1/web/challenges`
 
 挑战保存在主节点内存中，不写入数据库；主节点按客户端前缀和挑战类型执行轻量限流，并定期清理过期挑战。
+
+创建挑战前会先检查 `quota.yaml` 黑名单。命中静态黑名单或订阅源黑名单时返回 `403 CLIENT_BLOCKED`，不会创建挑战。
 
 请求：
 
@@ -247,6 +250,10 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 成功响应与网页授权一致。挑战提交后必须被消费，重复提交返回 `CHALLENGE_CONSUMED`。
 
+授权签发前会再次检查黑名单，覆盖“挑战创建后客户端被封禁”的窗口。命中后返回 `403 CLIENT_BLOCKED`，不会签发下载令牌。
+
+若授权签发因为 `REQUEST_QUOTA_EXHAUSTED` 或 `TRAFFIC_LIMIT_EXCEEDED` 失败，主节点会把客户端前缀写入本站自动封禁表。默认封禁 7 天，时长由 `quota.yaml` 的 `blocklist.auto_ban_duration` 调整；过期后自动不再生效。订阅源黑名单不受该过期时间影响，只跟随订阅源当前快照。
+
 ## 6. 授权查询
 
 `GET /api/public/v1/authorizations/{authorization_id}`
@@ -361,6 +368,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 
 - 公共 API 响应不得包含节点内部地址、控制端口、证书、磁盘路径、GitHub Token 或完整客户端 IP。
 - 日志不得记录完整 `download_token`、完整网页挑战 payload、完整 PoW 规范字符串或完整 URL 查询令牌。
+- 黑名单拒绝日志必须包含封禁原因和来源，并累计 `blocked_after_attempts` 表示该客户端前缀封禁后仍尝试下载的次数。
 - JSON 字段新增必须保持向后兼容；删除或重命名字段前必须更新本文并经过阶段确认。
 - 所有中文错误、页面文案和文档使用 UTF-8。
 

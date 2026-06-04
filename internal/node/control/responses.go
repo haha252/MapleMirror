@@ -70,7 +70,8 @@ func (c Client) decodeSyncTask(msg protocol.Envelope, reqID string) (protocol.Sy
 			slog.String("task_id", task.TaskID),
 			slog.String("task_type", task.TaskType),
 			slog.String("asset_id", task.Asset.AssetID),
-			slog.String("file_name", task.Asset.FileName))
+			slog.String("file_name", task.Asset.FileName),
+			slog.Int("fallback_sources", len(task.FallbackSources)))
 	}
 	return task, nil
 }

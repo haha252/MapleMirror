@@ -10,13 +10,16 @@ import (
 	"fmt"
 	"time"
 
+	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
 )
 
 type Repository struct {
-	DB      *sql.DB
-	Logger  *logging.Logger
-	Runtime *RuntimeStore
+	DB                  *sql.DB
+	Logger              *logging.Logger
+	Runtime             *RuntimeStore
+	ReplicationSigner   downloadtoken.Signer
+	ReplicationTokenTTL time.Duration
 }
 
 var defaultRuntime = NewRuntimeStore()
