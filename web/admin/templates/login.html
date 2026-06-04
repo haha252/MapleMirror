@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理登录 - 枫源镜像</title>
+<script>
+(function () {
+  var root = document.documentElement;
+  var mode = localStorage.getItem("mirror-mode");
+  var accent = localStorage.getItem("mirror-accent") || "maple";
+  if (mode !== "light" && mode !== "dark") {
+    mode = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  root.setAttribute("data-theme", mode);
+  root.setAttribute("data-accent", accent);
+})();
+</script>
+<link rel="icon" type="image/webp" href="/static/public/logo.webp">
+<link rel="stylesheet" href="/static/public/base.css">
+<link rel="stylesheet" href="/static/public/base-responsive.css">
+<link rel="stylesheet" href="/static/admin/admin.css">
+</head>
+<body class="page-admin-login">
+<main class="admin-login">
+  <form class="admin-login__box panel-card" method="post" action="/admin/login" novalidate>
+    <div class="admin-login__brand">
+      <img src="/static/public/logo.webp" alt="">
+      <div>
+        <h1>枫源镜像</h1>
+        <p>管理面板</p>
+      </div>
+    </div>
+    {{if .Message}}<div class="admin-status admin-status--warn" role="status">{{.Message}}</div>{{end}}
+    <label class="admin-field">
+      <span>账号</span>
+      <input name="username" autocomplete="username" required>
+    </label>
+    <label class="admin-field">
+      <span>密码</span>
+      <input name="password" type="password" autocomplete="current-password" required>
+    </label>
+    <button class="admin-primary" type="submit">登录</button>
+  </form>
+</main>
+<script src="/static/public/theme.js" defer></script>
+</body>
+</html>

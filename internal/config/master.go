@@ -78,19 +78,6 @@ type TLS struct {
 	SigningCAKeyFile  string `yaml:"signing_ca_key_file"`
 	ServerName        string `yaml:"server_name"`
 }
-type Administration struct {
-	AllowedCIDRs        []string `yaml:"allowed_cidrs"`
-	TokenEnv            string   `yaml:"token_env"`
-	TokenFile           string   `yaml:"token_file"`
-	TokenMinBytes       int      `yaml:"token_min_bytes"`
-	HighRiskRequireMTLS *bool    `yaml:"high_risk_require_mtls"`
-	TLS                 AdminTLS `yaml:"tls"`
-}
-type AdminTLS struct {
-	CertFile     string `yaml:"cert_file"`
-	KeyFile      string `yaml:"key_file"`
-	ClientCAFile string `yaml:"client_ca_file"`
-}
 
 func LoadMaster(path string, warn WarnFunc) (Master, error) {
 	var c Master
@@ -149,6 +136,20 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 		c.Admin.HighRiskRequireMTLS = &value
 		warnDefault(warn, "admin.high_risk_require_mtls", "true")
 	}
+	if c.Admin.Web.Enabled == nil {
+		value := false
+		c.Admin.Web.Enabled = &value
+		warnDefault(warn, "admin.web.enabled", "false")
+	}
+	setString(&c.Admin.Web.UsersFile, "secrets/admin-users.yaml", "admin.web.users_file", warn)
+	setString(&c.Admin.Web.SessionSecretFile, "secrets/admin-web-session.key", "admin.web.session_secret_file", warn)
+	setString(&c.Admin.Web.SessionTTL, "12h", "admin.web.session_ttl", warn)
+	setString(&c.Admin.Web.LoginFailureWindow, "24h", "admin.web.login_failure_window", warn)
+	if c.Admin.Web.LoginFailureLimit == 0 {
+		c.Admin.Web.LoginFailureLimit = 3
+		warnDefault(warn, "admin.web.login_failure_limit", "3")
+	}
+	setString(&c.Admin.Web.LoginBanDuration, "168h", "admin.web.login_ban_duration", warn)
 	setString(&c.Admin.TLS.CertFile, "secrets/admin-api.crt", "admin.tls.cert_file", warn)
 	setString(&c.Admin.TLS.KeyFile, "secrets/admin-api.key", "admin.tls.key_file", warn)
 	setString(&c.Admin.TLS.ClientCAFile, "secrets/admin-client-ca.pem", "admin.tls.client_ca_file", warn)
@@ -177,7 +178,7 @@ func validateMaster(c Master) error {
 	if err := validateLogging(c.Logging); err != nil {
 		return err
 	}
-	for field, value := range map[string]string{"database.busy_timeout": c.Database.BusyTimeout, "scan.interval": c.Scan.Interval, "altcha.challenge_ttl": c.ALTCHA.ChallengeTTL, "api_pow.challenge_ttl": c.APIPoW.ChallengeTTL, "download_token.ttl": c.DownloadToken.TTL, "node.heartbeat_timeout": c.Node.HeartbeatTimeout, "node.heartbeat_interval": c.Node.HeartbeatInterval, "node.enrollment_timeout": c.Node.EnrollmentTimeout, "node.pairing_code_ttl": c.Node.PairingCodeTTL} {
+	for field, value := range map[string]string{"database.busy_timeout": c.Database.BusyTimeout, "scan.interval": c.Scan.Interval, "altcha.challenge_ttl": c.ALTCHA.ChallengeTTL, "api_pow.challenge_ttl": c.APIPoW.ChallengeTTL, "download_token.ttl": c.DownloadToken.TTL, "node.heartbeat_timeout": c.Node.HeartbeatTimeout, "node.heartbeat_interval": c.Node.HeartbeatInterval, "node.enrollment_timeout": c.Node.EnrollmentTimeout, "node.pairing_code_ttl": c.Node.PairingCodeTTL, "admin.web.session_ttl": c.Admin.Web.SessionTTL, "admin.web.login_failure_window": c.Admin.Web.LoginFailureWindow, "admin.web.login_ban_duration": c.Admin.Web.LoginBanDuration} {
 		if err := validDuration(field, value); err != nil {
 			return err
 		}
@@ -213,6 +214,14 @@ func validateMaster(c Master) error {
 	}
 	if len(c.Admin.AllowedCIDRs) == 0 {
 		return errors.New("管理 API 必须配置管理网络 CIDR")
+	}
+	if c.Admin.Web.Enabled != nil && *c.Admin.Web.Enabled {
+		if c.Admin.Web.UsersFile == "" || c.Admin.Web.SessionSecretFile == "" {
+			return errors.New("管理面板启用时必须配置用户文件和会话密钥文件")
+		}
+		if c.Admin.Web.LoginFailureLimit < 1 {
+			return errors.New("管理面板登录失败封禁阈值必须大于零")
+		}
 	}
 	for _, cidr := range append(c.Proxy.TrustedCIDRs, c.Admin.AllowedCIDRs...) {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {

@@ -70,7 +70,8 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 			slog.String("node_id", session.NodeID),
 			slog.String("asset_id", task.Asset.AssetID),
 			slog.String("file_name", task.Asset.FileName),
-			slog.Int64("size_bytes", task.Asset.SizeBytes))
+			slog.Int64("size_bytes", task.Asset.SizeBytes),
+			slog.Int("fallback_sources", len(task.FallbackSources)))
 	}
 	body, _ := json.Marshal(task)
 	return writeControlFrame(conn, protocol.Envelope{

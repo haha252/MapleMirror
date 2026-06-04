@@ -52,6 +52,9 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, _ = tx.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
 		close_reason = '新会话替换' WHERE node_id = ? AND disconnected_at IS NULL`, now, session.NodeID)
+	if err := resetInterruptedTasks(ctx, tx, session.NodeID, now); err != nil {
+		return Session{}, err
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO node_control_sessions
 		(id, node_id, certificate_id, request_id, connected_at, last_message_sequence)
 		VALUES (?, ?, ?, ?, ?, 0)`,
@@ -69,6 +72,13 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 	}
 	r.runtime().StartSession(session)
 	return session, nil
+}
+
+func resetInterruptedTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
+	_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+		error_message = '控制会话重连后重新派发', retry_after = NULL, updated_at = ?
+		WHERE node_id = ? AND state IN ('sent', 'running')`, now, nodeID)
+	return err
 }
 
 func (r Repository) CloseSession(ctx context.Context, sessionID, reason string) error {

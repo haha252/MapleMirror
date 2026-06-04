@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理面板 - 枫源镜像</title>
+<script>
+(function () {
+  var root = document.documentElement;
+  var mode = localStorage.getItem("mirror-mode");
+  var accent = localStorage.getItem("mirror-accent") || "maple";
+  if (mode !== "light" && mode !== "dark") {
+    mode = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  root.setAttribute("data-theme", mode);
+  root.setAttribute("data-accent", accent);
+})();
+</script>
+<link rel="icon" type="image/webp" href="/static/public/logo.webp">
+<link rel="stylesheet" href="/static/public/base.css">
+<link rel="stylesheet" href="/static/public/base-responsive.css">
+<link rel="stylesheet" href="/static/admin/admin.css">
+</head>
+<body class="page-admin">
+<div id="page-loading-bar" class="page-loading-bar" aria-hidden="true"></div>
+<header class="site-header">
+  <div class="site-header__left">
+    <a class="site-brand" href="/admin/" aria-label="枫源镜像管理面板">
+      <img src="/static/public/logo.webp" alt="">
+      <span>枫源镜像管理</span>
+    </a>
+    <nav class="site-nav" aria-label="管理导航">
+      <a href="/admin/" aria-current="page"><span>总览</span></a>
+      <a href="/admin/nodes"><span>节点</span></a>
+      <a href="/admin/sync"><span>同步</span></a>
+      <a href="/admin/projects"><span>项目</span></a>
+      <a href="/admin/security"><span>安全</span></a>
+    </nav>
+  </div>
+  <div class="theme-tools">
+    <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"></button>
+    <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色"></button>
+    <a class="admin-logout" href="/admin/logout">退出</a>
+    <div id="palette-menu" class="palette-menu" hidden></div>
+  </div>
+</header>
+<main class="site-main admin-main">
+  <div class="page-title-row">
+    <h1>管理总览</h1>
+    <p class="page-subtitle">节点、同步与流量状态</p>
+  </div>
+  <div id="admin-status" class="status" hidden></div>
+  <section class="admin-metrics" aria-label="关键指标">
+    <article class="panel-card admin-metric"><span>今日授权</span><strong id="metric-auth">0</strong></article>
+    <article class="panel-card admin-metric"><span>今日传输</span><strong id="metric-started">0</strong></article>
+    <article class="panel-card admin-metric"><span>今日流量</span><strong id="metric-daily">0 B</strong></article>
+    <article class="panel-card admin-metric"><span>累计流量</span><strong id="metric-total">0 B</strong></article>
+  </section>
+  <section class="admin-grid">
+    <article class="panel-card admin-panel">
+      <div class="admin-panel__head">
+        <h2>节点</h2>
+        <span id="node-summary" class="muted">加载中</span>
+      </div>
+      <div class="admin-table-wrap">
+        <table>
+          <thead><tr><th>节点</th><th>状态</th><th>路由</th><th>最近心跳</th></tr></thead>
+          <tbody id="nodes-body"></tbody>
+        </table>
+      </div>
+    </article>
+    <article class="panel-card admin-panel">
+      <div class="admin-panel__head">
+        <h2>扫描</h2>
+        <span id="scan-summary" class="muted">加载中</span>
+      </div>
+      <div class="admin-table-wrap">
+        <table>
+          <thead><tr><th>项目</th><th>状态</th><th>下次扫描</th></tr></thead>
+          <tbody id="scans-body"></tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+  <section class="panel-card admin-panel admin-projects">
+    <div class="admin-panel__head">
+      <h2>项目配置</h2>
+      <button id="projects-save" class="admin-primary" type="button">保存项目配置</button>
+    </div>
+    <p class="page-intro">这里管理要镜像的 GitHub 仓库、版本保留数量、预发布版本、资产包含/排除规则、架构和系统识别规则。</p>
+    <textarea id="projects-editor" class="admin-editor" spellcheck="false" aria-label="项目配置 JSON"></textarea>
+  </section>
+</main>
+<script src="/static/public/theme.js" defer></script>
+<script src="/static/admin/admin.js" defer></script>
+</body>
+</html>

@@ -80,6 +80,16 @@ admin:
   token_min_bytes: 32
   # 高风险节点操作必须叠加 mTLS，不得关闭。
   high_risk_require_mtls: true
+  web:
+    # 管理面板只挂载在 HTTPS 管理监听器；启用前请先生成 users_file 中的密码哈希。
+    enabled: false
+    users_file: "secrets/admin-users.yaml"
+    session_secret_file: "secrets/admin-web-session.key"
+    session_ttl: "12h"
+    # 同一来源 1 天内密码错误 3 次，封禁 7 天。
+    login_failure_window: "24h"
+    login_failure_limit: 3
+    login_ban_duration: "168h"
   tls:
     cert_file: "secrets/admin-api.crt"
     key_file: "secrets/admin-api.key"

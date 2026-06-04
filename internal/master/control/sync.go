@@ -5,20 +5,17 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"net/url"
-	"strings"
 	"time"
 
-	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/protocol"
 )
-
-const maxSyncFallbackSources = 3
 
 func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.SyncTask, bool, error) {
 	var task protocol.SyncTask
 	var attempts int
 	var retryAfter string
+	var assetID, projectID, version, fileName, downloadURL, digest sql.NullString
+	var size sql.NullInt64
 	err := r.DB.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, r.project_id,
 		r.tag_name, a.file_name, a.size_bytes, a.source_url, a.digest_sha256, COALESCE(t.attempts, 0),
 		COALESCE(t.retry_after, '')
@@ -30,15 +27,20 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
 		)
 		ORDER BY t.created_at LIMIT 1`, nodeID, time.Now().UTC().Format(time.RFC3339Nano)).
-		Scan(&task.TaskID, &task.TaskType, &task.Asset.AssetID,
-			&task.Asset.ProjectID, &task.Asset.Version, &task.Asset.FileName, &task.Asset.SizeBytes,
-			&task.Asset.DownloadURL, &task.Asset.DigestSHA256,
+		Scan(&task.TaskID, &task.TaskType, &assetID,
+			&projectID, &version, &fileName, &size,
+			&downloadURL, &digest,
 			&attempts, &retryAfter)
 	if err == sql.ErrNoRows {
 		return protocol.SyncTask{}, false, nil
 	}
 	if err != nil {
 		return protocol.SyncTask{}, false, err
+	}
+	task.Asset = protocol.SyncAsset{
+		AssetID: assetID.String, ProjectID: projectID.String, Version: version.String,
+		FileName: fileName.String, SizeBytes: size.Int64,
+		DownloadURL: downloadURL.String, DigestSHA256: digest.String,
 	}
 	if task.TaskType == "asset_download" {
 		task.FallbackSources = r.syncFallbackSources(ctx, nodeID, task)
@@ -55,54 +57,6 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 			slog.String("retry_after", retryAfter))
 	}
 	return task, true, err
-}
-
-func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string, task protocol.SyncTask) []protocol.SyncFallbackSource {
-	rows, err := r.DB.QueryContext(ctx, `SELECT n.id, n.public_name, n.public_download_base_url
-		FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
-		JOIN assets a ON a.id = ni.asset_id
-		WHERE ni.asset_id = ? AND ni.node_id != ? AND n.state != 'disabled'
-		AND n.state != 'offline' AND n.last_heartbeat_at IS NOT NULL
-		AND n.last_heartbeat_at != '' AND n.public_download_base_url != '' AND ni.state = 'verified'
-		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
-		ORDER BY n.public_name, n.id LIMIT ?`,
-		task.Asset.AssetID, targetNodeID, maxSyncFallbackSources)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	expires := time.Now().UTC().Add(r.replicationTokenTTL()).Format(time.RFC3339Nano)
-	out := make([]protocol.SyncFallbackSource, 0, maxSyncFallbackSources)
-	for rows.Next() {
-		var nodeID, nodeName, baseURL string
-		if err := rows.Scan(&nodeID, &nodeName, &baseURL); err != nil {
-			return out
-		}
-		token, err := r.ReplicationSigner.SignReplication(downloadtoken.ReplicationClaims{
-			AssetID: task.Asset.AssetID, SourceNodeID: nodeID, TargetNodeID: targetNodeID,
-			ExpiresAt: expires, RequestID: task.TaskID, TaskID: task.TaskID,
-		})
-		if err != nil {
-			continue
-		}
-		out = append(out, protocol.SyncFallbackSource{
-			NodeID: nodeID, NodeName: nodeName,
-			DownloadURL: joinReplicationURL(baseURL, task.Asset.AssetID),
-			Token:       token,
-		})
-	}
-	return out
-}
-
-func (r Repository) replicationTokenTTL() time.Duration {
-	if r.ReplicationTokenTTL > 0 {
-		return r.ReplicationTokenTTL
-	}
-	return 15 * time.Minute
-}
-
-func joinReplicationURL(baseURL, assetID string) string {
-	return strings.TrimRight(baseURL, "/") + "/internal/replication/" + url.PathEscape(assetID)
 }
 
 func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, seq uint64, result protocol.SyncTaskResult) (HeartbeatResult, error) {
