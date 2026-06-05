@@ -52,9 +52,18 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 	if err != nil {
 		return nil, err
 	}
-	sessionTTL, _ := time.ParseDuration(cfg.Web.SessionTTL)
-	window, _ := time.ParseDuration(cfg.Web.LoginFailureWindow)
-	banDuration, _ := time.ParseDuration(cfg.Web.LoginBanDuration)
+	sessionTTL, err := parseWebDuration("admin.web.session_ttl", cfg.Web.SessionTTL)
+	if err != nil {
+		return nil, err
+	}
+	window, err := parseWebDuration("admin.web.login_failure_window", cfg.Web.LoginFailureWindow)
+	if err != nil {
+		return nil, err
+	}
+	banDuration, err := parseWebDuration("admin.web.login_ban_duration", cfg.Web.LoginBanDuration)
+	if err != nil {
+		return nil, err
+	}
 	networks, err := parseNetworks(cfg.AllowedCIDRs)
 	if err != nil {
 		return nil, err
@@ -78,6 +87,14 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		store: loginStore{db: repo.DB, secret: secret, window: window,
 			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
 	}, nil
+}
+
+func parseWebDuration(field, value string) (time.Duration, error) {
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("管理面板配置字段 %s 无效：%w", field, err)
+	}
+	return duration, nil
 }
 
 func (s *Server) Handler() http.Handler {
