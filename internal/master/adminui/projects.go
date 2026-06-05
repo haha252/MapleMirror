@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"mirror-server/internal/config"
 
@@ -62,13 +61,35 @@ func writeProjectsFile(path string, projects config.Projects) error {
 		return err
 	}
 	dir := filepath.Dir(path)
-	tmp := filepath.Join(dir, ".projects."+time.Now().UTC().Format("20060102150405")+".tmp")
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	tmp, err := writeProjectsTemp(dir, data)
+	if err != nil {
 		return err
 	}
 	if _, err := config.LoadProjects(tmp, nil); err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+func writeProjectsTemp(dir string, data []byte) (string, error) {
+	file, err := os.CreateTemp(dir, ".projects-*.yaml")
+	if err != nil {
+		return "", err
+	}
+	tmp := file.Name()
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	return tmp, nil
 }
