@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ func (e Executor) commitAsset(task protocol.SyncTask, tmpPath, finalPath, rel, d
 		}
 		return taskResult(task, "temporary_error", digest, size, "创建资产目录失败")
 	}
-	if err := os.Rename(tmpPath, finalPath); err == nil {
+	if err := moveAssetFile(tmpPath, finalPath); err == nil {
 		return e.recordCommittedAsset(task, rel, digest, size, "资产已校验并落盘")
 	} else {
 		return e.reuseOrReplaceTarget(task, tmpPath, finalPath, rel, digest, size, err)
@@ -34,8 +35,7 @@ func (e Executor) reuseOrReplaceTarget(task protocol.SyncTask, tmpPath, finalPat
 		_ = os.Remove(tmpPath)
 		return e.recordCommittedAsset(task, rel, digest, size, "资产已由并发任务落盘")
 	}
-	_ = os.Remove(finalPath)
-	if err := os.Rename(tmpPath, finalPath); err == nil {
+	if err := moveAssetFile(tmpPath, finalPath); err == nil {
 		return e.recordCommittedAsset(task, rel, digest, size, "资产已校验并落盘")
 	}
 	_ = os.Remove(tmpPath)
@@ -47,6 +47,45 @@ func (e Executor) reuseOrReplaceTarget(task protocol.SyncTask, tmpPath, finalPat
 			slog.String("error", renameErr.Error()))
 	}
 	return taskResult(task, "temporary_error", digest, size, "资产落盘失败")
+}
+
+func moveAssetFile(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+	tmp, err := copyAssetToTargetDir(src, filepath.Dir(dst))
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp)
+	_ = os.Remove(dst)
+	if err := os.Rename(tmp, dst); err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
+func copyAssetToTargetDir(src, dir string) (string, error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return "", err
+	}
+	defer in.Close()
+	out, err := os.CreateTemp(dir, ".asset-*")
+	if err != nil {
+		return "", err
+	}
+	tmp := out.Name()
+	if _, err = io.Copy(out, in); err != nil {
+		_ = out.Close()
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	if err = out.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	return tmp, nil
 }
 
 func (e Executor) recordCommittedAsset(task protocol.SyncTask, rel, digest string, size int64, msg string) protocol.SyncTaskResult {

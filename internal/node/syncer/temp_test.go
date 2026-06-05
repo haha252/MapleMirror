@@ -59,6 +59,28 @@ func TestDownloadReplacesStaleIncompleteTargetAfterValidation(t *testing.T) {
 	}
 }
 
+func TestMoveAssetFileReplacesExistingTarget(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "source.tmp")
+	dst := filepath.Join(dir, "asset.zip")
+	if err := os.WriteFile(src, []byte("fresh"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := moveAssetFile(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(dst)
+	if err != nil || string(data) != "fresh" {
+		t.Fatalf("target not replaced data=%q err=%v", string(data), err)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("source temp file should be moved, err=%v", err)
+	}
+}
+
 func TestDownloadSupersedesOldLocalAssetOnSamePath(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
 	rel := filepath.Join("p1", "v1", "a.zip")
