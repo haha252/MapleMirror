@@ -42,10 +42,15 @@ func remoteIP(addr string) net.IP {
 }
 
 func forwardedIP(r *http.Request) net.IP {
-	for _, value := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
-		if ip := net.ParseIP(strings.TrimSpace(value)); ip != nil {
-			return ip
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		for _, value := range strings.Split(xff, ",") {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			return net.ParseIP(value)
 		}
+		return nil
 	}
 	return net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP")))
 }
