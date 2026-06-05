@@ -37,7 +37,7 @@ func (t *pageViewTracker) shouldCount(day, visitorID string) bool {
 }
 
 func visitorID(w http.ResponseWriter, r *http.Request) string {
-	if cookie, err := r.Cookie(pageViewCookie); err == nil && cookie.Value != "" {
+	if cookie, err := r.Cookie(pageViewCookie); err == nil && validVisitorID(cookie.Value) {
 		return cookie.Value
 	}
 	id, err := requestid.New()
@@ -53,4 +53,18 @@ func visitorID(w http.ResponseWriter, r *http.Request) string {
 		SameSite: http.SameSiteLaxMode,
 	})
 	return id
+}
+
+func validVisitorID(value string) bool {
+	if len(value) == 0 || len(value) > 128 {
+		return false
+	}
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' ||
+			r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }

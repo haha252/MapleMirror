@@ -49,3 +49,18 @@ func TestPageViewTrackerResetsWhenDayChanges(t *testing.T) {
 		t.Fatal("same visitor should count again on a new day")
 	}
 }
+
+func TestVisitorIDReplacesOversizedCookie(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: pageViewCookie, Value: strings.Repeat("a", 512)})
+	rec := httptest.NewRecorder()
+
+	id := visitorID(rec, req)
+	if len(id) == 512 {
+		t.Fatal("oversized visitor cookie should not be reused")
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) == 0 || cookies[0].Name != pageViewCookie || cookies[0].Value != id {
+		t.Fatalf("expected replacement visitor cookie, got id=%q cookies=%+v", id, cookies)
+	}
+}
