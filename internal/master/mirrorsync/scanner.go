@@ -112,7 +112,13 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 	if err != nil {
 		return ScanSummary{}, err
 	}
+	if err := supersedeDuplicatePublicPaths(ctx, tx, project.ID); err != nil {
+		return ScanSummary{}, err
+	}
 	if err := rebuildTargetInventory(ctx, tx, project.ID, now); err != nil {
+		return ScanSummary{}, err
+	}
+	if err := cancelObsoleteDownloadTasks(ctx, tx, project.ID, now); err != nil {
 		return ScanSummary{}, err
 	}
 	generated, err := generateTasks(ctx, tx, now)

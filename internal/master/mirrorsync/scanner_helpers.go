@@ -56,6 +56,9 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 		arch := assetArchitecture(asset.Name, archRE)
 		system := assetSystem(asset.Name, systemRE)
 		assetID := fmt.Sprintf("%s:%d", releaseID, asset.ID)
+		if err := markInventoryStaleOnAssetChange(ctx, tx, assetID, digest, asset.Size, now); err != nil {
+			return accepted, rejected, err
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO assets
 			(id, release_id, github_asset_id, file_name, architecture, system, size_bytes,
 			source_url, digest_sha256, service_state, created_at)
@@ -83,6 +86,48 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 		accepted++
 	}
 	return accepted, rejected, nil
+}
+
+func markInventoryStaleOnAssetChange(ctx context.Context, tx *sql.Tx, assetID, digest string, size int64, now string) error {
+	var oldDigest string
+	var oldSize int64
+	err := tx.QueryRowContext(ctx, `SELECT digest_sha256, size_bytes FROM assets
+		WHERE id = ?`, assetID).Scan(&oldDigest, &oldSize)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if oldDigest == digest && oldSize == size {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE node_inventory SET state = 'mismatch',
+		verified_at = ? WHERE asset_id = ? AND state = 'verified'`, now, assetID)
+	return err
+}
+
+func supersedeDuplicatePublicPaths(ctx context.Context, tx *sql.Tx, projectID string) error {
+	_, err := tx.ExecContext(ctx, `UPDATE assets SET service_state = 'superseded'
+		WHERE id IN (
+			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+			WHERE r.project_id = ? AND r.selected = 1 AND a.service_state = 'candidate'
+			AND EXISTS (
+				SELECT 1 FROM assets newer JOIN releases nr ON nr.id = newer.release_id
+				WHERE nr.project_id = r.project_id AND nr.selected = 1
+				AND newer.service_state = 'candidate'
+				AND nr.tag_name = r.tag_name AND newer.file_name = a.file_name
+				AND (
+					nr.published_at > r.published_at
+					OR (nr.published_at = r.published_at
+						AND nr.github_release_id > r.github_release_id)
+					OR (nr.published_at = r.published_at
+						AND nr.github_release_id = r.github_release_id
+						AND newer.github_asset_id > a.github_asset_id)
+				)
+			)
+		)`, projectID)
+	return err
 }
 
 func selectReleases(releases []GitHubRelease, includePrerelease bool, keep int) []GitHubRelease {

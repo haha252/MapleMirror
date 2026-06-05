@@ -218,6 +218,12 @@ func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {
 }
 
 func (e Executor) upsertAsset(assetID, rel, digest string, size int64) error {
+	if _, err := e.DB.Exec(`UPDATE local_assets SET state = 'superseded',
+		verified_at = ? WHERE relative_path = ? AND asset_id != ?
+		AND state = 'verified'`,
+		time.Now().UTC().Format(time.RFC3339Nano), rel, assetID); err != nil {
+		return err
+	}
 	_, err := e.DB.Exec(`INSERT INTO local_assets
 		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
 		VALUES (?, ?, ?, ?, ?, 'verified')

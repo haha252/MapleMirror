@@ -66,6 +66,32 @@ func TestHandlerServesReadableAssetPathWithQueryToken(t *testing.T) {
 	}
 }
 
+func TestHandlerReadablePathUsesTokenAssetIDWhenPathHasOldRows(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	_, err := db.Exec(`INSERT INTO local_assets
+		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
+		VALUES ('asset-old', ?, 'sha256:old', 6, ?, 'verified')`,
+		filepath.Join("p1", "v1", "a.zip"), time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
+		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
+		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
+	token, err := signer.Sign(claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/p1/v1/a.zip?token="+token, nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	rec := httptest.NewRecorder()
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("可读路径应按令牌资产定位，code=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandlerAllowsLargeRequestedRangeWhenActualBytesFit(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	_, err := db.Exec(`INSERT INTO pending_traffic_events

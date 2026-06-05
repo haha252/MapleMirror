@@ -60,7 +60,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusUnauthorized, "下载令牌无效")
 		return
 	}
-	asset, err := h.requestedAsset(requested)
+	asset, err := h.requestedAsset(requested, claims.AssetID)
 	if err != nil {
 		httpError(w, r, http.StatusNotFound, "本地资产不可用")
 		return
@@ -134,11 +134,11 @@ func parseAssetRequest(r *http.Request) (assetRequest, error) {
 	return assetRequest{RelativePath: assetpath.SafeRelativePath(parts.ProjectID, parts.Version, parts.FileName)}, nil
 }
 
-func (h *Handler) requestedAsset(requested assetRequest) (localAsset, error) {
+func (h *Handler) requestedAsset(requested assetRequest, claimAssetID string) (localAsset, error) {
 	if requested.LegacyAssetID != "" {
 		return h.localAsset(requested.LegacyAssetID)
 	}
-	return h.localAssetByPath(requested.RelativePath)
+	return h.localAssetByPath(requested.RelativePath, claimAssetID)
 }
 
 func (h *Handler) authorizationBytes(id string) (int64, error) {
@@ -160,31 +160,15 @@ func (h *Handler) localAsset(assetID string) (localAsset, error) {
 	return cleanLocalAsset(out)
 }
 
-func (h *Handler) localAssetByPath(rel string) (localAsset, error) {
-	rows, err := h.DB.Query(`SELECT asset_id, relative_path, digest_sha256,
+func (h *Handler) localAssetByPath(rel, assetID string) (localAsset, error) {
+	var out localAsset
+	err := h.DB.QueryRow(`SELECT asset_id, relative_path, digest_sha256,
 		size_bytes, COALESCE(verified_at, '')
-		FROM local_assets WHERE relative_path = ? AND state = 'verified'`, rel)
+		FROM local_assets WHERE relative_path = ? AND asset_id = ?
+		AND state = 'verified'`, rel, assetID).Scan(&out.AssetID,
+		&out.RelativePath, &out.DigestSHA256, &out.SizeBytes, &out.VerifiedAt)
 	if err != nil {
 		return localAsset{}, err
-	}
-	defer rows.Close()
-	var out localAsset
-	count := 0
-	for rows.Next() {
-		count++
-		if count > 1 {
-			return localAsset{}, errors.New("本地资产路径不唯一")
-		}
-		if err := rows.Scan(&out.AssetID, &out.RelativePath, &out.DigestSHA256,
-			&out.SizeBytes, &out.VerifiedAt); err != nil {
-			return localAsset{}, err
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return localAsset{}, err
-	}
-	if count != 1 {
-		return localAsset{}, sql.ErrNoRows
 	}
 	return cleanLocalAsset(out)
 }

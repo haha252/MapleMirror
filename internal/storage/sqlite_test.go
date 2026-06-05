@@ -24,6 +24,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertTable(t, db, "client_blocks")
 	assertTable(t, db, "admin_web_sessions")
 	assertTable(t, db, "admin_ip_blocks")
+	assertColumn(t, db, "node_tasks", "lease_expires_at")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {
@@ -31,7 +32,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	}
 	defer db.Close()
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 15 {
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 16 {
 		t.Fatalf("主节点迁移重复执行不符合预期：count=%d err=%v", count, err)
 	}
 }
@@ -56,4 +57,26 @@ func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }
 	if err != nil || count != 1 {
 		t.Fatalf("缺少数据表 %s：%v", table, err)
 	}
+}
+
+func assertColumn(t *testing.T, db *sql.DB, table, column string) {
+	t.Helper()
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull, pk int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatal(err)
+		}
+		if name == column {
+			return
+		}
+	}
+	t.Fatalf("缺少数据列 %s.%s", table, column)
 }

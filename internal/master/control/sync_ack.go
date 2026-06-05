@@ -31,9 +31,12 @@ func (r Repository) AcceptSyncTaskAck(ctx context.Context, session Session, seq 
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `UPDATE node_tasks SET state = ?,
-		error_message = ?, updated_at = ? WHERE id = ? AND node_id = ?
-		AND state IN ('sent', 'pending', 'retry_wait')`,
-		state, nullable(ack.Message), now, ack.TaskID, session.NodeID)
+		error_message = ?, lease_expires_at = ?, updated_at = ?
+		WHERE id = ? AND node_id = ?
+		AND state IN ('sent', 'pending', 'retry_wait', 'running')`,
+		state, nullable(ack.Message),
+		time.Now().UTC().Add(syncTaskLeaseDuration).Format(time.RFC3339Nano),
+		now, ack.TaskID, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}

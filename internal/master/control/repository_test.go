@@ -59,6 +59,38 @@ func TestApproveKeepsRoutingReadyFalse(t *testing.T) {
 	}
 }
 
+func TestApproveEnrollmentSeedsCurrentTargets(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	ctx := context.Background()
+	mustExecControl(t, repo.DB, `INSERT INTO projects
+		(id, name, repository, enabled, retain_versions, include_prerelease,
+		download_multiplier, config_hash, updated_at)
+		VALUES ('p1', '项目', 'owner/repo', 1, 1, 0, 1, 'hash', 'now')`)
+	mustExecControl(t, repo.DB, `INSERT INTO releases
+		(id, project_id, github_release_id, tag_name, prerelease, published_at, selected, created_at)
+		VALUES ('rel-1', 'p1', 1, 'latest', 0, '2026-02-01T00:00:00Z', 1, 'now')`)
+	mustExecControl(t, repo.DB, `INSERT INTO assets
+		(id, release_id, github_asset_id, file_name, architecture, size_bytes,
+		source_url, digest_sha256, service_state, created_at)
+		VALUES ('asset-1', 'rel-1', 1, 'ffmpeg.zip', 'amd64', 10,
+		'https://example.invalid', 'sha256:aa', 'candidate', 'now')`)
+	code, _ := repo.CreatePairing(ctx, time.Minute, "req-create")
+	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", "csr", "sha256:aa", "[]", "req-enroll", time.Minute)
+	signed := SignedCertificate{
+		NodeID: "node-1", CertificateID: "cert-1", SerialNumber: "1",
+		Fingerprint: "sha256:cc", NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour),
+		CertificatePEM: "cert", CAChainPEM: "ca",
+	}
+	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", "sha256:aa", "req-approve", signed); err != nil {
+		t.Fatal(err)
+	}
+	assertTableCount(t, repo, "target_inventory",
+		"node_id = 'node-1' AND asset_id = 'asset-1' AND desired_state = 'required'", 1)
+	assertTableCount(t, repo, "node_tasks",
+		"node_id = 'node-1' AND asset_id = 'asset-1' AND state = 'pending'", 1)
+}
+
 func TestRotateCertificateKeepsAuthorizedNodeName(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

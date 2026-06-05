@@ -111,6 +111,9 @@ func (r Repository) ApproveEnrollment(ctx context.Context, id, name, fp, request
 	if err != nil {
 		return fmt.Errorf("创建节点身份失败：%w", err)
 	}
+	if err := seedNodeTargets(ctx, tx, signed.NodeID, now); err != nil {
+		return err
+	}
 	if err := insertCertificate(ctx, tx, signed, requestID, now); err != nil {
 		return err
 	}

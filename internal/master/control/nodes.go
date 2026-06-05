@@ -53,12 +53,24 @@ func (r Repository) DisableNode(ctx context.Context, nodeID, requestID, reason s
 
 func (r Repository) EnableNode(ctx context.Context, nodeID, requestID, admin string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
 		routing_ready = 0, updated_at = ? WHERE id = ? AND state = 'disabled'`, now, nodeID)
 	if err != nil {
 		return err
 	}
-	return r.Audit(ctx, "node.enable", "node", nodeID, "success", requestID, "节点已启用并等待心跳", admin)
+	if err := seedNodeTargets(ctx, tx, nodeID, now); err != nil {
+		return err
+	}
+	if err := auditTx(ctx, tx, "node.enable", "node", nodeID, "success",
+		requestID, "节点已启用并等待心跳", admin); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r Repository) SyncReset(ctx context.Context, nodeID, requestID, admin string) error {

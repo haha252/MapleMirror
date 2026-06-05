@@ -56,6 +56,43 @@ func TestScanRejectsBadDigestAndCreatesInventoryTasks(t *testing.T) {
 	assertCount(t, db, "node_tasks", 1)
 }
 
+func TestScanSupersedesDuplicateLatestPublicPath(t *testing.T) {
+	wal := true
+	db, err := storage.OpenMaster(config.Database{
+		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	seedNode(t, db)
+	good := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	newer := "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	scanner := Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: []GitHubRelease{
+		{ID: 1, TagName: "latest", PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			Assets: []GitHubAsset{{ID: 1, Name: "ffmpeg.zip", Size: 10, URL: "https://example.invalid/old", Digest: good}}},
+		{ID: 2, TagName: "latest", PublishedAt: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+			Assets: []GitHubAsset{{ID: 1, Name: "ffmpeg.zip", Size: 20, URL: "https://example.invalid/new", Digest: newer}}},
+	}}}
+	projects := config.Projects{Projects: []config.Project{{
+		ID: "p1", Name: "项目", Repository: "owner/repo", Enabled: true,
+		RetainVersions: 2, AssetInclude: config.AssetRules{{Pattern: "*.zip", Type: "glob"}},
+	}}}
+	if _, err := scanner.Scan(context.Background(), projects, "", "req-scan"); err != nil {
+		t.Fatal(err)
+	}
+	assertWhereCount(t, db, "assets", "service_state = 'candidate'", 1)
+	assertWhereCount(t, db, "assets", "service_state = 'superseded'", 1)
+	assertWhereCount(t, db, "target_inventory", "desired_state = 'required'", 1)
+	assertWhereCount(t, db, "node_tasks", "state = 'pending'", 1)
+	var assetID string
+	err = db.QueryRow(`SELECT asset_id FROM target_inventory
+		WHERE desired_state = 'required'`).Scan(&assetID)
+	if err != nil || assetID != "p1:2:1" {
+		t.Fatalf("重复 latest 应只要求最新资产，asset_id=%q err=%v", assetID, err)
+	}
+}
+
 func TestScanProjectsDisabledConfigImmediately(t *testing.T) {
 	wal := true
 	db, err := storage.OpenMaster(config.Database{
@@ -131,6 +168,14 @@ func assertCount(t *testing.T, db *sql.DB, table string, want int) {
 	var got int
 	if err := db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&got); err != nil || got != want {
 		t.Fatalf("%s 数量错误 got=%d want=%d err=%v", table, got, want, err)
+	}
+}
+
+func assertWhereCount(t *testing.T, db *sql.DB, table, where string, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow("SELECT COUNT(*) FROM " + table + " WHERE " + where).Scan(&got); err != nil || got != want {
+		t.Fatalf("%s 数量错误 got=%d want=%d where=%s err=%v", table, got, want, where, err)
 	}
 }
 

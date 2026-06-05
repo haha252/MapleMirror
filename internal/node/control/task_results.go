@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"net"
 	"time"
@@ -44,6 +45,57 @@ func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uin
 		sequence++
 	}
 	return sequence, nil
+}
+
+func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
+	if c.DB == nil {
+		return sequence, nil
+	}
+	rows, err := c.DB.Query(`SELECT task_id
+		FROM local_sync_tasks WHERE state = 'running' ORDER BY updated_at LIMIT 50`)
+	if err != nil {
+		return sequence, err
+	}
+	defer rows.Close()
+	var items []protocol.SyncTaskAck
+	for rows.Next() {
+		var ack protocol.SyncTaskAck
+		if err := rows.Scan(&ack.TaskID); err != nil {
+			return sequence, err
+		}
+		ack.State = "running"
+		ack.Message = "任务仍在执行"
+		items = append(items, ack)
+	}
+	if err := rows.Err(); err != nil {
+		return sequence, err
+	}
+	for _, ack := range items {
+		if err := c.sendRunningTaskAck(conn, reqID, sequence, ack); err != nil {
+			return sequence, err
+		}
+		sequence++
+	}
+	return sequence, nil
+}
+
+func (c Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64, ack protocol.SyncTaskAck) error {
+	body, _ := json.Marshal(ack)
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点续报运行中的同步任务",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID),
+			slog.String("task_id", ack.TaskID))
+	}
+	if err := c.writeFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: reqID + "-" + ack.TaskID + "-running",
+		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
+		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
+	}); err != nil {
+		return err
+	}
+	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
+	return err
 }
 
 func scanPendingTaskResult(rows *sql.Rows) (protocol.SyncTaskResult, error) {

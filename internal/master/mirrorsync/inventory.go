@@ -24,6 +24,23 @@ func rebuildTargetInventory(ctx context.Context, tx *sql.Tx, projectID, now stri
 	return err
 }
 
+func cancelObsoleteDownloadTasks(ctx context.Context, tx *sql.Tx, projectID, now string) error {
+	_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'obsolete',
+		error_message = '资产已不在当前目标库存中', completed_at = ?,
+		updated_at = ?, lease_expires_at = NULL
+		WHERE task_type = 'asset_download'
+		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
+		AND asset_id IN (
+			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
+				AND ti.asset_id = a.id
+			WHERE r.project_id = ?
+			AND (a.service_state != 'candidate'
+				OR ti.asset_id IS NULL OR ti.desired_state != 'required')
+		)`, now, now, projectID)
+	return err
+}
+
 func generateTasks(ctx context.Context, tx *sql.Tx, now string) (int, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT ti.node_id, ti.asset_id
 		FROM target_inventory ti

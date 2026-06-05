@@ -35,7 +35,9 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 	var retryAfter string
 	var assetID, projectID, version, fileName, downloadURL, digest sql.NullString
 	var size sql.NullInt64
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	nowValue := time.Now().UTC()
+	now := nowValue.Format(time.RFC3339Nano)
+	leaseExpires := nowValue.Add(syncTaskLeaseDuration).Format(time.RFC3339Nano)
 	err := tx.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, r.project_id,
 		r.tag_name, a.file_name, a.size_bytes, a.source_url, a.digest_sha256, COALESCE(t.attempts, 0),
 		COALESCE(t.retry_after, '')
@@ -46,7 +48,7 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 			t.state = 'pending'
 			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
 		)
-		ORDER BY t.created_at LIMIT 1`, nodeID, now).
+	ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1`, nodeID, now).
 		Scan(&task.TaskID, &task.TaskType, &assetID,
 			&projectID, &version, &fileName, &size,
 			&downloadURL, &digest,
@@ -63,10 +65,10 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 		DownloadURL: downloadURL.String, DigestSHA256: digest.String,
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'sent',
-		updated_at = ? WHERE id = ? AND node_id = ? AND (
+		lease_expires_at = ?, updated_at = ? WHERE id = ? AND node_id = ? AND (
 			state = 'pending'
 			OR (state = 'retry_wait' AND (retry_after IS NULL OR retry_after = '' OR retry_after <= ?))
-		)`, now, task.TaskID, nodeID, now)
+		)`, leaseExpires, now, task.TaskID, nodeID, now)
 	if err != nil {
 		return protocol.SyncTask{}, false, err
 	}
@@ -106,7 +108,7 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
-	if result.Result == "succeeded" && result.AssetID != "" {
+	if result.Result == "succeeded" && result.AssetID != "" && taskState != "obsolete" {
 		if err := upsertVerifiedInventory(ctx, tx, session.NodeID, result, now); err != nil {
 			return HeartbeatResult{}, err
 		}
