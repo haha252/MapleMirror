@@ -144,12 +144,19 @@ func insertCertificate(ctx context.Context, tx *sql.Tx, cert SignedCertificate, 
 }
 
 func (r Repository) RotateCertificate(ctx context.Context, nodeID, requestID, admin string, signed SignedCertificate) error {
+	if signed.NodeID != nodeID {
+		return fmt.Errorf("签发证书归属节点不一致")
+	}
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var exists string
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM nodes WHERE id = ?`, nodeID).Scan(&exists); err != nil {
+		return err
+	}
 	_, err = tx.ExecContext(ctx, `UPDATE node_certificates SET status = 'revoked',
 		revoked_at = ? WHERE node_id = ? AND status = 'active'`, now, nodeID)
 	if err != nil {
@@ -158,10 +165,13 @@ func (r Repository) RotateCertificate(ctx context.Context, nodeID, requestID, ad
 	if err := insertCertificate(ctx, tx, signed, requestID, now); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE nodes SET certificate_fingerprint = ?,
+	result, err := tx.ExecContext(ctx, `UPDATE nodes SET certificate_fingerprint = ?,
 		state = 'offline', routing_ready = 0, updated_at = ? WHERE id = ?`, signed.Fingerprint, now, nodeID)
 	if err != nil {
 		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
 	}
 	_, _ = tx.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
 		close_reason = '证书轮换' WHERE node_id = ? AND disconnected_at IS NULL`, now, nodeID)

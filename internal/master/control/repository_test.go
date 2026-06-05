@@ -124,6 +124,31 @@ func TestRotateCertificateKeepsAuthorizedNodeName(t *testing.T) {
 	}
 }
 
+func TestRotateCertificateRejectsMissingOrMismatchedNode(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	ctx := context.Background()
+	signed := SignedCertificate{
+		NodeID: "missing-node", CertificateID: "cert-missing", SerialNumber: "1",
+		Fingerprint: "sha256:missing", NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour),
+		CertificatePEM: "cert", CAChainPEM: "ca",
+	}
+	if err := repo.RotateCertificate(ctx, "missing-node", "req-rotate", "admin", signed); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("missing node should return sql.ErrNoRows, got %v", err)
+	}
+	mustExecControl(t, repo.DB, `INSERT INTO nodes
+		(id, public_name, certificate_fingerprint, state, target_bandwidth_bps,
+		routing_ready, created_at, updated_at)
+		VALUES ('node-1', '节点一', 'sha256:old', 'offline', 0, 0, 'now', 'now')`)
+	signed.NodeID = "node-other"
+	signed.CertificateID = "cert-other"
+	if err := repo.RotateCertificate(ctx, "node-1", "req-rotate", "admin", signed); err == nil {
+		t.Fatal("certificate rotation must reject mismatched signed node id")
+	}
+	assertTableCount(t, repo, "node_certificates", "id IN ('cert-missing', 'cert-other')", 0)
+	assertTableCount(t, repo, "admin_audit_events", "operation = 'certificate.rotate'", 0)
+}
+
 func TestNodeMutationsRejectMissingNode(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
