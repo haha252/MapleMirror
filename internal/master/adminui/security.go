@@ -46,6 +46,9 @@ func loadUsers(path, bootstrapEnv string) (map[string]userRecord, error) {
 		if item.Username == "" || item.PasswordHash == "" {
 			return nil, errors.New("管理面板用户文件包含空用户名或密码哈希")
 		}
+		if _, exists := users[item.Username]; exists {
+			return nil, errors.New("管理面板用户文件包含重复用户名")
+		}
 		users[item.Username] = item
 	}
 	if len(users) == 0 {
