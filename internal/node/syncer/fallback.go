@@ -21,7 +21,12 @@ func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmp
 				slog.String("source_node_id", source.NodeID),
 				slog.String("source_node_name", source.NodeName))
 		}
+		if err := acquirePeerFallback(ctx); err != nil {
+			lastErr = err
+			continue
+		}
 		digest, size, err := e.fetchWithToken(ctx, source.DownloadURL, tmpPath, source.Token)
+		releasePeerFallback()
 		if err != nil {
 			lastErr = err
 			lastDigest = digest

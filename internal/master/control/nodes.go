@@ -7,11 +7,12 @@ import (
 )
 
 type NodeSummary struct {
-	NodeID        string `json:"node_id"`
-	PublicName    string `json:"public_name"`
-	State         string `json:"state"`
-	RoutingReady  bool   `json:"routing_ready"`
-	LastHeartbeat string `json:"last_heartbeat_at,omitempty"`
+	NodeID          string `json:"node_id"`
+	PublicName      string `json:"public_name"`
+	State           string `json:"state"`
+	ConnectionState string `json:"connection_state"`
+	RoutingReady    bool   `json:"routing_ready"`
+	LastHeartbeat   string `json:"last_heartbeat_at,omitempty"`
 }
 
 func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
@@ -28,6 +29,7 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State, &ready, &item.LastHeartbeat); err != nil {
 			return nil, err
 		}
+		item.ConnectionState = item.State
 		item.RoutingReady = ready == 1
 		items = append(items, item)
 	}
@@ -51,7 +53,7 @@ func (r Repository) DisableNode(ctx context.Context, nodeID, requestID, reason s
 
 func (r Repository) EnableNode(ctx context.Context, nodeID, requestID, admin string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
+	_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
 		routing_ready = 0, updated_at = ? WHERE id = ? AND state = 'disabled'`, now, nodeID)
 	if err != nil {
 		return err
@@ -61,8 +63,8 @@ func (r Repository) EnableNode(ctx context.Context, nodeID, requestID, admin str
 
 func (r Repository) SyncReset(ctx context.Context, nodeID, requestID, admin string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
-		routing_ready = 0, updated_at = ? WHERE id = ? AND state != 'disabled'`, now, nodeID)
+	_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET routing_ready = 0,
+		updated_at = ? WHERE id = ? AND state != 'disabled'`, now, nodeID)
 	if err != nil {
 		return err
 	}

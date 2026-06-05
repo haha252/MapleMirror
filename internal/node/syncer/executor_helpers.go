@@ -2,12 +2,15 @@ package syncer
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"mirror-server/internal/assetpath"
 	"mirror-server/internal/protocol"
@@ -66,6 +69,48 @@ func relativeAssetPath(asset protocol.SyncAsset) string {
 		return assetpath.SafeRelativePath(asset.AssetID, "legacy", asset.FileName)
 	}
 	return assetpath.SafeRelativePath(asset.ProjectID, asset.Version, asset.FileName)
+}
+
+func tempAssetPath(tempDir, taskID string) (string, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", err
+	}
+	return filepath.Join(tempDir, taskID+"-"+hex.EncodeToString(suffix[:])+".tmp"), nil
+}
+
+func effectiveTempDir(storageDir, tempDir string) string {
+	storageAbs, storageErr := filepath.Abs(filepath.Clean(storageDir))
+	tempAbs, tempErr := filepath.Abs(filepath.Clean(tempDir))
+	if storageErr != nil || tempErr != nil {
+		return tempDir
+	}
+	if sameOrInside(tempAbs, storageAbs) {
+		return filepath.Join(filepath.Dir(storageAbs), "."+filepath.Base(storageAbs)+"-tmp")
+	}
+	return tempDir
+}
+
+func sameOrInside(path, parent string) bool {
+	if path == parent {
+		return true
+	}
+	rel, err := filepath.Rel(parent, path)
+	return err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != ".."
+}
+
+func fileDigest(path string) (string, int64, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", 0, err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	size, err := io.Copy(hash, file)
+	if err != nil {
+		return "", size, err
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), size, nil
 }
 
 func nullable(value string) any {

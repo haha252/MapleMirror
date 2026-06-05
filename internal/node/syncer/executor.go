@@ -59,6 +59,15 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 		}
 		return taskResult(task, "failed", "", 0, err.Error())
 	}
+	finish, err := beginAssetDownload(ctx, task.Asset.AssetID)
+	if err != nil {
+		return taskResult(task, "temporary_error", "", 0, "等待同资产下载完成失败")
+	}
+	defer finish()
+	if result, ok := e.reuseVerifiedAsset(task); ok {
+		_ = e.recordTask(task, "succeeded", result.Message)
+		return result
+	}
 	if e.Logger != nil {
 		e.Logger.Debug(context.Background(), "节点开始下载资产",
 			slog.String("task_id", task.TaskID),
@@ -76,7 +85,8 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 		}
 		return taskResult(task, "temporary_error", "", 0, "创建存储目录失败")
 	}
-	if err := os.MkdirAll(e.TempDir, 0o755); err != nil {
+	tempDir := effectiveTempDir(e.Storage, e.TempDir)
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
 		if e.Logger != nil {
 			e.Logger.Warn(context.Background(), "节点创建临时目录失败",
 				slog.String("task_id", task.TaskID),
@@ -85,7 +95,11 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 		}
 		return taskResult(task, "temporary_error", "", 0, "创建临时目录失败")
 	}
-	tmpPath := filepath.Join(e.TempDir, task.TaskID+".tmp")
+	tmpPath, err := tempAssetPath(tempDir, task.TaskID)
+	if err != nil {
+		return taskResult(task, "temporary_error", "", 0, "创建临时文件路径失败")
+	}
+	defer os.Remove(tmpPath)
 	digest, size, err := e.fetchPrimary(ctx, task, tmpPath)
 	if err != nil {
 		if e.Logger != nil {
@@ -134,38 +148,11 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 	}
 	rel := relativeAssetPath(task.Asset)
 	finalPath := filepath.Join(e.Storage, rel)
-	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
-		_ = os.Remove(tmpPath)
-		if e.Logger != nil {
-			e.Logger.Warn(context.Background(), "节点创建资产目录失败",
-				slog.String("task_id", task.TaskID),
-				slog.String("asset_id", task.Asset.AssetID),
-				slog.String("path", filepath.Dir(finalPath)),
-				slog.String("error", err.Error()))
-		}
-		return taskResult(task, "temporary_error", digest, size, "创建资产目录失败")
+	result := e.commitAsset(task, tmpPath, finalPath, rel, digest, size)
+	if result.Result != "succeeded" {
+		return result
 	}
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		_ = os.Remove(tmpPath)
-		if e.Logger != nil {
-			e.Logger.Warn(context.Background(), "节点落盘失败",
-				slog.String("task_id", task.TaskID),
-				slog.String("asset_id", task.Asset.AssetID),
-				slog.String("path", finalPath),
-				slog.String("error", err.Error()))
-		}
-		return taskResult(task, "temporary_error", digest, size, "资产落盘失败")
-	}
-	if err := e.upsertAsset(task.Asset.AssetID, rel, digest, size); err != nil {
-		if e.Logger != nil {
-			e.Logger.Warn(context.Background(), "节点写入本地库存失败",
-				slog.String("task_id", task.TaskID),
-				slog.String("asset_id", task.Asset.AssetID),
-				slog.String("error", err.Error()))
-		}
-		return taskResult(task, "temporary_error", digest, size, "写入本地库存失败")
-	}
-	_ = e.recordTask(task, "succeeded", "")
+	_ = e.recordTask(task, "succeeded", result.Message)
 	if e.Logger != nil {
 		e.Logger.Debug(context.Background(), "节点资产下载完成",
 			slog.String("task_id", task.TaskID),
@@ -174,7 +161,25 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 			slog.String("digest", digest),
 			slog.Int64("size_bytes", size))
 	}
-	return taskResult(task, "succeeded", digest, size, "资产已校验并落盘")
+	return result
+}
+
+func (e Executor) reuseVerifiedAsset(task protocol.SyncTask) (protocol.SyncTaskResult, bool) {
+	var rel, digest string
+	var size int64
+	err := e.DB.QueryRow(`SELECT relative_path, digest_sha256, size_bytes FROM local_assets
+		WHERE asset_id = ? AND state = 'verified'`, task.Asset.AssetID).Scan(&rel, &digest, &size)
+	if err != nil {
+		return protocol.SyncTaskResult{}, false
+	}
+	if digest != task.Asset.DigestSHA256 || size != task.Asset.SizeBytes {
+		return protocol.SyncTaskResult{}, false
+	}
+	if gotDigest, gotSize, err := fileDigest(filepath.Join(e.Storage, rel)); err != nil ||
+		gotDigest != digest || gotSize != size {
+		return protocol.SyncTaskResult{}, false
+	}
+	return taskResult(task, "succeeded", digest, size, "资产已由并发任务落盘"), true
 }
 
 func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {

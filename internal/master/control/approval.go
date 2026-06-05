@@ -100,9 +100,13 @@ func (r Repository) ApproveEnrollment(ctx context.Context, id, name, fp, request
 		return fmt.Errorf("管理员确认的节点材料不一致")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	replacedNodeIDs, err := deleteQuarantinedNodesByName(ctx, tx, name, signed.NodeID)
+	if err != nil {
+		return err
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO nodes
 		(id, public_name, certificate_fingerprint, state, target_bandwidth_bps,
-		routing_ready, created_at, updated_at) VALUES (?, ?, ?, 'syncing', 0, 0, ?, ?)`,
+		routing_ready, created_at, updated_at) VALUES (?, ?, ?, 'offline', 0, 0, ?, ?)`,
 		signed.NodeID, name, signed.Fingerprint, now, now)
 	if err != nil {
 		return fmt.Errorf("创建节点身份失败：%w", err)
@@ -116,7 +120,13 @@ func (r Repository) ApproveEnrollment(ctx context.Context, id, name, fp, request
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for _, nodeID := range replacedNodeIDs {
+		r.runtime().CloseNodeSessions(nodeID)
+	}
+	return nil
 }
 
 func insertCertificate(ctx context.Context, tx *sql.Tx, cert SignedCertificate, requestID, now string) error {
@@ -146,7 +156,7 @@ func (r Repository) RotateCertificate(ctx context.Context, nodeID, requestID, ad
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET certificate_fingerprint = ?,
-		routing_ready = 0, updated_at = ? WHERE id = ?`, signed.Fingerprint, now, nodeID)
+		state = 'offline', routing_ready = 0, updated_at = ? WHERE id = ?`, signed.Fingerprint, now, nodeID)
 	if err != nil {
 		return err
 	}

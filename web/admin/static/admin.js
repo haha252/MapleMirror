@@ -34,13 +34,21 @@
     return '<span class="admin-badge">' + esc(value || "未知") + "</span>";
   }
 
+  function connectionLabel(value) {
+    var state = String(value || "").toLowerCase();
+    if (state === "online" || state === "syncing" || state === "ready") return "在线";
+    if (state === "offline") return "离线";
+    if (state === "disabled") return "已禁用";
+    return value || "未知";
+  }
+
   function renderNodes(nodes) {
     var body = document.getElementById("nodes-body");
     if (!body) return;
     body.innerHTML = (nodes || []).map(function (node) {
       return "<tr><td><strong>" + esc(node.public_name || node.node_id) +
         '</strong><span class="sub">' + esc(node.node_id) + "</span></td><td>" +
-        badge(node.state) + "</td><td>" + badge(node.routing_ready ? "可路由" : "不可路由") +
+        badge(connectionLabel(node.connection_state || node.state)) + "</td><td>" + badge(node.routing_ready ? "全量就绪" : "未全量就绪") +
         "</td><td>" + esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
         '<button class="admin-secondary" data-node-action="sync-status" data-node="' + esc(node.node_id) + '">诊断</button>' +
         '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + esc(node.node_id) + '">重置</button>' +

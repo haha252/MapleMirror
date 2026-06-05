@@ -1,13 +1,9 @@
 package control
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
+
+	"mirror-server/internal/node/localasset"
 )
 
 type localInventoryRecord struct {
@@ -61,23 +57,11 @@ func (c Client) loadLocalInventoryRecords() ([]localInventoryRecord, error) {
 }
 
 func (c Client) verifyLocalRecord(record localInventoryRecord) string {
-	clean := filepath.Clean(record.RelativePath)
-	if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
-		return "mismatch"
-	}
-	path := filepath.Join(c.Storage, clean)
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return "missing"
-	}
-	digest, size, err := hashLocalFile(path)
-	if err != nil {
-		return "missing"
-	}
-	if digest != record.DigestSHA256 || size != record.SizeBytes {
-		return "mismatch"
-	}
-	return "verified"
+	return localasset.Verify(c.Storage, localasset.Record{
+		RelativePath: record.RelativePath,
+		DigestSHA256: record.DigestSHA256,
+		SizeBytes:    record.SizeBytes,
+	})
 }
 
 func (c Client) updateLocalInventoryRecord(assetID, state string) error {
@@ -85,18 +69,4 @@ func (c Client) updateLocalInventoryRecord(assetID, state string) error {
 		verified_at = ? WHERE asset_id = ?`,
 		state, time.Now().UTC().Format(time.RFC3339Nano), assetID)
 	return err
-}
-
-func hashLocalFile(path string) (string, int64, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", 0, err
-	}
-	defer file.Close()
-	hash := sha256.New()
-	size, err := io.Copy(hash, file)
-	if err != nil {
-		return "", size, err
-	}
-	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), size, nil
 }

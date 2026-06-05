@@ -173,7 +173,7 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
 		last_heartbeat_at = ?, updated_at = ? WHERE id = ?`,
 		now, now, session.NodeID)
 	if err != nil {

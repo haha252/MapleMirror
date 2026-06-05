@@ -11,12 +11,32 @@ import (
 )
 
 func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.SyncTask, bool, error) {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return protocol.SyncTask{}, false, err
+	}
+	defer tx.Rollback()
+	task, ok, err := r.claimNextSyncTask(ctx, tx, nodeID)
+	if err != nil || !ok {
+		return protocol.SyncTask{}, ok, err
+	}
+	if err := tx.Commit(); err != nil {
+		return protocol.SyncTask{}, false, err
+	}
+	if task.TaskType == "asset_download" {
+		task.FallbackSources = r.syncFallbackSources(ctx, nodeID, task)
+	}
+	return task, true, nil
+}
+
+func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID string) (protocol.SyncTask, bool, error) {
 	var task protocol.SyncTask
 	var attempts int
 	var retryAfter string
 	var assetID, projectID, version, fileName, downloadURL, digest sql.NullString
 	var size sql.NullInt64
-	err := r.DB.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, r.project_id,
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	err := tx.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, r.project_id,
 		r.tag_name, a.file_name, a.size_bytes, a.source_url, a.digest_sha256, COALESCE(t.attempts, 0),
 		COALESCE(t.retry_after, '')
 		FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id
@@ -26,7 +46,7 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 			t.state = 'pending'
 			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
 		)
-		ORDER BY t.created_at LIMIT 1`, nodeID, time.Now().UTC().Format(time.RFC3339Nano)).
+		ORDER BY t.created_at LIMIT 1`, nodeID, now).
 		Scan(&task.TaskID, &task.TaskType, &assetID,
 			&projectID, &version, &fileName, &size,
 			&downloadURL, &digest,
@@ -42,11 +62,18 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 		FileName: fileName.String, SizeBytes: size.Int64,
 		DownloadURL: downloadURL.String, DigestSHA256: digest.String,
 	}
-	if task.TaskType == "asset_download" {
-		task.FallbackSources = r.syncFallbackSources(ctx, nodeID, task)
+	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'sent',
+		updated_at = ? WHERE id = ? AND node_id = ? AND (
+			state = 'pending'
+			OR (state = 'retry_wait' AND (retry_after IS NULL OR retry_after = '' OR retry_after <= ?))
+		)`, now, task.TaskID, nodeID, now)
+	if err != nil {
+		return protocol.SyncTask{}, false, err
 	}
-	_, err = r.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'sent',
-		updated_at = ? WHERE id = ?`, time.Now().UTC().Format(time.RFC3339Nano), task.TaskID)
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return protocol.SyncTask{}, false, nil
+	}
 	if err == nil && r.Logger != nil {
 		r.Logger.Debug(ctx, "同步任务可派发",
 			slog.String("node_id", nodeID),
@@ -56,7 +83,7 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 			slog.Int("attempts", attempts),
 			slog.String("retry_after", retryAfter))
 	}
-	return task, true, err
+	return task, true, nil
 }
 
 func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, seq uint64, result protocol.SyncTaskResult) (HeartbeatResult, error) {
@@ -128,7 +155,11 @@ func upsertVerifiedInventory(ctx context.Context, tx *sql.Tx, nodeID string, res
 
 func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) (bool, error) {
 	var previousReady int
-	if err := tx.QueryRowContext(ctx, `SELECT routing_ready FROM nodes WHERE id = ?`, nodeID).Scan(&previousReady); err != nil {
+	var nodeState string
+	var lastHeartbeat string
+	if err := tx.QueryRowContext(ctx, `SELECT routing_ready, state,
+		COALESCE(last_heartbeat_at, '') FROM nodes WHERE id = ?`, nodeID).
+		Scan(&previousReady, &nodeState, &lastHeartbeat); err != nil {
 		return false, err
 	}
 	var missing, running int
@@ -144,21 +175,19 @@ func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, 
 		return false, err
 	}
 	ready := 0
-	state := "syncing"
-	if missing == 0 && running == 0 {
+	if nodeState != "disabled" && nodeState != "offline" && lastHeartbeat != "" &&
+		missing == 0 && running == 0 {
 		ready = 1
-		state = "ready"
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE nodes SET routing_ready = ?,
-		state = CASE WHEN state = 'disabled' THEN state ELSE ? END,
-		updated_at = ? WHERE id = ?`, ready, state, now, nodeID)
+		updated_at = ? WHERE id = ?`, ready, now, nodeID)
 	if err == nil && r.Logger != nil && previousReady != ready {
 		r.Logger.Debug(ctx, "节点同步就绪状态已更新",
 			slog.String("node_id", nodeID),
 			slog.Bool("routing_ready", ready == 1),
 			slog.Int("missing_targets", missing),
 			slog.Int("running_tasks", running),
-			slog.String("state", state))
+			slog.String("connection_state", nodeState))
 	}
 	return ready == 1, err
 }

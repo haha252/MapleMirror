@@ -21,7 +21,10 @@ func TestCompleteInventoryReportCreatesRepairTaskForMissingTarget(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+	if _, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.AcceptInventoryReport(context.Background(), session, 2, protocol.InventoryReport{
 		ReportID: "r-missing", Revision: 1, GeneratedAt: time.Now(), Complete: true,
 		Items: []protocol.InventoryItem{},
 	})
@@ -122,7 +125,10 @@ func TestCompleteInventoryReportCancelsSatisfiedPendingTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+	if _, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.AcceptInventoryReport(context.Background(), session, 2, protocol.InventoryReport{
 		ReportID: "r-ok", Revision: 1, GeneratedAt: time.Now(), Complete: true,
 		Items: []protocol.InventoryItem{{
 			AssetID: "asset-1", SizeBytes: 10,

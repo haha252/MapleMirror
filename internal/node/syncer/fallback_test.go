@@ -101,7 +101,7 @@ func TestDownloadPreflightsPrimaryAndSkipsFileGetWhenSourceUnavailable(t *testin
 	if result.Result != "succeeded" {
 		t.Fatalf("cached failed preflight should still use fallback: %+v", result)
 	}
-	if headHits != 1 || getHits != 0 || fallbackHits != 2 {
+	if headHits != 1 || getHits != 0 || fallbackHits != 1 {
 		t.Fatalf("preflight should be cached head=%d get=%d fallback=%d", headHits, getHits, fallbackHits)
 	}
 }

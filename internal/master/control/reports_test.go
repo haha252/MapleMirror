@@ -37,7 +37,10 @@ func TestCompleteInventoryReportCanMarkNodeReady(t *testing.T) {
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
-	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+	if _, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 2, protocol.InventoryReport{
 		ReportID: "r-ready", Revision: 1, GeneratedAt: time.Now(), Complete: true,
 		Items: []protocol.InventoryItem{{
 			AssetID: "asset-1", SizeBytes: 10,
@@ -49,9 +52,33 @@ func TestCompleteInventoryReportCanMarkNodeReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	var ready int
+	var state string
+	_ = repo.DB.QueryRow("SELECT routing_ready, state FROM nodes WHERE id = ?", session.NodeID).Scan(&ready, &state)
+	if ready != 1 || state != "online" {
+		t.Fatalf("完整库存对账通过后只应更新同步就绪，ready=%d state=%s", ready, state)
+	}
+}
+
+func TestCompleteInventoryWithoutHeartbeatDoesNotMarkReady(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+		ReportID: "r-no-heartbeat", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-1", SizeBytes: 10,
+			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			LocalState:   "reported",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ready int
 	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
-	if ready != 1 {
-		t.Fatalf("完整库存对账通过后应允许同步就绪，ready=%d", ready)
+	if ready != 0 {
+		t.Fatalf("无心跳节点不得完成全量同步就绪，ready=%d", ready)
 	}
 }
 
@@ -60,7 +87,10 @@ func TestReconnectResetsReadyUntilCompleteInventoryReportArrives(t *testing.T) {
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
-	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+	if _, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 2, protocol.InventoryReport{
 		ReportID: "r-ready", Revision: 1, GeneratedAt: time.Now(), Complete: true,
 		Items: []protocol.InventoryItem{{
 			AssetID: "asset-1", SizeBytes: 10,
@@ -84,7 +114,10 @@ func TestReconnectResetsReadyUntilCompleteInventoryReportArrives(t *testing.T) {
 	if ready != 0 {
 		t.Fatalf("expected ready reset on reconnect, got %d", ready)
 	}
-	_, err = repo.AcceptInventoryReport(context.Background(), restarted, 1, protocol.InventoryReport{
+	if _, err := repo.AcceptHeartbeat(context.Background(), restarted, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.AcceptInventoryReport(context.Background(), restarted, 2, protocol.InventoryReport{
 		ReportID: "r-reconnect", Revision: 2, GeneratedAt: time.Now(), Complete: true,
 		Items: []protocol.InventoryItem{{
 			AssetID: "asset-1", SizeBytes: 10,
@@ -106,6 +139,9 @@ func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
+	if _, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
 	report := protocol.InventoryReport{
 		ReportID: "r-ready", Revision: 1, GeneratedAt: time.Now(), Complete: true,
 		Items: []protocol.InventoryItem{{
@@ -114,7 +150,7 @@ func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
 			LocalState:   "reported",
 		}},
 	}
-	if _, err := repo.AcceptInventoryReport(context.Background(), session, 1, report); err != nil {
+	if _, err := repo.AcceptInventoryReport(context.Background(), session, 2, report); err != nil {
 		t.Fatal(err)
 	}
 	restarted, err := repo.StartSession(context.Background(), "sha256:aa", "req-reconnect")
@@ -122,7 +158,10 @@ func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	report.ReportID = "r-ready-retry"
-	if _, err := repo.AcceptInventoryReport(context.Background(), restarted, 1, report); err != nil {
+	if _, err := repo.AcceptHeartbeat(context.Background(), restarted, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AcceptInventoryReport(context.Background(), restarted, 2, report); err != nil {
 		t.Fatal(err)
 	}
 	var reportCount, ready int
@@ -193,43 +232,5 @@ func TestDisableNodeAuditsAndMasksRouting(t *testing.T) {
 	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM admin_audit_events WHERE request_id = 'req-disable'").Scan(&audits)
 	if state != "disabled" || ready != 0 || audits == 0 {
 		t.Fatalf("禁用节点结果错误 state=%s ready=%d audits=%d", state, ready, audits)
-	}
-}
-
-func seedAssetTarget(t *testing.T, repo Repository, nodeID string) {
-	t.Helper()
-	_, err := repo.DB.Exec(`INSERT INTO projects
-		(id, name, repository, enabled, retain_versions, include_prerelease,
-		download_multiplier, config_hash, updated_at)
-		VALUES ('p1', '项目', 'owner/repo', 1, 1, 0, 1, 'hash', 'now')`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = repo.DB.Exec(`INSERT INTO releases
-		(id, project_id, github_release_id, tag_name, prerelease, published_at, selected, created_at)
-		VALUES ('rel-1', 'p1', 1, 'v1', 0, 'now', 1, 'now')`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = repo.DB.Exec(`INSERT INTO assets
-		(id, release_id, github_asset_id, file_name, architecture, size_bytes,
-		source_url, digest_sha256, service_state, created_at)
-		VALUES ('asset-1', 'rel-1', 1, 'app.zip', 'amd64', 10, 'https://example.invalid',
-		'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'candidate', 'now')`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = repo.DB.Exec(`INSERT INTO target_inventory
-		(node_id, asset_id, desired_state, updated_at)
-		VALUES (?, 'asset-1', 'required', 'now')`, nodeID)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func mustExecControl(t *testing.T, db *sql.DB, stmt string, args ...any) {
-	t.Helper()
-	if _, err := db.Exec(stmt, args...); err != nil {
-		t.Fatal(err)
 	}
 }

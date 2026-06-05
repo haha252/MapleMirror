@@ -32,8 +32,11 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (He
 		}
 		return s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
 	case protocol.TypeSyncTaskAck:
-		ready := s.Repo.nodeRoutingReady(context.Background(), session.NodeID)
-		return HeartbeatResult{AcceptedSequence: msg.Sequence, ManagedState: managedState(ready), RoutingReady: ready}, nil
+		var ack protocol.SyncTaskAck
+		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+			return HeartbeatResult{}, err
+		}
+		return s.Repo.AcceptSyncTaskAck(context.Background(), session, msg.Sequence, ack)
 	case protocol.TypeSyncTaskResult:
 		var result protocol.SyncTaskResult
 		if err := json.Unmarshal(msg.Payload, &result); err != nil {

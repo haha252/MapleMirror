@@ -14,11 +14,12 @@ type overviewResponse struct {
 }
 
 type nodeItem struct {
-	NodeID        string `json:"node_id"`
-	PublicName    string `json:"public_name"`
-	State         string `json:"state"`
-	RoutingReady  bool   `json:"routing_ready"`
-	LastHeartbeat string `json:"last_heartbeat_at,omitempty"`
+	NodeID          string `json:"node_id"`
+	PublicName      string `json:"public_name"`
+	State           string `json:"state"`
+	ConnectionState string `json:"connection_state"`
+	RoutingReady    bool   `json:"routing_ready"`
+	LastHeartbeat   string `json:"last_heartbeat_at,omitempty"`
 }
 
 func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
@@ -47,8 +48,16 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 		User:     map[string]string{"name": ""},
 	}
 	for _, item := range nodes {
-		out.Nodes = append(out.Nodes, nodeItem(item))
-		out.NodeStat[item.State]++
+		connectionState := item.ConnectionState
+		if connectionState == "" {
+			connectionState = item.State
+		}
+		out.Nodes = append(out.Nodes, nodeItem{
+			NodeID: item.NodeID, PublicName: item.PublicName,
+			State: item.State, ConnectionState: connectionState,
+			RoutingReady: item.RoutingReady, LastHeartbeat: item.LastHeartbeat,
+		})
+		out.NodeStat[connectionState]++
 		if item.RoutingReady {
 			out.NodeStat["routing_ready"]++
 		}

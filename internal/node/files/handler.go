@@ -33,6 +33,7 @@ type localAsset struct {
 	RelativePath string
 	DigestSHA256 string
 	SizeBytes    int64
+	VerifiedAt   string
 }
 
 type assetRequest struct {
@@ -92,6 +93,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusForbidden, "授权可发送字节数不足")
 		return
 	}
+	if err := h.ensureDownloadAssetVerified(asset); err != nil {
+		httpError(w, r, http.StatusNotFound, "本地资产状态不一致")
+		return
+	}
 	path := filepath.Join(h.Storage, asset.RelativePath)
 	file, err := os.Open(path)
 	if err != nil {
@@ -145,9 +150,10 @@ func (h *Handler) authorizationBytes(id string) (int64, error) {
 
 func (h *Handler) localAsset(assetID string) (localAsset, error) {
 	var out localAsset
-	err := h.DB.QueryRow(`SELECT asset_id, relative_path, digest_sha256, size_bytes FROM local_assets
+	err := h.DB.QueryRow(`SELECT asset_id, relative_path, digest_sha256,
+		size_bytes, COALESCE(verified_at, '') FROM local_assets
 		WHERE asset_id = ? AND state = 'verified'`, assetID).
-		Scan(&out.AssetID, &out.RelativePath, &out.DigestSHA256, &out.SizeBytes)
+		Scan(&out.AssetID, &out.RelativePath, &out.DigestSHA256, &out.SizeBytes, &out.VerifiedAt)
 	if err != nil {
 		return out, err
 	}
@@ -155,7 +161,8 @@ func (h *Handler) localAsset(assetID string) (localAsset, error) {
 }
 
 func (h *Handler) localAssetByPath(rel string) (localAsset, error) {
-	rows, err := h.DB.Query(`SELECT asset_id, relative_path, digest_sha256, size_bytes
+	rows, err := h.DB.Query(`SELECT asset_id, relative_path, digest_sha256,
+		size_bytes, COALESCE(verified_at, '')
 		FROM local_assets WHERE relative_path = ? AND state = 'verified'`, rel)
 	if err != nil {
 		return localAsset{}, err
@@ -168,7 +175,8 @@ func (h *Handler) localAssetByPath(rel string) (localAsset, error) {
 		if count > 1 {
 			return localAsset{}, errors.New("本地资产路径不唯一")
 		}
-		if err := rows.Scan(&out.AssetID, &out.RelativePath, &out.DigestSHA256, &out.SizeBytes); err != nil {
+		if err := rows.Scan(&out.AssetID, &out.RelativePath, &out.DigestSHA256,
+			&out.SizeBytes, &out.VerifiedAt); err != nil {
 			return localAsset{}, err
 		}
 	}
@@ -188,32 +196,6 @@ func cleanLocalAsset(out localAsset) (localAsset, error) {
 	}
 	out.RelativePath = clean
 	return out, nil
-}
-
-func (h *Handler) enter(id string, limit int) bool {
-	if limit <= 0 {
-		limit = 1
-	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.active == nil {
-		h.active = make(map[string]int)
-	}
-	if h.active[id] >= limit {
-		return false
-	}
-	h.active[id]++
-	return true
-}
-
-func (h *Handler) leave(id string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.active[id] <= 1 {
-		delete(h.active, id)
-		return
-	}
-	h.active[id]--
 }
 
 func bearer(r *http.Request) string {

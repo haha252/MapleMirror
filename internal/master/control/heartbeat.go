@@ -33,7 +33,7 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
 		last_heartbeat_at = ?, public_download_base_url = ?, updated_at = ? WHERE id = ?`,
 		now, downloadBaseURL, now, session.NodeID)
 	if err != nil {

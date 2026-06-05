@@ -165,8 +165,33 @@ func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) e
 		c.logSyncExecutorDisabled(reqID, task.TaskID)
 		return c.sendTaskResult(conn, reqID, sequence, disabledExecutorResult(task))
 	}
+	if err := c.sendTaskAck(conn, reqID, sequence, task); err != nil {
+		return err
+	}
 	c.executeTaskAsync(task)
 	return nil
+}
+
+func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64, task protocol.SyncTask) error {
+	body, _ := json.Marshal(protocol.SyncTaskAck{
+		TaskID: task.TaskID, State: "running",
+	})
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点确认同步任务开始执行",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID),
+			slog.String("task_id", task.TaskID),
+			slog.String("asset_id", task.Asset.AssetID))
+	}
+	if err := c.writeFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-ack",
+		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
+		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
+	}); err != nil {
+		return err
+	}
+	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
+	return err
 }
 
 func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64, result protocol.SyncTaskResult) error {

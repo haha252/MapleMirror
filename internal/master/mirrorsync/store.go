@@ -33,12 +33,17 @@ type ScanSummary struct {
 
 type SyncStatus struct {
 	NodeID                  string `json:"node_id"`
+	ConnectionState         string `json:"connection_state"`
+	SyncPhase               string `json:"sync_phase"`
 	RoutingReady            bool   `json:"routing_ready"`
 	RequiredAssets          int    `json:"required_assets"`
 	VerifiedAssets          int    `json:"verified_assets"`
 	MissingAssets           int    `json:"missing_assets"`
 	MismatchedAssets        int    `json:"mismatched_assets"`
+	PendingTasks            int    `json:"pending_tasks"`
+	SentTasks               int    `json:"sent_tasks"`
 	RunningTasks            int    `json:"running_tasks"`
+	RetryWaitTasks          int    `json:"retry_wait_tasks"`
 	FailedTasks             int    `json:"failed_tasks"`
 	LatestInventoryRevision int    `json:"latest_inventory_revision"`
 	LatestInventoryComplete bool   `json:"latest_inventory_complete"`
@@ -136,8 +141,8 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 	out := SyncStatus{NodeID: nodeID}
 	var ready int
 	if err := s.DB.QueryRowContext(ctx,
-		`SELECT routing_ready, COALESCE(last_heartbeat_at, '') FROM nodes WHERE id = ?`, nodeID).
-		Scan(&ready, &out.LastHeartbeatAt); err != nil {
+		`SELECT state, routing_ready, COALESCE(last_heartbeat_at, '') FROM nodes WHERE id = ?`, nodeID).
+		Scan(&out.ConnectionState, &ready, &out.LastHeartbeatAt); err != nil {
 		return out, err
 	}
 	out.RoutingReady = ready == 1
@@ -151,8 +156,14 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 		AND (ni.asset_id IS NULL OR ni.state != 'verified')`, nodeID)
 	out.MismatchedAssets = count(ctx, s.DB, `SELECT COUNT(*) FROM node_inventory
 		WHERE node_id = ? AND state = 'mismatch'`, nodeID)
+	out.PendingTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
+		WHERE node_id = ? AND state = 'pending'`, nodeID)
+	out.SentTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
+		WHERE node_id = ? AND state = 'sent'`, nodeID)
 	out.RunningTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
-		WHERE node_id = ? AND state IN ('sent', 'running')`, nodeID)
+		WHERE node_id = ? AND state = 'running'`, nodeID)
+	out.RetryWaitTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
+		WHERE node_id = ? AND state = 'retry_wait'`, nodeID)
 	out.OutstandingTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`, nodeID)
 	out.FailedTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
@@ -175,6 +186,7 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 		out.ActiveControlSession = exists(ctx, s.DB, `SELECT 1 FROM node_control_sessions
 			WHERE node_id = ? AND disconnected_at IS NULL`, nodeID)
 	}
+	out.SyncPhase = syncPhase(out)
 	out.RoutingReadyReason, out.RoutingReadyDetail = syncStatusReason(out)
 	return out, nil
 }

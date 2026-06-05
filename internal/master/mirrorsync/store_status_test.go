@@ -54,7 +54,40 @@ func TestSyncStatusIncludesDetailedDiagnostics(t *testing.T) {
 	if status.RoutingReadyReason != "尚未上报完整库存，未完成最终对账" {
 		t.Fatalf("unexpected reason: %q", status.RoutingReadyReason)
 	}
+	if status.ConnectionState == "" || status.SyncPhase != "inventory_pending" {
+		t.Fatalf("expected explicit state projection, got %+v", status)
+	}
 	if status.RoutingReadyDetail == "" || status.LastHeartbeatAt == "" {
 		t.Fatalf("expected diagnostics fields, got %+v", status)
+	}
+}
+
+func TestSyncStatusPhaseDistinguishesRetryWait(t *testing.T) {
+	wal := true
+	db, err := storage.OpenMaster(config.Database{
+		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	seedNode(t, db)
+	_, err = db.Exec(`UPDATE nodes SET state = 'online', last_heartbeat_at = '2026-05-30T11:04:34Z' WHERE id = 'node-1'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO node_tasks
+		(id, node_id, task_type, state, request_id, created_at, updated_at, retry_after)
+		VALUES ('task-retry', 'node-1', 'asset_download', 'retry_wait', 'req', 'now', 'now', '2099-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := Store{DB: db}
+	status, err := store.SyncStatus(context.Background(), "node-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.SyncPhase != "retry_wait" || status.RoutingReadyReason != "同步任务等待重试窗口到期" {
+		t.Fatalf("expected retry_wait projection, got %+v", status)
 	}
 }

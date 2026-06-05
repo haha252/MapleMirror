@@ -24,7 +24,7 @@ func TestHeartbeatKeepsNodeNonRoutable(t *testing.T) {
 	var ready int
 	var state string
 	err = repo.DB.QueryRow("SELECT routing_ready, state FROM nodes WHERE id = ?", session.NodeID).Scan(&ready, &state)
-	if err != nil || ready != 0 || state != "syncing" {
+	if err != nil || ready != 0 || state != "online" {
 		t.Fatalf("心跳不得使节点可路由，ready=%d state=%s err=%v", ready, state, err)
 	}
 	var downloadURL string
@@ -63,7 +63,7 @@ func TestHeartbeatWithInvalidPublicDownloadURLKeepsControlAlive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state != "syncing" || downloadURL != "" {
+	if state != "online" || downloadURL != "" {
 		t.Fatalf("无效公网地址应只清空路由地址并保持连接，state=%q url=%q", state, downloadURL)
 	}
 }
@@ -108,8 +108,32 @@ func TestMarkOfflineSkipsNodeWithActiveControlSession(t *testing.T) {
 	var ready int
 	var state string
 	_ = repo.DB.QueryRow("SELECT routing_ready, state FROM nodes WHERE id = ?", session.NodeID).Scan(&ready, &state)
-	if ready != 1 || state != "syncing" {
+	if ready != 1 || state != "online" {
 		t.Fatalf("活动会话节点不应清空同步就绪 ready=%d state=%s", ready, state)
+	}
+}
+
+func TestHeartbeatDoesNotDemoteRoutingReadyToSyncingState(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	_, err := repo.DB.Exec(`UPDATE nodes SET routing_ready = 1 WHERE id = ?`, session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{
+		Status: "syncing", PublicDownloadBaseURL: "https://node-1.example.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ready int
+	var state string
+	_ = repo.DB.QueryRow(`SELECT routing_ready, state FROM nodes WHERE id = ?`, session.NodeID).
+		Scan(&ready, &state)
+	if ready != 1 || state != "online" || !result.RoutingReady || result.ManagedState != "ready" {
+		t.Fatalf("心跳不应把全量就绪节点退回同步业务态 ready=%d state=%s result=%+v",
+			ready, state, result)
 	}
 }
 

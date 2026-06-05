@@ -3,7 +3,6 @@ package control
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"log/slog"
 	"net"
 	"time"
@@ -207,31 +206,19 @@ func (s ControlServer) Handle(conn net.Conn) {
 					slog.Uint64("accepted_sequence", result.AcceptedSequence))
 			}
 		}
-		messageType := protocol.TypeHeartbeatAck
-		payload := HeartbeatAck(result)
-		if msg.MessageType == protocol.TypeTrafficEvent {
-			messageType = protocol.TypeTrafficEventAck
-			payload, _ = json.Marshal(protocol.TrafficEventAck{
-				AcceptedSequence: result.AcceptedSequence,
-				Message:          "流量事件已入账",
-			})
-		}
-		if err := writeControlFrame(conn, protocol.Envelope{
-			ProtocolVersion: protocol.Version, MessageID: reqID,
-			MessageType: messageType, SentAt: time.Now().UTC(),
-			NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
-			Payload: payload,
-		}); err != nil {
+		if err := s.writeMessageAck(conn, session, reqID, msg, result); err != nil {
 			closeReason = "控制响应发送失败: " + err.Error()
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "控制响应发送失败",
 					slog.String("request_id", reqID),
 					slog.String("session_id", session.ID),
 					slog.String("node_id", session.NodeID),
-					slog.String("message_type", messageType),
 					slog.String("error", err.Error()))
 			}
 			return
+		}
+		if !shouldDispatchNextTask(msg.MessageType) {
+			continue
 		}
 		if err := s.writeNextTask(conn, session, reqID); err != nil {
 			closeReason = "同步任务下发失败: " + err.Error()

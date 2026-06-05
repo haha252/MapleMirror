@@ -83,8 +83,12 @@ func (s Server) trackPageView(w http.ResponseWriter, r *http.Request) {
 
 func stateText(value string) string {
 	switch strings.ToLower(value) {
+	case "online":
+		return "在线"
 	case "syncing":
-		return "同步中"
+		return "在线"
+	case "ready":
+		return "在线"
 	case "offline":
 		return "离线"
 	case "disabled":

@@ -205,7 +205,7 @@
 1. 验证登记状态仍为 `pending` 且未过审批窗口。
 2. 验证管理员确认的节点名称与公钥指纹和登记材料一致。
 3. 签发仅供客户端认证的节点证书，写入证书身份记录。
-4. 创建或绑定唯一节点 ID，初始状态为 `syncing`，`routing_ready=false`。
+4. 创建或绑定唯一节点 ID，连接状态等待节点建立控制会话，`routing_ready=false`。
 5. 将登记状态改为 `approved`，等待节点一次性领取证书。
 6. 写入高风险审计，关联管理请求 ID、登记 ID、节点 ID 和证书 ID。
 
@@ -233,7 +233,7 @@
 | --- | --- |
 | `node_id` | 节点标识 |
 | `public_name` | 公开名称 |
-| `state` | `syncing`、`offline`、`disabled` 等 M2 控制状态 |
+| `state` / `connection_state` | `online`、`offline`、`disabled` 等连接/管理状态；历史 `syncing`、`ready` 仅按在线兼容展示 |
 | `routing_ready` | M2 必须为 `false` |
 | `last_heartbeat_at` | 最近有效心跳时间，可空 |
 | `certificate_not_after` | 当前证书到期时间摘要 |
@@ -282,7 +282,7 @@
 
 鉴权：高风险。
 
-启用仅允许节点重新使用有效证书建立控制连接；输出状态回到 `syncing` 或等待心跳，不得直接恢复 `routing_ready=true`。
+启用仅允许节点重新使用有效证书建立控制连接；输出连接状态回到等待心跳/离线，不得直接恢复 `routing_ready=true`。
 
 ### 7.5 轮换节点证书
 
@@ -296,7 +296,7 @@ M2 合同：
 - 签发新证书身份或建立安全领取过程。
 - 将旧活动证书标记失效，关闭旧证书建立的会话。
 - 审计新旧证书记录 ID 和请求 ID，不写 PEM 或私钥。
-- 新证书连接后节点仍处于同步中/不可路由。
+- 新证书连接前节点处于离线等待状态；连接后仍需重新完整库存对账，`routing_ready=false`。
 
 ### 7.6 强制同步重置
 
@@ -306,7 +306,7 @@ M2 合同：
 
 M2 仅支持安全状态效果：
 
-- 将节点控制状态置为 `syncing`。
+- 保留节点连接/管理状态，仅重置同步对账状态。
 - 确保 `routing_ready=false`。
 - 写入审计。
 
@@ -433,6 +433,8 @@ M3 已在现有管理 API 上增加 Release 扫描、同步任务和库存对账
 | --- | --- |
 | `node_id` | 节点标识 |
 | `routing_ready` | 是否完成 M3 目标库存最终对账 |
+| `connection_state` | 当前连接/管理状态，取值如 `online`、`offline`、`disabled` |
+| `sync_phase` | 管理诊断用同步阶段，取值如 `no_target`、`inventory_pending`、`syncing`、`retry_wait`、`failed`、`reconciling`、`ready` |
 | `required_assets` | 当前目标资产数 |
 | `verified_assets` | 已验证持有资产数 |
 | `missing_assets` | 缺失资产数 |

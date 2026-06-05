@@ -62,7 +62,7 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 	if err != nil {
 		return Session{}, err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'syncing',
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
 		routing_ready = 0, updated_at = ? WHERE id = ?`, now, session.NodeID)
 	if err != nil {
 		return Session{}, err
