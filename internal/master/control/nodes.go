@@ -38,10 +38,13 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 
 func (r Repository) DisableNode(ctx context.Context, nodeID, requestID, reason string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET state = 'disabled',
+	result, err := r.DB.ExecContext(ctx, `UPDATE nodes SET state = 'disabled',
 		routing_ready = 0, updated_at = ? WHERE id = ?`, now, nodeID)
 	if err != nil {
 		return err
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return sql.ErrNoRows
 	}
 	_, _ = r.DB.ExecContext(ctx, `UPDATE node_certificates SET status = 'revoked',
 		revoked_at = ? WHERE node_id = ? AND status = 'active'`, now, nodeID)
@@ -58,10 +61,15 @@ func (r Repository) EnableNode(ctx context.Context, nodeID, requestID, admin str
 		return err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
-		routing_ready = 0, updated_at = ? WHERE id = ? AND state = 'disabled'`, now, nodeID)
-	if err != nil {
+	var state string
+	if err := tx.QueryRowContext(ctx, `SELECT state FROM nodes WHERE id = ?`, nodeID).Scan(&state); err != nil {
 		return err
+	}
+	if state == "disabled" {
+		if _, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
+			routing_ready = 0, updated_at = ? WHERE id = ?`, now, nodeID); err != nil {
+			return err
+		}
 	}
 	if err := seedNodeTargets(ctx, tx, nodeID, now); err != nil {
 		return err
@@ -75,10 +83,16 @@ func (r Repository) EnableNode(ctx context.Context, nodeID, requestID, admin str
 
 func (r Repository) SyncReset(ctx context.Context, nodeID, requestID, admin string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET routing_ready = 0,
-		updated_at = ? WHERE id = ? AND state != 'disabled'`, now, nodeID)
-	if err != nil {
+	var state string
+	if err := r.DB.QueryRowContext(ctx, `SELECT state FROM nodes WHERE id = ?`, nodeID).Scan(&state); err != nil {
 		return err
+	}
+	if state != "disabled" {
+		_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET routing_ready = 0,
+		updated_at = ? WHERE id = ? AND state != 'disabled'`, now, nodeID)
+		if err != nil {
+			return err
+		}
 	}
 	return r.Audit(ctx, "node.sync_reset", "node", nodeID, "success", requestID, "同步状态已重置", admin)
 }

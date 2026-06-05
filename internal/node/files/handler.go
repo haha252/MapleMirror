@@ -115,7 +115,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	counter := &countingWriter{ResponseWriter: w}
 	http.ServeContent(counter, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
 	if counter.bytes > 0 {
-		_ = h.recordTraffic(claims, asset.AssetID, requestid.FromContext(r.Context()), counter.bytes)
+		if err := h.recordTraffic(claims, asset.AssetID, requestid.FromContext(r.Context()), counter.bytes); err != nil && h.Logger != nil {
+			h.Logger.Warn(r.Context(), "下载流量事件记录失败",
+				slog.String("request_id", requestid.FromContext(r.Context())),
+				slog.String("authorization_id", claims.AuthorizationID),
+				slog.String("asset_id", asset.AssetID),
+				slog.String("error", err.Error()))
+		}
 	}
 }
 

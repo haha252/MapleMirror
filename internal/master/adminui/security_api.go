@@ -1,6 +1,7 @@
 package adminui
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
 )
@@ -41,14 +42,39 @@ func (s *Server) securityBlockActionAPI(w http.ResponseWriter, r *http.Request) 
 	}
 	switch kind {
 	case "admin":
-		_, _ = s.repo.DB.ExecContext(r.Context(), `DELETE FROM admin_ip_blocks WHERE ip_key = ?`, id)
+		if err := deleteBlock(r, s, `DELETE FROM admin_ip_blocks WHERE ip_key = ?`, id); err != nil {
+			writeDeleteBlockError(w, err)
+			return
+		}
 	case "client":
-		_, _ = s.repo.DB.ExecContext(r.Context(), `DELETE FROM client_blocks WHERE client_prefix_key = ?`, id)
+		if err := deleteBlock(r, s, `DELETE FROM client_blocks WHERE client_prefix_key = ?`, id); err != nil {
+			writeDeleteBlockError(w, err)
+			return
+		}
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "封禁已解除"})
+}
+
+func deleteBlock(r *http.Request, s *Server, query, id string) error {
+	result, err := s.repo.DB.ExecContext(r.Context(), query, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func writeDeleteBlockError(w http.ResponseWriter, err error) {
+	if err == sql.ErrNoRows {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "封禁记录不存在"})
+		return
+	}
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "封禁解除失败"})
 }
 
 func (s *Server) listAdminBlocks(r *http.Request) ([]map[string]any, error) {

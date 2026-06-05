@@ -86,6 +86,10 @@ func (s *Server) disableNode(w http.ResponseWriter, r *http.Request, nodeID stri
 	var body struct{ Reason string }
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.repo.DisableNode(r.Context(), nodeID, requestID(r), body.Reason); err != nil {
+		if err == sql.ErrNoRows {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "节点不存在"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "禁用节点失败"})
 		return
 	}
@@ -99,6 +103,10 @@ func (s *Server) enableNode(w http.ResponseWriter, r *http.Request, nodeID strin
 		return
 	}
 	if err := s.repo.EnableNode(r.Context(), nodeID, requestID(r), admin); err != nil {
+		if err == sql.ErrNoRows {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "节点不存在"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "启用节点失败"})
 		return
 	}
@@ -111,6 +119,10 @@ func (s *Server) syncReset(w http.ResponseWriter, r *http.Request, nodeID string
 		return
 	}
 	if err := s.repo.SyncReset(r.Context(), nodeID, requestID(r), admin); err != nil {
+		if err == sql.ErrNoRows {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "节点不存在"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步状态重置失败"})
 		return
 	}

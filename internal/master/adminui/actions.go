@@ -55,6 +55,10 @@ func (s *Server) projectActionAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]string{"message": "扫描服务未启用"})
 		return
 	}
+	if !s.projectEnabled(r, projectID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "项目不存在"})
+		return
+	}
 	if err := s.syncStore.ResetProject(r.Context(), projectID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "项目重置失败"})
 		return
@@ -67,6 +71,22 @@ func (s *Server) projectActionAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.repo.Audit(r.Context(), "project.reset", "project", projectID, "success", requestID(r), "项目数据已重置并重新扫描", admin)
 	writeJSON(w, http.StatusOK, map[string]any{"message": "项目数据已重置并重新扫描", "scan_id": scanID})
+}
+
+func (s *Server) projectEnabled(r *http.Request, projectID string) bool {
+	if s.projects == nil {
+		return true
+	}
+	projects, err := s.projects.Load()
+	if err != nil {
+		projects = s.projects.Current()
+	}
+	for _, project := range projects.Projects {
+		if project.ID == projectID {
+			return project.Enabled
+		}
+	}
+	return false
 }
 
 func (s *Server) pairingCodesAPI(w http.ResponseWriter, r *http.Request) {

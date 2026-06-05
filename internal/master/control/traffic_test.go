@@ -61,6 +61,25 @@ func TestAcceptTrafficEventRejectsConflictingConfirmedReplay(t *testing.T) {
 	}
 }
 
+func TestAcceptTrafficEventRejectsReplayWithDifferentMetadata(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	seedTrafficAuth(t, repo)
+	session := Session{ID: "sess-1", NodeID: "node-1"}
+	event := protocol.TrafficEvent{
+		EventSequence: 1, AuthorizationID: "auth-1", AssetID: "asset-1",
+		NodeRequestID: "node-req-1", MasterRequestID: "master-req-1",
+		SentBytes: 5, Status: "completed", ReportedAt: time.Now().UTC(),
+	}
+	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err != nil {
+		t.Fatal(err)
+	}
+	event.AssetID = "asset-other"
+	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err == nil {
+		t.Fatal("已确认序号的不同资源事件不应被静默确认")
+	}
+}
+
 func TestAcceptTrafficEventAccountsExemptReservation(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

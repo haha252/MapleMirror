@@ -65,6 +65,10 @@ func (s Server) disableNode(w http.ResponseWriter, r *http.Request, nodeID strin
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.Repo.DisableNode(r.Context(), nodeID, requestID(r), body.Reason); err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "节点不存在")
+			return
+		}
 		if s.Logger != nil {
 			s.Logger.Warn(r.Context(), "禁用节点失败",
 				slog.String("request_id", requestID(r)),
@@ -90,6 +94,10 @@ func (s Server) syncReset(w http.ResponseWriter, r *http.Request, nodeID string)
 		return
 	}
 	if err := s.Repo.SyncReset(r.Context(), nodeID, requestID(r), adminID); err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "节点不存在")
+			return
+		}
 		if s.Logger != nil {
 			s.Logger.Warn(r.Context(), "同步状态重置失败",
 				slog.String("request_id", requestID(r)),
@@ -113,6 +121,10 @@ func (s Server) enableNode(w http.ResponseWriter, r *http.Request, nodeID string
 		return
 	}
 	if err := s.Repo.EnableNode(r.Context(), nodeID, requestID(r), adminID); err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, r, http.StatusNotFound, "RESOURCE_NOT_FOUND", "节点不存在")
+			return
+		}
 		if s.Logger != nil {
 			s.Logger.Warn(r.Context(), "启用节点失败",
 				slog.String("request_id", requestID(r)),

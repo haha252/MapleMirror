@@ -158,6 +158,30 @@ func TestSaveProjectsRequiresMTLSOutsideLoopback(t *testing.T) {
 	}
 }
 
+func TestSecurityBlockDeleteReportsMissingRecord(t *testing.T) {
+	server, db := newTestServer(t)
+	mustExecAdminUI(t, db, `INSERT INTO admin_ip_blocks
+		(ip_key, masked_ip, reason, blocked_at, expires_at, attempts_after_block,
+		last_attempt_at, updated_at)
+		VALUES ('ip-key', '192.0.2.*', 'too_many_failures', 'now', 'tomorrow', 0, 'now', 'now')`)
+
+	req := httptest.NewRequest(http.MethodDelete, "/admin/api/security/blocks/admin/ip-key", nil)
+	req.RemoteAddr = "127.0.0.1:55000"
+	rec := httptest.NewRecorder()
+	server.securityBlockActionAPI(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/admin/api/security/blocks/admin/missing", nil)
+	req.RemoteAddr = "127.0.0.1:55000"
+	rec = httptest.NewRecorder()
+	server.securityBlockActionAPI(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing delete status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func newTestServer(t *testing.T) (*Server, *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
@@ -188,6 +212,13 @@ func newTestServer(t *testing.T) (*Server, *sql.DB) {
 		t.Fatal(err)
 	}
 	return server, db
+}
+
+func mustExecAdminUI(t *testing.T, db *sql.DB, query string, args ...any) {
+	t.Helper()
+	if _, err := db.Exec(query, args...); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func loginRequest(username, password string) *http.Request {

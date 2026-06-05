@@ -7,6 +7,8 @@ import (
 )
 
 func (h *Handler) recordTraffic(claims downloadtoken.Claims, assetID, nodeRequestID string, sent int64) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	next, err := h.nextEventSequence()
 	if err != nil {
 		return err

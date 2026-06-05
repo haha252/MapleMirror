@@ -2,6 +2,8 @@ package control
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -120,6 +122,35 @@ func TestRotateCertificateKeepsAuthorizedNodeName(t *testing.T) {
 	if publicName != "授权节点名" {
 		t.Fatalf("授权后的节点名称不得被后续节点配置改写 got=%q", publicName)
 	}
+}
+
+func TestNodeMutationsRejectMissingNode(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	ctx := context.Background()
+
+	cases := []struct {
+		name string
+		run  func() error
+	}{
+		{name: "disable", run: func() error {
+			return repo.DisableNode(ctx, "missing-node", "req-disable", "不存在")
+		}},
+		{name: "enable", run: func() error {
+			return repo.EnableNode(ctx, "missing-node", "req-enable", "admin")
+		}},
+		{name: "sync reset", run: func() error {
+			return repo.SyncReset(ctx, "missing-node", "req-reset", "admin")
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.run(); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("missing node should return sql.ErrNoRows, got %v", err)
+			}
+		})
+	}
+	assertTableCount(t, repo, "admin_audit_events", "target_id = 'missing-node'", 0)
 }
 
 func testRepo(t *testing.T) (Repository, func()) {

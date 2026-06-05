@@ -27,6 +27,9 @@ type Logging struct {
 func readYAML(path string, target any, example []byte) error {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("创建配置目录失败：%w", err)
+		}
 		if err := os.WriteFile(path, example, 0o600); err != nil {
 			return fmt.Errorf("生成示例配置失败：%w", err)
 		}

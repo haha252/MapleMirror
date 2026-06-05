@@ -49,6 +49,17 @@ func TestMissingConfigurationWritesChineseExample(t *testing.T) {
 	}
 }
 
+func TestMissingConfigurationCreatesParentDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "configs", "node.yaml")
+	_, err := LoadNode(path, nil)
+	if !errors.Is(err, ErrExampleCreated) {
+		t.Fatalf("应生成嵌套目录中的配置示例，实际错误：%v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestProjectsAndQuotaDefaults(t *testing.T) {
 	dir := t.TempDir()
 	projectsPath := filepath.Join(dir, "projects.yaml")
