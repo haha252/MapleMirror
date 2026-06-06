@@ -32,11 +32,11 @@ func EnsureMasterMaterials(cfg config.Master) error {
 		cfg.DownloadToken.VerifyPublicKeyFile); err != nil {
 		return err
 	}
-	if err := EnsureCA(cfg.Node.TLS.CAFile, "secrets/master-ca.key", "mirror-master-ca"); err != nil {
+	if err := EnsureCA(cfg.Node.TLS.CAFile, cfg.Node.TLS.CAKeyFile, "mirror-master-ca"); err != nil {
 		return err
 	}
 	if err := EnsureServerCert(cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile,
-		cfg.Node.TLS.CAFile, "secrets/master-ca.key", "mirror-master",
+		cfg.Node.TLS.CAFile, cfg.Node.TLS.CAKeyFile, "mirror-master",
 		[]string{"127.0.0.1", "localhost"}); err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func EnsureMasterMaterials(cfg config.Master) error {
 		return err
 	}
 	if err := EnsureServerCert(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile,
-		cfg.Node.TLS.CAFile, "secrets/master-ca.key", "mirror-admin",
+		cfg.Node.TLS.CAFile, cfg.Node.TLS.CAKeyFile, "mirror-admin",
 		[]string{"127.0.0.1", "localhost"}); err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func EnsureMasterMaterials(cfg config.Master) error {
 
 func MasterNeedsMaterials(cfg config.Master) bool {
 	paths := []string{cfg.DownloadToken.SigningPrivateKeyFile, cfg.DownloadToken.VerifyPublicKeyFile,
-		cfg.Node.TLS.CAFile, cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile,
+		cfg.Node.TLS.CAFile, cfg.Node.TLS.CAKeyFile, cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile,
 		cfg.Node.TLS.SigningCACertFile, cfg.Node.TLS.SigningCAKeyFile,
 		cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile}
 	for _, path := range paths {

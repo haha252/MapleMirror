@@ -71,6 +71,7 @@ type NodeControl struct {
 }
 type TLS struct {
 	CAFile            string `yaml:"ca_file"`
+	CAKeyFile         string `yaml:"ca_key_file"`
 	CertFile          string `yaml:"cert_file"`
 	KeyFile           string `yaml:"key_file"`
 	ClientCAFile      string `yaml:"client_ca_file"`
@@ -121,6 +122,7 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.Node.EnrollmentTimeout, "10m", "node.enrollment_timeout", warn)
 	setString(&c.Node.PairingCodeTTL, "5m", "node.pairing_code_ttl", warn)
 	setString(&c.Node.TLS.CAFile, "secrets/master-ca.pem", "node.tls.ca_file", warn)
+	setString(&c.Node.TLS.CAKeyFile, "secrets/master-ca.key", "node.tls.ca_key_file", warn)
 	setString(&c.Node.TLS.CertFile, "secrets/master-control.crt", "node.tls.cert_file", warn)
 	setString(&c.Node.TLS.KeyFile, "secrets/master-control.key", "node.tls.key_file", warn)
 	setString(&c.Node.TLS.ClientCAFile, "secrets/node-signing-ca.pem", "node.tls.client_ca_file", warn)

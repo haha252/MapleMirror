@@ -94,6 +94,8 @@ node:
   tls:
     # 主节点控制/登记服务端证书对应的 CA 文件，会下发给下载节点信任。
     ca_file: "secrets/master-ca.pem"
+    # 主节点控制/登记服务端证书对应的 CA 私钥，只用于本机生成服务端证书。
+    ca_key_file: "secrets/master-ca.key"
     # 主节点控制/登记入口使用的服务端证书。
     cert_file: "secrets/master-control.crt"
     # 主节点控制/登记入口服务端私钥，不得分发给下载节点。

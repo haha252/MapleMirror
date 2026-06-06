@@ -24,7 +24,7 @@ func TestLoadMasterExample(t *testing.T) {
 		t.Fatal("网页验证安全合同被修改")
 	}
 	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" ||
-		c.Admin.Web.UsersFile == "" {
+		c.Node.TLS.CAKeyFile == "" || c.Admin.Web.UsersFile == "" {
 		t.Fatal("控制面配置默认值缺失")
 	}
 }
