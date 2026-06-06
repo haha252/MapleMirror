@@ -27,11 +27,9 @@ func TestNewRejectsInvalidWebDuration(t *testing.T) {
 	if err := os.WriteFile(usersPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	enabled := true
 	_, err = New(config.Administration{
-		AllowedCIDRs: []string{"127.0.0.0/8"},
 		Web: config.AdminWeb{
-			Enabled: &enabled, UsersFile: usersPath,
+			UsersFile:         usersPath,
 			SessionSecretFile: filepath.Join(dir, "session.key"),
 			SessionTTL:        "not-a-duration", LoginFailureWindow: "24h",
 			LoginFailureLimit: 3, LoginBanDuration: "168h",

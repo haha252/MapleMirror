@@ -69,6 +69,7 @@ func TestSaveProjectsDeletesAndDisablesProjects(t *testing.T) {
 	body, _ := json.Marshal(next)
 	req := httptest.NewRequest(http.MethodPut, "/admin/api/projects", strings.NewReader(string(body)))
 	req.RemoteAddr = "127.0.0.1:55000"
+	req = withAdminUser(req)
 	rec := httptest.NewRecorder()
 	server.saveProjects(rec, req)
 	if rec.Code != http.StatusOK {

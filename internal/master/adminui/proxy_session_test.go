@@ -18,7 +18,7 @@ import (
 )
 
 func TestAdminShellRequiresLoginThenRendersAfterSession(t *testing.T) {
-	server, _ := newProxyTestServer(t, []string{"127.0.0.0/8"}, nil, config.AdminWeb{})
+	server, _ := newProxyTestServer(t, nil, config.AdminWeb{})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/admin/", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
@@ -38,8 +38,8 @@ func TestAdminShellRequiresLoginThenRendersAfterSession(t *testing.T) {
 	}
 }
 
-func TestAdminWebLoginDoesNotUseAllowedCIDRs(t *testing.T) {
-	server, _ := newProxyTestServer(t, []string{"10.0.0.0/8"}, nil, config.AdminWeb{})
+func TestAdminWebLoginUsesPanelSession(t *testing.T) {
+	server, _ := newProxyTestServer(t, nil, config.AdminWeb{})
 	req := loginForm("admin", "correct-password")
 	req.RemoteAddr = "198.51.100.10:55000"
 	rec := httptest.NewRecorder()
@@ -50,8 +50,7 @@ func TestAdminWebLoginDoesNotUseAllowedCIDRs(t *testing.T) {
 }
 
 func TestTrustedProxyIPDrivesLoginBlockAndSession(t *testing.T) {
-	server, db := newProxyTestServer(t, []string{"203.0.113.0/24"},
-		[]string{"127.0.0.0/8"}, config.AdminWeb{})
+	server, db := newProxyTestServer(t, []string{"127.0.0.0/8"}, config.AdminWeb{})
 	cookie := loginCookie(t, server, "127.0.0.1:55000", "203.0.113.45")
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/nodes", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
@@ -83,7 +82,7 @@ func TestTrustedProxyIPDrivesLoginBlockAndSession(t *testing.T) {
 }
 
 func TestUntrustedProxyHeaderDoesNotChangeLoginIP(t *testing.T) {
-	server, db := newProxyTestServer(t, []string{"127.0.0.0/8"}, nil, config.AdminWeb{})
+	server, db := newProxyTestServer(t, nil, config.AdminWeb{})
 	for i := 0; i < 3; i++ {
 		req := loginForm("admin", "wrong-password")
 		req.RemoteAddr = "127.0.0.1:55000"
@@ -104,9 +103,7 @@ func TestUntrustedProxyHeaderDoesNotChangeLoginIP(t *testing.T) {
 }
 
 func TestHighRiskWebSessionAllowedForRemoteAdmin(t *testing.T) {
-	exclusive, sessionAllowed := true, true
-	server, _ := newProxyTestServer(t, []string{"192.0.2.0/24"}, nil,
-		config.AdminWeb{ExclusiveAPI: &exclusive, HighRiskSessionAllowed: &sessionAllowed})
+	server, _ := newProxyTestServer(t, nil, config.AdminWeb{})
 	projectsPath := filepath.Join(t.TempDir(), "projects.yaml")
 	initial := config.Projects{Projects: []config.Project{{
 		ID: "demo", Name: "演示项目", Repository: "owner/demo",
@@ -139,7 +136,7 @@ func TestHighRiskWebSessionAllowedForRemoteAdmin(t *testing.T) {
 	}
 }
 
-func newProxyTestServer(t *testing.T, allowed, trusted []string, web config.AdminWeb) (*Server, *sql.DB) {
+func newProxyTestServer(t *testing.T, trusted []string, web config.AdminWeb) (*Server, *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := storage.OpenMaster(config.Database{
@@ -155,15 +152,13 @@ func newProxyTestServer(t *testing.T, allowed, trusted []string, web config.Admi
 	if err := os.WriteFile(usersPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	enabled := true
-	web.Enabled = &enabled
 	web.UsersFile = usersPath
 	web.SessionSecretFile = filepath.Join(dir, "session.key")
 	web.SessionTTL = "12h"
 	web.LoginFailureWindow = "24h"
 	web.LoginFailureLimit = 3
 	web.LoginBanDuration = "168h"
-	server, err := New(config.Administration{AllowedCIDRs: allowed, Web: web},
+	server, err := New(config.Administration{Web: web},
 		mastercontrol.Repository{DB: db}, mirrorsync.Store{DB: db},
 		Options{TrustedCIDRs: trusted})
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"net"
 	"net/http"
 	"time"
 
@@ -27,15 +26,13 @@ type Server struct {
 	sync      interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
-	users                  map[string]userRecord
-	store                  loginStore
-	networks               []*net.IPNet
-	trustedCIDRs           []string
-	highRiskSessionAllowed bool
-	timeLocation           *time.Location
-	templates              *template.Template
-	adminFS                fs.FS
-	publicFS               fs.FS
+	users        map[string]userRecord
+	store        loginStore
+	trustedCIDRs []string
+	timeLocation *time.Location
+	templates    *template.Template
+	adminFS      fs.FS
+	publicFS     fs.FS
 }
 
 type Options struct {
@@ -73,10 +70,6 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 	if err != nil {
 		return nil, err
 	}
-	networks, err := parseNetworks(cfg.AllowedCIDRs)
-	if err != nil {
-		return nil, err
-	}
 	templates, err := template.ParseFS(web.Assets, "admin/templates/*.html")
 	if err != nil {
 		return nil, err
@@ -91,11 +84,10 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 	}
 	return &Server{
 		repo: repo, syncStore: syncStore, projects: opts.Projects,
-		signer: opts.Signer, sync: opts.Sync, users: users, networks: networks,
+		signer: opts.Signer, sync: opts.Sync, users: users,
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
-		trustedCIDRs:           opts.TrustedCIDRs,
-		highRiskSessionAllowed: cfg.Web.HighRiskSessionAllowed != nil && *cfg.Web.HighRiskSessionAllowed,
-		timeLocation:           timeLocation,
+		trustedCIDRs: opts.TrustedCIDRs,
+		timeLocation: timeLocation,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
 			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
 	}, nil

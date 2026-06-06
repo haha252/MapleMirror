@@ -26,15 +26,12 @@ func ControlServer(certFile, keyFile, clientCAFile string) (*tls.Config, error) 
 	return serverConfig(cert, clientCAFile, tls.RequireAndVerifyClientCert)
 }
 
-func AdminServer(certFile, keyFile, clientCAFile string) (*tls.Config, error) {
-	if clientCAFile == "" {
-		return nil, fmt.Errorf("管理高风险 mTLS 客户端 CA 不得为空")
-	}
+func AdminWebServer(certFile, keyFile string) (*tls.Config, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("加载管理 TLS 证书失败：%w", err)
+		return nil, fmt.Errorf("加载管理面板 TLS 证书失败：%w", err)
 	}
-	return serverConfig(cert, clientCAFile, tls.VerifyClientCertIfGiven)
+	return serverConfig(cert, "", tls.NoClientCert)
 }
 
 func NodeClient(caFile, certFile, keyFile, serverName string) (*tls.Config, error) {

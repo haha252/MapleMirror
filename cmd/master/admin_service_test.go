@@ -16,17 +16,15 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/logging"
-	"mirror-server/internal/master/admin"
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/mirrorsync"
 	"mirror-server/internal/storage"
 )
 
-func TestAdminHandlerExclusiveWebAPI(t *testing.T) {
-	handler := newAdminHandlerForTest(t, true)
+func TestAdminHandlerOnlyServesWebPanel(t *testing.T) {
+	handler := newAdminHandlerForTest(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/v1/nodes", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
-	req.Header.Set("Authorization", "Bearer "+testAdminToken)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
@@ -45,7 +43,7 @@ func TestAdminHandlerExclusiveWebAPI(t *testing.T) {
 }
 
 func TestAdminHandlerRootEntrypointsRedirectToPanel(t *testing.T) {
-	handler := newAdminHandlerForTest(t, true)
+	handler := newAdminHandlerForTest(t)
 	for _, path := range []string{"/", "/admin"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.RemoteAddr = "127.0.0.1:55000"
@@ -57,36 +55,18 @@ func TestAdminHandlerRootEntrypointsRedirectToPanel(t *testing.T) {
 	}
 }
 
-func TestAdminHandlerKeepsRawAPIByDefault(t *testing.T) {
-	handler := newAdminHandlerForTest(t, false)
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/v1/nodes", nil)
-	req.RemoteAddr = "127.0.0.1:55000"
-	req.Header.Set("Authorization", "Bearer "+testAdminToken)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("raw admin api status = %d body=%s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestAdminWebHTTPSEnabledDefaultsToTLS(t *testing.T) {
 	if !adminWebHTTPSEnabled(config.Master{}) {
 		t.Fatal("管理 Web 默认应启用后端 HTTPS")
 	}
-	enabled, disabled := true, false
+	disabled := false
 	cfg := config.Master{Admin: config.Administration{Web: config.AdminWeb{HTTPSEnabled: &disabled}}}
-	if !adminWebHTTPSEnabled(cfg) {
-		t.Fatal("Web 未启用时不得关闭原始管理 API HTTPS")
-	}
-	cfg.Admin.Web.Enabled = &enabled
 	if adminWebHTTPSEnabled(cfg) {
 		t.Fatal("https_enabled=false 应关闭后端 HTTPS")
 	}
 }
 
-const testAdminToken = "0123456789abcdef0123456789abcdef"
-
-func newAdminHandlerForTest(t *testing.T, exclusive bool) http.Handler {
+func newAdminHandlerForTest(t *testing.T) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := storage.OpenMaster(config.Database{
@@ -100,25 +80,16 @@ func newAdminHandlerForTest(t *testing.T, exclusive bool) http.Handler {
 	if err := os.WriteFile(usersPath, []byte(adminUsersYAML()), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("MIRROR_ADMIN_TOKEN", testAdminToken)
-	enabled := true
 	cfg := config.Master{
 		RequestID: config.RequestID{ResponseHeader: "X-Request-ID", ParentHeader: "X-Request-ID"},
 		Admin: config.Administration{
-			AllowedCIDRs:  []string{"127.0.0.0/8"},
-			TokenEnv:      "MIRROR_ADMIN_TOKEN",
-			TokenMinBytes: 32,
 			Web: config.AdminWeb{
-				Enabled: &enabled, ExclusiveAPI: &exclusive, UsersFile: usersPath,
+				UsersFile:         usersPath,
 				SessionSecretFile: filepath.Join(dir, "session.key"),
 				SessionTTL:        "12h", LoginFailureWindow: "24h",
 				LoginFailureLimit: 3, LoginBanDuration: "168h",
 			},
 		},
-	}
-	auth, err := admin.NewAuth(cfg.Admin)
-	if err != nil {
-		t.Fatal(err)
 	}
 	logger, err := logging.New("test", config.Logging{
 		ConsoleLevel: "error", FileLevel: "error", Directory: filepath.Join(dir, "logs"),
@@ -129,8 +100,12 @@ func newAdminHandlerForTest(t *testing.T, exclusive bool) http.Handler {
 	}
 	t.Cleanup(func() { _ = logger.Close() })
 	sync := mirrorsync.Service{Scanner: mirrorsync.Scanner{Store: mirrorsync.Store{DB: db}}}
-	return adminHandler(cfg, mastercontrol.Repository{DB: db}, sync, nil, logger, auth,
+	handler, err := adminHandler(cfg, mastercontrol.Repository{DB: db}, sync, nil, logger,
 		mastercontrol.CertificateSigner{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
 }
 
 func adminLoginCookie(t *testing.T, handler http.Handler) *http.Cookie {

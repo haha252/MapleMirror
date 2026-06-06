@@ -126,20 +126,9 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.Node.TLS.ClientCAFile, "secrets/node-signing-ca.pem", "node.tls.client_ca_file", warn)
 	setString(&c.Node.TLS.SigningCACertFile, "secrets/node-signing-ca.pem", "node.tls.signing_ca_cert_file", warn)
 	setString(&c.Node.TLS.SigningCAKeyFile, "secrets/node-signing-ca.key", "node.tls.signing_ca_key_file", warn)
-	if c.Admin.TokenMinBytes == 0 {
-		c.Admin.TokenMinBytes = 32
-		warnDefault(warn, "admin.token_min_bytes", "32")
-	}
-	setString(&c.Admin.TokenFile, "secrets/admin-token", "admin.token_file", warn)
-	if c.Admin.HighRiskRequireMTLS == nil {
-		value := true
-		c.Admin.HighRiskRequireMTLS = &value
-		warnDefault(warn, "admin.high_risk_require_mtls", "true")
-	}
 	applyAdminWebDefaults(c, warn)
-	setString(&c.Admin.TLS.CertFile, "secrets/admin-api.crt", "admin.tls.cert_file", warn)
-	setString(&c.Admin.TLS.KeyFile, "secrets/admin-api.key", "admin.tls.key_file", warn)
-	setString(&c.Admin.TLS.ClientCAFile, "secrets/admin-client-ca.pem", "admin.tls.client_ca_file", warn)
+	setString(&c.Admin.TLS.CertFile, "secrets/admin-web.crt", "admin.tls.cert_file", warn)
+	setString(&c.Admin.TLS.KeyFile, "secrets/admin-web.key", "admin.tls.key_file", warn)
 }
 
 func setString(value *string, fallback, field string, warn WarnFunc) {
@@ -190,22 +179,10 @@ func validateMaster(c Master) error {
 	if c.DownloadToken.SigningPrivateKeyFile == "" || c.DownloadToken.VerifyPublicKeyFile == "" {
 		return errors.New("下载令牌 Ed25519 私钥和公钥文件不得为空")
 	}
-	if c.Admin.TokenEnv == "" && c.Admin.TokenFile == "" {
-		return errors.New("管理 API 必须配置令牌环境变量或令牌文件")
-	}
-	if c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
-		return errors.New("管理 API 高风险操作必须强制 mTLS")
-	}
-	if c.Admin.TokenMinBytes < 32 {
-		return errors.New("管理令牌最小字节数不得低于 32")
-	}
-	if len(c.Admin.AllowedCIDRs) == 0 {
-		return errors.New("管理 API 必须配置管理网络 CIDR")
-	}
 	if err := validateAdminWeb(c.Admin.Web); err != nil {
 		return err
 	}
-	for _, cidr := range append(c.Proxy.TrustedCIDRs, c.Admin.AllowedCIDRs...) {
+	for _, cidr := range c.Proxy.TrustedCIDRs {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {
 			return fmt.Errorf("配置包含无效 CIDR：%s", cidr)
 		}

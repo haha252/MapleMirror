@@ -14,6 +14,7 @@ func TestNodeDeleteAPIUsesHighRiskAndRemovesNode(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodDelete, "/admin/api/nodes/node-delete", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
+	req = withAdminUser(req)
 	rec := httptest.NewRecorder()
 	server.nodeActionAPI(rec, req)
 	if rec.Code != http.StatusOK {

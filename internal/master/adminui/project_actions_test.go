@@ -30,6 +30,7 @@ func TestProjectResetRejectsDisabledConfiguredProject(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/projects/p1/reset", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
+	req = withAdminUser(req)
 	rec := httptest.NewRecorder()
 	server.projectActionAPI(rec, req)
 	if rec.Code != http.StatusNotFound {

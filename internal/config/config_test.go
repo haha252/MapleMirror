@@ -20,24 +20,21 @@ func TestLoadMasterExample(t *testing.T) {
 	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits != 23 {
 		t.Fatal("公开 API PoW 默认合同被修改")
 	}
-	if c.ALTCHA.Difficulty != 22 || c.Admin.HighRiskRequireMTLS == nil || !*c.Admin.HighRiskRequireMTLS {
-		t.Fatal("验证或管理安全合同被修改")
+	if c.ALTCHA.Difficulty != 22 {
+		t.Fatal("网页验证安全合同被修改")
 	}
-	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" || c.Admin.TokenMinBytes != 32 {
+	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" ||
+		c.Admin.Web.UsersFile == "" {
 		t.Fatal("M2 控制面配置默认值缺失")
 	}
 }
 
-func TestMasterAllowsExplicitManagementNetworkListen(t *testing.T) {
+func TestMasterAllowsExplicitManagementNetworkListenForWebPanel(t *testing.T) {
 	text := strings.Replace(string(MasterExample), "127.0.0.1:9080", "0.0.0.0:9080", 1)
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	_ = os.WriteFile(path, []byte(text), 0o600)
-	cfg, err := LoadMaster(path, nil)
-	if err != nil {
+	if _, err := LoadMaster(path, nil); err != nil {
 		t.Fatal(err)
-	}
-	if len(cfg.Admin.AllowedCIDRs) == 0 {
-		t.Fatal("管理监听放开时仍必须配置 admin.allowed_cidrs")
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/logging"
-	"mirror-server/internal/master/admin"
 	"mirror-server/internal/master/adminui"
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/mirrorsync"
@@ -21,30 +20,30 @@ import (
 func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, projectLoader *mirrorsync.ProjectLoader, logger *logging.Logger) {
 	httpsEnabled := adminWebHTTPSEnabled(cfg)
 	if httpsEnabled && (cfg.Admin.TLS.CertFile == "" || cfg.Admin.TLS.KeyFile == "") {
-		logger.Warn(context.Background(), "管理 API TLS 材料未配置，管理服务未启动")
-		return
-	}
-	auth, err := admin.NewAuth(cfg.Admin)
-	if err != nil {
-		logger.Error(context.Background(), "管理 API 鉴权初始化失败", slog.String("error", err.Error()))
+		logger.Warn(context.Background(), "管理面板 TLS 材料未配置，管理服务未启动")
 		return
 	}
 	if cfg.Node.TLS.SigningCACertFile == "" || cfg.Node.TLS.SigningCAKeyFile == "" {
 		logger.Error(context.Background(), "节点证书签发 CA 未配置，管理服务未启动")
 		return
 	}
+	var err error
 	loaded, err := mastercontrol.LoadCertificateSigner(
 		cfg.Node.TLS.SigningCACertFile, cfg.Node.TLS.SigningCAKeyFile, 365*24*time.Hour)
 	if err != nil {
 		logger.Error(context.Background(), "节点证书签发器初始化失败", slog.String("error", err.Error()))
 		return
 	}
-	handler := adminHandler(cfg, repo, syncService, projectLoader, logger, auth, loaded)
+	handler, err := adminHandler(cfg, repo, syncService, projectLoader, logger, loaded)
+	if err != nil {
+		logger.Error(context.Background(), "管理面板初始化失败", slog.String("error", err.Error()))
+		return
+	}
 	var tlsCfg *tls.Config
 	if httpsEnabled {
-		tlsCfg, err = controltls.AdminServer(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile, cfg.Admin.TLS.ClientCAFile)
+		tlsCfg, err = controltls.AdminWebServer(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile)
 		if err != nil {
-			logger.Error(context.Background(), "管理 API TLS 初始化失败", slog.String("error", err.Error()))
+			logger.Error(context.Background(), "管理面板 TLS 初始化失败", slog.String("error", err.Error()))
 			return
 		}
 	}
@@ -60,18 +59,15 @@ func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncSer
 		if httpsEnabled {
 			scheme = "https"
 		}
-		logger.Info(context.Background(), "管理 API 已启动",
+		logger.Info(context.Background(), "管理面板已启动",
 			slog.String("listen", cfg.Server.ManagementListen), slog.String("scheme", scheme))
 		if err := serveAdmin(server, httpsEnabled); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error(context.Background(), "管理 API 异常退出", slog.String("error", err.Error()))
+			logger.Error(context.Background(), "管理面板异常退出", slog.String("error", err.Error()))
 		}
 	}()
 }
 
 func adminWebHTTPSEnabled(cfg config.Master) bool {
-	if cfg.Admin.Web.Enabled == nil || !*cfg.Admin.Web.Enabled {
-		return true
-	}
 	return cfg.Admin.Web.HTTPSEnabled == nil || *cfg.Admin.Web.HTTPSEnabled
 }
 
@@ -82,36 +78,24 @@ func serveAdmin(server *http.Server, httpsEnabled bool) error {
 	return server.ListenAndServe()
 }
 
-func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, projectLoader *mirrorsync.ProjectLoader, logger *logging.Logger, auth admin.Auth, loaded mastercontrol.CertificateSigner) http.Handler {
-	apiHandler := admin.Server{
-		Auth: auth, Repo: repo, Signer: loaded.Sign,
-		Sync: syncService, SyncStore: syncService.Scanner.Store, Projects: projectLoader, Logger: logger,
-	}.Handler()
-	handler := http.Handler(apiHandler)
-	if cfg.Admin.Web.Enabled != nil && *cfg.Admin.Web.Enabled {
-		ui, uiErr := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
-			Projects:     projectLoader,
-			Signer:       loaded.Sign,
-			Sync:         syncService,
-			TrustedCIDRs: cfg.Proxy.TrustedCIDRs,
-			Timezone:     cfg.Stats.Timezone,
-		})
-		if uiErr != nil {
-			logger.Error(context.Background(), "管理面板初始化失败", slog.String("error", uiErr.Error()))
-		} else {
-			mux := http.NewServeMux()
-			if cfg.Admin.Web.ExclusiveAPI == nil || !*cfg.Admin.Web.ExclusiveAPI {
-				mux.Handle("/api/admin/v1/", apiHandler)
-			}
-			mux.HandleFunc("/admin", adminEntry)
-			mux.Handle("/admin/", ui.Handler())
-			mux.Handle("/static/", ui.Handler())
-			mux.HandleFunc("/", adminRoot)
-			handler = mux
-			logger.Info(context.Background(), "管理面板已启用", slog.String("path", "/admin/"))
-		}
+func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, projectLoader *mirrorsync.ProjectLoader, logger *logging.Logger, loaded mastercontrol.CertificateSigner) (http.Handler, error) {
+	ui, err := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
+		Projects:     projectLoader,
+		Signer:       loaded.Sign,
+		Sync:         syncService,
+		TrustedCIDRs: cfg.Proxy.TrustedCIDRs,
+		Timezone:     cfg.Stats.Timezone,
+	})
+	if err != nil {
+		return nil, err
 	}
-	return requestid.Middleware(handler, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/admin", adminEntry)
+	mux.Handle("/admin/", ui.Handler())
+	mux.Handle("/static/", ui.Handler())
+	mux.HandleFunc("/", adminRoot)
+	logger.Info(context.Background(), "管理面板挂载完成", slog.String("path", "/admin/"))
+	return requestid.Middleware(mux, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader), nil
 }
 
 func adminRoot(w http.ResponseWriter, r *http.Request) {

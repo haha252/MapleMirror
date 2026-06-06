@@ -1,12 +1,9 @@
 package adminui
 
 import (
-	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,6 +77,7 @@ func TestSaveProjectsWritesFileAndSyncsState(t *testing.T) {
 	}}})
 	req := httptest.NewRequest(http.MethodPut, "/admin/api/projects", strings.NewReader(string(body)))
 	req.RemoteAddr = "127.0.0.1:55000"
+	req = withAdminUser(req)
 	rec := httptest.NewRecorder()
 	server.saveProjects(rec, req)
 	if rec.Code != http.StatusOK {
@@ -112,12 +110,10 @@ func TestBootstrapPasswordEnvCreatesUsersFile(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	t.Setenv("MIRROR_ADMIN_WEB_PASSWORD", "created-password")
-	enabled := true
 	usersPath := filepath.Join(dir, "users.yaml")
 	server, err := New(config.Administration{
-		AllowedCIDRs: []string{"127.0.0.0/8"},
 		Web: config.AdminWeb{
-			Enabled: &enabled, UsersFile: usersPath,
+			UsersFile:            usersPath,
 			BootstrapPasswordEnv: "MIRROR_ADMIN_WEB_PASSWORD",
 			SessionSecretFile:    filepath.Join(dir, "session.key"),
 			SessionTTL:           "12h", LoginFailureWindow: "24h",
@@ -137,7 +133,7 @@ func TestBootstrapPasswordEnvCreatesUsersFile(t *testing.T) {
 	}
 }
 
-func TestSaveProjectsRequiresMTLSOutsideLoopback(t *testing.T) {
+func TestSaveProjectsRequiresLoginSession(t *testing.T) {
 	server, _ := newTestServer(t)
 	projectsPath := filepath.Join(t.TempDir(), "projects.yaml")
 	initial := config.Projects{Projects: []config.Project{{
@@ -167,6 +163,7 @@ func TestSecurityBlockDeleteReportsMissingRecord(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodDelete, "/admin/api/security/blocks/admin/ip-key", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
+	req = withAdminUser(req)
 	rec := httptest.NewRecorder()
 	server.securityBlockActionAPI(rec, req)
 	if rec.Code != http.StatusOK {
@@ -175,74 +172,12 @@ func TestSecurityBlockDeleteReportsMissingRecord(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodDelete, "/admin/api/security/blocks/admin/missing", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
+	req = withAdminUser(req)
 	rec = httptest.NewRecorder()
 	server.securityBlockActionAPI(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("missing delete status = %d body=%s", rec.Code, rec.Body.String())
 	}
-}
-
-func newTestServer(t *testing.T) (*Server, *sql.DB) {
-	t.Helper()
-	dir := t.TempDir()
-	db, err := storage.OpenMaster(config.Database{
-		Path: filepath.Join(dir, "master.db"), BusyTimeout: "5s", WAL: boolPtr(false),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	usersPath := filepath.Join(dir, "users.yaml")
-	hash := testPasswordHash("correct-password")
-	body := "users:\n  - username: admin\n    password_hash: \"" + hash + "\"\n"
-	if err := os.WriteFile(usersPath, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	enabled := true
-	server, err := New(config.Administration{
-		AllowedCIDRs: []string{"127.0.0.0/8"},
-		Web: config.AdminWeb{
-			Enabled: &enabled, UsersFile: usersPath,
-			SessionSecretFile: filepath.Join(dir, "session.key"),
-			SessionTTL:        "12h", LoginFailureWindow: "24h",
-			LoginFailureLimit: 3, LoginBanDuration: "168h",
-		},
-	}, mastercontrol.Repository{DB: db}, mirrorsync.Store{DB: db}, Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return server, db
-}
-
-func mustExecAdminUI(t *testing.T, db *sql.DB, query string, args ...any) {
-	t.Helper()
-	if _, err := db.Exec(query, args...); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func loginRequest(username, password string) *http.Request {
-	form := url.Values{"username": {username}, "password": {password}}
-	req := httptest.NewRequest(http.MethodPost, "/admin/login", strings.NewReader(form.Encode()))
-	req.RemoteAddr = "127.0.0.1:55000"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	return req
-}
-
-func sessionFrom(cookies []*http.Cookie) *http.Cookie {
-	for _, cookie := range cookies {
-		if cookie.Name == sessionCookie {
-			return cookie
-		}
-	}
-	return nil
-}
-
-func testPasswordHash(password string) string {
-	salt := []byte("0123456789abcdef")
-	key := pbkdf2SHA256([]byte(password), salt, 100000, 32)
-	return "pbkdf2-sha256$100000$" + base64.RawStdEncoding.EncodeToString(salt) +
-		"$" + base64.RawStdEncoding.EncodeToString(key)
 }
 
 func boolPtr(value bool) *bool {
