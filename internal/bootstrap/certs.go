@@ -100,6 +100,18 @@ func readCA(certPath, keyPath string) (*x509.Certificate, *ecdsa.PrivateKey, err
 	}
 	certBlock, _ := pem.Decode(certPEM)
 	keyBlock, _ := pem.Decode(keyPEM)
+	if certBlock == nil {
+		return nil, nil, fmt.Errorf("CA 证书 PEM 内容无效：%s", certPath)
+	}
+	if certBlock.Type != "CERTIFICATE" {
+		return nil, nil, fmt.Errorf("CA 证书 PEM 类型无效：%s", certBlock.Type)
+	}
+	if keyBlock == nil {
+		return nil, nil, fmt.Errorf("CA 私钥 PEM 内容无效：%s", keyPath)
+	}
+	if keyBlock.Type != "EC PRIVATE KEY" {
+		return nil, nil, fmt.Errorf("CA 私钥 PEM 类型无效：%s", keyBlock.Type)
+	}
 	cert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
 		return nil, nil, err
