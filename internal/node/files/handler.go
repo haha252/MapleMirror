@@ -112,6 +112,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("X-Authorization-Request-ID", claims.RequestID)
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment",
 		map[string]string{"filename": filepath.Base(asset.RelativePath)}))
 	counter := &limitCountingWriter{ResponseWriter: w, handler: h,

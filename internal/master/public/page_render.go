@@ -32,6 +32,7 @@ func (s Server) renderPage(w http.ResponseWriter, data pageData) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	_ = assets.pageTemplate.Execute(w, data)
 }
 
