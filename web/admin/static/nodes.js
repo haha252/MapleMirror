@@ -21,7 +21,8 @@
         '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + a.esc(node.node_id) + '">重置</button>' +
         '<button class="admin-secondary" data-node-action="' + (node.state === "disabled" ? "enable" : "disable") +
         '" data-node="' + a.esc(node.node_id) + '">' + (node.state === "disabled" ? "启用" : "禁用") +
-        "</button></div></td></tr>";
+        '</button><button class="admin-secondary admin-danger" data-node-action="delete" data-node="' +
+        a.esc(node.node_id) + '">删除</button></div></td></tr>';
     }).join("");
     a.text("node-summary", nodes.length + " 个节点");
     if (!currentNode && nodes[0]) showDetail(nodes[0].node_id);
@@ -98,9 +99,28 @@
     var node = button.getAttribute("data-node");
     var action = button.getAttribute("data-node-action");
     if (action === "detail") return showDetail(node);
-    a.confirmAction("节点操作", "确认对节点 " + node + " 执行 " + action + "？", function () {
-      a.api("/admin/api/nodes/" + encodeURIComponent(node) + "/" + action, { method: "POST", body: "{}" })
-        .then(function (data) { a.setStatus(data.message || "操作已完成"); loadNodes(); showDetail(node); })
+    var labels = { "sync-reset": "重置同步状态", "disable": "禁用", "enable": "启用", "delete": "删除" };
+    var text = action === "delete" ? "确认删除节点 " + node + "？该操作会清理该节点的运行数据、任务、库存和授权记录。"
+      : "确认对节点 " + node + " 执行 " + labels[action] + "？";
+    a.confirmAction("节点操作", text, function () {
+      var path = "/admin/api/nodes/" + encodeURIComponent(node);
+      var options = { method: "DELETE", body: "{}" };
+      if (action !== "delete") {
+        path += "/" + action;
+        options.method = "POST";
+      }
+      a.api(path, options)
+        .then(function (data) {
+          a.setStatus(data.message || "操作已完成");
+          if (action === "delete") {
+            currentNode = "";
+            a.text("node-detail-title", "未选择");
+            document.getElementById("node-detail").innerHTML = "";
+            return loadNodes();
+          }
+          loadNodes();
+          showDetail(node);
+        })
         .catch(function (err) { a.setStatus(err.message); });
     });
   }

@@ -56,6 +56,26 @@ func TestApproveEnrollmentKeepsSameNameManualDisabledNode(t *testing.T) {
 	assertTableCount(t, repo, "nodes", "id = 'new-node'", 1)
 }
 
+func TestDeleteNodeRemovesRuntimeData(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	ctx := context.Background()
+	seedQuarantinedNode(t, repo, "old-node", "节点一")
+
+	if err := repo.DeleteNode(ctx, "old-node", "req-delete", "admin"); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTableCount(t, repo, "nodes", "id = 'old-node'", 0)
+	assertTableCount(t, repo, "node_certificates", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "node_control_sessions", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "target_inventory", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "node_inventory", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "node_tasks", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "daily_node_traffic_stats", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "admin_audit_events", "operation = 'node.delete'", 1)
+}
+
 func seedQuarantinedNode(t *testing.T, repo Repository, nodeID, name string) {
 	t.Helper()
 	seedDisabledNode(t, repo, nodeID, name)

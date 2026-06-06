@@ -39,6 +39,8 @@ func (s *Server) nodeActionAPI(w http.ResponseWriter, r *http.Request) {
 		s.enableNode(w, r, nodeID)
 	case r.Method == http.MethodPost && action == "sync-reset":
 		s.syncReset(w, r, nodeID)
+	case r.Method == http.MethodDelete && action == "":
+		s.deleteNode(w, r, nodeID)
 	case r.Method == http.MethodPost && strings.HasPrefix(action, "sync-tasks/"):
 		s.syncTask(w, r, nodeID, action)
 	default:
@@ -111,6 +113,22 @@ func (s *Server) enableNode(w http.ResponseWriter, r *http.Request, nodeID strin
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"message": "节点已启用", "node_id": nodeID})
+}
+
+func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request, nodeID string) {
+	admin, ok := s.requireHighRisk(w, r)
+	if !ok {
+		return
+	}
+	if err := s.repo.DeleteNode(r.Context(), nodeID, requestID(r), admin); err != nil {
+		if err == sql.ErrNoRows {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "节点不存在"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "删除节点失败"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"message": "节点已删除", "node_id": nodeID})
 }
 
 func (s *Server) syncReset(w http.ResponseWriter, r *http.Request, nodeID string) {

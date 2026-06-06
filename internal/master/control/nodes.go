@@ -81,6 +81,27 @@ func (r Repository) EnableNode(ctx context.Context, nodeID, requestID, admin str
 	return tx.Commit()
 }
 
+func (r Repository) DeleteNode(ctx context.Context, nodeID, requestID, admin string) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM nodes WHERE id = ?`, nodeID).Scan(&exists); err != nil {
+		return err
+	}
+	if err := deleteNodeData(ctx, tx, nodeID); err != nil {
+		return err
+	}
+	if err := auditTx(ctx, tx, "node.delete", "node", nodeID, "success",
+		requestID, "节点已删除", admin); err != nil {
+		return err
+	}
+	r.runtime().CloseNodeSessions(nodeID)
+	return tx.Commit()
+}
+
 func (r Repository) SyncReset(ctx context.Context, nodeID, requestID, admin string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var state string
