@@ -101,6 +101,8 @@ type AuthorizationStatus struct {
 	AuthorizationID string
 	AssetID         string
 	NodeID          string
+	NodeName        string
+	ClientPrefixKey string
 	State           string
 	ExpiresAt       string
 }

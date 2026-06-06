@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -121,18 +122,44 @@ func remainingTokens(microunits map[string]int64) map[string]int64 {
 }
 
 func (s Server) authorization(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
 	id := r.URL.Path[len("/api/public/v1/authorizations/"):]
+	claims, err := s.Signer.Verify(authorizationBearer(r))
+	if err != nil || claims.AuthorizationID != id {
+		writeError(w, r, http.StatusUnauthorized, "DOWNLOAD_TOKEN_INVALID", "下载令牌无效")
+		return
+	}
 	auth, err := s.Store.Authorization(r.Context(), id)
 	if err != nil {
 		writeError(w, r, http.StatusNotFound, "ASSET_NOT_FOUND", "授权不存在")
 		return
 	}
+	if claims.AssetID != auth.AssetID || claims.NodeID != auth.NodeID ||
+		claims.ClientPrefix != auth.ClientPrefixKey {
+		writeError(w, r, http.StatusUnauthorized, "DOWNLOAD_TOKEN_INVALID", "下载令牌无效")
+		return
+	}
+	if claims.ClientPrefix != s.clientPrefix(r) {
+		writeError(w, r, http.StatusForbidden, "CLIENT_PREFIX_MISMATCH", "客户端网络前缀不匹配")
+		return
+	}
 	sent, first, _ := s.Store.AuthorizationBytes(r.Context(), id)
 	writeOK(w, r, http.StatusOK, "查询成功", map[string]any{
 		"authorization_id": auth.AuthorizationID, "asset_id": auth.AssetID,
-		"node_id": auth.NodeID, "state": auth.State, "expires_at": auth.ExpiresAt,
+		"node_id": auth.NodeName, "state": auth.State, "expires_at": auth.ExpiresAt,
 		"bytes_accounting_enabled": true, "sent_bytes": sent, "first_transfer_at": first,
 	})
+}
+
+func authorizationBearer(r *http.Request) string {
+	const prefix = "Bearer "
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, prefix) {
+		return strings.TrimPrefix(auth, prefix)
+	}
+	return ""
 }
 
 func expiresAfter(ttl time.Duration) string {

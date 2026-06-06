@@ -258,7 +258,12 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 `GET /api/public/v1/authorizations/{authorization_id}`
 
-M5 返回授权基本状态和已由主节点幂等入账的真实发送字节。
+必须携带该授权对应的下载令牌，且客户端前缀必须与令牌一致。M5 返回授权基本状态和已由主节点幂等入账的真实发送字节；`node_id` 字段为公开节点名，不返回内部节点 ID。
+
+```text
+GET /api/public/v1/authorizations/{authorization_id}
+Authorization: Bearer <download_token>
+```
 
 ```json
 {
@@ -268,7 +273,7 @@ M5 返回授权基本状态和已由主节点幂等入账的真实发送字节�
   "data": {
     "authorization_id": "授权标识",
     "asset_id": "asset_123",
-    "node_id": "公开节点标识或脱敏节点名",
+    "node_id": "公开节点名",
     "state": "issued",
     "expires_at": "2026-05-28T12:05:00Z",
     "bytes_accounting_enabled": false,
@@ -390,6 +395,8 @@ M5 启用后，公开 API 不再使用 `QUOTA_NOT_ENABLED` 占位错误。网页
 
 `GET /api/public/v1/authorizations/{authorization_id}` 在 M5 后可返回真实入账字段：
 
+该接口必须携带与 `authorization_id` 匹配的下载令牌，且令牌内客户端前缀必须匹配当前请求客户端前缀。
+
 ```json
 {
   "status": "success",
@@ -398,7 +405,7 @@ M5 启用后，公开 API 不再使用 `QUOTA_NOT_ENABLED` 占位错误。网页
   "data": {
     "authorization_id": "授权标识",
     "asset_id": "asset_123",
-    "node_id": "公开节点标识或脱敏节点名",
+    "node_id": "公开节点名",
     "state": "issued",
     "expires_at": "2026-05-28T12:05:00Z",
     "bytes_accounting_enabled": true,

@@ -94,10 +94,11 @@ const apiDocsBody = `
 
   <section class="api-endpoint">
     <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/authorizations/{authorization_id}</code></div>
-    <p>查询授权状态、过期时间、脱敏节点标识和已入账真实发送字节。</p>
-    <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>authorization_id</td><td>Path</td><td>授权标识</td></tr></tbody></table>
+    <p>携带对应下载令牌查询授权状态、过期时间、公开节点名和已入账真实发送字节。</p>
+    <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>authorization_id</td><td>Path</td><td>授权标识</td></tr><tr><td>Authorization</td><td>Header</td><td><code>Bearer &lt;download_token&gt;</code></td></tr></tbody></table>
     <p class="api-label">Example Request</p>
-    <pre><code>GET /api/public/v1/authorizations/auth_123</code></pre>
+    <pre><code>GET /api/public/v1/authorizations/auth_123
+Authorization: Bearer &lt;download_token&gt;</code></pre>
     <p class="api-label">Example Response</p>
     <pre><code>{
   "status": "success",
