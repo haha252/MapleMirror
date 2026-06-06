@@ -3,6 +3,7 @@ package adminui
 import (
 	"database/sql"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -67,13 +68,18 @@ func (s *Server) createBlock(r *http.Request, kind, key, reason, duration string
 	expires := time.Now().UTC().Add(d).Format(time.RFC3339Nano)
 	switch kind {
 	case "admin":
+		ip, err := normalizeAdminBlockIP(key)
+		if err != nil {
+			return err
+		}
+		key = s.store.ipKey(ip)
 		_, err = s.repo.DB.ExecContext(r.Context(), `INSERT INTO admin_ip_blocks
 			(ip_key, masked_ip, reason, blocked_at, expires_at,
 			attempts_after_block, last_attempt_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, 0, ?, ?)
 			ON CONFLICT(ip_key) DO UPDATE SET reason = excluded.reason,
 			expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
-			key, maskBlockKey(key), reason, now, expires, now, now)
+			key, maskIP(ip), reason, now, expires, now, now)
 	case "client":
 		_, err = s.repo.DB.ExecContext(r.Context(), `INSERT INTO client_blocks
 			(client_prefix_key, reason, source, blocked_at, expires_at,
@@ -86,6 +92,20 @@ func (s *Server) createBlock(r *http.Request, kind, key, reason, duration string
 		return errors.New("封禁类型必须是 admin 或 client")
 	}
 	return err
+}
+
+func normalizeAdminBlockIP(value string) (string, error) {
+	if strings.Contains(value, "/") {
+		return "", errors.New("管理登录来源封禁只支持单个 IP，请输入例如 192.0.2.10")
+	}
+	ip := net.ParseIP(value)
+	if ip == nil {
+		return "", errors.New("管理登录来源封禁必须是合法 IP")
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String(), nil
+	}
+	return ip.String(), nil
 }
 
 func (s *Server) deleteBlock(r *http.Request, kind, key string) error {
