@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"mirror-server/internal/controltls"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
 )
@@ -93,6 +94,17 @@ func (r Repository) RevokePairing(ctx context.Context, id, requestID string) err
 }
 
 func (r Repository) CreateEnrollment(ctx context.Context, code, name, csr, fp, caps, requestID string, ttl time.Duration) (Enrollment, error) {
+	parsedCSR, err := controltls.ParseCSR([]byte(csr))
+	if err != nil {
+		return Enrollment{}, err
+	}
+	serverFP, err := controltls.PublicKeyFingerprint(parsedCSR)
+	if err != nil {
+		return Enrollment{}, err
+	}
+	if fp != "" && controltls.NormalizeFingerprint(fp) != serverFP {
+		return Enrollment{}, fmt.Errorf("登记请求公钥指纹与 CSR 不一致")
+	}
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return Enrollment{}, err
@@ -112,12 +124,12 @@ func (r Repository) CreateEnrollment(ctx context.Context, code, name, csr, fp, c
 		(id, pairing_code_id, public_name, csr_pem, public_key_fingerprint, status,
 		request_id, capabilities_json, expires_at, created_at)
 		VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
-		id, pairingID, name, csr, fp, requestID, caps,
+		id, pairingID, name, csr, serverFP, requestID, caps,
 		expires.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
 	if err != nil {
 		return Enrollment{}, fmt.Errorf("创建登记请求失败：%w", err)
 	}
-	return Enrollment{ID: id, PublicName: name, Fingerprint: fp, Status: "pending",
+	return Enrollment{ID: id, PublicName: name, Fingerprint: serverFP, Status: "pending",
 		ExpiresAt: expires, RequestID: requestID, Capabilities: caps}, tx.Commit()
 }
 

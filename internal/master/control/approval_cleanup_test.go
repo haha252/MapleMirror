@@ -12,14 +12,15 @@ func TestApproveEnrollmentDeletesSameNameQuarantinedNode(t *testing.T) {
 	ctx := context.Background()
 	seedQuarantinedNode(t, repo, "old-node", "节点一")
 	code, _ := repo.CreatePairing(ctx, time.Minute, "req-create")
-	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", "csr", "sha256:new", "[]", "req-enroll", time.Minute)
+	csr, fp := testEnrollmentCSR(t, "节点一")
+	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", csr, fp, "[]", "req-enroll", time.Minute)
 	signed := SignedCertificate{
 		NodeID: "new-node", CertificateID: "new-cert", SerialNumber: "new-1",
 		Fingerprint: "sha256:new-cert", NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour),
 		CertificatePEM: "cert", CAChainPEM: "ca",
 	}
 
-	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", "sha256:new", "req-approve", signed); err != nil {
+	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", fp, "req-approve", signed); err != nil {
 		t.Fatal(err)
 	}
 
@@ -40,14 +41,15 @@ func TestApproveEnrollmentKeepsSameNameManualDisabledNode(t *testing.T) {
 	ctx := context.Background()
 	seedDisabledNode(t, repo, "old-node", "节点一")
 	code, _ := repo.CreatePairing(ctx, time.Minute, "req-create")
-	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", "csr", "sha256:new", "[]", "req-enroll", time.Minute)
+	csr, fp := testEnrollmentCSR(t, "节点一")
+	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", csr, fp, "[]", "req-enroll", time.Minute)
 	signed := SignedCertificate{
 		NodeID: "new-node", CertificateID: "new-cert", SerialNumber: "new-1",
 		Fingerprint: "sha256:new-cert", NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour),
 		CertificatePEM: "cert", CAChainPEM: "ca",
 	}
 
-	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", "sha256:new", "req-approve", signed); err != nil {
+	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", fp, "req-approve", signed); err != nil {
 		t.Fatal(err)
 	}
 

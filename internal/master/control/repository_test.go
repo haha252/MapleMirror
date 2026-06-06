@@ -20,13 +20,34 @@ func TestPairingCodeIsOneTime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = repo.CreateEnrollment(ctx, code.Code, "节点一", "csr", "sha256:aa", "[]", "req-enroll", time.Minute)
+	csr, fp := testEnrollmentCSR(t, "节点一")
+	_, err = repo.CreateEnrollment(ctx, code.Code, "节点一", csr, fp, "[]", "req-enroll", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = repo.CreateEnrollment(ctx, code.Code, "节点二", "csr", "sha256:bb", "[]", "req-replay", time.Minute)
+	replayCSR, replayFP := testEnrollmentCSR(t, "节点二")
+	_, err = repo.CreateEnrollment(ctx, code.Code, "节点二", replayCSR, replayFP, "[]", "req-replay", time.Minute)
 	if err == nil {
 		t.Fatal("同一个配对码不得重复登记")
+	}
+}
+
+func TestCreateEnrollmentRejectsMismatchedPublicKeyFingerprint(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	ctx := context.Background()
+	code, err := repo.CreatePairing(ctx, time.Minute, "req-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, _ := testEnrollmentCSR(t, "节点一")
+	_, err = repo.CreateEnrollment(ctx, code.Code, "节点一", csr, "sha256:bad", "[]", "req-enroll", time.Minute)
+	if err == nil {
+		t.Fatal("登记请求不得接受与 CSR 不一致的公钥指纹")
+	}
+	csr, fp := testEnrollmentCSR(t, "节点一")
+	if _, err = repo.CreateEnrollment(ctx, code.Code, "节点一", csr, fp, "[]", "req-enroll-ok", time.Minute); err != nil {
+		t.Fatalf("指纹拒绝不应消耗配对码：%v", err)
 	}
 }
 
@@ -35,13 +56,14 @@ func TestApproveKeepsRoutingReadyFalse(t *testing.T) {
 	defer closeDB()
 	ctx := context.Background()
 	code, _ := repo.CreatePairing(ctx, time.Minute, "req-create")
-	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", "csr", "sha256:aa", "[]", "req-enroll", time.Minute)
+	csr, fp := testEnrollmentCSR(t, "节点一")
+	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", csr, fp, "[]", "req-enroll", time.Minute)
 	signed := SignedCertificate{
 		NodeID: "node-1", CertificateID: "cert-1", SerialNumber: "1",
 		Fingerprint: "sha256:cc", NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour),
 		CertificatePEM: "cert", CAChainPEM: "ca",
 	}
-	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", "sha256:aa", "req-approve", signed); err != nil {
+	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", fp, "req-approve", signed); err != nil {
 		t.Fatal(err)
 	}
 	var ready int
@@ -78,13 +100,14 @@ func TestApproveEnrollmentSeedsCurrentTargets(t *testing.T) {
 		VALUES ('asset-1', 'rel-1', 1, 'ffmpeg.zip', 'amd64', 10,
 		'https://example.invalid', 'sha256:aa', 'candidate', 'now')`)
 	code, _ := repo.CreatePairing(ctx, time.Minute, "req-create")
-	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", "csr", "sha256:aa", "[]", "req-enroll", time.Minute)
+	csr, fp := testEnrollmentCSR(t, "节点一")
+	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "节点一", csr, fp, "[]", "req-enroll", time.Minute)
 	signed := SignedCertificate{
 		NodeID: "node-1", CertificateID: "cert-1", SerialNumber: "1",
 		Fingerprint: "sha256:cc", NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour),
 		CertificatePEM: "cert", CAChainPEM: "ca",
 	}
-	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", "sha256:aa", "req-approve", signed); err != nil {
+	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "节点一", fp, "req-approve", signed); err != nil {
 		t.Fatal(err)
 	}
 	assertTableCount(t, repo, "target_inventory",
@@ -98,13 +121,14 @@ func TestRotateCertificateKeepsAuthorizedNodeName(t *testing.T) {
 	defer closeDB()
 	ctx := context.Background()
 	code, _ := repo.CreatePairing(ctx, time.Minute, "req-create")
-	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "授权节点名", "csr", "sha256:aa", "[]", "req-enroll", time.Minute)
+	csr, fp := testEnrollmentCSR(t, "授权节点名")
+	enrollment, _ := repo.CreateEnrollment(ctx, code.Code, "授权节点名", csr, fp, "[]", "req-enroll", time.Minute)
 	signed := SignedCertificate{
 		NodeID: "node-1", CertificateID: "cert-1", SerialNumber: "1",
 		Fingerprint: "sha256:cc", NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour),
 		CertificatePEM: "cert", CAChainPEM: "ca",
 	}
-	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "授权节点名", "sha256:aa", "req-approve", signed); err != nil {
+	if err := repo.ApproveEnrollment(ctx, enrollment.ID, "授权节点名", fp, "req-approve", signed); err != nil {
 		t.Fatal(err)
 	}
 	rotated := SignedCertificate{
