@@ -26,6 +26,7 @@ type Handler struct {
 	Logger       *logging.Logger
 	mu           sync.Mutex
 	active       map[string]int
+	budgets      map[string]int64
 }
 
 type localAsset struct {
@@ -89,7 +90,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer h.leave(claims.AuthorizationID)
 	sent, err := h.authorizationBytes(claims.AuthorizationID)
-	if err != nil || (r.Method != http.MethodHead && sent >= claims.MaxBytes) {
+	limit := h.authorizationLimit(claims)
+	if err != nil || (r.Method != http.MethodHead && sent >= limit) {
 		httpError(w, r, http.StatusForbidden, "授权可发送字节数不足")
 		return
 	}
@@ -112,7 +114,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Authorization-Request-ID", claims.RequestID)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment",
 		map[string]string{"filename": filepath.Base(asset.RelativePath)}))
-	counter := &countingWriter{ResponseWriter: w}
+	counter := &limitCountingWriter{ResponseWriter: w, handler: h,
+		authorizationID: claims.AuthorizationID, limit: limit, sent: sent}
 	http.ServeContent(counter, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
 	if counter.bytes > 0 {
 		if err := h.recordTraffic(claims, asset.AssetID, requestid.FromContext(r.Context()), counter.bytes); err != nil && h.Logger != nil {
@@ -152,6 +155,14 @@ func (h *Handler) authorizationBytes(id string) (int64, error) {
 	err := h.DB.QueryRow(`SELECT COALESCE(SUM(sent_bytes), 0)
 		FROM pending_traffic_events WHERE authorization_id = ?`, id).Scan(&sent)
 	return sent, err
+}
+
+func (h *Handler) authorizationLimit(claims downloadtoken.Claims) int64 {
+	limit := claims.MaxBytes
+	if claims.TrafficLimitBytes > 0 && claims.TrafficLimitBytes < limit {
+		limit = claims.TrafficLimitBytes
+	}
+	return limit
 }
 
 func (h *Handler) localAsset(assetID string) (localAsset, error) {
@@ -201,15 +212,4 @@ func httpError(w http.ResponseWriter, r *http.Request, code int, message string)
 	w.WriteHeader(code)
 	_, _ = w.Write([]byte(`{"status":"error","message":"` + message +
 		`","request_id":"` + requestid.FromContext(r.Context()) + `"}`))
-}
-
-type countingWriter struct {
-	http.ResponseWriter
-	bytes int64
-}
-
-func (w *countingWriter) Write(data []byte) (int, error) {
-	n, err := w.ResponseWriter.Write(data)
-	w.bytes += int64(n)
-	return n, err
 }

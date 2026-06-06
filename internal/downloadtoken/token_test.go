@@ -26,13 +26,17 @@ func TestEd25519TokenRoundTripAndTamperReject(t *testing.T) {
 	}
 	token, err := signer.Sign(Claims{AuthorizationID: "auth", AssetID: "asset",
 		NodeID: "node", ClientPrefix: "192.0.2.1/32",
-		ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano)})
+		ExpiresAt:         time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		TrafficLimitBytes: 123})
 	if err != nil {
 		t.Fatal(err)
 	}
 	claims, err := verifier.Verify(token)
 	if err != nil || claims.TokenVersion != Version {
 		t.Fatalf("Ed25519 令牌验证失败：claims=%+v err=%v", claims, err)
+	}
+	if claims.TrafficLimitBytes != 123 {
+		t.Fatalf("流量上限字段未保留：%d", claims.TrafficLimitBytes)
 	}
 	if _, err := verifier.Verify(token + "x"); err == nil {
 		t.Fatal("篡改后的令牌应被拒绝")

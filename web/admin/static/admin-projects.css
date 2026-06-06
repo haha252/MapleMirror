@@ -1,0 +1,136 @@
+.admin-project-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-project-card {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 16px;
+}
+
+.project-card__meta {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.project-card__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-muted);
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.project-card__title {
+  min-width: 0;
+}
+
+.project-card__title h2 {
+  margin-bottom: 4px;
+  font-size: 20px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.project-repository {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.project-card__summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.project-card__summary p {
+  margin-bottom: 0;
+}
+
+.project-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.project-editor[hidden] {
+  display: none;
+}
+
+.project-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.project-edit-section {
+  display: grid;
+  gap: 12px;
+}
+.project-edit-section h2 {
+  margin-bottom: 0;
+  font-size: 18px;
+}
+.project-editor-page .project-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-check {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.rule-block {
+  display: grid;
+  gap: 8px;
+}
+
+.rule-block h3 {
+  margin-bottom: 0;
+  font-size: 16px;
+}
+
+.rule-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 100px auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.editor-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 1180px) {
+  .admin-project-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .project-form,
+  .project-editor-page .project-form,
+  .rule-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-project-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-card__summary {
+    flex-direction: column;
+  }
+}

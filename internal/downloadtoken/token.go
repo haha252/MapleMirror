@@ -34,6 +34,7 @@ type Claims struct {
 	ClientPrefix          string `json:"client_prefix"`
 	ExpiresAt             string `json:"expires_at"`
 	MaxBytes              int64  `json:"max_bytes"`
+	TrafficLimitBytes     int64  `json:"traffic_limit_bytes,omitempty"`
 	RangeConcurrencyLimit int    `json:"range_concurrency_limit"`
 	RequestID             string `json:"request_id"`
 }

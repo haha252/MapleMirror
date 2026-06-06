@@ -68,7 +68,7 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		reservationStatus = "exempt"
 	}
 	if !exempt {
-		if err := quota.reserve(ctx, tx, day, scopes, maxBytes); err != nil {
+		if err := quota.reserve(ctx, tx, day, scopes); err != nil {
 			return IssuedAuthorization{}, AuthorizationDebug{}, err
 		}
 	}
@@ -96,7 +96,8 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version, AuthorizationID: authID,
 		AssetID: c.AssetID, NodeID: asset.NodeID, ProjectID: asset.ProjectID,
 		System: asset.System, Architecture: asset.Architecture, ClientPrefix: c.ClientPrefixKey,
-		ExpiresAt: expires, MaxBytes: maxBytes, RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
+		ExpiresAt: expires, MaxBytes: maxBytes, TrafficLimitBytes: trafficLimitBytes(maxBytes, trafficRemaining, exempt),
+		RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
 	debug := AuthorizationDebug{
 		ClientPrefix:               c.ClientPrefixKey,
 		NodeID:                     asset.NodeID,
@@ -112,6 +113,19 @@ func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 		TrafficRemainingBytes:      trafficRemaining,
 	}
 	return IssuedAuthorization{Claims: claims}, debug, tx.Commit()
+}
+
+func trafficLimitBytes(maxBytes int64, remaining map[string]int64, exempt bool) int64 {
+	if exempt {
+		return 0
+	}
+	limit := maxBytes
+	for _, value := range remaining {
+		if value > 0 && value < limit {
+			limit = value
+		}
+	}
+	return limit
 }
 
 func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatus, error) {

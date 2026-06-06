@@ -32,6 +32,7 @@ type Server struct {
 	networks               []*net.IPNet
 	trustedCIDRs           []string
 	highRiskSessionAllowed bool
+	timeLocation           *time.Location
 	templates              *template.Template
 	adminFS                fs.FS
 	publicFS               fs.FS
@@ -44,6 +45,7 @@ type Options struct {
 		Trigger(context.Context, string, string) (string, error)
 	}
 	TrustedCIDRs []string
+	Timezone     string
 }
 
 func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mirrorsync.Store, opts Options) (*Server, error) {
@@ -64,6 +66,10 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		return nil, err
 	}
 	banDuration, err := parseWebDuration("admin.web.login_ban_duration", cfg.Web.LoginBanDuration)
+	if err != nil {
+		return nil, err
+	}
+	timeLocation, err := loadTimeLocation(opts.Timezone)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +95,7 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
 		trustedCIDRs:           opts.TrustedCIDRs,
 		highRiskSessionAllowed: cfg.Web.HighRiskSessionAllowed != nil && *cfg.Web.HighRiskSessionAllowed,
+		timeLocation:           timeLocation,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
 			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
 	}, nil
@@ -106,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/static/admin/", http.StripPrefix("/static/admin/", http.FileServer(http.FS(s.adminFS))))
 	mux.Handle("/static/public/", http.StripPrefix("/static/public/", http.FileServer(http.FS(s.publicFS))))
+	mux.HandleFunc("/static/project-icons/", s.projectIcon)
 	mux.HandleFunc("/admin/login", s.login)
 	mux.HandleFunc("/admin/logout", s.logout)
 	mux.HandleFunc("/admin/api/overview", s.requireSession(s.overview))
@@ -114,13 +122,20 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/api/nodes", s.requireSession(s.nodesAPI))
 	mux.HandleFunc("/admin/api/nodes/", s.requireSession(s.nodeActionAPI))
 	mux.HandleFunc("/admin/api/sync/scans", s.requireSession(s.scanAPI))
+	mux.HandleFunc("/admin/api/sync/scans/latest", s.requireSession(s.latestScanAPI))
+	mux.HandleFunc("/admin/api/sync/tasks", s.requireSession(s.syncTasksAPI))
+	mux.HandleFunc("/admin/api/stats/overview", s.requireSession(s.statsOverviewAPI))
+	mux.HandleFunc("/admin/api/stats/projects", s.requireSession(s.projectStatsAPI))
+	mux.HandleFunc("/admin/api/authorizations/", s.requireSession(s.authorizationAPI))
+	mux.HandleFunc("/admin/api/traffic/events", s.requireSession(s.trafficEventsAPI))
 	mux.HandleFunc("/admin/api/pairing-codes", s.requireSession(s.pairingCodesAPI))
 	mux.HandleFunc("/admin/api/pairing-requests", s.requireSession(s.pairingRequestsAPI))
 	mux.HandleFunc("/admin/api/pairing-requests/", s.requireSession(s.pairingRequestActionAPI))
 	mux.HandleFunc("/admin/api/security/blocks", s.requireSession(s.securityBlocksAPI))
 	mux.HandleFunc("/admin/api/security/blocks/", s.requireSession(s.securityBlockActionAPI))
+	mux.HandleFunc("/admin/api/security/audit-events", s.requireSession(s.auditEventsAPI))
 	mux.HandleFunc("/admin/", s.requireSession(s.shell))
-	return s.networkGuard(mux)
+	return mux
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -192,9 +207,15 @@ func (s *Server) renderLogin(w http.ResponseWriter, message string) {
 }
 
 func (s *Server) shell(w http.ResponseWriter, r *http.Request) {
+	page, ok := adminPageForPath(r.URL.Path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates.ExecuteTemplate(w, "shell.html", map[string]any{
 		"Username": r.Context().Value(usernameKey{}),
+		"Page":     page,
 	})
 }
 

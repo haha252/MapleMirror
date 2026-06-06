@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>管理面板 - 枫源镜像</title>
+<title>{{.Page.Title}} - 枫源镜像</title>
 <script>
 (function () {
   var root = document.documentElement;
@@ -20,8 +20,11 @@
 <link rel="stylesheet" href="/static/public/base.css">
 <link rel="stylesheet" href="/static/public/base-responsive.css">
 <link rel="stylesheet" href="/static/admin/admin.css">
+<link rel="stylesheet" href="/static/admin/admin-overview.css">
+<link rel="stylesheet" href="/static/admin/admin-projects.css">
+<link rel="stylesheet" href="/static/admin/admin-security.css">
 </head>
-<body class="page-admin">
+<body class="page-admin" data-admin-page="{{.Page.ID}}">
 <div id="page-loading-bar" class="page-loading-bar" aria-hidden="true"></div>
 <header class="site-header">
   <div class="site-header__left">
@@ -30,93 +33,32 @@
       <span>枫源镜像管理</span>
     </a>
     <nav class="site-nav" aria-label="管理导航">
-      <a href="/admin/" aria-current="page"><span>总览</span></a>
-      <a href="/admin/nodes"><span>节点</span></a>
-      <a href="/admin/sync"><span>同步</span></a>
-      <a href="/admin/projects"><span>项目</span></a>
-      <a href="/admin/security"><span>安全</span></a>
+      <a href="/admin/" data-nav="overview"><span>总览</span></a>
+      <a href="/admin/nodes" data-nav="nodes"><span>节点</span></a>
+      <a href="/admin/sync" data-nav="sync"><span>同步</span></a>
+      <a href="/admin/projects" data-nav="projects"><span>项目</span></a>
+      <a href="/admin/security" data-nav="security"><span>安全</span></a>
     </nav>
   </div>
   <div class="theme-tools">
     <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"></button>
-    <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色"></button>
+    <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 1.4-3.4l-.3-.3a1.8 1.8 0 0 1 1.3-3.1H18a6 6 0 0 0 0-12h-6Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="14" cy="7.5" r="1"/></svg></button>
     <a class="admin-logout" href="/admin/logout">退出</a>
     <div id="palette-menu" class="palette-menu" hidden></div>
   </div>
 </header>
 <main class="site-main admin-main">
   <div class="page-title-row">
-    <h1>管理总览</h1>
-    <p class="page-subtitle">节点、同步与流量状态</p>
+    <h1>{{.Page.Title}}</h1>
+    <p class="page-subtitle">{{.Page.Subtitle}}</p>
   </div>
   <div id="admin-status" class="status" hidden></div>
-  <section class="admin-metrics" aria-label="关键指标">
-    <article class="panel-card admin-metric"><span>今日授权</span><strong id="metric-auth">0</strong></article>
-    <article class="panel-card admin-metric"><span>今日传输</span><strong id="metric-started">0</strong></article>
-    <article class="panel-card admin-metric"><span>今日流量</span><strong id="metric-daily">0 B</strong></article>
-    <article class="panel-card admin-metric"><span>累计流量</span><strong id="metric-total">0 B</strong></article>
-  </section>
-  <section class="admin-grid">
-    <article class="panel-card admin-panel">
-      <div class="admin-panel__head">
-        <h2>节点</h2>
-        <span id="node-summary" class="muted">加载中</span>
-      </div>
-      <div class="admin-table-wrap">
-        <table>
-          <thead><tr><th>节点</th><th>状态</th><th>路由</th><th>最近心跳</th></tr></thead>
-          <tbody id="nodes-body"></tbody>
-        </table>
-      </div>
-    </article>
-    <article class="panel-card admin-panel">
-      <div class="admin-panel__head">
-        <h2>扫描</h2>
-        <button id="scan-all" class="admin-secondary" type="button">触发扫描</button>
-      </div>
-      <div class="admin-table-wrap">
-        <table>
-          <thead><tr><th>项目</th><th>状态</th><th>下次扫描</th></tr></thead>
-          <tbody id="scans-body"></tbody>
-        </table>
-      </div>
-    </article>
-  </section>
-  <section class="panel-card admin-panel admin-projects">
-    <div class="admin-panel__head">
-      <h2>项目配置</h2>
-      <button id="projects-save" class="admin-primary" type="button">保存项目配置</button>
-    </div>
-    <p class="page-intro">这里管理要镜像的 GitHub 仓库、版本保留数量、预发布版本、资产包含/排除规则、架构和系统识别规则。</p>
-    <textarea id="projects-editor" class="admin-editor" spellcheck="false" aria-label="项目配置 JSON"></textarea>
-  </section>
-  <section class="admin-grid admin-extra">
-    <article class="panel-card admin-panel">
-      <div class="admin-panel__head">
-        <h2>配对</h2>
-        <button id="pairing-create" class="admin-secondary" type="button">创建配对码</button>
-      </div>
-      <div id="pairing-code" class="admin-status" hidden></div>
-      <div class="admin-table-wrap">
-        <table>
-          <thead><tr><th>节点名</th><th>指纹</th><th>过期时间</th><th>操作</th></tr></thead>
-          <tbody id="pairing-body"></tbody>
-        </table>
-      </div>
-    </article>
-    <article class="panel-card admin-panel">
-      <div class="admin-panel__head">
-        <h2>安全封禁</h2>
-        <button id="security-refresh" class="admin-secondary" type="button">刷新</button>
-      </div>
-      <div class="admin-table-wrap">
-        <table>
-          <thead><tr><th>来源</th><th>原因</th><th>过期时间</th><th>操作</th></tr></thead>
-          <tbody id="blocks-body"></tbody>
-        </table>
-      </div>
-    </article>
-  </section>
+  {{if eq .Page.ID "overview"}}{{template "overview" .}}{{end}}
+  {{if eq .Page.ID "nodes"}}{{template "nodes" .}}{{end}}
+  {{if eq .Page.ID "sync"}}{{template "sync" .}}{{end}}
+  {{if eq .Page.ID "projects"}}{{template "projects" .}}{{end}}
+  {{if eq .Page.ID "project-edit"}}{{template "project-edit" .}}{{end}}
+  {{if eq .Page.ID "security"}}{{template "security" .}}{{end}}
 </main>
 <div id="admin-modal" class="admin-modal" hidden>
   <div class="admin-modal__box panel-card" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
@@ -130,6 +72,118 @@
 </div>
 <script src="/static/public/theme.js" defer></script>
 <script src="/static/admin/admin.js" defer></script>
-<script src="/static/admin/admin-actions.js" defer></script>
+<script src="/static/admin/{{.Page.Script}}" defer></script>
 </body>
 </html>
+
+{{define "overview"}}
+<section class="overview-top">
+  <div class="overview-metrics" aria-label="关键指标">
+    <article class="panel-card admin-metric"><span>今日授权</span><strong id="metric-auth">0</strong></article>
+    <article class="panel-card admin-metric"><span>今日传输</span><strong id="metric-started">0</strong></article>
+    <article class="panel-card admin-metric"><span>今日流量</span><strong id="metric-daily">0 B</strong></article>
+    <article class="panel-card admin-metric"><span>累计流量</span><strong id="metric-total">0 B</strong></article>
+  </div>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>节点摘要</h2><a class="admin-secondary" href="/admin/nodes">查看节点</a></div>
+    <div id="node-summary-grid" class="summary-grid"></div>
+  </article>
+</section>
+<section class="admin-extra">
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>扫描异常</h2><a class="admin-secondary" href="/admin/sync">查看同步</a></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>项目</th><th>状态</th><th>摘要</th></tr></thead><tbody id="scan-alerts-body"></tbody></table></div>
+  </article>
+</section>
+{{end}}
+
+{{define "nodes"}}
+<section class="admin-grid">
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>节点列表</h2><span id="node-summary" class="muted">加载中</span></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>节点</th><th>状态</th><th>路由</th><th>最近心跳</th><th>操作</th></tr></thead><tbody id="nodes-body"></tbody></table></div>
+  </article>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>节点详情</h2><span id="node-detail-title" class="muted">未选择</span></div>
+    <div id="node-detail" class="detail-stack"></div>
+  </article>
+</section>
+<section class="admin-grid admin-extra">
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>登记审批</h2><button id="pairing-create" class="admin-secondary" type="button">创建配对码</button></div>
+    <div id="pairing-code" class="admin-status" hidden></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>节点名</th><th>指纹</th><th>过期时间</th><th>操作</th></tr></thead><tbody id="pairing-body"></tbody></table></div>
+  </article>
+</section>
+{{end}}
+
+{{define "sync"}}
+<section class="admin-grid">
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>项目扫描</h2><button id="scan-all" class="admin-secondary" type="button">触发全部扫描</button></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>项目</th><th>启用</th><th>状态</th><th>下次扫描</th><th>操作</th></tr></thead><tbody id="scans-body"></tbody></table></div>
+  </article>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>最近扫描</h2><span id="latest-scan-title" class="muted">未选择</span></div>
+    <div id="latest-scan" class="detail-stack"></div>
+  </article>
+</section>
+<section class="panel-card admin-panel admin-extra">
+  <div class="admin-panel__head"><h2>节点同步任务</h2><select id="task-node-select" class="admin-select"></select></div>
+  <div class="admin-table-wrap"><table><thead><tr><th>任务</th><th>资产</th><th>状态</th><th>重试</th><th>错误</th><th>操作</th></tr></thead><tbody id="tasks-body"></tbody></table></div>
+  <div id="tasks-pager" class="admin-pager"></div>
+</section>
+{{end}}
+
+{{define "projects"}}
+<section class="admin-toolbar">
+  <a id="project-add" class="admin-primary admin-link-button" href="/admin/projects/new">新增项目</a>
+  <button id="projects-save" class="admin-secondary" type="button">保存全部项目</button>
+  <span id="projects-summary" class="muted">加载中</span>
+</section>
+<section id="project-grid" class="project-grid admin-project-grid"></section>
+{{end}}
+
+{{define "project-edit"}}
+<section class="admin-toolbar">
+  <a class="admin-secondary" href="/admin/projects">返回项目列表</a>
+  <button id="project-save" class="admin-primary" type="button">保存项目</button>
+  <span id="project-edit-summary" class="muted">加载中</span>
+</section>
+<section id="project-editor" class="project-editor-page"></section>
+{{end}}
+
+{{define "security"}}
+<section class="security-stack">
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>手动封禁</h2></div>
+    <div class="security-form">
+      <label class="admin-field"><span>封禁类型</span><select id="block-kind" class="admin-select"><option value="client">公开下载客户端</option><option value="admin">管理登录来源</option></select></label>
+      <label class="admin-field"><span>IP / 前缀键</span><input id="block-key" type="text" placeholder="例如 192.0.2.0/24 或客户端前缀键"></label>
+      <label class="admin-field"><span>封禁原因</span><input id="block-reason" type="text" placeholder="中文原因摘要"></label>
+      <label class="admin-field"><span>封禁时长</span><input id="block-duration" type="text" value="168h"></label>
+      <button id="block-create" class="admin-primary" type="button">添加封禁</button>
+    </div>
+  </article>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>封禁列表</h2><div class="admin-actions"><button id="blocks-delete-selected" class="admin-secondary" type="button">解除选中</button><button id="security-refresh" class="admin-secondary" type="button">刷新</button></div></div>
+    <div class="admin-table-wrap"><table><thead><tr><th><input id="blocks-check-all" type="checkbox" aria-label="全选封禁"></th><th>类型</th><th>来源</th><th>原因</th><th>过期时间</th><th>操作</th></tr></thead><tbody id="blocks-body"></tbody></table></div>
+    <div id="blocks-pager" class="admin-pager"></div>
+  </article>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>授权排障</h2></div>
+    <div class="inline-form"><input id="authorization-id" type="text" placeholder="authorization_id"><button id="authorization-query" class="admin-secondary" type="button">查询</button></div>
+    <div id="authorization-result" class="detail-stack"></div>
+  </article>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>流量事件</h2></div>
+    <div id="traffic-events" class="admin-table-wrap"></div>
+    <div id="traffic-pager" class="admin-pager"></div>
+  </article>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>审计摘要</h2></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>操作</th><th>目标</th><th>结果</th><th>时间</th></tr></thead><tbody id="audit-body"></tbody></table></div>
+    <div id="audit-pager" class="admin-pager"></div>
+  </article>
+</section>
+{{end}}

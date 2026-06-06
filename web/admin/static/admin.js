@@ -3,14 +3,19 @@
 
   function setStatus(text) {
     if (!status) return;
-    status.textContent = text;
+    status.textContent = text || "";
     status.hidden = !text;
   }
-  window.adminSetStatus = setStatus;
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
 
   function text(id, value) {
     var el = document.getElementById(id);
-    if (el) el.textContent = value;
+    if (el) el.textContent = value == null ? "" : value;
   }
 
   function bytes(value) {
@@ -24,14 +29,49 @@
     return (index === 0 ? String(n) : n.toFixed(1)) + " " + units[index];
   }
 
-  function esc(value) {
-    return String(value == null ? "" : value)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-
   function badge(value) {
     return '<span class="admin-badge">' + esc(value || "未知") + "</span>";
+  }
+
+  function api(path, options) {
+    options = options || {};
+    options.credentials = "same-origin";
+    if (options.body && !options.headers) {
+      options.headers = { "Content-Type": "application/json" };
+    }
+    return fetch(path, options).then(function (res) {
+      return res.json().then(function (body) {
+        if (!res.ok) throw new Error(body.message || "操作失败");
+        return body;
+      });
+    });
+  }
+
+  function confirmAction(title, body, run) {
+    var modal = document.getElementById("admin-modal");
+    var ok = document.getElementById("admin-modal-confirm");
+    var cancel = document.getElementById("admin-modal-cancel");
+    if (!modal || !ok || !cancel) return run();
+    document.getElementById("admin-modal-title").textContent = title;
+    document.getElementById("admin-modal-body").textContent = body;
+    modal.hidden = false;
+    function close() {
+      modal.hidden = true;
+      ok.onclick = null;
+      cancel.onclick = null;
+    }
+    cancel.onclick = close;
+    ok.onclick = function () {
+      close();
+      run();
+    };
+  }
+
+  function kv(data) {
+    return Object.keys(data || {}).map(function (key) {
+      return '<div class="detail-row"><span>' + esc(key) + '</span><strong>' +
+        esc(data[key]) + "</strong></div>";
+    }).join("");
   }
 
   function connectionLabel(value) {
@@ -42,96 +82,29 @@
     return value || "未知";
   }
 
-  function renderNodes(nodes) {
-    var body = document.getElementById("nodes-body");
-    if (!body) return;
-    body.innerHTML = (nodes || []).map(function (node) {
-      return "<tr><td><strong>" + esc(node.public_name || node.node_id) +
-        '</strong><span class="sub">' + esc(node.node_id) + "</span></td><td>" +
-        badge(connectionLabel(node.connection_state || node.state)) + "</td><td>" + badge(node.routing_ready ? "全量就绪" : "未全量就绪") +
-        "</td><td>" + esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
-        '<button class="admin-secondary" data-node-action="sync-status" data-node="' + esc(node.node_id) + '">诊断</button>' +
-        '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + esc(node.node_id) + '">重置</button>' +
-        '<button class="admin-secondary" data-node-action="' + (node.state === "disabled" ? "enable" : "disable") +
-        '" data-node="' + esc(node.node_id) + '">' + (node.state === "disabled" ? "启用" : "禁用") + "</button></div></td></tr>";
-    }).join("");
-    text("node-summary", (nodes || []).length + " 个节点");
+  function currentPage() {
+    return document.body.getAttribute("data-admin-page") || "overview";
   }
 
-  function renderScans(scans) {
-    var body = document.getElementById("scans-body");
-    if (!body) return;
-    body.innerHTML = (scans || []).map(function (scan) {
-      return "<tr><td><strong>" + esc(scan.project_id) + "</strong></td><td>" +
-        badge(scan.last_scan_state || "未扫描") + "</td><td>" +
-        esc(scan.next_scan_at || "暂无") + "</td></tr>";
-    }).join("");
-    text("scan-summary", (scans || []).length + " 个项目");
-  }
-
-  function loadProjects() {
-    return fetch("/admin/api/projects", { credentials: "same-origin" })
-      .then(function (res) {
-        if (!res.ok) throw new Error("项目配置加载失败");
-        return res.json();
-      })
-      .then(function (data) {
-        var editor = document.getElementById("projects-editor");
-        if (editor) editor.value = JSON.stringify(data, null, 2);
-      });
-  }
-  window.adminLoadProjects = loadProjects;
-
-  function saveProjects() {
-    var editor = document.getElementById("projects-editor");
-    if (!editor) return;
-    var data;
-    try {
-      data = JSON.parse(editor.value);
-    } catch (err) {
-      setStatus("项目配置 JSON 不合法，请检查逗号、引号和括号。");
-      return;
+  document.querySelectorAll("[data-nav]").forEach(function (link) {
+    var page = currentPage() === "project-edit" ? "projects" : currentPage();
+    if (link.getAttribute("data-nav") === page) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
     }
-    setStatus("正在保存项目配置...");
-    fetch("/admin/api/projects", {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    }).then(function (res) {
-      return res.json().then(function (body) {
-        if (!res.ok) throw new Error(body.message || "项目配置保存失败");
-        return body;
-      });
-    }).then(function () {
-      setStatus("项目配置已保存，并已同步运行状态。");
-      return loadProjects().then(function () {
-        if (window.adminLoadActions) window.adminLoadActions();
-      });
-    }).catch(function (err) {
-      setStatus(err.message || "项目配置保存失败");
-    });
-  }
+  });
 
-  var saveButton = document.getElementById("projects-save");
-  if (saveButton) saveButton.addEventListener("click", saveProjects);
-
-  fetch("/admin/api/overview", { credentials: "same-origin" })
-    .then(function (res) {
-      if (!res.ok) throw new Error("管理总览加载失败");
-      return res.json();
-    })
-    .then(function (data) {
-      text("metric-auth", data.stats.authorization_count || 0);
-      text("metric-started", data.stats.transfer_started_count || 0);
-      text("metric-daily", bytes(data.stats.daily_sent_bytes));
-      text("metric-total", bytes(data.stats.total_sent_bytes));
-      renderNodes(data.nodes);
-      renderScans(data.scans);
-      setStatus("");
-      return loadProjects();
-    })
-    .catch(function () {
-      setStatus("管理总览加载失败，请检查会话、管理网络和服务日志。");
-    });
+  window.admin = {
+    api: api,
+    badge: badge,
+    bytes: bytes,
+    confirmAction: confirmAction,
+    connectionLabel: connectionLabel,
+    esc: esc,
+    kv: kv,
+    page: currentPage,
+    setStatus: setStatus,
+    text: text
+  };
 })();

@@ -17,7 +17,7 @@ func (s *Server) nodesAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "节点列表查询失败"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"nodes": items})
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": s.nodeSummaries(items)})
 }
 
 func (s *Server) nodeActionAPI(w http.ResponseWriter, r *http.Request) {
@@ -52,19 +52,19 @@ func (s *Server) nodeSyncStatus(w http.ResponseWriter, r *http.Request, nodeID s
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "同步状态不存在"})
 		return
 	}
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, s.syncStatusResponse(item))
 }
 
 func (s *Server) nodeReports(w http.ResponseWriter, r *http.Request, nodeID string) {
 	data := map[string]any{}
 	if item, err := s.repo.LatestHeartbeat(r.Context(), nodeID); err == nil {
-		data["heartbeat"] = item
+		data["heartbeat"] = s.displayTimeMap(item)
 	}
 	if item, err := s.repo.LatestInventoryReport(r.Context(), nodeID); err == nil {
-		data["inventory"] = item
+		data["inventory"] = s.displayTimeMap(item)
 	}
 	if item, err := s.repo.LatestPressureReport(r.Context(), nodeID); err == nil {
-		data["pressure"] = item
+		data["pressure"] = s.displayTimeMap(item)
 	}
 	writeJSON(w, http.StatusOK, data)
 }

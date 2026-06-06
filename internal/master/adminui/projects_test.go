@@ -1,11 +1,17 @@
 package adminui
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/master/mirrorsync"
 )
 
 func TestWriteProjectsFileUsesUniqueTemporaryFiles(t *testing.T) {
@@ -41,6 +47,46 @@ func TestWriteProjectsFileCleansInvalidTemporaryFile(t *testing.T) {
 		t.Fatal("invalid project config should be rejected")
 	}
 	assertNoProjectTempFiles(t, dir)
+}
+
+func TestSaveProjectsDeletesAndDisablesProjects(t *testing.T) {
+	server, db := newTestServer(t)
+	path := filepath.Join(t.TempDir(), "projects.yaml")
+	initial := config.Projects{Projects: []config.Project{
+		{ID: "keep", Name: "保留", Repository: "owner/keep", Enabled: true, RetainVersions: 1, DownloadMultiplier: 1},
+		{ID: "drop", Name: "删除", Repository: "owner/drop", Enabled: true, RetainVersions: 1, DownloadMultiplier: 1},
+	}}
+	if err := writeProjectsFile(path, initial); err != nil {
+		t.Fatal(err)
+	}
+	server.projects = mirrorsync.NewProjectLoader(path, initial)
+	if err := server.syncStore.SyncProjectConfig(context.Background(), initial); err != nil {
+		t.Fatal(err)
+	}
+	next := config.Projects{Projects: []config.Project{
+		{ID: "keep", Name: "保留", Repository: "owner/keep", Enabled: false, RetainVersions: 1, DownloadMultiplier: 1},
+	}}
+	body, _ := json.Marshal(next)
+	req := httptest.NewRequest(http.MethodPut, "/admin/api/projects", strings.NewReader(string(body)))
+	req.RemoteAddr = "127.0.0.1:55000"
+	rec := httptest.NewRecorder()
+	server.saveProjects(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var enabled int
+	if err := db.QueryRow(`SELECT enabled FROM project_scan_state WHERE project_id = 'keep'`).Scan(&enabled); err != nil {
+		t.Fatal(err)
+	}
+	if enabled != 0 {
+		t.Fatalf("keep enabled=%d, want disabled", enabled)
+	}
+	if err := db.QueryRow(`SELECT enabled FROM project_scan_state WHERE project_id = 'drop'`).Scan(&enabled); err != nil {
+		t.Fatal(err)
+	}
+	if enabled != 0 {
+		t.Fatalf("drop enabled=%d, want disabled", enabled)
+	}
 }
 
 func assertNoProjectTempFiles(t *testing.T, dir string) {

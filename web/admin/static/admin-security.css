@@ -1,0 +1,31 @@
+.security-stack,
+.project-editor-page {
+  display: grid;
+  gap: 16px;
+}
+
+.security-form {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) minmax(0, 1fr) 140px auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-pager {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.admin-pager span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 920px) {
+  .security-form {
+    grid-template-columns: 1fr;
+  }
+}

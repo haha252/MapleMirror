@@ -2,29 +2,73 @@ package adminui
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
-	"strings"
 )
 
 func (s *Server) securityBlocksAPI(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		s.listBlocksAPI(w, r)
+	case http.MethodPost:
+		s.createBlockAPI(w, r)
+	case http.MethodDelete:
+		s.deleteBlocksAPI(w, r)
+	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
-		return
 	}
-	adminBlocks, err := s.listAdminBlocks(r)
+}
+
+func (s *Server) listBlocksAPI(w http.ResponseWriter, r *http.Request) {
+	page := paginationFrom(r, 20)
+	items, total, err := s.listBlocks(r, page)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "登录封禁查询失败"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "封禁列表查询失败"})
 		return
 	}
-	clientBlocks, err := s.listClientBlocks(r)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "下载封禁查询失败"})
+	page.Total = total
+	writeJSON(w, http.StatusOK, map[string]any{"blocks": items, "pagination": page})
+}
+
+func (s *Server) createBlockAPI(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireHighRisk(w, r); !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"admin_blocks":  adminBlocks,
-		"client_blocks": clientBlocks,
-	})
+	var body struct {
+		Kind     string `json:"kind"`
+		Key      string `json:"key"`
+		Reason   string `json:"reason"`
+		Duration string `json:"duration"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "请求内容不合法"})
+		return
+	}
+	if err := s.createBlock(r, body.Kind, body.Key, body.Reason, body.Duration); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "封禁已添加"})
+}
+
+func (s *Server) deleteBlocksAPI(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireHighRisk(w, r); !ok {
+		return
+	}
+	var body struct {
+		Items []struct {
+			Kind string `json:"kind"`
+			Key  string `json:"key"`
+		} `json:"items"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	deleted := 0
+	for _, item := range body.Items {
+		if err := s.deleteBlock(r, item.Kind, item.Key); err == nil {
+			deleted++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"message": "封禁已解除", "deleted": deleted})
 }
 
 func (s *Server) securityBlockActionAPI(w http.ResponseWriter, r *http.Request) {
@@ -36,37 +80,11 @@ func (s *Server) securityBlockActionAPI(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	kind, id := splitAdminPath(r.URL.Path, "/admin/api/security/blocks/")
-	if id == "" {
-		writeJSON(w, http.StatusNotFound, map[string]string{"message": "封禁记录不存在"})
-		return
-	}
-	switch kind {
-	case "admin":
-		if err := deleteBlock(r, s, `DELETE FROM admin_ip_blocks WHERE ip_key = ?`, id); err != nil {
-			writeDeleteBlockError(w, err)
-			return
-		}
-	case "client":
-		if err := deleteBlock(r, s, `DELETE FROM client_blocks WHERE client_prefix_key = ?`, id); err != nil {
-			writeDeleteBlockError(w, err)
-			return
-		}
-	default:
-		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
+	if err := s.deleteBlock(r, kind, id); err != nil {
+		writeDeleteBlockError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "封禁已解除"})
-}
-
-func deleteBlock(r *http.Request, s *Server, query, id string) error {
-	result, err := s.repo.DB.ExecContext(r.Context(), query, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }
 
 func writeDeleteBlockError(w http.ResponseWriter, err error) {
@@ -75,55 +93,4 @@ func writeDeleteBlockError(w http.ResponseWriter, err error) {
 		return
 	}
 	writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "封禁解除失败"})
-}
-
-func (s *Server) listAdminBlocks(r *http.Request) ([]map[string]any, error) {
-	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT ip_key, masked_ip,
-		reason, blocked_at, expires_at, attempts_after_block, last_attempt_at
-		FROM admin_ip_blocks WHERE expires_at > ? ORDER BY blocked_at DESC LIMIT 100`, nowText())
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []map[string]any
-	for rows.Next() {
-		var key, masked, reason, blocked, expires, last string
-		var attempts int
-		if err := rows.Scan(&key, &masked, &reason, &blocked, &expires, &attempts, &last); err != nil {
-			return nil, err
-		}
-		items = append(items, map[string]any{"key": key, "masked_ip": masked,
-			"reason": reason, "blocked_at": blocked, "expires_at": expires,
-			"attempts_after_block": attempts, "last_attempt_at": last})
-	}
-	return items, rows.Err()
-}
-
-func (s *Server) listClientBlocks(r *http.Request) ([]map[string]any, error) {
-	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT client_prefix_key,
-		reason, source, blocked_at, expires_at, attempts_after_block, last_attempt_at
-		FROM client_blocks WHERE expires_at > ? ORDER BY blocked_at DESC LIMIT 100`, nowText())
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []map[string]any
-	for rows.Next() {
-		var key, reason, source, blocked, expires, last string
-		var attempts int
-		if err := rows.Scan(&key, &reason, &source, &blocked, &expires, &attempts, &last); err != nil {
-			return nil, err
-		}
-		items = append(items, map[string]any{"key": key, "masked_ip": maskBlockKey(key),
-			"reason": reason, "source": source, "blocked_at": blocked,
-			"expires_at": expires, "attempts_after_block": attempts, "last_attempt_at": last})
-	}
-	return items, rows.Err()
-}
-
-func maskBlockKey(value string) string {
-	if len(value) <= 10 {
-		return value
-	}
-	return strings.TrimSpace(value[:10]) + "*"
 }

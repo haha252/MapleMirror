@@ -55,7 +55,7 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 		out.Nodes = append(out.Nodes, nodeItem{
 			NodeID: item.NodeID, PublicName: item.PublicName,
 			State: item.State, ConnectionState: connectionState,
-			RoutingReady: item.RoutingReady, LastHeartbeat: item.LastHeartbeat,
+			RoutingReady: item.RoutingReady, LastHeartbeat: s.displayTime(item.LastHeartbeat),
 		})
 		out.NodeStat[connectionState]++
 		if item.RoutingReady {
@@ -65,9 +65,9 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 	for _, item := range scans {
 		out.Scans = append(out.Scans, map[string]any{
 			"project_id": item.ProjectID, "enabled": item.Enabled,
-			"last_scan_state": item.LastScanState, "next_scan_at": item.NextScanAt,
+			"last_scan_state": item.LastScanState, "next_scan_at": s.displayTime(item.NextScanAt),
 			"last_error_message": item.LastErrorMessage,
-			"updated_at":         item.UpdatedAt,
+			"updated_at":         s.displayTime(item.UpdatedAt),
 		})
 	}
 	return out, nil

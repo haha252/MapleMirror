@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -18,7 +19,8 @@ import (
 )
 
 func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, projectLoader *mirrorsync.ProjectLoader, logger *logging.Logger) {
-	if cfg.Admin.TLS.CertFile == "" || cfg.Admin.TLS.KeyFile == "" {
+	httpsEnabled := adminWebHTTPSEnabled(cfg)
+	if httpsEnabled && (cfg.Admin.TLS.CertFile == "" || cfg.Admin.TLS.KeyFile == "") {
 		logger.Warn(context.Background(), "管理 API TLS 材料未配置，管理服务未启动")
 		return
 	}
@@ -38,21 +40,46 @@ func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncSer
 		return
 	}
 	handler := adminHandler(cfg, repo, syncService, projectLoader, logger, auth, loaded)
-	tlsCfg, err := controltls.AdminServer(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile, cfg.Admin.TLS.ClientCAFile)
-	if err != nil {
-		logger.Error(context.Background(), "管理 API TLS 初始化失败", slog.String("error", err.Error()))
-		return
+	var tlsCfg *tls.Config
+	if httpsEnabled {
+		tlsCfg, err = controltls.AdminServer(cfg.Admin.TLS.CertFile, cfg.Admin.TLS.KeyFile, cfg.Admin.TLS.ClientCAFile)
+		if err != nil {
+			logger.Error(context.Background(), "管理 API TLS 初始化失败", slog.String("error", err.Error()))
+			return
+		}
 	}
 	server := &http.Server{
 		Addr: cfg.Server.ManagementListen, Handler: handler,
-		ReadHeaderTimeout: 5 * time.Second, TLSConfig: tlsCfg,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	if httpsEnabled {
+		server.TLSConfig = tlsCfg
 	}
 	go func() {
-		logger.Info(context.Background(), "管理 API 已启动", slog.String("listen", cfg.Server.ManagementListen))
-		if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		scheme := "http"
+		if httpsEnabled {
+			scheme = "https"
+		}
+		logger.Info(context.Background(), "管理 API 已启动",
+			slog.String("listen", cfg.Server.ManagementListen), slog.String("scheme", scheme))
+		if err := serveAdmin(server, httpsEnabled); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error(context.Background(), "管理 API 异常退出", slog.String("error", err.Error()))
 		}
 	}()
+}
+
+func adminWebHTTPSEnabled(cfg config.Master) bool {
+	if cfg.Admin.Web.Enabled == nil || !*cfg.Admin.Web.Enabled {
+		return true
+	}
+	return cfg.Admin.Web.HTTPSEnabled == nil || *cfg.Admin.Web.HTTPSEnabled
+}
+
+func serveAdmin(server *http.Server, httpsEnabled bool) error {
+	if httpsEnabled {
+		return server.ListenAndServeTLS("", "")
+	}
+	return server.ListenAndServe()
 }
 
 func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service, projectLoader *mirrorsync.ProjectLoader, logger *logging.Logger, auth admin.Auth, loaded mastercontrol.CertificateSigner) http.Handler {
@@ -67,6 +94,7 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 			Signer:       loaded.Sign,
 			Sync:         syncService,
 			TrustedCIDRs: cfg.Proxy.TrustedCIDRs,
+			Timezone:     cfg.Stats.Timezone,
 		})
 		if uiErr != nil {
 			logger.Error(context.Background(), "管理面板初始化失败", slog.String("error", uiErr.Error()))

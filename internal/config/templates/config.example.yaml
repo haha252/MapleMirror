@@ -3,7 +3,7 @@
 server:
   # 公共基础监听地址；M1 仅提供健康检查。
   public_listen: ":8080"
-  # 管理接口在首版必须限制于本机或明确的管理网络，本地址当前仅作合同校验。
+  # 管理接口默认只监听本机；需要远程管理时可改为明确的管理网络地址。
   management_listen: "127.0.0.1:9080"
   # 节点控制通道监听地址；M2 启用 mTLS 后使用。
   control_listen: ":9443"
@@ -69,7 +69,7 @@ node:
     signing_ca_key_file: "secrets/node-signing-ca.key"
 
 admin:
-  # 首版管理接口仅向管理网络开放；示例默认只允许本机。
+  # 裸 /api/admin/v1/* 管理 API 仅向以下来源开放；Web 管理面板不使用此 CIDR 限制。
   allowed_cidrs:
     - "127.0.0.0/8"
     - "::1/128"
@@ -81,8 +81,11 @@ admin:
   # 高风险节点操作必须叠加 mTLS，不得关闭。
   high_risk_require_mtls: true
   web:
-    # 管理面板只挂载在 HTTPS 管理监听器；启用前请先生成 users_file 中的密码哈希。
+    # 管理面板默认挂载在 HTTPS 管理监听器；启用前请先生成 users_file 中的密码哈希。
     enabled: false
+    # nginx 已在本机终止 HTTPS 时可设为 false，使后端管理监听改用 HTTP。
+    # 仅允许与 exclusive_api=true、high_risk_session_allowed=true 同时使用。
+    https_enabled: true
     # 设为 true 后不再挂载原始 /api/admin/v1/*，只能通过网页登录后的 /admin/api/* 操作。
     exclusive_api: false
     # 仅在 exclusive_api=true 时可设为 true，使高风险操作使用网页登录会话授权。

@@ -25,7 +25,7 @@
 
 | 配置 | 当前状态 | M2 合同 |
 | --- | --- | --- |
-| `server.management_listen` | M1 已存在，当前默认并强制回环 | 管理 API 的唯一监听入口 |
+| `server.management_listen` | M1 已存在，默认回环，可显式改为管理网络监听 | 管理 API 的唯一监听入口 |
 | `admin.allowed_cidrs` | M1 已存在且必须配置 | 来源地址访问控制 |
 | `admin.token_env` | 可选覆盖项 | 指向强随机 Bearer 令牌环境变量；存在时优先于令牌文件 |
 | `admin.token_file` | 必须配置 | 指向强随机 Bearer 令牌文件；首次交互初始化自动生成 |

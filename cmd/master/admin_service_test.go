@@ -69,6 +69,21 @@ func TestAdminHandlerKeepsRawAPIByDefault(t *testing.T) {
 	}
 }
 
+func TestAdminWebHTTPSEnabledDefaultsToTLS(t *testing.T) {
+	if !adminWebHTTPSEnabled(config.Master{}) {
+		t.Fatal("管理 Web 默认应启用后端 HTTPS")
+	}
+	enabled, disabled := true, false
+	cfg := config.Master{Admin: config.Administration{Web: config.AdminWeb{HTTPSEnabled: &disabled}}}
+	if !adminWebHTTPSEnabled(cfg) {
+		t.Fatal("Web 未启用时不得关闭原始管理 API HTTPS")
+	}
+	cfg.Admin.Web.Enabled = &enabled
+	if adminWebHTTPSEnabled(cfg) {
+		t.Fatal("https_enabled=false 应关闭后端 HTTPS")
+	}
+}
+
 const testAdminToken = "0123456789abcdef0123456789abcdef"
 
 func newAdminHandlerForTest(t *testing.T, exclusive bool) http.Handler {

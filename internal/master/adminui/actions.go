@@ -17,7 +17,7 @@ func (s *Server) scanAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "扫描状态查询失败"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"projects": items})
+		writeJSON(w, http.StatusOK, map[string]any{"projects": s.scanStatesResponse(items)})
 	case http.MethodPost:
 		if _, ok := s.requireHighRisk(w, r); !ok {
 			return
@@ -112,7 +112,7 @@ func (s *Server) pairingCodesAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"message": "一次性配对码已创建", "pairing_code_id": item.ID,
-		"pairing_code": item.Code, "expires_at": item.ExpiresAt,
+		"pairing_code": item.Code, "expires_at": item.ExpiresAt.In(s.location()).Format(adminTimeLayout),
 	})
 }
 
@@ -126,7 +126,7 @@ func (s *Server) pairingRequestsAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "登记请求查询失败"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"requests": items})
+	writeJSON(w, http.StatusOK, map[string]any{"requests": s.pairingRequestsResponse(items)})
 }
 
 func (s *Server) pairingRequestActionAPI(w http.ResponseWriter, r *http.Request) {

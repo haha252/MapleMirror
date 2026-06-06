@@ -12,6 +12,7 @@ type Administration struct {
 
 type AdminWeb struct {
 	Enabled                *bool  `yaml:"enabled"`
+	HTTPSEnabled           *bool  `yaml:"https_enabled"`
 	ExclusiveAPI           *bool  `yaml:"exclusive_api"`
 	HighRiskSessionAllowed *bool  `yaml:"high_risk_session_allowed"`
 	UsersFile              string `yaml:"users_file"`

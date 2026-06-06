@@ -136,31 +136,7 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 		c.Admin.HighRiskRequireMTLS = &value
 		warnDefault(warn, "admin.high_risk_require_mtls", "true")
 	}
-	if c.Admin.Web.Enabled == nil {
-		value := false
-		c.Admin.Web.Enabled = &value
-		warnDefault(warn, "admin.web.enabled", "false")
-	}
-	if c.Admin.Web.ExclusiveAPI == nil {
-		value := false
-		c.Admin.Web.ExclusiveAPI = &value
-		warnDefault(warn, "admin.web.exclusive_api", "false")
-	}
-	if c.Admin.Web.HighRiskSessionAllowed == nil {
-		value := false
-		c.Admin.Web.HighRiskSessionAllowed = &value
-		warnDefault(warn, "admin.web.high_risk_session_allowed", "false")
-	}
-	setString(&c.Admin.Web.UsersFile, "secrets/admin-users.yaml", "admin.web.users_file", warn)
-	setString(&c.Admin.Web.BootstrapPasswordEnv, "MIRROR_ADMIN_WEB_PASSWORD", "admin.web.bootstrap_password_env", warn)
-	setString(&c.Admin.Web.SessionSecretFile, "secrets/admin-web-session.key", "admin.web.session_secret_file", warn)
-	setString(&c.Admin.Web.SessionTTL, "12h", "admin.web.session_ttl", warn)
-	setString(&c.Admin.Web.LoginFailureWindow, "24h", "admin.web.login_failure_window", warn)
-	if c.Admin.Web.LoginFailureLimit == 0 {
-		c.Admin.Web.LoginFailureLimit = 3
-		warnDefault(warn, "admin.web.login_failure_limit", "3")
-	}
-	setString(&c.Admin.Web.LoginBanDuration, "168h", "admin.web.login_ban_duration", warn)
+	applyAdminWebDefaults(c, warn)
 	setString(&c.Admin.TLS.CertFile, "secrets/admin-api.crt", "admin.tls.cert_file", warn)
 	setString(&c.Admin.TLS.KeyFile, "secrets/admin-api.key", "admin.tls.key_file", warn)
 	setString(&c.Admin.TLS.ClientCAFile, "secrets/admin-client-ca.pem", "admin.tls.client_ca_file", warn)
@@ -177,8 +153,8 @@ func validateMaster(c Master) error {
 	if !validListen(c.Server.PublicListen) {
 		return errors.New("配置字段 server.public_listen 必须为合法监听地址")
 	}
-	if !loopbackListen(c.Server.ManagementListen) {
-		return errors.New("管理监听 server.management_listen 在首版必须限制于回环地址")
+	if !validListen(c.Server.ManagementListen) {
+		return errors.New("配置字段 server.management_listen 必须为合法监听地址")
 	}
 	if c.Server.ControlListen != "" && !validListen(c.Server.ControlListen) {
 		return errors.New("配置字段 server.control_listen 必须为合法监听地址")
@@ -226,17 +202,8 @@ func validateMaster(c Master) error {
 	if len(c.Admin.AllowedCIDRs) == 0 {
 		return errors.New("管理 API 必须配置管理网络 CIDR")
 	}
-	if c.Admin.Web.Enabled != nil && *c.Admin.Web.Enabled {
-		if c.Admin.Web.UsersFile == "" || c.Admin.Web.SessionSecretFile == "" {
-			return errors.New("管理面板启用时必须配置用户文件和会话密钥文件")
-		}
-		if c.Admin.Web.LoginFailureLimit < 1 {
-			return errors.New("管理面板登录失败封禁阈值必须大于零")
-		}
-		if c.Admin.Web.HighRiskSessionAllowed != nil && *c.Admin.Web.HighRiskSessionAllowed &&
-			(c.Admin.Web.ExclusiveAPI == nil || !*c.Admin.Web.ExclusiveAPI) {
-			return errors.New("admin.web.high_risk_session_allowed 只能在 admin.web.exclusive_api=true 时启用")
-		}
+	if err := validateAdminWeb(c.Admin.Web); err != nil {
+		return err
 	}
 	for _, cidr := range append(c.Proxy.TrustedCIDRs, c.Admin.AllowedCIDRs...) {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {

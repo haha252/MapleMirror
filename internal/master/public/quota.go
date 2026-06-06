@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -156,23 +155,16 @@ func statDay(t time.Time, loc *time.Location) string {
 	return t.In(loc).Format("2006-01-02")
 }
 
-func (p quotaPolicy) reserve(ctx context.Context, tx *sql.Tx, day string, scopes [2]quotaScope, bytes int64) error {
+func (p quotaPolicy) reserve(ctx context.Context, tx *sql.Tx, day string, scopes [2]quotaScope) error {
 	for _, scope := range scopes {
-		var outstanding, accounted int64
-		column := trafficColumn(scope.Kind)
-		query := fmt.Sprintf(`SELECT COALESCE(SUM(%s_reserved_bytes - settled_bytes), 0)
-			FROM traffic_reservations WHERE scope_day = ? AND %s_scope_kind = ?
-			AND %s_scope_key = ? AND status = 'active'`, column, column, column)
-		if err := tx.QueryRowContext(ctx, query, day, scope.Kind, scope.Key).Scan(&outstanding); err != nil {
-			return err
-		}
+		var accounted int64
 		err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
 			FROM daily_traffic_stats WHERE stat_day = ? AND scope_kind = ?
 			AND scope_key = ?`, day, scope.Kind, scope.Key).Scan(&accounted)
 		if err != nil {
 			return err
 		}
-		if accounted+outstanding+bytes > p.daily[scope.Kind] {
+		if accounted >= p.daily[scope.Kind] {
 			return errTrafficLimit
 		}
 	}
@@ -189,31 +181,17 @@ func (p quotaPolicy) snapshot(ctx context.Context, tx *sql.Tx, day string, scope
 			return nil, nil, err
 		}
 		requestRemaining[scope.Kind] = tokens
-		var accounted, outstanding int64
-		column := trafficColumn(scope.Kind)
-		if err := tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT COALESCE(SUM(sent_bytes), 0)
+		var accounted int64
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
 			FROM daily_traffic_stats WHERE stat_day = ? AND scope_kind = ?
-			AND scope_key = ?`), day, scope.Kind, scope.Key).Scan(&accounted); err != nil {
+			AND scope_key = ?`, day, scope.Kind, scope.Key).Scan(&accounted); err != nil {
 			return nil, nil, err
 		}
-		query := fmt.Sprintf(`SELECT COALESCE(SUM(%s_reserved_bytes - settled_bytes), 0)
-			FROM traffic_reservations WHERE scope_day = ? AND %s_scope_kind = ?
-			AND %s_scope_key = ? AND status = 'active'`, column, column, column)
-		if err := tx.QueryRowContext(ctx, query, day, scope.Kind, scope.Key).Scan(&outstanding); err != nil {
-			return nil, nil, err
-		}
-		remaining := p.daily[scope.Kind] - accounted - outstanding
+		remaining := p.daily[scope.Kind] - accounted
 		if remaining < 0 {
 			remaining = 0
 		}
 		trafficRemaining[scope.Kind] = remaining
 	}
 	return requestRemaining, trafficRemaining, nil
-}
-
-func trafficColumn(kind string) string {
-	if strings.Contains(kind, "_24") || strings.Contains(kind, "_64") {
-		return "network"
-	}
-	return "address"
 }

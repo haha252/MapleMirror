@@ -38,6 +38,17 @@ func TestAdminShellRequiresLoginThenRendersAfterSession(t *testing.T) {
 	}
 }
 
+func TestAdminWebLoginDoesNotUseAllowedCIDRs(t *testing.T) {
+	server, _ := newProxyTestServer(t, []string{"10.0.0.0/8"}, nil, config.AdminWeb{})
+	req := loginForm("admin", "correct-password")
+	req.RemoteAddr = "198.51.100.10:55000"
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("web login status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestTrustedProxyIPDrivesLoginBlockAndSession(t *testing.T) {
 	server, db := newProxyTestServer(t, []string{"203.0.113.0/24"},
 		[]string{"127.0.0.0/8"}, config.AdminWeb{})

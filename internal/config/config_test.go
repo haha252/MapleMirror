@@ -28,12 +28,16 @@ func TestLoadMasterExample(t *testing.T) {
 	}
 }
 
-func TestMasterRejectsPublicManagementListen(t *testing.T) {
+func TestMasterAllowsExplicitManagementNetworkListen(t *testing.T) {
 	text := strings.Replace(string(MasterExample), "127.0.0.1:9080", "0.0.0.0:9080", 1)
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	_ = os.WriteFile(path, []byte(text), 0o600)
-	if _, err := LoadMaster(path, nil); err == nil {
-		t.Fatal("管理监听不得对公网开放")
+	cfg, err := LoadMaster(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Admin.AllowedCIDRs) == 0 {
+		t.Fatal("管理监听放开时仍必须配置 admin.allowed_cidrs")
 	}
 }
 
