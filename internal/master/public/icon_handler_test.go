@@ -12,7 +12,7 @@ import (
 func TestProjectIconServesConfiguredFile(t *testing.T) {
 	dir := t.TempDir()
 	iconPath := filepath.Join(dir, "icon.svg")
-	if err := os.WriteFile(iconPath, []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`), 0o600); err != nil {
+	if err := os.WriteFile(iconPath, []byte(`<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	srv := Server{ProjectAssets: map[string]projectAssetConfig{
@@ -27,6 +27,7 @@ func TestProjectIconServesConfiguredFile(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "image/svg+xml") {
 		t.Fatalf("unexpected content type: %s", got)
 	}
+	assertIconCSP(t, rec.Header().Get("Content-Security-Policy"))
 }
 
 func TestProjectIconFallsBackToPlaceholderWhenFileMissing(t *testing.T) {
@@ -51,5 +52,14 @@ func TestProjectIconRejectsUnknownProject(t *testing.T) {
 	srv.projectIcon(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func assertIconCSP(t *testing.T, value string) {
+	t.Helper()
+	for _, want := range []string{"sandbox", "script-src 'none'", "object-src 'none'", "base-uri 'none'"} {
+		if !strings.Contains(value, want) {
+			t.Fatalf("missing svg icon CSP %q in %q", want, value)
+		}
 	}
 }

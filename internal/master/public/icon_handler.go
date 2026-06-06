@@ -81,6 +81,8 @@ func writeProjectIcon(w http.ResponseWriter, data []byte, extension string) {
 		w.Header().Set("Content-Type", "image/webp")
 	default:
 		w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+		w.Header().Set("Content-Security-Policy",
+			"sandbox; script-src 'none'; object-src 'none'; base-uri 'none'")
 	}
 	_, _ = w.Write(data)
 }
