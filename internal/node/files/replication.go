@@ -29,6 +29,10 @@ func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusNotFound, "本地资产不可用")
 		return
 	}
+	if err := h.ensureDownloadAssetVerified(asset); err != nil {
+		httpError(w, r, http.StatusNotFound, "本地资产状态不一致")
+		return
+	}
 	path := filepath.Join(h.Storage, asset.RelativePath)
 	file, err := os.Open(path)
 	if err != nil {

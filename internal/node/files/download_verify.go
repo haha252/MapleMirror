@@ -2,6 +2,8 @@ package files
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"time"
 
 	"mirror-server/internal/node/localasset"
@@ -14,7 +16,7 @@ func (h *Handler) now() time.Time {
 }
 
 func (h *Handler) ensureDownloadAssetVerified(asset localAsset) error {
-	if verificationFresh(asset.VerifiedAt, h.now()) {
+	if recentVerifiedAssetUnmodified(h.Storage, asset, h.now()) {
 		return nil
 	}
 	state := localasset.Verify(h.Storage, localasset.Record{
@@ -31,15 +33,26 @@ func (h *Handler) ensureDownloadAssetVerified(asset localAsset) error {
 	return nil
 }
 
-func verificationFresh(verifiedAt string, now time.Time) bool {
-	if verifiedAt == "" {
+func recentVerifiedAssetUnmodified(storage string, asset localAsset, now time.Time) bool {
+	if asset.VerifiedAt == "" {
 		return false
 	}
-	t, err := time.Parse(time.RFC3339Nano, verifiedAt)
+	verifiedAt, err := time.Parse(time.RFC3339Nano, asset.VerifiedAt)
 	if err != nil {
 		return false
 	}
-	return now.Sub(t) < downloadVerificationTTL
+	if verifiedAt.After(now) || now.Sub(verifiedAt) >= downloadVerificationTTL {
+		return false
+	}
+	clean, ok := localasset.CleanRelativePath(asset.RelativePath)
+	if !ok {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(storage, clean))
+	if err != nil || info.IsDir() || info.Size() != asset.SizeBytes {
+		return false
+	}
+	return !info.ModTime().After(verifiedAt)
 }
 
 func (h *Handler) updateLocalAssetState(assetID, state string) error {

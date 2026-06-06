@@ -34,9 +34,9 @@ func TestHandlerRefreshesExpiredVerificationBeforeDownload(t *testing.T) {
 	}
 }
 
-func TestHandlerSkipsFreshVerificationWindow(t *testing.T) {
+func TestHandlerRejectsFreshModifiedFile(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
-	fresh := time.Now().UTC().Format(time.RFC3339Nano)
+	fresh := time.Now().Add(-10 * time.Second).UTC().Format(time.RFC3339Nano)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
 		WHERE asset_id = 'asset-1'`, testDigestABCDEF, fresh)
 	if err != nil {
@@ -47,15 +47,10 @@ func TestHandlerSkipsFreshVerificationWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := serveVerifiedAsset(t, db, storageDir, signer)
-	if rec.Code != http.StatusOK || rec.Body.String() != "zzzzzz" {
-		t.Fatalf("1 分钟内应跳过 hash 重新校验：code=%d body=%q", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("fresh window 内验证后改写的文件应拒绝下载：%d", rec.Code)
 	}
-	var state, verifiedAt string
-	err = db.QueryRow(`SELECT state, verified_at FROM local_assets
-		WHERE asset_id = 'asset-1'`).Scan(&state, &verifiedAt)
-	if err != nil || state != "verified" || verifiedAt != fresh {
-		t.Fatalf("跳过 hash 时不应刷新状态：state=%q verified_at=%q err=%v", state, verifiedAt, err)
-	}
+	assertLocalAssetState(t, db, "mismatch")
 }
 
 func TestHandlerMarksExpiredMismatchedFile(t *testing.T) {
