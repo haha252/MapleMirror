@@ -43,6 +43,11 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 			quarantined = true
 			break
 		}
+		if result.State == "verified" {
+			if err := publishVerifiedAsset(ctx, tx, result.AssetID, now); err != nil {
+				return HeartbeatResult{}, err
+			}
+		}
 	}
 	if report.Complete && !quarantined {
 		if err := markMissingInventory(ctx, tx, session.NodeID, now, reported); err != nil {

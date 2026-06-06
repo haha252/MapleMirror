@@ -123,6 +123,11 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 			}
 			quarantined = true
 		}
+		if inventory.State == "verified" {
+			if err := publishVerifiedAsset(ctx, tx, inventory.AssetID, now); err != nil {
+				return HeartbeatResult{}, err
+			}
+		}
 	}
 	ready, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now)
 	if err != nil {

@@ -3,42 +3,16 @@ package mirrorsync
 import (
 	"context"
 	"database/sql"
+
+	"mirror-server/internal/master/assetstate"
 )
 
 func rebuildTargetInventory(ctx context.Context, tx *sql.Tx, projectID, now string) error {
-	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO target_inventory
-		(node_id, asset_id, desired_state, updated_at)
-		SELECT n.id, a.id, 'required', ?
-		FROM nodes n JOIN releases r ON r.project_id = ?
-		JOIN assets a ON a.release_id = r.id
-		WHERE n.state != 'disabled' AND r.selected = 1 AND a.service_state = 'candidate'`,
-		now, projectID)
-	if err != nil {
-		return err
-	}
-	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
-		updated_at = ? WHERE asset_id IN (
-		SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-		WHERE r.project_id = ? AND (r.selected = 0 OR a.service_state != 'candidate'))`,
-		now, projectID)
-	return err
+	return assetstate.RebuildTargetInventory(ctx, tx, projectID, now)
 }
 
 func cancelObsoleteDownloadTasks(ctx context.Context, tx *sql.Tx, projectID, now string) error {
-	_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'obsolete',
-		error_message = '资产已不在当前目标库存中', completed_at = ?,
-		updated_at = ?, lease_expires_at = NULL
-		WHERE task_type = 'asset_download'
-		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
-		AND asset_id IN (
-			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
-				AND ti.asset_id = a.id
-			WHERE r.project_id = ?
-			AND (a.service_state != 'candidate'
-				OR ti.asset_id IS NULL OR ti.desired_state != 'required')
-		)`, now, now, projectID)
-	return err
+	return assetstate.CancelObsoleteDownloadTasks(ctx, tx, projectID, now)
 }
 
 func generateTasks(ctx context.Context, tx *sql.Tx, now string) (int, error) {

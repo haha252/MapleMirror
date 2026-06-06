@@ -179,6 +179,17 @@ func assertWhereCount(t *testing.T, db *sql.DB, table, where string, want int) {
 	}
 }
 
+func assertAssetState(t *testing.T, db *sql.DB, assetID, want string) {
+	t.Helper()
+	var got string
+	if err := db.QueryRow(`SELECT service_state FROM assets WHERE id = ?`, assetID).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("资产状态错误 asset_id=%s got=%q want=%q", assetID, got, want)
+	}
+}
+
 func assertProjectEnabled(t *testing.T, db *sql.DB, projectID string, want bool) {
 	t.Helper()
 	var got int

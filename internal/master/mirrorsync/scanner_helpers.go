@@ -13,6 +13,7 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/master/assetstate"
 )
 
 func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releaseID string, assets []GitHubAsset, logger *logging.Logger, now string) (int, int, error) {
@@ -108,26 +109,7 @@ func markInventoryStaleOnAssetChange(ctx context.Context, tx *sql.Tx, assetID, d
 }
 
 func supersedeDuplicatePublicPaths(ctx context.Context, tx *sql.Tx, projectID string) error {
-	_, err := tx.ExecContext(ctx, `UPDATE assets SET service_state = 'superseded'
-		WHERE id IN (
-			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-			WHERE r.project_id = ? AND r.selected = 1 AND a.service_state = 'candidate'
-			AND EXISTS (
-				SELECT 1 FROM assets newer JOIN releases nr ON nr.id = newer.release_id
-				WHERE nr.project_id = r.project_id AND nr.selected = 1
-				AND newer.service_state = 'candidate'
-				AND nr.tag_name = r.tag_name AND newer.file_name = a.file_name
-				AND (
-					nr.published_at > r.published_at
-					OR (nr.published_at = r.published_at
-						AND nr.github_release_id > r.github_release_id)
-					OR (nr.published_at = r.published_at
-						AND nr.github_release_id = r.github_release_id
-						AND newer.github_asset_id > a.github_asset_id)
-				)
-			)
-		)`, projectID)
-	return err
+	return assetstate.ReconcilePublicPaths(ctx, tx, projectID)
 }
 
 func selectReleases(releases []GitHubRelease, includePrerelease bool, keep int) []GitHubRelease {

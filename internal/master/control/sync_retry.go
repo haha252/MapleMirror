@@ -88,7 +88,8 @@ func syncTaskCurrent(ctx context.Context, tx *sql.Tx, nodeID, taskID, assetID st
 		SELECT 1 FROM node_tasks t
 		JOIN target_inventory ti ON ti.node_id = t.node_id
 			AND ti.asset_id = t.asset_id AND ti.desired_state = 'required'
-		JOIN assets a ON a.id = t.asset_id AND a.service_state = 'candidate'
+		JOIN assets a ON a.id = t.asset_id
+			AND a.service_state IN ('candidate', 'pending')
 		JOIN releases r ON r.id = a.release_id AND r.selected = 1
 		JOIN projects p ON p.id = r.project_id AND p.enabled = 1
 		WHERE t.id = ? AND t.node_id = ? AND t.asset_id = ?

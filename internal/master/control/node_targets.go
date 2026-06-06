@@ -10,7 +10,7 @@ func seedNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) error 
 		FROM assets a JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id
 		WHERE p.enabled = 1 AND r.selected = 1
-		AND a.service_state = 'candidate'
+		AND a.service_state IN ('candidate', 'pending')
 		ORDER BY r.published_at DESC, a.size_bytes, a.file_name`)
 	if err != nil {
 		return err
