@@ -75,7 +75,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.Logger != nil {
-		h.Logger.Info(r.Context(), "下载节点收到下载令牌",
+		h.Logger.Info(r.Context(), "下载节点收到下载请求",
 			slog.String("request_id", requestid.FromContext(r.Context())),
 			slog.String("authorization_id", claims.AuthorizationID),
 			slog.String("asset_id", claims.AssetID),
