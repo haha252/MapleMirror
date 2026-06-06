@@ -78,11 +78,9 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 
 func resetInterruptedTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
 	_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
-		error_message = '控制会话租约过期后重新派发', retry_after = NULL,
+		error_message = '控制会话重新建立后重新派发', retry_after = NULL,
 		lease_expires_at = NULL, updated_at = ?
-		WHERE node_id = ? AND state IN ('sent', 'running')
-		AND (lease_expires_at IS NULL OR lease_expires_at = '' OR lease_expires_at <= ?)`,
-		now, nodeID, now)
+		WHERE node_id = ? AND state IN ('sent', 'running')`, now, nodeID)
 	return err
 }
 

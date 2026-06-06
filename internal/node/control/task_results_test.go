@@ -132,3 +132,27 @@ func TestStorePendingTaskResultStopsRunningAck(t *testing.T) {
 		t.Fatalf("终态任务不得再发送 running ACK，next=%d", next)
 	}
 }
+
+func TestRunOnceClearsInterruptedLocalRunningTasks(t *testing.T) {
+	db := openNodeDB(t)
+	defer db.Close()
+	_, err := db.Exec(`INSERT INTO local_sync_tasks
+		(task_id, asset_id, task_type, state, updated_at)
+		VALUES ('task-1', 'asset-1', 'asset_download', 'running', ?)`,
+		time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := Client{NodeID: "node-1", DB: db}
+	if err := client.resetInterruptedLocalTasks(); err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	err = db.QueryRow(`SELECT state FROM local_sync_tasks WHERE task_id = 'task-1'`).Scan(&state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != "interrupted" {
+		t.Fatalf("控制连接重新建立前应清理本地 running 状态，got=%s", state)
+	}
+}

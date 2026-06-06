@@ -34,6 +34,9 @@ type Client struct {
 }
 
 func (c Client) RunOnce() (time.Duration, error) {
+	if err := c.resetInterruptedLocalTasks(); err != nil {
+		return 0, err
+	}
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点开始连接主节点",
 			slog.String("node_id", c.NodeID),
@@ -106,6 +109,17 @@ func (c Client) RunOnce() (time.Duration, error) {
 		return interval, err
 	}
 	return interval, nil
+}
+
+func (c Client) resetInterruptedLocalTasks() error {
+	if c.DB == nil {
+		return nil
+	}
+	_, err := c.DB.Exec(`UPDATE local_sync_tasks SET state = 'interrupted',
+		error_message = '控制连接重新建立后停止续报运行状态',
+		updated_at = ? WHERE state = 'running'`,
+		time.Now().UTC().Format(time.RFC3339Nano))
+	return err
 }
 
 func (c Client) hello(conn net.Conn, reqID string) error {

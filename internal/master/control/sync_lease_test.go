@@ -9,7 +9,7 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func TestStartSessionKeepsLeasedRunningTask(t *testing.T) {
+func TestStartSessionResetsLeasedRunningTaskForRedispatch(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 
@@ -27,11 +27,11 @@ func TestStartSessionKeepsLeasedRunningTask(t *testing.T) {
 	if _, err := repo.StartSession(context.Background(), "sha256:aa", "req-reconnect"); err != nil {
 		t.Fatal(err)
 	}
-	var state string
-	err = repo.DB.QueryRow(`SELECT state FROM node_tasks
-		WHERE id = 'task-running'`).Scan(&state)
-	if err != nil || state != "running" {
-		t.Fatalf("未过期运行任务不应重派 state=%q err=%v", state, err)
+	var state, leaseAfter string
+	err = repo.DB.QueryRow(`SELECT state, COALESCE(lease_expires_at, '') FROM node_tasks
+		WHERE id = 'task-running'`).Scan(&state, &leaseAfter)
+	if err != nil || state != "pending" || leaseAfter != "" {
+		t.Fatalf("重连后运行任务应重派 state=%q lease=%q err=%v", state, leaseAfter, err)
 	}
 }
 
