@@ -48,7 +48,11 @@ func newTestServer(t *testing.T) (*Server, *sql.DB) {
 }
 
 func withAdminUser(req *http.Request) *http.Request {
-	return req.WithContext(context.WithValue(req.Context(), usernameKey{}, "admin"))
+	return withAdminUsername(req, "admin")
+}
+
+func withAdminUsername(req *http.Request, username string) *http.Request {
+	return req.WithContext(context.WithValue(req.Context(), usernameKey{}, username))
 }
 
 func mustExecAdminUI(t *testing.T, db *sql.DB, query string, args ...any) {

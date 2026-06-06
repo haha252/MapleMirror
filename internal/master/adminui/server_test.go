@@ -154,6 +154,39 @@ func TestSaveProjectsRequiresLoginSession(t *testing.T) {
 	}
 }
 
+func TestSaveProjectsRequiresOwnerRole(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.users["viewer"] = userRecord{
+		Username: "viewer", PasswordHash: testPasswordHash("viewer-password"),
+		Role: "viewer",
+	}
+	projectsPath := filepath.Join(t.TempDir(), "projects.yaml")
+	initial := config.Projects{Projects: []config.Project{{
+		ID: "demo", Name: "演示项目", Repository: "owner/demo",
+		Enabled: true, RetainVersions: 1, DownloadMultiplier: 1,
+	}}}
+	if err := writeProjectsFile(projectsPath, initial); err != nil {
+		t.Fatal(err)
+	}
+	server.projects = mirrorsync.NewProjectLoader(projectsPath, initial)
+	body, _ := json.Marshal(initial)
+	req := httptest.NewRequest(http.MethodPut, "/admin/api/projects", strings.NewReader(string(body)))
+	req.RemoteAddr = "127.0.0.1:55000"
+	req = withAdminUsername(req, "viewer")
+	rec := httptest.NewRecorder()
+	server.saveProjects(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer save status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	loaded, err := config.LoadProjects(projectsPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Projects[0].ID != "demo" {
+		t.Fatalf("viewer must not rewrite projects file, got %s", loaded.Projects[0].ID)
+	}
+}
+
 func TestSecurityBlockDeleteReportsMissingRecord(t *testing.T) {
 	server, db := newTestServer(t)
 	mustExecAdminUI(t, db, `INSERT INTO admin_ip_blocks

@@ -24,6 +24,8 @@ type userRecord struct {
 	Role         string `yaml:"role"`
 }
 
+const adminRoleOwner = "owner"
+
 func loadUsers(path, bootstrapEnv string) (map[string]userRecord, error) {
 	var file userFile
 	if err := readYAMLFile(path, &file); err != nil {
@@ -41,6 +43,9 @@ func loadUsers(path, bootstrapEnv string) (map[string]userRecord, error) {
 	for _, item := range file.Users {
 		if item.Username == "" || item.PasswordHash == "" {
 			return nil, errors.New("管理面板用户文件包含空用户名或密码哈希")
+		}
+		if item.Role == "" {
+			item.Role = adminRoleOwner
 		}
 		if _, exists := users[item.Username]; exists {
 			return nil, errors.New("管理面板用户文件包含重复用户名")

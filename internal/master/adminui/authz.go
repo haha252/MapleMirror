@@ -8,5 +8,10 @@ func (s *Server) requireHighRisk(w http.ResponseWriter, r *http.Request) (string
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "该操作需要管理面板登录会话"})
 		return "", false
 	}
+	user, ok := s.users[username]
+	if !ok || user.Role != adminRoleOwner {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "该操作需要 owner 角色"})
+		return "", false
+	}
 	return username, true
 }
