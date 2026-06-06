@@ -1,11 +1,10 @@
 package public
 
 import (
-	"strings"
-
 	"mirror-server/internal/assetpath"
+	"mirror-server/internal/downloadurl"
 )
 
-func joinDownloadURL(baseURL, projectID, version, fileName string) string {
-	return strings.TrimRight(baseURL, "/") + assetpath.PublicPath(projectID, version, fileName)
+func joinDownloadURL(baseURL, projectID, version, fileName string) (string, error) {
+	return downloadurl.Join(baseURL, assetpath.PublicPath(projectID, version, fileName))
 }

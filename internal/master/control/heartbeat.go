@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"time"
 
+	"mirror-server/internal/downloadurl"
 	"mirror-server/internal/protocol"
 )
 
@@ -65,11 +65,8 @@ type OfflineSweepResult struct {
 }
 
 func normalizedPublicDownloadBaseURL(value string) string {
-	parsed, err := url.Parse(value)
-	if err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") {
-		return value
-	}
-	return ""
+	out, _ := downloadurl.NormalizeBase(value)
+	return out
 }
 
 func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int64, error) {

@@ -30,10 +30,16 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 		item.Available = available == 1
 		out = append(out, item)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	for i := range out {
+		if out[i].Available {
+			out[i].Available = s.projectHasRoutableAsset(ctx, out[i].ProjectID)
+		}
 		if !out[i].Available {
 			info := s.projectUnavailableInfo(ctx, out[i].ProjectID)
 			out[i].UnavailableReason = info.Summary
@@ -77,10 +83,16 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 		item.DownloadPath = assetpath.PublicPath(projectID, item.Version, item.FileName)
 		out = append(out, item)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	for i := range out {
+		if out[i].Available {
+			out[i].Available = s.assetHasRoutableReplica(ctx, out[i].AssetID)
+		}
 		if !out[i].Available {
 			info := s.assetUnavailableInfo(ctx, out[i].AssetID)
 			out[i].UnavailableReason = info.Summary
@@ -124,18 +136,22 @@ func (s Store) downloadAsset(ctx context.Context, where string, args ...any) (Do
 	if err != nil {
 		return DownloadAssetSummary{}, err
 	}
-	defer rows.Close()
 	count := 0
 	for rows.Next() {
 		count++
 		if count > 1 {
+			_ = rows.Close()
 			return DownloadAssetSummary{}, sql.ErrNoRows
 		}
 		if err := rows.Scan(&item.ProjectID, &item.ProjectName, &item.Repository, &item.AssetID,
 			&item.Version, &item.FileName, &item.Architecture, &item.System,
 			&item.SizeBytes, &available); err != nil {
+			_ = rows.Close()
 			return DownloadAssetSummary{}, err
 		}
+	}
+	if err := rows.Close(); err != nil {
+		return DownloadAssetSummary{}, err
 	}
 	if err := rows.Err(); err != nil {
 		return DownloadAssetSummary{}, err
@@ -144,6 +160,9 @@ func (s Store) downloadAsset(ctx context.Context, where string, args ...any) (Do
 		return DownloadAssetSummary{}, sql.ErrNoRows
 	}
 	item.Available = available == 1
+	if item.Available {
+		item.Available = s.assetHasRoutableReplica(ctx, item.AssetID)
+	}
 	item.DownloadPath = assetpath.PublicPath(item.ProjectID, item.Version, item.FileName)
 	if !item.Available {
 		info := s.assetUnavailableInfo(ctx, item.AssetID)

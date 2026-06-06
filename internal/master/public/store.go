@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"mirror-server/internal/downloadtoken"
+	"mirror-server/internal/downloadurl"
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/requestid"
 )
@@ -154,8 +155,25 @@ func (s *Store) challengeMemory() *challengeMemory {
 }
 
 func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {
-	var size int64
-	err := s.DB.QueryRowContext(ctx, `SELECT a.size_bytes FROM assets a`+routableAssetReplicaSQL+`
-		WHERE a.id = ? AND a.service_state = 'candidate' LIMIT 1`, assetID).Scan(&size)
-	return size, err
+	rows, err := s.DB.QueryContext(ctx, `SELECT a.size_bytes, n.public_download_base_url
+		FROM assets a`+routableAssetReplicaSQL+`
+		WHERE a.id = ? AND a.service_state = 'candidate'`, assetID)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var size int64
+		var baseURL string
+		if err := rows.Scan(&size, &baseURL); err != nil {
+			return 0, err
+		}
+		if _, ok := downloadurl.NormalizeBase(baseURL); ok {
+			return size, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return 0, sql.ErrNoRows
 }

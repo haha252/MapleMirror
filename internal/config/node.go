@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/url"
 
+	"mirror-server/internal/downloadurl"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -115,9 +117,8 @@ func validateNode(c *Node) error {
 	if !validListen(c.Server.Listen) {
 		return errors.New("节点配置 server.listen 必须为合法监听地址")
 	}
-	baseURL, err := url.Parse(c.Server.PublicDownloadBaseURL)
-	if err != nil || baseURL.Host == "" || (baseURL.Scheme != "http" && baseURL.Scheme != "https") {
-		return errors.New("节点配置 server.public_download_base_url 必须为合法 HTTP 或 HTTPS 地址")
+	if _, ok := downloadurl.NormalizeBase(c.Server.PublicDownloadBaseURL); !ok {
+		return errors.New("节点配置 server.public_download_base_url 必须为 HTTPS 公网基址；HTTP 仅允许本机回环地址，且不得包含路径、查询或片段")
 	}
 	address, err := url.Parse(c.Master.ControlAddress)
 	if err != nil || address.Scheme != "https" || address.Host == "" {

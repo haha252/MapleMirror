@@ -3,10 +3,10 @@ package control
 import (
 	"context"
 	"net/url"
-	"strings"
 	"time"
 
 	"mirror-server/internal/downloadtoken"
+	"mirror-server/internal/downloadurl"
 	"mirror-server/internal/protocol"
 )
 
@@ -40,9 +40,13 @@ func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string
 		if err != nil {
 			continue
 		}
+		downloadURL, err := joinReplicationURL(baseURL, task.Asset.AssetID)
+		if err != nil {
+			continue
+		}
 		out = append(out, protocol.SyncFallbackSource{
 			NodeID: nodeID, NodeName: nodeName,
-			DownloadURL: joinReplicationURL(baseURL, task.Asset.AssetID),
+			DownloadURL: downloadURL,
 			Token:       token,
 		})
 	}
@@ -56,6 +60,6 @@ func (r Repository) replicationTokenTTL() time.Duration {
 	return 15 * time.Minute
 }
 
-func joinReplicationURL(baseURL, assetID string) string {
-	return strings.TrimRight(baseURL, "/") + "/internal/replication/" + url.PathEscape(assetID)
+func joinReplicationURL(baseURL, assetID string) (string, error) {
+	return downloadurl.Join(baseURL, "/internal/replication/"+url.PathEscape(assetID))
 }

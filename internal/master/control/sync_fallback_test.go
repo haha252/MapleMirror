@@ -60,6 +60,9 @@ func TestNextSyncTaskSkipsInvalidPeerFallbackSources(t *testing.T) {
 	seedPeerNode(t, repo, "node-4", "缺地址", "")
 	seedVerifiedPeerAsset(t, repo, "node-4", "asset-1",
 		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+	seedPeerNode(t, repo, "node-5", "危险地址", "https://unsafe.example.com/prefix")
+	seedVerifiedPeerAsset(t, repo, "node-5", "asset-1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
 	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
 
 	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)

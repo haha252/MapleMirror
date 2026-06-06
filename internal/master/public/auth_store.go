@@ -154,21 +154,34 @@ type routableAssetInfo struct {
 
 func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (routableAssetInfo, error) {
 	var out routableAssetInfo
-	var downloadBaseURL string
-	err := tx.QueryRowContext(ctx, `SELECT n.id, n.public_name, r.project_id,
+	rows, err := tx.QueryContext(ctx, `SELECT n.id, n.public_name, r.project_id,
 		r.tag_name, a.file_name, n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1),
 		a.size_bytes, a.architecture, a.system FROM assets a
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
-		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id LIMIT 1`, assetID).
-		Scan(&out.NodeID, &out.NodeName, &out.ProjectID, &out.Version, &out.FileName,
-			&downloadBaseURL, &out.Multiplier, &out.SizeBytes, &out.Architecture, &out.System)
+		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id`, assetID)
 	if err != nil {
 		return out, err
 	}
-	out.DownloadURL = joinDownloadURL(downloadBaseURL, out.ProjectID, out.Version, out.FileName)
-	return out, nil
+	defer rows.Close()
+	for rows.Next() {
+		var item routableAssetInfo
+		var downloadBaseURL string
+		if err := rows.Scan(&item.NodeID, &item.NodeName, &item.ProjectID,
+			&item.Version, &item.FileName, &downloadBaseURL, &item.Multiplier,
+			&item.SizeBytes, &item.Architecture, &item.System); err != nil {
+			return out, err
+		}
+		item.DownloadURL, err = joinDownloadURL(downloadBaseURL, item.ProjectID, item.Version, item.FileName)
+		if err == nil {
+			return item, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	return out, sql.ErrNoRows
 }
 
 func (s Store) rangeConcurrencyLimit() int {
