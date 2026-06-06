@@ -7,7 +7,15 @@ import (
 )
 
 func (s *Server) requireHighRisk(w http.ResponseWriter, r *http.Request) (string, bool) {
-	if loopbackRemote(r.RemoteAddr) {
+	if s.highRiskSessionAllowed {
+		username, _ := r.Context().Value(usernameKey{}).(string)
+		if username == "" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"message": "该操作需要管理面板登录会话"})
+			return "", false
+		}
+		return username, true
+	}
+	if loopbackIP(s.clientIP(r)) {
 		return "local-admin", true
 	}
 	identity, ok := clientIdentity(r)
@@ -18,12 +26,8 @@ func (s *Server) requireHighRisk(w http.ResponseWriter, r *http.Request) (string
 	return identity, true
 }
 
-func loopbackRemote(remote string) bool {
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		host = remote
-	}
-	ip := net.ParseIP(host)
+func loopbackIP(value string) bool {
+	ip := net.ParseIP(value)
 	return ip != nil && ip.IsLoopback()
 }
 

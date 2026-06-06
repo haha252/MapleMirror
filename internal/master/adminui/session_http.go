@@ -1,18 +1,9 @@
 package adminui
 
 import (
-	"net"
 	"net/http"
 	"time"
 )
-
-func remoteIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
 
 func setSessionCookie(w http.ResponseWriter, token, expires string) {
 	exp, _ := time.Parse(time.RFC3339Nano, expires)

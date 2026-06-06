@@ -27,12 +27,14 @@ type Server struct {
 	sync      interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
-	users     map[string]userRecord
-	store     loginStore
-	networks  []*net.IPNet
-	templates *template.Template
-	adminFS   fs.FS
-	publicFS  fs.FS
+	users                  map[string]userRecord
+	store                  loginStore
+	networks               []*net.IPNet
+	trustedCIDRs           []string
+	highRiskSessionAllowed bool
+	templates              *template.Template
+	adminFS                fs.FS
+	publicFS               fs.FS
 }
 
 type Options struct {
@@ -41,6 +43,7 @@ type Options struct {
 	Sync     interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
+	TrustedCIDRs []string
 }
 
 func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mirrorsync.Store, opts Options) (*Server, error) {
@@ -84,6 +87,8 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		repo: repo, syncStore: syncStore, projects: opts.Projects,
 		signer: opts.Signer, sync: opts.Sync, users: users, networks: networks,
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
+		trustedCIDRs:           opts.TrustedCIDRs,
+		highRiskSessionAllowed: cfg.Web.HighRiskSessionAllowed != nil && *cfg.Web.HighRiskSessionAllowed,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
 			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
 	}, nil
@@ -118,47 +123,8 @@ func (s *Server) Handler() http.Handler {
 	return s.networkGuard(mux)
 }
 
-func (s *Server) networkGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.allowedRemote(r.RemoteAddr) {
-			http.Error(w, "管理来源暂不可用", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (s *Server) allowedRemote(remote string) bool {
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		host = remote
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
-	}
-	for _, network := range s.networks {
-		if network.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-func parseNetworks(values []string) ([]*net.IPNet, error) {
-	var networks []*net.IPNet
-	for _, value := range values {
-		_, network, err := net.ParseCIDR(value)
-		if err != nil {
-			return nil, err
-		}
-		networks = append(networks, network)
-	}
-	return networks, nil
-}
-
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	ip := remoteIP(r)
+	ip := s.clientIP(r)
 	blocked, err := s.store.blocked(r.Context(), ip)
 	if err != nil {
 		http.Error(w, "管理面板暂不可用", http.StatusInternalServerError)
@@ -208,7 +174,7 @@ func (s *Server) requireSession(next http.HandlerFunc) http.HandlerFunc {
 			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 			return
 		}
-		username, ok, err := s.store.verifySession(r.Context(), cookie.Value, remoteIP(r))
+		username, ok, err := s.store.verifySession(r.Context(), cookie.Value, s.clientIP(r))
 		if err != nil || !ok {
 			clearSessionCookie(w)
 			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)

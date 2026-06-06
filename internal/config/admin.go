@@ -11,14 +11,16 @@ type Administration struct {
 }
 
 type AdminWeb struct {
-	Enabled              *bool  `yaml:"enabled"`
-	UsersFile            string `yaml:"users_file"`
-	BootstrapPasswordEnv string `yaml:"bootstrap_password_env"`
-	SessionSecretFile    string `yaml:"session_secret_file"`
-	SessionTTL           string `yaml:"session_ttl"`
-	LoginFailureWindow   string `yaml:"login_failure_window"`
-	LoginFailureLimit    int    `yaml:"login_failure_limit"`
-	LoginBanDuration     string `yaml:"login_ban_duration"`
+	Enabled                *bool  `yaml:"enabled"`
+	ExclusiveAPI           *bool  `yaml:"exclusive_api"`
+	HighRiskSessionAllowed *bool  `yaml:"high_risk_session_allowed"`
+	UsersFile              string `yaml:"users_file"`
+	BootstrapPasswordEnv   string `yaml:"bootstrap_password_env"`
+	SessionSecretFile      string `yaml:"session_secret_file"`
+	SessionTTL             string `yaml:"session_ttl"`
+	LoginFailureWindow     string `yaml:"login_failure_window"`
+	LoginFailureLimit      int    `yaml:"login_failure_limit"`
+	LoginBanDuration       string `yaml:"login_ban_duration"`
 }
 
 type AdminTLS struct {

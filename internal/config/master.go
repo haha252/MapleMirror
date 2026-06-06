@@ -141,6 +141,16 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 		c.Admin.Web.Enabled = &value
 		warnDefault(warn, "admin.web.enabled", "false")
 	}
+	if c.Admin.Web.ExclusiveAPI == nil {
+		value := false
+		c.Admin.Web.ExclusiveAPI = &value
+		warnDefault(warn, "admin.web.exclusive_api", "false")
+	}
+	if c.Admin.Web.HighRiskSessionAllowed == nil {
+		value := false
+		c.Admin.Web.HighRiskSessionAllowed = &value
+		warnDefault(warn, "admin.web.high_risk_session_allowed", "false")
+	}
 	setString(&c.Admin.Web.UsersFile, "secrets/admin-users.yaml", "admin.web.users_file", warn)
 	setString(&c.Admin.Web.BootstrapPasswordEnv, "MIRROR_ADMIN_WEB_PASSWORD", "admin.web.bootstrap_password_env", warn)
 	setString(&c.Admin.Web.SessionSecretFile, "secrets/admin-web-session.key", "admin.web.session_secret_file", warn)
@@ -222,6 +232,10 @@ func validateMaster(c Master) error {
 		}
 		if c.Admin.Web.LoginFailureLimit < 1 {
 			return errors.New("管理面板登录失败封禁阈值必须大于零")
+		}
+		if c.Admin.Web.HighRiskSessionAllowed != nil && *c.Admin.Web.HighRiskSessionAllowed &&
+			(c.Admin.Web.ExclusiveAPI == nil || !*c.Admin.Web.ExclusiveAPI) {
+			return errors.New("admin.web.high_risk_session_allowed 只能在 admin.web.exclusive_api=true 时启用")
 		}
 	}
 	for _, cidr := range append(c.Proxy.TrustedCIDRs, c.Admin.AllowedCIDRs...) {

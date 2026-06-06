@@ -27,14 +27,10 @@ type userRecord struct {
 func loadUsers(path, bootstrapEnv string) (map[string]userRecord, error) {
 	var file userFile
 	if err := readYAMLFile(path, &file); err != nil {
-		if bootstrapEnv == "" || !errors.Is(err, os.ErrNotExist) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
-		password := os.Getenv(bootstrapEnv)
-		if password == "" {
-			return nil, err
-		}
-		if err := writeBootstrapUser(path, password); err != nil {
+		if err := bootstrapUserFile(path, bootstrapEnv); err != nil {
 			return nil, err
 		}
 		if err := readYAMLFile(path, &file); err != nil {
@@ -52,12 +48,15 @@ func loadUsers(path, bootstrapEnv string) (map[string]userRecord, error) {
 		users[item.Username] = item
 	}
 	if len(users) == 0 {
-		return nil, errors.New("管理面板用户文件至少需要一个用户")
+		if err := writeGeneratedBootstrapUser(path); err != nil {
+			return nil, err
+		}
+		return loadUsers(path, "")
 	}
 	return users, nil
 }
 
-func writeBootstrapUser(path, password string) error {
+func writeBootstrapUser(path, username, password string) error {
 	hash, err := hashPassword(password)
 	if err != nil {
 		return err
@@ -65,7 +64,7 @@ func writeBootstrapUser(path, password string) error {
 	if err := os.MkdirAll(dirName(path), 0o700); err != nil {
 		return err
 	}
-	body := "users:\n  - username: \"admin\"\n    password_hash: \"" + hash + "\"\n    role: \"owner\"\n"
+	body := "users:\n  - username: \"" + username + "\"\n    password_hash: \"" + hash + "\"\n    role: \"owner\"\n"
 	return os.WriteFile(path, []byte(body), 0o600)
 }
 

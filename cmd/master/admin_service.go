@@ -63,20 +63,41 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 	handler := http.Handler(apiHandler)
 	if cfg.Admin.Web.Enabled != nil && *cfg.Admin.Web.Enabled {
 		ui, uiErr := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
-			Projects: projectLoader,
-			Signer:   loaded.Sign,
-			Sync:     syncService,
+			Projects:     projectLoader,
+			Signer:       loaded.Sign,
+			Sync:         syncService,
+			TrustedCIDRs: cfg.Proxy.TrustedCIDRs,
 		})
 		if uiErr != nil {
 			logger.Error(context.Background(), "管理面板初始化失败", slog.String("error", uiErr.Error()))
 		} else {
 			mux := http.NewServeMux()
-			mux.Handle("/api/admin/v1/", apiHandler)
+			if cfg.Admin.Web.ExclusiveAPI == nil || !*cfg.Admin.Web.ExclusiveAPI {
+				mux.Handle("/api/admin/v1/", apiHandler)
+			}
+			mux.HandleFunc("/admin", adminEntry)
 			mux.Handle("/admin/", ui.Handler())
 			mux.Handle("/static/", ui.Handler())
+			mux.HandleFunc("/", adminRoot)
 			handler = mux
 			logger.Info(context.Background(), "管理面板已启用", slog.String("path", "/admin/"))
 		}
 	}
 	return requestid.Middleware(handler, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader)
+}
+
+func adminRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+}
+
+func adminEntry(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/admin" {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
 }
