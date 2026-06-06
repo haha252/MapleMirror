@@ -34,17 +34,12 @@ func main() {
 	path := flag.String("config", "node.yaml", "下载节点配置文件路径")
 	flag.Parse()
 	var warnings [][2]string
-	cfg, err := config.LoadNode(*path, func(field, value string) {
+	cfg, created, err := loadNodeConfig(*path, func(field, value string) {
 		warnings = append(warnings, [2]string{field, value})
 	})
-	if errors.Is(err, config.ErrExampleCreated) {
-		cfg, err = config.LoadNode(*path, func(field, value string) {
-			warnings = append(warnings, [2]string{field, value})
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "下载节点配置加载失败：%v\n", err)
-			os.Exit(1)
-		}
+	if created {
+		fmt.Fprintln(os.Stderr, "已生成下载节点示例配置，请确认安全字段后重新启动。")
+		return
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "下载节点配置加载失败：%v\n", err)
