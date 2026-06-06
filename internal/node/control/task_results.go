@@ -139,7 +139,12 @@ func (c Client) storePendingTaskResult(result protocol.SyncTaskResult) error {
 	if c.DB == nil {
 		return nil
 	}
-	_, err := c.DB.Exec(`INSERT INTO pending_sync_task_results
+	tx, err := c.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`INSERT INTO pending_sync_task_results
 		(task_id, asset_id, result, local_digest_sha256, size_bytes, message, created_at, reported_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
 		ON CONFLICT(task_id) DO UPDATE SET asset_id = excluded.asset_id,
@@ -148,6 +153,31 @@ func (c Client) storePendingTaskResult(result protocol.SyncTaskResult) error {
 		created_at = excluded.created_at, reported_at = NULL`,
 		result.TaskID, result.AssetID, result.Result, nullableString(result.LocalDigestSHA256),
 		result.SizeBytes, nullableString(result.Message), time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return err
+	}
+	if err := recordLocalTaskResult(tx, result); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func recordLocalTaskResult(tx *sql.Tx, result protocol.SyncTaskResult) error {
+	state := result.Result
+	switch result.Result {
+	case "succeeded":
+		state = "succeeded"
+	case "temporary_error", "digest_mismatch", "size_mismatch":
+		state = "failed"
+	default:
+		if state == "" || state == "running" {
+			state = "failed"
+		}
+	}
+	_, err := tx.Exec(`UPDATE local_sync_tasks SET state = ?,
+		error_message = ?, updated_at = ? WHERE task_id = ?`,
+		state, nullableString(result.Message), time.Now().UTC().Format(time.RFC3339Nano),
+		result.TaskID)
 	return err
 }
 

@@ -89,3 +89,46 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 	}
 	<-done
 }
+
+func TestStorePendingTaskResultStopsRunningAck(t *testing.T) {
+	db := openNodeDB(t)
+	defer db.Close()
+	_, err := db.Exec(`INSERT INTO local_sync_tasks
+		(task_id, asset_id, task_type, state, updated_at)
+		VALUES ('task-1', 'asset-1', 'asset_download', 'running', ?)`,
+		time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := Client{NodeID: "node-1", DB: db}
+	err = client.storePendingTaskResult(protocol.SyncTaskResult{
+		TaskID:  "task-1",
+		AssetID: "asset-1",
+		Result:  "temporary_error",
+		Message: "下载资产失败",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	err = db.QueryRow(`SELECT state FROM local_sync_tasks WHERE task_id = 'task-1'`).Scan(&state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == "running" {
+		t.Fatal("终态结果入库后不得继续保留 running 续报状态")
+	}
+	var running int
+	err = db.QueryRow(`SELECT COUNT(*) FROM local_sync_tasks
+		WHERE task_id = 'task-1' AND state = 'running'`).Scan(&running)
+	if err != nil || running != 0 {
+		t.Fatalf("失败任务不应再被 running ACK 查询到 running=%d err=%v", running, err)
+	}
+	next, err := client.sendRunningTaskAcks(nil, "req-1", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next != 7 {
+		t.Fatalf("终态任务不得再发送 running ACK，next=%d", next)
+	}
+}

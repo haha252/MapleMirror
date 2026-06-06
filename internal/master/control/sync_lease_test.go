@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,5 +64,37 @@ func TestSyncTaskAckRenewsRunningLease(t *testing.T) {
 	leaseAt, err := time.Parse(time.RFC3339Nano, lease)
 	if err != nil || !leaseAt.After(before) {
 		t.Fatalf("running ack should renew lease lease=%q err=%v", lease, err)
+	}
+}
+
+func TestRunningAckDoesNotReviveRetryWaitTask(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	retryAfter := time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)
+	seedDownloadTask(t, repo, session.NodeID, "task-retry", "asset-1", 1, retryAfter)
+
+	_, err := repo.AcceptSyncTaskAck(context.Background(), session, 1, protocol.SyncTaskAck{
+		TaskID: "task-retry", State: "running", Message: "任务仍在执行",
+	})
+	if err == nil || !strings.Contains(err.Error(), "ACK 无效") {
+		t.Fatalf("retry_wait 任务不应接受 stale running ACK，err=%v", err)
+	}
+	var state string
+	if err := repo.DB.QueryRow(`SELECT state FROM node_tasks
+		WHERE id = 'task-retry'`).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != "retry_wait" {
+		t.Fatalf("stale running ACK 不得回退任务状态 state=%s", state)
+	}
+	last, err := repo.currentSequence(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last != 0 {
+		t.Fatalf("无效 running ACK 不应推进序号 got=%d", last)
 	}
 }

@@ -34,7 +34,7 @@ func (r Repository) AcceptSyncTaskAck(ctx context.Context, session Session, seq 
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = ?,
 		error_message = ?, lease_expires_at = ?, updated_at = ?
 		WHERE id = ? AND node_id = ?
-		AND state IN ('sent', 'pending', 'retry_wait', 'running')`,
+		AND state IN ('sent', 'pending', 'running')`,
 		state, nullable(ack.Message),
 		time.Now().UTC().Add(syncTaskLeaseDuration).Format(time.RFC3339Nano),
 		now, ack.TaskID, session.NodeID)
