@@ -52,9 +52,10 @@ func TestChunkedInventoryReportKeepsEarlierChunkVerified(t *testing.T) {
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
 	seedSecondAssetTarget(t, repo, session.NodeID)
-	reportedAt := time.Now().UTC()
+	firstReportedAt := time.Now().UTC().Add(-time.Minute)
+	finalReportedAt := time.Now().UTC()
 	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
-		ReportID: "r-chunk-1", Revision: 1, GeneratedAt: reportedAt, Complete: false,
+		ReportID: "r-chunk-1", Revision: 1, GeneratedAt: firstReportedAt, Complete: false,
 		Items: []protocol.InventoryItem{{
 			AssetID: "asset-1", SizeBytes: 10,
 			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -65,7 +66,7 @@ func TestChunkedInventoryReportKeepsEarlierChunkVerified(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = repo.AcceptInventoryReport(context.Background(), session, 2, protocol.InventoryReport{
-		ReportID: "r-chunk-2", Revision: 1, GeneratedAt: reportedAt, Complete: true,
+		ReportID: "r-chunk-2", Revision: 1, GeneratedAt: finalReportedAt, Complete: true,
 		Items: []protocol.InventoryItem{{
 			AssetID: "asset-2", SizeBytes: 20,
 			DigestSHA256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",

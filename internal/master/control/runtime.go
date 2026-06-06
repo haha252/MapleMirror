@@ -7,9 +7,10 @@ import (
 )
 
 type RuntimeStore struct {
-	mu       sync.RWMutex
-	sessions map[string]runtimeSession
-	latest   map[string]runtimeNode
+	mu               sync.RWMutex
+	sessions         map[string]runtimeSession
+	latest           map[string]runtimeNode
+	inventoryBatches map[string]runtimeInventoryBatch
 }
 
 type runtimeSession struct {
@@ -60,8 +61,9 @@ type runtimePressureReport struct {
 
 func NewRuntimeStore() *RuntimeStore {
 	return &RuntimeStore{
-		sessions: map[string]runtimeSession{},
-		latest:   map[string]runtimeNode{},
+		sessions:         map[string]runtimeSession{},
+		latest:           map[string]runtimeNode{},
+		inventoryBatches: map[string]runtimeInventoryBatch{},
 	}
 }
 
@@ -76,6 +78,7 @@ func (s *RuntimeStore) StartSession(session Session) {
 			delete(s.sessions, id)
 		}
 	}
+	delete(s.inventoryBatches, session.NodeID)
 	s.sessions[session.ID] = runtimeSession{
 		NodeID: session.NodeID, CertificateID: session.CertificateID,
 		RequestID: session.RequestID, ConnectedAt: time.Now().UTC().Format(time.RFC3339Nano),
