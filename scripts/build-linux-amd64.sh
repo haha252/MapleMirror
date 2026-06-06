@@ -20,7 +20,8 @@ elif command -v zig >/dev/null 2>&1; then
     "-Wl,--export=solve_pow" "-Wl,--initial-memory=2097152" "-Wl,--max-memory=2097152" \
     -o "$ROOT/web/public/static/pow.wasm" "$ROOT/web/wasm/pow.c"
 else
-  printf '%s\n' "未找到 clang 或 zig，跳过网页 PoW WASM 构建，将使用浏览器 JS 回退。"
+  printf '%s\n' "未找到 clang 或 zig，无法生成网页 PoW WASM，发布构建已停止。"
+  exit 1
 fi
 find cmd internal configs scripts web -type f \
   \( -name '*.go' -o -name '*.sql' -o -name '*.yaml' -o -name '*.yml' -o -name '*.sh' -o -name '*.bat' -o -name '*.ps1' -o -name '*.js' -o -name '*.css' -o -name '*.html' \) |

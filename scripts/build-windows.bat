@@ -22,7 +22,8 @@ if not errorlevel 1 (
     zig cc -target wasm32-freestanding -O3 -nostdlib "-Wl,--no-entry" "-Wl,--export-memory" "-Wl,--export=get_buffer" "-Wl,--export=solve_pow" "-Wl,--initial-memory=2097152" "-Wl,--max-memory=2097152" -o "web\public\static\pow.wasm" "web\wasm\pow.c"
     if errorlevel 1 goto :failed
   ) else (
-    powershell -NoProfile -Command "$m=ConvertFrom-Json '\"未找到 clang 或 zig，跳过网页 PoW WASM 构建，将使用浏览器 JS 回退。\"'; Write-Host $m"
+    powershell -NoProfile -Command "$m=ConvertFrom-Json '\"未找到 clang 或 zig，无法生成网页 PoW WASM，发布构建已停止。\"'; Write-Host $m"
+    goto :failed
   )
 )
 
