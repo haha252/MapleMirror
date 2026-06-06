@@ -104,13 +104,24 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	}
 	nowValue := time.Now().UTC()
 	now := nowValue.Format(time.RFC3339Nano)
-	taskState, attempts, retryAfter, err := r.applyTaskResult(ctx, tx, session.NodeID, result, nowValue)
+	checkedResult, inventory, hasInventory, err := inspectSucceededSyncResult(ctx, tx, result)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
-	if result.Result == "succeeded" && result.AssetID != "" && taskState != "obsolete" {
-		if err := upsertVerifiedInventory(ctx, tx, session.NodeID, result, now); err != nil {
+	taskState, attempts, retryAfter, err := r.applyTaskResult(ctx, tx, session.NodeID, checkedResult, nowValue)
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
+	quarantined := false
+	if hasInventory && taskState != "obsolete" {
+		if err := upsertSyncResultInventory(ctx, tx, session.NodeID, inventory, now); err != nil {
 			return HeartbeatResult{}, err
+		}
+		if inventory.PublicAsset && inventory.State == "mismatch" {
+			if err := r.quarantineNodeForPublicAssetMismatch(ctx, tx, session, inventory, now); err != nil {
+				return HeartbeatResult{}, err
+			}
+			quarantined = true
 		}
 	}
 	ready, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now)
@@ -121,38 +132,25 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	if err == nil && r.Logger != nil {
 		r.Logger.Debug(ctx, "同步任务结果已处理",
 			slog.String("node_id", session.NodeID),
-			slog.String("task_id", result.TaskID),
-			slog.String("asset_id", result.AssetID),
-			slog.String("result", result.Result),
+			slog.String("task_id", checkedResult.TaskID),
+			slog.String("asset_id", checkedResult.AssetID),
+			slog.String("result", checkedResult.Result),
 			slog.String("task_state", taskState),
 			slog.Int("attempts", attempts),
 			slog.String("retry_after", retryAfter),
-			slog.String("message", result.Message))
+			slog.String("message", checkedResult.Message))
 	}
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, finish(tx, err)
-}
-
-func upsertVerifiedInventory(ctx context.Context, tx *sql.Tx, nodeID string, result protocol.SyncTaskResult, now string) error {
-	var expectedDigest string
-	var expectedSize int64
-	err := tx.QueryRowContext(ctx, `SELECT digest_sha256, size_bytes FROM assets
-		WHERE id = ?`, result.AssetID).Scan(&expectedDigest, &expectedSize)
 	if err != nil {
-		return err
+		return HeartbeatResult{}, err
 	}
-	state := "verified"
-	if result.LocalDigestSHA256 != expectedDigest || result.SizeBytes != expectedSize {
-		state = "mismatch"
+	if err := tx.Commit(); err != nil {
+		return HeartbeatResult{}, err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO node_inventory
-		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(node_id, asset_id) DO UPDATE SET
-		local_digest_sha256 = excluded.local_digest_sha256,
-		size_bytes = excluded.size_bytes, verified_at = excluded.verified_at,
-		state = excluded.state`,
-		nodeID, result.AssetID, result.LocalDigestSHA256, result.SizeBytes, now, state)
-	return err
+	if quarantined {
+		r.runtime().CloseNodeSessions(session.NodeID)
+		return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(false), RoutingReady: false}, nil
+	}
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
 }
 
 func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) (bool, error) {
