@@ -119,6 +119,7 @@ func TestHighRiskWebSessionAllowedForRemoteAdmin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/api/projects", strings.NewReader(string(body)))
 	req.RemoteAddr = "192.0.2.10:55000"
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfHeader, server.csrfToken(cookie.Value))
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	server.Handler().ServeHTTP(rec, req)

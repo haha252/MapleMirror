@@ -181,13 +181,19 @@ func (s *Server) requireSession(next http.HandlerFunc) http.HandlerFunc {
 			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 			return
 		}
-		username, ok, err := s.store.verifySession(r.Context(), cookie.Value, s.clientIP(r))
+		sessionToken := cookie.Value
+		username, ok, err := s.store.verifySession(r.Context(), sessionToken, s.clientIP(r))
 		if err != nil || !ok {
 			clearSessionCookie(w)
 			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), usernameKey{}, username)))
+		if !s.requireCSRF(w, r, sessionToken) {
+			return
+		}
+		ctx := context.WithValue(r.Context(), usernameKey{}, username)
+		ctx = context.WithValue(ctx, csrfTokenKey{}, s.csrfToken(sessionToken))
+		next(w, r.WithContext(ctx))
 	}
 }
 
@@ -206,8 +212,9 @@ func (s *Server) shell(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = s.templates.ExecuteTemplate(w, "shell.html", map[string]any{
-		"Username": r.Context().Value(usernameKey{}),
-		"Page":     page,
+		"Username":  r.Context().Value(usernameKey{}),
+		"CSRFToken": r.Context().Value(csrfTokenKey{}),
+		"Page":      page,
 	})
 }
 

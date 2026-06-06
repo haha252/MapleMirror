@@ -36,8 +36,15 @@
   function api(path, options) {
     options = options || {};
     options.credentials = "same-origin";
+    options.headers = options.headers || {};
     if (options.body && !options.headers) {
       options.headers = { "Content-Type": "application/json" };
+    }
+    if (options.body && !options.headers["Content-Type"]) {
+      options.headers["Content-Type"] = "application/json";
+    }
+    if (writeMethod(options.method)) {
+      options.headers["X-CSRF-Token"] = csrfToken();
     }
     return fetch(path, options).then(function (res) {
       return res.json().then(function (body) {
@@ -45,6 +52,16 @@
         return body;
       });
     });
+  }
+
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute("content") || "" : "";
+  }
+
+  function writeMethod(method) {
+    method = String(method || "GET").toUpperCase();
+    return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
   }
 
   function confirmAction(title, body, run) {
