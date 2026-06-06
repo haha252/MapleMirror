@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -30,7 +31,7 @@ func (r Repository) AcceptSyncTaskAck(ctx context.Context, session Session, seq 
 		state = "running"
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `UPDATE node_tasks SET state = ?,
+	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = ?,
 		error_message = ?, lease_expires_at = ?, updated_at = ?
 		WHERE id = ? AND node_id = ?
 		AND state IN ('sent', 'pending', 'retry_wait', 'running')`,
@@ -39,6 +40,9 @@ func (r Repository) AcceptSyncTaskAck(ctx context.Context, session Session, seq 
 		now, ack.TaskID, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return HeartbeatResult{}, fmt.Errorf("同步任务 ACK 无效：任务不存在或状态不允许确认")
 	}
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
