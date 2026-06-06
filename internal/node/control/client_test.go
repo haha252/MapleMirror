@@ -139,21 +139,12 @@ func handleTestSession(conn net.Conn) {
 	if err != nil || hb.MessageType != protocol.TypeHeartbeat {
 		return
 	}
-	ackBody, _ := json.Marshal(map[string]any{
-		"accepted_sequence": hb.Sequence,
-		"managed_state":     "syncing",
-		"routing_ready":     false,
-	})
-	_ = protocol.WriteFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version,
-		MessageID:       "heartbeat-ack",
-		MessageType:     protocol.TypeHeartbeatAck,
-		SentAt:          time.Now().UTC(),
-		NodeID:          hb.NodeID,
-		RequestID:       hb.RequestID,
-		ReplyTo:         hb.MessageID,
-		Payload:         ackBody,
-	})
+	sendAck(conn, hb)
+	pressure, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	if err != nil || pressure.MessageType != protocol.TypePressureReport {
+		return
+	}
+	sendAck(conn, pressure)
 }
 
 func testTLSServer(t *testing.T) net.Listener {

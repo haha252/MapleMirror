@@ -2,8 +2,11 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Node struct {
@@ -21,8 +24,7 @@ type Node struct {
 }
 
 type NodeIdentity struct {
-	Name   string `yaml:"name"`
-	IDFile string `yaml:"id_file"`
+	Name string `yaml:"name"`
 }
 type NodeServer struct {
 	Listen                string `yaml:"listen"`
@@ -38,11 +40,13 @@ type NodeStorage struct {
 	StateDB       string `yaml:"state_db"`
 }
 type Bandwidth struct {
-	Target string `yaml:"target"`
+	Target    string `yaml:"target"`
+	TargetBPS int64  `yaml:"-"`
 }
 type Sync struct {
-	MaxWorkers     int    `yaml:"max_workers"`
-	BandwidthLimit string `yaml:"bandwidth_limit"`
+	MaxWorkers        int    `yaml:"max_workers"`
+	BandwidthLimit    string `yaml:"bandwidth_limit"`
+	BandwidthLimitBPS int64  `yaml:"-"`
 }
 type NodeDownload struct {
 	VerifyPublicKeyFile string `yaml:"verify_public_key_file"`
@@ -55,15 +59,27 @@ type Pairing struct {
 
 func LoadNode(path string, warn WarnFunc) (Node, error) {
 	var c Node
-	if _, err := readYAML(path, &c, NodeExample); err != nil {
+	legacyIDFile := false
+	_, err := readYAMLWithRepair(path, &c, NodeExample, NodeExample, func(doc *yaml.Node) bool {
+		changed, found := migrateNodeIDFile(doc)
+		legacyIDFile = legacyIDFile || found
+		return changed
+	})
+	if err != nil {
 		return c, err
 	}
+	if legacyIDFile {
+		warnDeprecated(warn, "node.id_file", "storage.state_db 和 tls 证书材料")
+	}
 	applyNodeDefaults(&c, warn)
-	return c, validateNode(c)
+	if err := validateNode(&c); err != nil {
+		return c, err
+	}
+	return c, nil
 }
 
 func SaveNodeFirstRun(path string, c Node) error {
-	if err := validateNode(c); err != nil {
+	if err := validateNode(&c); err != nil {
 		return err
 	}
 	return updateYAMLScalars(path, map[string]string{
@@ -89,9 +105,10 @@ func applyNodeDefaults(c *Node, warn WarnFunc) {
 		c.Sync.MaxWorkers = 2
 		warnDefault(warn, "sync.max_workers", "2")
 	}
+	setString(&c.Sync.BandwidthLimit, "0", "sync.bandwidth_limit", warn)
 }
 
-func validateNode(c Node) error {
+func validateNode(c *Node) error {
 	if c.Node.Name == "" {
 		return errors.New("节点配置 node.name 不得为空")
 	}
@@ -129,8 +146,39 @@ func validateNode(c Node) error {
 			return errors.New("节点配置 proxy.trusted_cidrs 包含无效 CIDR")
 		}
 	}
-	if c.Bandwidth.Target == "" || c.Sync.MaxWorkers <= 0 {
-		return errors.New("节点目标带宽不得为空且同步线程数必须大于零")
+	if c.Bandwidth.Target == "" {
+		return errors.New("节点目标带宽不得为空")
 	}
+	target, err := ParseBandwidthBPS("bandwidth.target", c.Bandwidth.Target, false)
+	if err != nil {
+		return err
+	}
+	c.Bandwidth.TargetBPS = target
+	if c.Sync.MaxWorkers <= 0 {
+		return errors.New("同步线程数必须大于零")
+	}
+	limit, err := ParseBandwidthBPS("sync.bandwidth_limit", c.Sync.BandwidthLimit, true)
+	if err != nil {
+		return err
+	}
+	c.Sync.BandwidthLimitBPS = limit
 	return validateLogging(c.Logging)
+}
+
+func migrateNodeIDFile(doc *yaml.Node) (bool, bool) {
+	root := yamlRoot(doc)
+	node := findYAMLMapValue(root, "node")
+	if node == nil || node.Kind != yaml.MappingNode {
+		return false, false
+	}
+	found := yamlMapIndex(node, "id_file") >= 0
+	return yamlRemoveMapKey(node, "id_file"), found
+}
+
+func ParseBandwidthBPS(field, value string, allowZero bool) (int64, error) {
+	bps, err := parseBandwidthBPS(value, allowZero)
+	if err != nil {
+		return 0, fmt.Errorf("配置字段 %s 必须使用 0、MiB/s、MB/s 或 Mbps 格式", field)
+	}
+	return bps, nil
 }

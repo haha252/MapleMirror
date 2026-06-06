@@ -174,8 +174,10 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
-		last_heartbeat_at = ?, updated_at = ? WHERE id = ?`,
-		now, now, session.NodeID)
+		last_heartbeat_at = ?,
+		target_bandwidth_bps = CASE WHEN ? > 0 THEN ? ELSE target_bandwidth_bps END,
+		updated_at = ? WHERE id = ?`,
+		now, report.TargetBandwidthBPS, report.TargetBandwidthBPS, now, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -184,11 +186,14 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 	}
 	r.runtime().MarkPressure(session.NodeID, runtimePressureReport{
 		PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
-		FreeBytes: report.FreeBytes, RequestID: session.RequestID, ReportedAt: now, Valid: true,
+		FreeBytes: report.FreeBytes, TargetBandwidth: report.TargetBandwidthBPS,
+		ActualBandwidth: report.ActualBandwidthBPS,
+		RequestID:       session.RequestID, ReportedAt: now, Valid: true,
 	})
 	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
 		State: "syncing", PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
-		FreeBytes: report.FreeBytes, ReportedAt: now, Valid: true,
+		FreeBytes: report.FreeBytes, TargetBandwidth: report.TargetBandwidthBPS,
+		ActualBandwidth: report.ActualBandwidthBPS, ReportedAt: now, Valid: true,
 	})
 	ready := r.nodeRoutingReady(ctx, session.NodeID)
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil

@@ -98,6 +98,7 @@
       a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/sla").catch(function (err) { return { error: err.message }; })
     ]).then(function (items) {
       var sync = items[0], reports = items[1], sla = items[2];
+      var pressure = reports.pressure || reports.heartbeat || {};
       var slaText = (sla.windows || []).map(function (w) {
         var pct = (Number(w.availability_ratio || 0) * 100).toFixed(2) + "%";
         return w.window + ": " + (w.insufficient_samples ? "样本不足" : pct);
@@ -116,7 +117,10 @@
         }) + '<h3>最近报告</h3>' + a.kv({
           "心跳": (reports.heartbeat && reports.heartbeat.reported_at) || "暂无",
           "库存": (reports.inventory && reports.inventory.reported_at) || "暂无",
-          "压力": (reports.pressure && reports.pressure.reported_at) || "暂无"
+          "压力": pressure.reported_at || "暂无",
+          "目标带宽": pressure.target_bandwidth_bps ? a.bytes(pressure.target_bandwidth_bps) + "/s" : "未上报",
+          "实际带宽": pressure.actual_bandwidth_bps ? a.bytes(pressure.actual_bandwidth_bps) + "/s" : "暂无采样",
+          "压力比": pressure.pressure_ratio != null ? (Number(pressure.pressure_ratio) * 100).toFixed(1) + "%" : "暂无"
         }) + '<h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") + "</p>";
     });
   }

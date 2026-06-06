@@ -42,6 +42,11 @@ func TestClientRunOnceReportsInventoryAfterPendingTaskResults(t *testing.T) {
 			return
 		}
 		sendAck(conn, hb)
+		pressure, ok := expectType(t, conn, protocol.TypePressureReport)
+		if !ok {
+			return
+		}
+		sendAck(conn, pressure)
 		taskResult, ok := expectType(t, conn, protocol.TypeSyncTaskResult)
 		if !ok {
 			return

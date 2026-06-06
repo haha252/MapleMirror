@@ -34,8 +34,11 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
-		last_heartbeat_at = ?, public_download_base_url = ?, updated_at = ? WHERE id = ?`,
-		now, downloadBaseURL, now, session.NodeID)
+		last_heartbeat_at = ?, public_download_base_url = ?,
+		target_bandwidth_bps = CASE WHEN ? > 0 THEN ? ELSE target_bandwidth_bps END,
+		updated_at = ? WHERE id = ?`,
+		now, downloadBaseURL, hb.Pressure.TargetBandwidthBPS,
+		hb.Pressure.TargetBandwidthBPS, now, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -49,7 +52,9 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
 		State: hb.Status, PressureRatio: hb.Pressure.Ratio,
 		ActiveDownloads: int64(hb.ActiveDownloads), FreeBytes: hb.FreeBytes,
-		ReportedAt: now, Valid: true,
+		TargetBandwidth: hb.Pressure.TargetBandwidthBPS,
+		ActualBandwidth: hb.Pressure.ActualBandwidthBPS,
+		ReportedAt:      now, Valid: true,
 	})
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
 }

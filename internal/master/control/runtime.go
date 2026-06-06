@@ -31,6 +31,8 @@ type runtimeHeartbeat struct {
 	PressureRatio   float64
 	ActiveDownloads int64
 	FreeBytes       int64
+	TargetBandwidth int64
+	ActualBandwidth int64
 	ReportedAt      string
 	Valid           bool
 }
@@ -49,6 +51,8 @@ type runtimePressureReport struct {
 	PressureRatio   float64
 	ActiveDownloads int64
 	FreeBytes       int64
+	TargetBandwidth int64
+	ActualBandwidth int64
 	RequestID       string
 	ReportedAt      string
 	Valid           bool
@@ -194,7 +198,9 @@ func (s *RuntimeStore) LatestHeartbeat(nodeID string) (map[string]any, error) {
 	}
 	return map[string]any{"state": item.State, "pressure_ratio": item.PressureRatio,
 		"active_downloads": item.ActiveDownloads, "free_bytes": item.FreeBytes,
-		"reported_at": item.ReportedAt}, nil
+		"target_bandwidth_bps": item.TargetBandwidth,
+		"actual_bandwidth_bps": item.ActualBandwidth,
+		"reported_at":          item.ReportedAt}, nil
 }
 
 func (s *RuntimeStore) LatestInventoryReport(nodeID string) (map[string]any, error) {
@@ -218,5 +224,7 @@ func (s *RuntimeStore) LatestPressureReport(nodeID string) (map[string]any, erro
 	}
 	return map[string]any{"pressure_ratio": item.PressureRatio,
 		"active_downloads": item.ActiveDownloads, "free_bytes": item.FreeBytes,
-		"request_id": item.RequestID, "reported_at": item.ReportedAt}, nil
+		"target_bandwidth_bps": item.TargetBandwidth,
+		"actual_bandwidth_bps": item.ActualBandwidth,
+		"request_id":           item.RequestID, "reported_at": item.ReportedAt}, nil
 }

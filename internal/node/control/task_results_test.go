@@ -53,49 +53,22 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 		if err != nil || hb.MessageType != protocol.TypeHeartbeat {
 			return
 		}
-		ackBody, _ := json.Marshal(map[string]any{
-			"accepted_sequence": hb.Sequence,
-			"managed_state":     "syncing",
-			"routing_ready":     false,
-		})
-		_ = protocol.WriteFrame(conn, protocol.Envelope{
-			ProtocolVersion: protocol.Version,
-			MessageID:       "heartbeat-ack",
-			MessageType:     protocol.TypeHeartbeatAck,
-			SentAt:          time.Now().UTC(),
-			NodeID:          hb.NodeID,
-			RequestID:       hb.RequestID,
-			ReplyTo:         hb.MessageID,
-			Payload:         ackBody,
-		})
+		sendAck(conn, hb)
+		pressure, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+		if err != nil || pressure.MessageType != protocol.TypePressureReport {
+			return
+		}
+		sendAck(conn, pressure)
 		result, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
 		if err != nil || result.MessageType != protocol.TypeSyncTaskResult {
 			return
 		}
-		_ = protocol.WriteFrame(conn, protocol.Envelope{
-			ProtocolVersion: protocol.Version,
-			MessageID:       "result-ack",
-			MessageType:     protocol.TypeHeartbeatAck,
-			SentAt:          time.Now().UTC(),
-			NodeID:          result.NodeID,
-			RequestID:       result.RequestID,
-			ReplyTo:         result.MessageID,
-			Payload:         ackBody,
-		})
+		sendAck(conn, result)
 		report, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
 		if err != nil || report.MessageType != protocol.TypeInventoryReport {
 			return
 		}
-		_ = protocol.WriteFrame(conn, protocol.Envelope{
-			ProtocolVersion: protocol.Version,
-			MessageID:       "inventory-ack",
-			MessageType:     protocol.TypeHeartbeatAck,
-			SentAt:          time.Now().UTC(),
-			NodeID:          report.NodeID,
-			RequestID:       report.RequestID,
-			ReplyTo:         report.MessageID,
-			Payload:         ackBody,
-		})
+		sendAck(conn, report)
 	}()
 	client := &Client{
 		NodeID:    "node-1",

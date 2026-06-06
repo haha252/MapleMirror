@@ -7,17 +7,19 @@ import (
 )
 
 type NodeSummary struct {
-	NodeID          string `json:"node_id"`
-	PublicName      string `json:"public_name"`
-	State           string `json:"state"`
-	ConnectionState string `json:"connection_state"`
-	RoutingReady    bool   `json:"routing_ready"`
-	LastHeartbeat   string `json:"last_heartbeat_at,omitempty"`
+	NodeID             string `json:"node_id"`
+	PublicName         string `json:"public_name"`
+	State              string `json:"state"`
+	ConnectionState    string `json:"connection_state"`
+	RoutingReady       bool   `json:"routing_ready"`
+	TargetBandwidthBPS int64  `json:"target_bandwidth_bps"`
+	LastHeartbeat      string `json:"last_heartbeat_at,omitempty"`
 }
 
 func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 	rows, err := r.DB.QueryContext(ctx, `SELECT id, public_name, state,
-		routing_ready, COALESCE(last_heartbeat_at, '') FROM nodes ORDER BY created_at`)
+		routing_ready, target_bandwidth_bps, COALESCE(last_heartbeat_at, '')
+		FROM nodes ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +28,8 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 	for rows.Next() {
 		var item NodeSummary
 		var ready int
-		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State, &ready, &item.LastHeartbeat); err != nil {
+		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State,
+			&ready, &item.TargetBandwidthBPS, &item.LastHeartbeat); err != nil {
 			return nil, err
 		}
 		item.ConnectionState = item.State

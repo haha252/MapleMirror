@@ -23,6 +23,7 @@ type controlSupervisor struct {
 	logger   *logging.Logger
 	address  string
 	executor syncer.Executor
+	limiter  *nodecontrol.TaskLimiter
 }
 
 func (s controlSupervisor) run() {
@@ -90,9 +91,10 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 		return nil, err
 	}
 	return &nodecontrol.Client{
-		NodeID: nodeID, Address: s.address, PublicDownloadBaseURL: s.cfg.Server.PublicDownloadBaseURL, TLSConfig: tlsCfg,
-		Storage:           s.cfg.Storage.Directory,
-		HeartbeatInterval: interval, Logger: s.logger, Executor: s.executor, DB: s.db,
+		NodeID: nodeID, Address: s.address, PublicDownloadBaseURL: s.cfg.Server.PublicDownloadBaseURL,
+		TargetBandwidthBPS: s.cfg.Bandwidth.TargetBPS, TLSConfig: tlsCfg,
+		Storage: s.cfg.Storage.Directory, HeartbeatInterval: interval,
+		Logger: s.logger, Executor: s.executor, DB: s.db, TaskLimiter: s.limiter,
 	}, nil
 }
 

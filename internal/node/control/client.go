@@ -22,13 +22,15 @@ type Client struct {
 	Address               string
 	PublicDownloadBaseURL string
 	Storage               string
+	TargetBandwidthBPS    int64
 	TLSConfig             *tls.Config
 	HeartbeatInterval     time.Duration
 	Logger                *logging.Logger
 	Executor              interface {
 		Execute(context.Context, protocol.SyncTask) protocol.SyncTaskResult
 	}
-	DB *sql.DB
+	DB          *sql.DB
+	TaskLimiter *TaskLimiter
 }
 
 func (c Client) RunOnce() (time.Duration, error) {
@@ -81,7 +83,10 @@ func (c Client) RunOnce() (time.Duration, error) {
 	if err := c.heartbeat(conn, reqID, 2); err != nil {
 		return interval, err
 	}
-	nextSeq, err := c.sendPendingTraffic(conn, reqID, 3)
+	if err := c.sendPressureReport(conn, reqID, 3); err != nil {
+		return interval, err
+	}
+	nextSeq, err := c.sendPendingTraffic(conn, reqID, 4)
 	if err != nil {
 		return interval, err
 	}
@@ -117,10 +122,15 @@ func (c Client) hello(conn net.Conn, reqID string) error {
 }
 
 func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
+	active := c.activeDownloads()
 	body, _ := json.Marshal(protocol.Heartbeat{
-		Status: "syncing", ActiveDownloads: 0, FreeBytes: 0,
+		Status: "syncing", ActiveDownloads: active, FreeBytes: 0,
 		PublicDownloadBaseURL: c.PublicDownloadBaseURL,
-		Pressure:              protocol.PressureSample{},
+		Pressure: protocol.PressureSample{
+			TargetBandwidthBPS: c.TargetBandwidthBPS,
+			ActualBandwidthBPS: 0,
+			Ratio:              pressureRatio(0, c.TargetBandwidthBPS),
+		},
 	})
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点发送心跳",

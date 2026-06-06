@@ -46,7 +46,8 @@ func (e Executor) fetchWithToken(ctx context.Context, url, tmpPath, token string
 	}
 	defer file.Close()
 	hash := sha256.New()
-	size, err := io.Copy(io.MultiWriter(file, hash), resp.Body)
+	body := e.rateLimitedBody(resp.Body)
+	size, err := io.Copy(io.MultiWriter(file, hash), body)
 	if err != nil {
 		return "", size, err
 	}

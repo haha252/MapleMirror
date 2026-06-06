@@ -14,12 +14,13 @@ import (
 )
 
 type Executor struct {
-	DB      *sql.DB
-	Storage string
-	TempDir string
-	Client  *http.Client
-	Logger  *logging.Logger
-	Probe   *SourceProbe
+	DB                *sql.DB
+	Storage           string
+	TempDir           string
+	Client            *http.Client
+	Logger            *logging.Logger
+	Probe             *SourceProbe
+	BandwidthLimitBPS int64
 }
 
 func (e Executor) Execute(ctx context.Context, task protocol.SyncTask) protocol.SyncTaskResult {

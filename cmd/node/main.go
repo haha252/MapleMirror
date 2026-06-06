@@ -185,7 +185,9 @@ func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
 	supervisor := controlSupervisor{
 		cfg: cfg, db: db, logger: logger, address: address.Host,
 		executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
-			TempDir: cfg.Storage.TempDirectory, Logger: logger, Probe: syncer.NewSourceProbe(nil)},
+			TempDir: cfg.Storage.TempDirectory, Logger: logger,
+			Probe: syncer.NewSourceProbe(nil), BandwidthLimitBPS: cfg.Sync.BandwidthLimitBPS},
+		limiter: nodecontrol.NewTaskLimiter(cfg.Sync.MaxWorkers),
 	}
 	go supervisor.run()
 	logger.Info(context.Background(), "节点主动控制连接已启动", slog.String("master", address.Host))
