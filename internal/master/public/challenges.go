@@ -5,10 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 )
+
+const publicJSONBodyLimit = 16 * 1024
 
 type altchaPayload struct {
 	Challenge string `json:"challenge"`
@@ -152,7 +155,14 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, out any) bool {
 		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
 		return false
 	}
-	if err := json.NewDecoder(r.Body).Decode(out); err != nil {
+	body := http.MaxBytesReader(w, r.Body, publicJSONBodyLimit)
+	defer body.Close()
+	if err := json.NewDecoder(body).Decode(out); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, r, http.StatusRequestEntityTooLarge, "INVALID_REQUEST", "请求内容过大")
+			return false
+		}
 		writeError(w, r, http.StatusBadRequest, "INVALID_REQUEST", "请求内容不合法")
 		return false
 	}
