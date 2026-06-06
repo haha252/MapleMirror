@@ -34,6 +34,51 @@ func TestDownloadKeepsTempFilesOutsideAssetTreeWhenConfiguredInside(t *testing.T
 	}
 }
 
+func TestCleanTempDirectoryRemovesOnlyChildren(t *testing.T) {
+	dir := t.TempDir()
+	tempDir := filepath.Join(dir, "tmp")
+	if err := os.MkdirAll(filepath.Join(tempDir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "nested", "stale.tmp"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "stale.tmp"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cleanedDir, removed, err := CleanTempDirectory(filepath.Join(dir, "assets"), tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleanedDir != tempDir {
+		t.Fatalf("expected cleaned temp dir %q, got %q", tempDir, cleanedDir)
+	}
+	if removed != 2 {
+		t.Fatalf("expected 2 removed entries, got %d", removed)
+	}
+	entries, err := os.ReadDir(tempDir)
+	if err != nil {
+		t.Fatalf("temp dir should remain readable: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("temp dir should be empty, got %d entries", len(entries))
+	}
+}
+
+func TestCleanTempDirectoryRejectsEmptyPath(t *testing.T) {
+	if _, _, err := CleanTempDirectory(t.TempDir(), ""); err == nil {
+		t.Fatal("expected empty temp dir to be rejected")
+	}
+}
+
+func TestCleanTempDirectoryRejectsStorageParent(t *testing.T) {
+	dir := t.TempDir()
+	storageDir := filepath.Join(dir, "assets")
+	if _, _, err := CleanTempDirectory(storageDir, dir); err == nil {
+		t.Fatal("expected storage parent temp dir to be rejected")
+	}
+}
+
 func TestDownloadReplacesStaleIncompleteTargetAfterValidation(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
 	finalPath := filepath.Join(storageDir, "p1", "v1", "a.zip")

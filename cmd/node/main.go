@@ -67,6 +67,16 @@ func main() {
 	}
 	defer database.Close()
 	logger.Info(context.Background(), "下载节点本地状态库迁移已完成")
+	if tempDir, removed, err := syncer.CleanTempDirectory(cfg.Storage.Directory, cfg.Storage.TempDirectory); err != nil {
+		logger.Error(context.Background(), "下载节点临时目录启动清理失败",
+			slog.String("error", err.Error()),
+			slog.String("temp_directory", tempDir))
+		os.Exit(1)
+	} else {
+		logger.Info(context.Background(), "下载节点临时目录启动清理已完成",
+			slog.Int("removed_entries", removed),
+			slog.String("temp_directory", tempDir))
+	}
 	if err := interactiveEnrollIfNeeded(*path, &cfg, database); err != nil {
 		logger.Error(context.Background(), "下载节点首次交互登记失败", slog.String("error", err.Error()))
 		os.Exit(1)
