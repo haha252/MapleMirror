@@ -17,9 +17,28 @@ func TestPrefixIgnoresForwardedHeaderFromUntrustedRemote(t *testing.T) {
 func TestPrefixUsesForwardedHeaderFromTrustedRemote(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("X-Forwarded-For", "192.0.2.55, 198.51.100.10")
+	req.Header.Set("X-Forwarded-For", "192.0.2.55")
 	if got := Prefix(req, []string{"127.0.0.0/8"}); got != "192.0.2.55/32" {
-		t.Fatalf("可信代理头应解析第一个客户端地址：%s", got)
+		t.Fatalf("可信代理头应解析客户端地址：%s", got)
+	}
+}
+
+func TestPrefixRejectsSpoofedForwardedClientBeforeUntrustedHop(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.200, 198.51.100.10")
+	if got := Prefix(req, []string{"127.0.0.0/8"}); got != "198.51.100.10/32" {
+		t.Fatalf("可信代理追加链不得采信可伪造的左侧地址：%s", got)
+	}
+}
+
+func TestPrefixSkipsTrustedForwardedProxyFromRight(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "192.0.2.55, 198.51.100.10")
+	trusted := []string{"127.0.0.0/8", "198.51.100.0/24"}
+	if got := Prefix(req, trusted); got != "192.0.2.55/32" {
+		t.Fatalf("多级可信代理链应解析第一个非可信地址：%s", got)
 	}
 }
 
@@ -35,7 +54,7 @@ func TestPrefixDoesNotSkipInvalidForwardedClient(t *testing.T) {
 func TestPrefixUsesFirstNonEmptyForwardedClient(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("X-Forwarded-For", " , 192.0.2.55, 198.51.100.10")
+	req.Header.Set("X-Forwarded-For", " , 192.0.2.55")
 	if got := Prefix(req, []string{"127.0.0.0/8"}); got != "192.0.2.55/32" {
 		t.Fatalf("可信代理头应解析第一个非空客户端地址：%s", got)
 	}
