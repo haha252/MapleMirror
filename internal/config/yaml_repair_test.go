@@ -104,6 +104,20 @@ master:
 	}
 }
 
+func TestRepairDoesNotOverwriteInvalidConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	original := []byte("server:\n  public_listen: invalid\n")
+	writeTestFile(t, path, original)
+
+	if _, err := LoadMaster(path, nil); err == nil {
+		t.Fatal("无效配置应校验失败")
+	}
+	if got := []byte(readTestFile(t, path)); string(got) != string(original) {
+		t.Fatalf("校验失败前不应写回 repair 结果：\n%s", got)
+	}
+}
+
 func TestExistingYAMLFieldsAreRepairedWithMissingComments(t *testing.T) {
 	dir := t.TempDir()
 	quotaPath := filepath.Join(dir, "quota.yaml")

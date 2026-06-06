@@ -120,7 +120,7 @@ func decodeAssetRule(node *yaml.Node) (AssetRule, error) {
 func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 	var c Projects
 	legacyArchitectureDefault := false
-	_, err := readYAMLWithRepair(path, &c, ProjectsExample, ProjectsRepairExample,
+	data, repaired, err := readYAMLWithRepair(path, &c, ProjectsExample, ProjectsRepairExample,
 		func(doc *yaml.Node) bool {
 			changed, found := migrateProjectsArchitectureDefault(doc)
 			legacyArchitectureDefault = legacyArchitectureDefault || found
@@ -155,7 +155,7 @@ func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 		}
 		known[p.ID] = true
 	}
-	return c, nil
+	return c, writeRepairedYAML(path, data, repaired)
 }
 
 func validateProject(p Project, known map[string]bool) error {

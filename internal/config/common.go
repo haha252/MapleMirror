@@ -27,32 +27,33 @@ type Logging struct {
 const deprecatedWarningPrefix = "deprecated:"
 
 func readYAML(path string, target any, example []byte) ([]byte, error) {
-	return readYAMLWithRepair(path, target, example, example)
+	data, _, err := readYAMLWithRepair(path, target, example, example)
+	return data, err
 }
 
 func readYAMLWithRepair(path string, target any, example, repairExample []byte,
-	migrations ...yamlMigration) ([]byte, error) {
+	migrations ...yamlMigration) ([]byte, bool, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return nil, fmt.Errorf("创建配置目录失败：%w", err)
+			return nil, false, fmt.Errorf("创建配置目录失败：%w", err)
 		}
 		if err := os.WriteFile(path, example, 0o600); err != nil {
-			return nil, fmt.Errorf("生成示例配置失败：%w", err)
+			return nil, false, fmt.Errorf("生成示例配置失败：%w", err)
 		}
-		return nil, ErrExampleCreated
+		return nil, false, ErrExampleCreated
 	}
 	if err != nil {
-		return nil, fmt.Errorf("读取配置失败：%w", err)
+		return nil, false, fmt.Errorf("读取配置失败：%w", err)
 	}
-	data, err = repairYAML(path, data, repairExample, migrations...)
+	data, repaired, err := repairYAML(data, repairExample, migrations...)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := yaml.Unmarshal(data, target); err != nil {
-		return nil, fmt.Errorf("解析 YAML 配置失败：%w", err)
+		return nil, false, fmt.Errorf("解析 YAML 配置失败：%w", err)
 	}
-	return data, nil
+	return data, repaired, nil
 }
 
 func updateYAMLScalars(path string, values map[string]string) error {
@@ -71,14 +72,7 @@ func updateYAMLScalars(path string, values map[string]string) error {
 	if err != nil {
 		return fmt.Errorf("编码 YAML 配置失败：%w", err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, encoded, 0o600); err != nil {
-		return fmt.Errorf("写入配置临时文件失败：%w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		return fmt.Errorf("替换配置文件失败：%w", err)
-	}
-	return nil
+	return replaceConfigFile(path, encoded)
 }
 
 func setYAMLScalar(node *yaml.Node, path []string, value string) {

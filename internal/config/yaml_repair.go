@@ -2,24 +2,23 @@ package config
 
 import (
 	"fmt"
-	"os"
 
 	"gopkg.in/yaml.v3"
 )
 
 type yamlMigration func(*yaml.Node) bool
 
-func repairYAML(path string, data, example []byte, migrations ...yamlMigration) ([]byte, error) {
+func repairYAML(data, example []byte, migrations ...yamlMigration) ([]byte, bool, error) {
 	if len(example) == 0 {
-		return data, nil
+		return data, false, nil
 	}
 	var current yaml.Node
 	if err := yaml.Unmarshal(data, &current); err != nil {
-		return nil, fmt.Errorf("解析 YAML 配置失败：%w", err)
+		return nil, false, fmt.Errorf("解析 YAML 配置失败：%w", err)
 	}
 	var template yaml.Node
 	if err := yaml.Unmarshal(example, &template); err != nil {
-		return nil, fmt.Errorf("解析内置配置模板失败：%w", err)
+		return nil, false, fmt.Errorf("解析内置配置模板失败：%w", err)
 	}
 	changed := false
 	for _, migration := range migrations {
@@ -31,16 +30,13 @@ func repairYAML(path string, data, example []byte, migrations ...yamlMigration) 
 		changed = true
 	}
 	if !changed {
-		return data, nil
+		return data, false, nil
 	}
 	encoded, err := yaml.Marshal(&current)
 	if err != nil {
-		return nil, fmt.Errorf("编码 YAML 配置失败：%w", err)
+		return nil, false, fmt.Errorf("编码 YAML 配置失败：%w", err)
 	}
-	if err := os.WriteFile(path, encoded, 0o600); err != nil {
-		return nil, fmt.Errorf("补齐配置文件失败：%w", err)
-	}
-	return encoded, nil
+	return encoded, true, nil
 }
 
 func mergeMissingYAML(current, template *yaml.Node) bool {

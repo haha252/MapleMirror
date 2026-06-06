@@ -60,7 +60,7 @@ type Pairing struct {
 func LoadNode(path string, warn WarnFunc) (Node, error) {
 	var c Node
 	legacyIDFile := false
-	_, err := readYAMLWithRepair(path, &c, NodeExample, NodeExample, func(doc *yaml.Node) bool {
+	data, repaired, err := readYAMLWithRepair(path, &c, NodeExample, NodeExample, func(doc *yaml.Node) bool {
 		changed, found := migrateNodeIDFile(doc)
 		legacyIDFile = legacyIDFile || found
 		return changed
@@ -75,7 +75,7 @@ func LoadNode(path string, warn WarnFunc) (Node, error) {
 	if err := validateNode(&c); err != nil {
 		return c, err
 	}
-	return c, nil
+	return c, writeRepairedYAML(path, data, repaired)
 }
 
 func SaveNodeFirstRun(path string, c Node) error {

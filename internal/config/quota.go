@@ -54,7 +54,7 @@ type DailyTraffic struct {
 func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 	var c Quota
 	legacyBlacklist := false
-	_, err := readYAMLWithRepair(path, &c, QuotaExample, QuotaRepairExample,
+	data, repaired, err := readYAMLWithRepair(path, &c, QuotaExample, QuotaRepairExample,
 		func(doc *yaml.Node) bool {
 			changed, found := migrateQuotaBlacklist(doc)
 			legacyBlacklist = legacyBlacklist || found
@@ -87,7 +87,10 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 		warnDefault(warn, "range_concurrency_limit", "32")
 	}
 	setString(&c.Blocklist.AutoBanDuration, "168h", "blocklist.auto_ban_duration", warn)
-	return c, validateQuota(c)
+	if err := validateQuota(c); err != nil {
+		return c, err
+	}
+	return c, writeRepairedYAML(path, data, repaired)
 }
 
 func defaultBucket(bucket *Bucket, capacity int, field string, warn WarnFunc) {
