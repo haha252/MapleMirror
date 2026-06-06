@@ -26,10 +26,6 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与资产不匹配")
 		return
 	}
-	if loaded.ClientPrefixKey != s.clientPrefix(r) {
-		writeError(w, r, http.StatusForbidden, "CLIENT_PREFIX_MISMATCH", "客户端网络前缀不匹配")
-		return
-	}
 	if !s.validSolution(loaded, normalizeSolution(in.Solution)) {
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战校验失败")
 		return
@@ -140,10 +136,6 @@ func (s Server) authorization(w http.ResponseWriter, r *http.Request) {
 	if claims.AssetID != auth.AssetID || claims.NodeID != auth.NodeID ||
 		claims.ClientPrefix != auth.ClientPrefixKey {
 		writeError(w, r, http.StatusUnauthorized, "DOWNLOAD_TOKEN_INVALID", "下载令牌无效")
-		return
-	}
-	if claims.ClientPrefix != s.clientPrefix(r) {
-		writeError(w, r, http.StatusForbidden, "CLIENT_PREFIX_MISMATCH", "客户端网络前缀不匹配")
 		return
 	}
 	sent, first, _ := s.Store.AuthorizationBytes(r.Context(), id)

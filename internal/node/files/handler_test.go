@@ -165,7 +165,7 @@ func TestHandlerRejectsCrossAssetToken(t *testing.T) {
 	}
 }
 
-func TestHandlerIgnoresForwardedHeaderFromUntrustedRemote(t *testing.T) {
+func TestHandlerAllowsDifferentClientPrefix(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
 		AuthorizationID: "auth-1", AssetID: "asset-1", NodeID: "node-1",
@@ -179,8 +179,8 @@ func TestHandlerIgnoresForwardedHeaderFromUntrustedRemote(t *testing.T) {
 	rec := httptest.NewRecorder()
 	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer,
 		TrustedCIDRs: []string{"127.0.0.0/8"}}).ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("不可信代理头不应通过客户端前缀校验：%d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("下载节点不应要求请求来源前缀与令牌一致：%d", rec.Code)
 	}
 }
 

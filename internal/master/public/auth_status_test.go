@@ -26,18 +26,15 @@ func TestAuthorizationStatusRequiresBearerToken(t *testing.T) {
 	}
 }
 
-func TestAuthorizationStatusRejectsDifferentClientPrefix(t *testing.T) {
+func TestAuthorizationStatusAllowsDifferentClientPrefix(t *testing.T) {
 	server, authID, token := prepareAuthorizationStatus(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/public/v1/authorizations/"+authID, nil)
 	req.RemoteAddr = "198.51.100.9:12345"
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.authorization(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), `"code":"CLIENT_PREFIX_MISMATCH"`) {
-		t.Fatalf("expected prefix error, body=%s", rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -70,10 +70,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusUnauthorized, "下载令牌无效")
 		return
 	}
-	if claims.ClientPrefix != h.clientPrefix(r) {
-		httpError(w, r, http.StatusForbidden, "客户端网络前缀不匹配")
-		return
-	}
 	if h.Logger != nil {
 		h.Logger.Info(r.Context(), "下载节点收到下载请求",
 			slog.String("request_id", requestid.FromContext(r.Context())),
