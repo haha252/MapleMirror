@@ -14,7 +14,9 @@ import (
 func TestBlocklistRejectsChallengeAndCountsAttempts(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
-	policy := newBlocklistPolicy(config.Quota{Blacklist: []string{"192.0.2.0/24"}}, nil)
+	policy := newBlocklistPolicy(config.Quota{
+		Blocklist: config.Blocklist{Static: []string{"192.0.2.0/24"}},
+	}, nil)
 	server := Server{Store: Store{DB: db}, Blocklist: policy}
 
 	for i := 0; i < 2; i++ {
@@ -38,7 +40,7 @@ func TestBlocklistRejectsChallengeAndCountsAttempts(t *testing.T) {
 
 func TestBlocklistExemptionOverridesStaticBlock(t *testing.T) {
 	policy := newBlocklistPolicy(config.Quota{
-		Blacklist:  []string{"192.0.2.0/24"},
+		Blocklist:  config.Blocklist{Static: []string{"192.0.2.0/24"}},
 		Exemptions: []string{"192.0.2.9"},
 	}, nil)
 	if decision := policy.check("192.0.2.9/32"); decision.Blocked {

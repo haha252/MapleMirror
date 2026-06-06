@@ -1,88 +1,133 @@
 # 镜像服务主节点配置示例
 # 本文件使用 UTF-8 编码。密码、会话密钥和签名密钥不得直接填写在本文件中。
+# 主节点监听入口配置。
 server:
-  # 公共基础监听地址；M1 仅提供健康检查。
+  # 公共页面和公开 API 监听地址。
   public_listen: ":8080"
   # 管理面板默认只监听本机；需要远程管理时可改为明确的管理网络地址。
   management_listen: "127.0.0.1:9080"
-  # 节点控制通道监听地址；M2 启用 mTLS 后使用。
+  # 下载节点 mTLS 控制通道监听地址。
   control_listen: ":9443"
   # 首次领证登记入口，独立于正式 mTLS 控制通道。
   enrollment_listen: ":9444"
 
+# 主节点 SQLite 数据库配置。
 database:
+  # 主节点数据库文件路径；目录不存在时会自动创建。
   path: "data/master.db"
+  # SQLite 写锁等待时间；并发写入繁忙时最多等待该时长。
   busy_timeout: "5s"
+  # 是否启用 SQLite WAL 日志模式；推荐保持 true 以减少读写互相阻塞。
   wal: true
 
+# 主节点日志配置。
 logging:
+  # 控制台日志等级，可选 debug、info、warn、error。
   console_level: "info"
+  # 文件日志等级，可选 debug、info、warn、error。
   file_level: "info"
+  # 日志文件目录；主节点按日期写入 master-YYYY-MM-DD.log。
   directory: "logs/master"
+  # 日志保留天数；早于该天数的主节点日志会在轮转时清理。
   retention_days: 30
 
+# 请求 ID 透传配置。
 request_id:
+  # 每个响应写入的新请求 ID 响应头名称。
   response_header: "X-Request-ID"
+  # 读取上游父请求 ID 的请求头名称；非法或过长的值会被忽略。
   parent_header: "X-Request-ID"
 
+# 反向代理信任配置。
 proxy:
-  # 仅直连来源位于以下网段时，后续阶段才信任代理转发头。
+  # 仅直连来源位于以下网段时才信任代理转发头。
   trusted_cidrs: []
 
+# 统计时区配置。
 stats:
+  # 日统计、每日流量限额和日志轮转使用的 IANA 时区名称。
   timezone: "Asia/Shanghai"
 
+# GitHub Release 扫描配置。
 scan:
+  # 单个启用项目的自动扫描间隔；项目配置变化后会尽快扫描。
   interval: "15m"
   # 仅填写环境变量名称，不得填写 GitHub 凭据内容。
   github_token_env: "MIRROR_GITHUB_TOKEN"
 
+# 网页下载验证挑战配置。
 altcha:
-  # 网页验证使用自研 SHA-256 前导零挑战；difficulty 表示前导零位难度。
+  # 网页验证使用 SHA-256 前导零挑战；值越大客户端计算越慢。
   difficulty: 22
+  # 网页挑战从创建到过期的有效时间。
   challenge_ttl: "2m"
 
+# 公开 API PoW 挑战配置。
 api_pow:
-  # 公开 API 独立使用 SHA-256 前导零挑战，不与网页挑战参数混用。
+  # 公开 API PoW 算法；当前实现只支持 sha256。
   algorithm: "sha256"
+  # 公开 API SHA-256 前导零位难度，不与网页挑战参数混用。
   leading_zero_bits: 23
+  # 公开 API 挑战从创建到过期的有效时间。
   challenge_ttl: "2m"
 
+# 下载令牌签发与验证密钥配置。
 download_token:
+  # 主节点签发的下载令牌有效时间。
   ttl: "15m"
   # 主节点保存 Ed25519 私钥用于签发下载令牌，私钥不得分发给下载节点。
   signing_private_key_file: "secrets/download-token-ed25519.key"
   # 下载节点只需要同一对密钥的公钥来验证令牌。
   verify_public_key_file: "secrets/download-token-ed25519.pub"
 
+# 下载节点控制面配置。
 node:
+  # 主节点判定下载节点离线的心跳超时时间。
   heartbeat_timeout: "30s"
+  # 主节点下发给下载节点的建议心跳间隔，必须小于 heartbeat_timeout。
   heartbeat_interval: "10s"
+  # 下载节点首次登记请求的有效时间。
   enrollment_timeout: "10m"
+  # 控制台生成的一次性配对码有效时间。
   pairing_code_ttl: "5m"
+  # 下载节点登记、控制连接和证书签发使用的 TLS 材料。
   tls:
+    # 主节点控制/登记服务端证书对应的 CA 文件，会下发给下载节点信任。
     ca_file: "secrets/master-ca.pem"
+    # 主节点控制/登记入口使用的服务端证书。
     cert_file: "secrets/master-control.crt"
+    # 主节点控制/登记入口服务端私钥，不得分发给下载节点。
     key_file: "secrets/master-control.key"
+    # 控制通道用于校验下载节点客户端证书的 CA 文件。
     client_ca_file: "secrets/node-signing-ca.pem"
+    # 管理面板批准节点登记时使用的节点签发 CA 证书。
     signing_ca_cert_file: "secrets/node-signing-ca.pem"
+    # 管理面板批准节点登记时使用的节点签发 CA 私钥。
     signing_ca_key_file: "secrets/node-signing-ca.key"
 
+# 管理面板配置。
 admin:
+  # 管理面板 Web 登录、会话和防爆破配置。
   web:
-    # 管理面板是唯一管理入口；管理监听不再挂载裸 /api/admin/v1/*。
-    # nginx 已在本机终止 HTTPS 时可设为 false，使后端管理监听改用 HTTP。
+    # 是否由后端管理监听直接启用 HTTPS；前置 nginx 已终止 HTTPS 时可设为 false。
     https_enabled: true
+    # 管理面板用户文件路径；不存在时会自动创建初始用户。
     users_file: "secrets/admin-users.yaml"
-    # users_file 不存在时自动生成初始用户；该环境变量存在时使用 admin 和变量密码，否则生成随机用户名密码并只输出到控制台。
+    # 初始用户密码来源环境变量名；存在且有值时创建 admin 用户，否则生成随机账号密码并只输出到控制台。
     bootstrap_password_env: "MIRROR_ADMIN_WEB_PASSWORD"
+    # 管理面板会话签名密钥文件；不存在时自动生成随机密钥。
     session_secret_file: "secrets/admin-web-session.key"
+    # 管理面板登录会话有效时间。
     session_ttl: "12h"
-    # 同一来源 1 天内密码错误 3 次，封禁 7 天。
+    # 统计同一来源登录失败次数的时间窗口。
     login_failure_window: "24h"
+    # 同一来源在窗口内允许的最大密码错误次数，达到后写入登录封禁。
     login_failure_limit: 3
+    # 管理面板登录封禁持续时间。
     login_ban_duration: "168h"
+  # 管理面板 HTTPS 服务端证书配置。
   tls:
-    # 管理面板 HTTPS 服务端证书；https_enabled=false 时由前置 nginx 负责公网 HTTPS。
+    # 管理面板 HTTPS 服务端证书；https_enabled=false 时不会被后端加载。
     cert_file: "secrets/admin-web.crt"
+    # 管理面板 HTTPS 服务端私钥；https_enabled=false 时不会被后端加载。
     key_file: "secrets/admin-web.key"

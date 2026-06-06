@@ -75,6 +75,11 @@ func (l *Logger) log(ctx context.Context, level slog.Level, message string, attr
 }
 
 func (l *Logger) ConfigWarning(field, value string) {
+	if replacement, ok := config.DeprecatedWarningMessage(value); ok {
+		l.Warn(context.Background(), "配置字段已废弃，请迁移到新字段",
+			slog.String("field", field), slog.String("replacement", replacement))
+		return
+	}
 	l.Warn(context.Background(), "配置字段缺失，已使用默认值",
 		slog.String("field", field), slog.String("value", value))
 }

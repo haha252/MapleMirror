@@ -159,7 +159,6 @@ func projectHash(project config.Project) string {
 		assetRulesHash(project.AssetExclude),
 		project.ArchitectureRegex,
 		fmt.Sprint(project.ArchitectureMatchEnabled),
-		fmt.Sprint(project.ArchitectureDefaultEnabled),
 		fmt.Sprint(project.SystemMatchEnabled),
 		project.SystemRegex,
 	}, "|")))

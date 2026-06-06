@@ -1,4 +1,4 @@
-# 主节点额度配置示例
+# 主节点额度配置补齐模板
 # 请求额度按地址和网段同时检查；每日流量一律按节点真实发送字节统计。
 # 请求次数额度桶配置；一次授权按项目 download_multiplier 扣减请求额度。
 request_buckets:
@@ -50,12 +50,15 @@ blocklist:
   static: []
   # 本站因请求令牌或每日流量额度耗尽写入的自动封禁时长，默认 7 天。
   auto_ban_duration: "168h"
-  # 远程订阅源为空列表时不拉取外部黑名单。
-  feeds: []
-  # feeds 示例；url 必须为 http/https，refresh_interval 和 timeout 为空时分别默认 1h 和 10s：
-  # - url: "https://bcr.pbh-btn.ghorg.ghostchu-services.top/combine/all.txt"
-  #   refresh_interval: "1h"
-  #   timeout: "10s"
+  # 远程订阅源列表；每条订阅源必须配置 url。
+  feeds:
+    -
+      # 远程黑名单订阅源地址，必须为 http 或 https URL。
+      url: ""
+      # 订阅源刷新间隔；为空时运行时默认 1h。
+      refresh_interval: "1h"
+      # 单次拉取订阅源的超时时间；为空时运行时默认 10s。
+      timeout: "10s"
 
 # 白名单 IP 或 CIDR 列表；命中后跳过请求额度、流量限额和黑名单。
 exemptions:

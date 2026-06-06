@@ -1,0 +1,48 @@
+# 主节点项目清单补齐模板
+# 仅支持公开 GitHub 仓库，扫描时会校验可访问性及资产摘要。
+# 项目列表；每个项目对应一个公开 GitHub owner/repository 仓库。
+projects:
+  # 单个项目补齐模板；空值不会替代已有项目身份。
+  -
+    # 项目唯一 ID；用于 URL、数据库主键和公开路径，不得重复。
+    id: ""
+    # 下载页和管理面板展示的项目中文名称。
+    name: ""
+    # GitHub 仓库，必须使用 owner/repository 格式，不允许 URL。
+    repository: ""
+    # 项目图标相对当前 projects.yaml 所在目录；留空表示使用内置占位图标。
+    icon_path: ""
+    # 是否启用该项目；禁用后不会参与扫描和公共展示。
+    enabled: false
+    # 每个下载节点应保留的版本数量，默认值为 3。
+    retain_versions: 3
+    # 是否允许 GitHub prerelease 版本进入候选版本。
+    include_prerelease: false
+    # 倍率仅扣减请求额度，不放大实际流量统计或每日流量限额。
+    download_multiplier: 1
+    # 资产入选规则；空列表保持默认允许所有资产。
+    asset_include:
+      -
+        # pattern 匹配资产文件名；type=regex 时使用 Go 正则。
+        pattern: ""
+        # type 可选 glob 或 regex；旧字符串写法按 glob 处理。
+        type: glob
+        # required=false 表示可选入选规则；required=true 表示必须命中。
+        required: false
+    # 排除规则优先于包含规则；空列表表示不额外排除。
+    asset_exclude:
+      -
+        # pattern 匹配需要排除的资产文件名。
+        pattern: ""
+        # type 可选 glob 或 regex；regex 支持 (?i) 大小写不敏感。
+        type: glob
+        # required=false 命中即排除；required=true 参与组合排除。
+        required: false
+    # 默认不区分架构；启用后 architecture_regex 从已入选资产文件名提取展示架构。
+    architecture_match_enabled: false
+    # 架构提取正则；仅在 architecture_match_enabled=true 时编译和使用。
+    architecture_regex: "(?i)(amd64|arm64|x86_64)"
+    # 默认不区分系统；启用后 system_regex 从文件名提取系统并规范化为 win/linux/darwin。
+    system_match_enabled: false
+    # 系统提取正则；仅在 system_match_enabled=true 时编译和使用。
+    system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"

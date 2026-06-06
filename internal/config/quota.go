@@ -6,6 +6,8 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Quota struct {
@@ -51,8 +53,22 @@ type DailyTraffic struct {
 
 func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 	var c Quota
-	if err := readYAML(path, &c, QuotaExample); err != nil {
+	legacyBlacklist := false
+	_, err := readYAMLWithRepair(path, &c, QuotaExample, QuotaRepairExample,
+		func(doc *yaml.Node) bool {
+			changed, found := migrateQuotaBlacklist(doc)
+			legacyBlacklist = legacyBlacklist || found
+			return changed
+		})
+	if err != nil {
 		return c, err
+	}
+	if legacyBlacklist {
+		warnDeprecated(warn, "quota.blacklist", "quota.blocklist.static")
+	}
+	if len(c.Blacklist) > 0 {
+		c.Blocklist.Static = append(c.Blacklist, c.Blocklist.Static...)
+		c.Blacklist = nil
 	}
 	defaultBucket(&c.RequestBuckets.IPv432, 120, "request_buckets.ipv4_32", warn)
 	defaultBucket(&c.RequestBuckets.IPv424, 600, "request_buckets.ipv4_24", warn)

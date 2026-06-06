@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-func TestDownloadPageIncludesArchitectureDefaultFlag(t *testing.T) {
+func TestDownloadPageOmitsArchitectureDefaultFlag(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	srv := Server{Store: Store{DB: db}, ProjectAssets: map[string]projectAssetConfig{
-		"p1": {ArchitectureDefaultEnabled: true},
+		"p1": {ArchitectureMatchEnabled: true},
 	}}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -19,7 +19,7 @@ func TestDownloadPageIncludesArchitectureDefaultFlag(t *testing.T) {
 	srv.downloadPage(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `"architecture_default_enabled":true`) {
-		t.Fatalf("expected architecture default flag in payload: %s", body)
+	if strings.Contains(body, "architecture_default_enabled") {
+		t.Fatalf("download payload must not expose deprecated architecture default field: %s", body)
 	}
 }

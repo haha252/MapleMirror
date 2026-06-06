@@ -1,53 +1,82 @@
 # 镜像服务下载节点配置示例
-# 本文件使用 UTF-8 编码。M1 仅提供配置校验和基础健康服务。
+# 本文件使用 UTF-8 编码。凭据、证书和私钥不得直接填写在本文件中。
+# 下载节点本地身份展示配置。
 node:
+  # 下载节点公开展示名称；首次交互登记会写回该字段。
   name: "示例下载节点"
+  # 节点 ID 文件路径；当前实现不读取该文件，节点身份以本地状态库和证书材料为准。
   id_file: "data/node-id"
 
+# 下载节点 HTTP 文件服务配置。
 server:
+  # 下载节点 HTTP 文件服务和健康检查监听地址。
   listen: ":8081"
   # 浏览器最终下载文件时访问的公网基地址，主节点会基于它返回完整下载链接。
   public_download_base_url: "https://node1.example.com"
 
+# 主节点连接地址配置。
 master:
-  # 下载节点主动连接主节点控制面，M2 开始使用 mTLS。
+  # 下载节点主动连接主节点 mTLS 控制面。
   control_address: "https://127.0.0.1:9443"
+  # 下载节点首次登记和重新登记时访问的主节点 HTTPS 登记入口。
   enrollment_address: "https://127.0.0.1:9444"
 
+# 下载节点本地存储配置。
 storage:
+  # 已校验资产的本地保存目录。
   directory: "data/assets"
+  # 同步下载临时目录；启动时会清理未完成的临时文件。
   temp_directory: "data/tmp"
   # 节点状态库将持久化未被主节点确认的流量事件。
   state_db: "data/node-state.db"
 
+# 下载节点带宽目标配置。
 bandwidth:
+  # 目标出口带宽；当前 loader 仅校验非空，节点压力上报暂未从该字段换算目标带宽。
   target: "100 MiB/s"
 
+# 下载节点同步执行配置。
 sync:
+  # 同步任务并发上限；当前 loader 仅校验大于零，执行器暂未按该值限制并发。
   max_workers: 2
+  # 同步下载限速；当前执行器暂未按该值限速，"0" 表示不设置限速。
   bandwidth_limit: "0"
 
+# 下载令牌验证配置。
 download_token:
   # 下载节点只保存主节点下载令牌 Ed25519 公钥，不保存签发私钥。
   verify_public_key_file: "data/download-token-ed25519.pub"
 
+# 反向代理信任配置。
 proxy:
   # 下载节点若位于反向代理后，仅信任这些直连代理 CIDR 提供的转发头。
   trusted_cidrs: []
 
+# 下载节点日志配置。
 logging:
+  # 控制台日志等级，可选 debug、info、warn、error。
   console_level: "info"
+  # 文件日志等级，可选 debug、info、warn、error。
   file_level: "info"
+  # 日志文件目录；下载节点按日期写入 node-YYYY-MM-DD.log。
   directory: "logs/node"
+  # 日志保留天数；早于该天数的下载节点日志会在轮转时清理。
   retention_days: 30
 
+# 首次登记和重新登记配置。
 pairing:
+  # 登记过程中保存临时凭据的文件路径；重新登记时可能被清理。
   credential_file: "data/node-credential.json"
+  # 一次性配对码文件路径；交互式首次启动或重新登记会写入该文件。
   code_file: "data/pairing-code"
 
+# 下载节点 TLS 身份材料配置。
 tls:
-  # 配对后写入证书文件；私钥不得记录到日志。
+  # 主节点 CA 文件；用于校验登记入口和控制入口服务端证书。
   ca_file: "data/master-ca.pem"
+  # 下载节点客户端证书；登记审批通过后写入。
   cert_file: "data/node.crt"
+  # 下载节点客户端私钥；登记审批通过后写入，私钥不得记录到日志。
   key_file: "data/node.key"
+  # 校验主节点 TLS 证书时使用的服务端名称。
   server_name: "127.0.0.1"

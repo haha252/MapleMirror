@@ -10,18 +10,17 @@ import (
 )
 
 type downloadProjectView struct {
-	ProjectID                  string            `json:"project_id"`
-	DisplayName                string            `json:"display_name"`
-	Repository                 string            `json:"repository"`
-	Available                  bool              `json:"available"`
-	UnavailableReason          string            `json:"unavailable_reason"`
-	IconURL                    string            `json:"icon_url"`
-	ArchitectureMatchEnabled   bool              `json:"architecture_match_enabled"`
-	ArchitectureDefaultEnabled bool              `json:"architecture_default_enabled"`
-	SystemMatchEnabled         bool              `json:"system_match_enabled"`
-	LatestPublishedAt          string            `json:"latest_published_at"`
-	DefaultVersion             string            `json:"default_version"`
-	Assets                     []downloadAssetUI `json:"assets"`
+	ProjectID                string            `json:"project_id"`
+	DisplayName              string            `json:"display_name"`
+	Repository               string            `json:"repository"`
+	Available                bool              `json:"available"`
+	UnavailableReason        string            `json:"unavailable_reason"`
+	IconURL                  string            `json:"icon_url"`
+	ArchitectureMatchEnabled bool              `json:"architecture_match_enabled"`
+	SystemMatchEnabled       bool              `json:"system_match_enabled"`
+	LatestPublishedAt        string            `json:"latest_published_at"`
+	DefaultVersion           string            `json:"default_version"`
+	Assets                   []downloadAssetUI `json:"assets"`
 }
 
 type downloadAssetUI struct {
@@ -142,17 +141,16 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 
 func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, config projectAssetConfig) downloadProjectView {
 	view := downloadProjectView{
-		ProjectID:                  project.ProjectID,
-		DisplayName:                project.DisplayName,
-		Repository:                 project.Repository,
-		Available:                  project.Available,
-		UnavailableReason:          project.UnavailableReason,
-		IconURL:                    "/static/project-icons/" + project.ProjectID,
-		ArchitectureMatchEnabled:   config.ArchitectureMatchEnabled,
-		ArchitectureDefaultEnabled: config.ArchitectureDefaultEnabled,
-		SystemMatchEnabled:         config.SystemMatchEnabled,
-		LatestPublishedAt:          displayDate(project.LatestPublishedAt),
-		Assets:                     make([]downloadAssetUI, 0, len(assets)),
+		ProjectID:                project.ProjectID,
+		DisplayName:              project.DisplayName,
+		Repository:               project.Repository,
+		Available:                project.Available,
+		UnavailableReason:        project.UnavailableReason,
+		IconURL:                  "/static/project-icons/" + project.ProjectID,
+		ArchitectureMatchEnabled: config.ArchitectureMatchEnabled,
+		SystemMatchEnabled:       config.SystemMatchEnabled,
+		LatestPublishedAt:        displayDate(project.LatestPublishedAt),
+		Assets:                   make([]downloadAssetUI, 0, len(assets)),
 	}
 	if len(assets) > 0 {
 		view.DefaultVersion = assets[0].Version

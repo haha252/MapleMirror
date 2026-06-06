@@ -21,7 +21,6 @@
       AssetExclude: (val(p, "AssetExclude", []) || []).map(rule),
       ArchitectureMatchEnabled: !!val(p, "ArchitectureMatchEnabled", false),
       ArchitectureRegex: val(p, "ArchitectureRegex", ""),
-      ArchitectureDefaultEnabled: !!val(p, "ArchitectureDefaultEnabled", false),
       SystemMatchEnabled: !!val(p, "SystemMatchEnabled", false),
       SystemRegex: val(p, "SystemRegex", "")
     };
@@ -35,8 +34,7 @@
         num("DownloadMultiplier", "下载倍率", p.DownloadMultiplier) + check("Enabled", "启用项目", p.Enabled) +
         check("IncludePrerelease", "包含预发布版本", p.IncludePrerelease)) +
       section("架构识别", check("ArchitectureMatchEnabled", "启用架构匹配", p.ArchitectureMatchEnabled) +
-        input("ArchitectureRegex", "架构提取正则", p.ArchitectureRegex) +
-        check("ArchitectureDefaultEnabled", "未匹配架构时保留默认项", p.ArchitectureDefaultEnabled)) +
+        input("ArchitectureRegex", "架构提取正则", p.ArchitectureRegex)) +
       section("系统识别", check("SystemMatchEnabled", "启用系统匹配", p.SystemMatchEnabled) +
         input("SystemRegex", "系统提取正则", p.SystemRegex)) +
       ruleBlock("AssetInclude", "包含规则", p.AssetInclude) +

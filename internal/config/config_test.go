@@ -25,7 +25,7 @@ func TestLoadMasterExample(t *testing.T) {
 	}
 	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" ||
 		c.Admin.Web.UsersFile == "" {
-		t.Fatal("M2 控制面配置默认值缺失")
+		t.Fatal("控制面配置默认值缺失")
 	}
 }
 
@@ -71,9 +71,8 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 	if err != nil || projects.Projects[0].RetainVersions != 3 || projects.Projects[0].DownloadMultiplier != 1 {
 		t.Fatalf("项目默认合同错误：%v", err)
 	}
-	if projects.Projects[0].ArchitectureMatchEnabled || projects.Projects[0].ArchitectureDefaultEnabled ||
-		projects.Projects[0].SystemMatchEnabled || projects.Projects[0].SystemRegex != "" {
-		t.Fatal("项目默认不应启用架构匹配、架构兜底或系统匹配")
+	if projects.Projects[0].ArchitectureMatchEnabled || projects.Projects[0].SystemMatchEnabled {
+		t.Fatal("项目默认不应启用架构匹配或系统匹配")
 	}
 	quota, err := LoadQuota(quotaPath, nil)
 	if err != nil || quota.RequestBuckets.IPv6128.Capacity != 120 ||
@@ -87,7 +86,6 @@ func TestProjectsAndQuotaDefaults(t *testing.T) {
 
 func TestProjectsValidateSystemRegexWhenEnabled(t *testing.T) {
 	cases := []string{
-		"system_match_enabled: true\n",
 		"system_match_enabled: true\n    system_regex: '('\n",
 	}
 	for _, extra := range cases {

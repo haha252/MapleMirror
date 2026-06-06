@@ -28,7 +28,7 @@ type Project struct {
 	AssetExclude               AssetRules `yaml:"asset_exclude"`
 	ArchitectureMatchEnabled   bool       `yaml:"architecture_match_enabled"`
 	ArchitectureRegex          string     `yaml:"architecture_regex"`
-	ArchitectureDefaultEnabled bool       `yaml:"architecture_default_enabled"`
+	ArchitectureDefaultEnabled bool       `yaml:"-" json:"-"`
 	SystemMatchEnabled         bool       `yaml:"system_match_enabled"`
 	SystemRegex                string     `yaml:"system_regex"`
 	ResolvedIconPath           string     `yaml:"-"`
@@ -41,6 +41,44 @@ type AssetRule struct {
 }
 
 type AssetRules []AssetRule
+
+func (p *Project) UnmarshalYAML(value *yaml.Node) error {
+	type projectYAML struct {
+		ID                         string     `yaml:"id"`
+		Name                       string     `yaml:"name"`
+		Repository                 string     `yaml:"repository"`
+		IconPath                   string     `yaml:"icon_path"`
+		Enabled                    bool       `yaml:"enabled"`
+		RetainVersions             int        `yaml:"retain_versions"`
+		IncludePrerelease          bool       `yaml:"include_prerelease"`
+		DownloadMultiplier         int        `yaml:"download_multiplier"`
+		AssetInclude               AssetRules `yaml:"asset_include"`
+		AssetExclude               AssetRules `yaml:"asset_exclude"`
+		ArchitectureMatchEnabled   bool       `yaml:"architecture_match_enabled"`
+		ArchitectureRegex          string     `yaml:"architecture_regex"`
+		ArchitectureDefaultEnabled bool       `yaml:"architecture_default_enabled"`
+		SystemMatchEnabled         bool       `yaml:"system_match_enabled"`
+		SystemRegex                string     `yaml:"system_regex"`
+	}
+	var raw projectYAML
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*p = Project{
+		ID: raw.ID, Name: raw.Name, Repository: raw.Repository,
+		IconPath: raw.IconPath, Enabled: raw.Enabled,
+		RetainVersions:     raw.RetainVersions,
+		IncludePrerelease:  raw.IncludePrerelease,
+		DownloadMultiplier: raw.DownloadMultiplier,
+		AssetInclude:       raw.AssetInclude, AssetExclude: raw.AssetExclude,
+		ArchitectureMatchEnabled:   raw.ArchitectureMatchEnabled,
+		ArchitectureRegex:          raw.ArchitectureRegex,
+		ArchitectureDefaultEnabled: raw.ArchitectureDefaultEnabled,
+		SystemMatchEnabled:         raw.SystemMatchEnabled,
+		SystemRegex:                raw.SystemRegex,
+	}
+	return nil
+}
 
 func (r *AssetRules) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.SequenceNode {
@@ -81,8 +119,19 @@ func decodeAssetRule(node *yaml.Node) (AssetRule, error) {
 
 func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 	var c Projects
-	if err := readYAML(path, &c, ProjectsExample); err != nil {
+	legacyArchitectureDefault := false
+	_, err := readYAMLWithRepair(path, &c, ProjectsExample, ProjectsRepairExample,
+		func(doc *yaml.Node) bool {
+			changed, found := migrateProjectsArchitectureDefault(doc)
+			legacyArchitectureDefault = legacyArchitectureDefault || found
+			return changed
+		})
+	if err != nil {
 		return c, err
+	}
+	if legacyArchitectureDefault {
+		warnDeprecated(warn, "projects[].architecture_default_enabled",
+			"projects[].architecture_match_enabled")
 	}
 	baseDir := filepath.Dir(path)
 	known := map[string]bool{}

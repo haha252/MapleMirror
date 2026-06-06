@@ -11,8 +11,14 @@ var MasterExample []byte
 //go:embed templates/projects.example.yaml
 var ProjectsExample []byte
 
+//go:embed templates/projects.repair.yaml
+var ProjectsRepairExample []byte
+
 //go:embed templates/quota.example.yaml
 var QuotaExample []byte
+
+//go:embed templates/quota.repair.yaml
+var QuotaRepairExample []byte
 
 //go:embed templates/node.example.yaml
 var NodeExample []byte

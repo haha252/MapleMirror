@@ -55,7 +55,7 @@ type Pairing struct {
 
 func LoadNode(path string, warn WarnFunc) (Node, error) {
 	var c Node
-	if err := readYAML(path, &c, NodeExample); err != nil {
+	if _, err := readYAML(path, &c, NodeExample); err != nil {
 		return c, err
 	}
 	applyNodeDefaults(&c, warn)

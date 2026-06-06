@@ -59,7 +59,7 @@ func newBlocklistPolicy(q config.Quota, logger *logging.Logger) *blocklistPolicy
 	if p.autoBanTTL <= 0 {
 		p.autoBanTTL = 7 * 24 * time.Hour
 	}
-	for _, raw := range append(q.Blacklist, q.Blocklist.Static...) {
+	for _, raw := range q.Blocklist.Static {
 		if prefix, err := parseBlockPrefix(raw); err == nil {
 			p.static = append(p.static, blocklistEntry{prefix: prefix, source: raw})
 		}

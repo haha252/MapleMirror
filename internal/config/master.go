@@ -81,7 +81,7 @@ type TLS struct {
 
 func LoadMaster(path string, warn WarnFunc) (Master, error) {
 	var c Master
-	if err := readYAML(path, &c, MasterExample); err != nil {
+	if _, err := readYAML(path, &c, MasterExample); err != nil {
 		return c, err
 	}
 	applyMasterDefaults(&c, warn)

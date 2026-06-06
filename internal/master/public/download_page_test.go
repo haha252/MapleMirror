@@ -50,8 +50,8 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `"architecture_match_enabled":false`) {
 		t.Fatalf("expected disabled architecture matching in payload: %s", body)
 	}
-	if !strings.Contains(body, `"architecture_default_enabled":false`) {
-		t.Fatalf("expected disabled architecture default in payload: %s", body)
+	if strings.Contains(body, "architecture_default_enabled") {
+		t.Fatalf("download payload must not expose deprecated architecture default field: %s", body)
 	}
 	if !strings.Contains(body, `"default_version":"v1"`) {
 		t.Fatalf("expected default version in payload: %s", body)

@@ -66,16 +66,14 @@ func projectAssetMap(projects config.Projects) map[string]projectAssetConfig {
 	projectAssets := map[string]projectAssetConfig{}
 	for _, item := range projects.Projects {
 		projectAssets[item.ID] = projectAssetConfig{
-			IconPath:                   filepath.Clean(item.ResolvedIconPath),
-			ArchitectureMatchEnabled:   item.ArchitectureMatchEnabled,
-			ArchitectureDefaultEnabled: item.ArchitectureDefaultEnabled,
-			SystemMatchEnabled:         item.SystemMatchEnabled,
+			IconPath:                 filepath.Clean(item.ResolvedIconPath),
+			ArchitectureMatchEnabled: item.ArchitectureMatchEnabled,
+			SystemMatchEnabled:       item.SystemMatchEnabled,
 		}
 		if strings.TrimSpace(item.ResolvedIconPath) == "" {
 			projectAssets[item.ID] = projectAssetConfig{
-				ArchitectureMatchEnabled:   item.ArchitectureMatchEnabled,
-				ArchitectureDefaultEnabled: item.ArchitectureDefaultEnabled,
-				SystemMatchEnabled:         item.SystemMatchEnabled,
+				ArchitectureMatchEnabled: item.ArchitectureMatchEnabled,
+				SystemMatchEnabled:       item.SystemMatchEnabled,
 			}
 		}
 	}

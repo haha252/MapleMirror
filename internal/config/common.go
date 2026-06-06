@@ -24,24 +24,35 @@ type Logging struct {
 	RetentionDays int    `yaml:"retention_days"`
 }
 
-func readYAML(path string, target any, example []byte) error {
+const deprecatedWarningPrefix = "deprecated:"
+
+func readYAML(path string, target any, example []byte) ([]byte, error) {
+	return readYAMLWithRepair(path, target, example, example)
+}
+
+func readYAMLWithRepair(path string, target any, example, repairExample []byte,
+	migrations ...yamlMigration) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return fmt.Errorf("创建配置目录失败：%w", err)
+			return nil, fmt.Errorf("创建配置目录失败：%w", err)
 		}
 		if err := os.WriteFile(path, example, 0o600); err != nil {
-			return fmt.Errorf("生成示例配置失败：%w", err)
+			return nil, fmt.Errorf("生成示例配置失败：%w", err)
 		}
-		return ErrExampleCreated
+		return nil, ErrExampleCreated
 	}
 	if err != nil {
-		return fmt.Errorf("读取配置失败：%w", err)
+		return nil, fmt.Errorf("读取配置失败：%w", err)
+	}
+	data, err = repairYAML(path, data, repairExample, migrations...)
+	if err != nil {
+		return nil, err
 	}
 	if err := yaml.Unmarshal(data, target); err != nil {
-		return fmt.Errorf("解析 YAML 配置失败：%w", err)
+		return nil, fmt.Errorf("解析 YAML 配置失败：%w", err)
 	}
-	return nil
+	return data, nil
 }
 
 func updateYAMLScalars(path string, values map[string]string) error {
@@ -112,6 +123,19 @@ func warnDefault(warn WarnFunc, field, value string) {
 	if warn != nil {
 		warn(field, value)
 	}
+}
+
+func warnDeprecated(warn WarnFunc, field, replacement string) {
+	if warn != nil {
+		warn(field, deprecatedWarningPrefix+replacement)
+	}
+}
+
+func DeprecatedWarningMessage(value string) (string, bool) {
+	if strings.HasPrefix(value, deprecatedWarningPrefix) {
+		return strings.TrimPrefix(value, deprecatedWarningPrefix), true
+	}
+	return "", false
 }
 
 func applyLoggingDefaults(c *Logging, directory string, warn WarnFunc) {

@@ -62,10 +62,7 @@
     const badge = card.querySelector(".version-badge");
 
     function architectureLabel(item) {
-      if (project.architecture_default_enabled && !String(item.architecture || "").trim()) {
-        return "None";
-      }
-      return item.architecture;
+      return String(item.architecture || "").trim() || "None";
     }
 
     function setAvailability(selected) {
