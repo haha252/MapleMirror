@@ -1,0 +1,18 @@
+.admin-secondary[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel-muted));
+}
+.admin-inline-detail-row > td {
+  padding: 0 0 12px;
+  border-top: 0;
+}
+.admin-inline-detail {
+  margin: 4px 0 2px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-muted) 82%, transparent);
+}
+.admin-inline-detail .detail-row {
+  background: var(--panel);
+}

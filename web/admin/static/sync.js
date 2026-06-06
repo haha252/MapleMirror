@@ -19,27 +19,89 @@
     if (!body) return;
     if (!scans || !scans.length) {
       body.innerHTML = '<tr><td colspan="5" class="muted">暂无项目扫描状态</td></tr>';
+      selectedProject = "";
       return;
     }
+    var hasSelected = false;
     body.innerHTML = scans.map(function (scan) {
-      return "<tr><td><strong>" + a.esc(scan.project_id) + "</strong></td><td>" +
+      if (scan.project_id === selectedProject) hasSelected = true;
+      return '<tr data-scan-row="' + a.esc(scan.project_id) + '"><td><strong>' +
+        a.esc(scan.project_id) + "</strong></td><td>" +
         a.badge(scan.enabled ? "启用" : "禁用") + "</td><td>" +
         a.badge(scan.last_scan_state || "未扫描") + "</td><td>" +
         a.esc(scan.next_scan_at || "暂无") + '</td><td><div class="admin-actions">' +
-        '<button class="admin-secondary" data-scan-detail="' + a.esc(scan.project_id) + '">详情</button>' +
+        '<button class="admin-secondary" type="button" data-scan-detail="' +
+        a.esc(scan.project_id) + '" aria-expanded="' + (scan.project_id === selectedProject ? "true" : "false") + '">详情</button>' +
         '<button class="admin-secondary" data-scan-run="' + a.esc(scan.project_id) + '">扫描</button></div></td></tr>';
     }).join("");
-    if (!selectedProject && scans[0]) showLatest(scans[0].project_id);
+    if (selectedProject && hasSelected) {
+      renderLatest(selectedProject);
+    } else {
+      selectedProject = "";
+    }
   }
 
-  function showLatest(projectID) {
+  function scanRow(projectID) {
+    var rows = document.querySelectorAll("[data-scan-row]");
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute("data-scan-row") === projectID) return rows[i];
+    }
+    return null;
+  }
+
+  function scanDetailRow() {
+    return document.querySelector("[data-scan-detail-row]");
+  }
+
+  function setScanButtons() {
+    document.querySelectorAll("[data-scan-detail]").forEach(function (button) {
+      button.setAttribute("aria-expanded", button.getAttribute("data-scan-detail") === selectedProject ? "true" : "false");
+    });
+  }
+
+  function clearLatest() {
+    var row = scanDetailRow();
+    if (row) row.remove();
+    setScanButtons();
+  }
+
+  function latestBox(projectID, html) {
+    var row = scanDetailRow();
+    if (!row || row.getAttribute("data-scan-detail-row") !== projectID) {
+      clearLatest();
+      var anchor = scanRow(projectID);
+      if (!anchor) return null;
+      row = document.createElement("tr");
+      row.className = "admin-inline-detail-row";
+      row.setAttribute("data-scan-detail-row", projectID);
+      row.innerHTML = '<td colspan="5"><div class="admin-inline-detail detail-stack"></div></td>';
+      anchor.insertAdjacentElement("afterend", row);
+    }
+    var box = row.querySelector(".admin-inline-detail");
+    if (box && html != null) box.innerHTML = html;
+    return box;
+  }
+
+  function toggleLatest(projectID) {
+    if (selectedProject === projectID) {
+      selectedProject = "";
+      clearLatest();
+      return;
+    }
     selectedProject = projectID || "";
-    a.text("latest-scan-title", projectID || "全部项目");
-    var box = document.getElementById("latest-scan");
-    if (box) box.innerHTML = '<div class="muted">加载中...</div>';
+    renderLatest(projectID);
+  }
+
+  function renderLatest(projectID) {
+    var box = latestBox(projectID, '<div class="muted">加载中...</div>');
+    setScanButtons();
+    if (!box) return;
     var path = "/admin/api/sync/scans/latest";
     if (projectID) path += "?project_id=" + encodeURIComponent(projectID);
     a.api(path).then(function (data) {
+      if (selectedProject !== projectID) return;
+      box = latestBox(projectID);
+      if (!box) return;
       box.innerHTML = a.kv({
         "扫描 ID": data.scan_id || "",
         "项目": data.project_id || "全部",
@@ -52,6 +114,8 @@
         "错误摘要": data.last_error_message || ""
       });
     }).catch(function (err) {
+      if (selectedProject !== projectID) return;
+      box = latestBox(projectID);
       if (box) box.innerHTML = '<div class="muted">' + a.esc(err.message) + "</div>";
     });
   }
@@ -64,7 +128,12 @@
         body: JSON.stringify({ project_id: projectID || "" })
       }).then(function (data) {
         a.setStatus(data.message || "扫描已创建");
-        loadScans().then(function () { showLatest(projectID); });
+        loadScans().then(function () {
+          if (projectID) {
+            selectedProject = projectID;
+            renderLatest(projectID);
+          }
+        });
       }).catch(function (err) { a.setStatus(err.message); });
     });
   }
@@ -123,7 +192,7 @@
 
   document.addEventListener("click", function (event) {
     var detail = event.target.closest("[data-scan-detail]");
-    if (detail) return showLatest(detail.getAttribute("data-scan-detail"));
+    if (detail) return toggleLatest(detail.getAttribute("data-scan-detail"));
     var run = event.target.closest("[data-scan-run]");
     if (run) return runScan(run.getAttribute("data-scan-run"));
     var task = event.target.closest("[data-task-action]");

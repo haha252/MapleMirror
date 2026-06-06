@@ -8,16 +8,21 @@
     if (!body) return;
     if (!nodes || !nodes.length) {
       body.innerHTML = '<tr><td colspan="5" class="muted">暂无节点</td></tr>';
+      currentNode = "";
       return;
     }
+    var hasCurrent = false;
     body.innerHTML = nodes.map(function (node) {
       var state = node.connection_state || node.state;
-      return "<tr><td><strong>" + a.esc(node.public_name || node.node_id) +
+      if (node.node_id === currentNode) hasCurrent = true;
+      return '<tr data-node-row="' + a.esc(node.node_id) + '"><td><strong>' +
+        a.esc(node.public_name || node.node_id) +
         '</strong><span class="sub">' + a.esc(node.node_id) + "</span></td><td>" +
         a.badge(a.connectionLabel(state)) + "</td><td>" +
         a.badge(node.routing_ready ? "全量就绪" : "未全量就绪") + "</td><td>" +
         a.esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
-        '<button class="admin-secondary" data-node-action="detail" data-node="' + a.esc(node.node_id) + '">详情</button>' +
+        '<button class="admin-secondary" type="button" data-node-action="detail" data-node="' +
+        a.esc(node.node_id) + '" aria-expanded="' + (node.node_id === currentNode ? "true" : "false") + '">详情</button>' +
         '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + a.esc(node.node_id) + '">重置</button>' +
         '<button class="admin-secondary" data-node-action="' + (node.state === "disabled" ? "enable" : "disable") +
         '" data-node="' + a.esc(node.node_id) + '">' + (node.state === "disabled" ? "启用" : "禁用") +
@@ -25,14 +30,68 @@
         a.esc(node.node_id) + '">删除</button></div></td></tr>';
     }).join("");
     a.text("node-summary", nodes.length + " 个节点");
-    if (!currentNode && nodes[0]) showDetail(nodes[0].node_id);
+    if (currentNode && hasCurrent) {
+      renderDetail(currentNode);
+    } else {
+      currentNode = "";
+    }
   }
 
-  function showDetail(nodeID) {
+  function detailRow() {
+    return document.querySelector("[data-node-detail-row]");
+  }
+
+  function nodeRow(nodeID) {
+    var rows = document.querySelectorAll("[data-node-row]");
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute("data-node-row") === nodeID) return rows[i];
+    }
+    return null;
+  }
+
+  function setDetailButtons() {
+    document.querySelectorAll('[data-node-action="detail"]').forEach(function (button) {
+      button.setAttribute("aria-expanded", button.getAttribute("data-node") === currentNode ? "true" : "false");
+    });
+  }
+
+  function clearDetail() {
+    var row = detailRow();
+    if (row) row.remove();
+    setDetailButtons();
+  }
+
+  function detailBox(nodeID, html) {
+    var row = detailRow();
+    if (!row || row.getAttribute("data-node-detail-row") !== nodeID) {
+      clearDetail();
+      var anchor = nodeRow(nodeID);
+      if (!anchor) return null;
+      row = document.createElement("tr");
+      row.className = "admin-inline-detail-row";
+      row.setAttribute("data-node-detail-row", nodeID);
+      row.innerHTML = '<td colspan="5"><div class="admin-inline-detail detail-stack"></div></td>';
+      anchor.insertAdjacentElement("afterend", row);
+    }
+    var box = row.querySelector(".admin-inline-detail");
+    if (box && html != null) box.innerHTML = html;
+    return box;
+  }
+
+  function toggleDetail(nodeID) {
+    if (currentNode === nodeID) {
+      currentNode = "";
+      clearDetail();
+      return;
+    }
     currentNode = nodeID;
-    a.text("node-detail-title", nodeID);
-    var box = document.getElementById("node-detail");
-    if (box) box.innerHTML = '<div class="muted">加载中...</div>';
+    renderDetail(nodeID);
+  }
+
+  function renderDetail(nodeID) {
+    var box = detailBox(nodeID, '<div class="muted">加载中...</div>');
+    setDetailButtons();
+    if (!box) return;
     Promise.all([
       a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/sync-status").catch(function (err) { return { error: err.message }; }),
       a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/reports").catch(function (err) { return { error: err.message }; }),
@@ -43,6 +102,9 @@
         var pct = (Number(w.availability_ratio || 0) * 100).toFixed(2) + "%";
         return w.window + ": " + (w.insufficient_samples ? "样本不足" : pct);
       }).join(" / ");
+      if (currentNode !== nodeID) return;
+      box = detailBox(nodeID);
+      if (!box) return;
       box.innerHTML =
         '<h3>同步诊断</h3>' + a.kv({
           "同步阶段": sync.sync_phase || sync.error || "未知",
@@ -98,7 +160,7 @@
   function nodeAction(button) {
     var node = button.getAttribute("data-node");
     var action = button.getAttribute("data-node-action");
-    if (action === "detail") return showDetail(node);
+    if (action === "detail") return toggleDetail(node);
     var labels = { "sync-reset": "重置同步状态", "disable": "禁用", "enable": "启用", "delete": "删除" };
     var text = action === "delete" ? "确认删除节点 " + node + "？该操作会清理该节点的运行数据、任务、库存和授权记录。"
       : "确认对节点 " + node + " 执行 " + labels[action] + "？";
@@ -113,13 +175,14 @@
         .then(function (data) {
           a.setStatus(data.message || "操作已完成");
           if (action === "delete") {
-            currentNode = "";
-            a.text("node-detail-title", "未选择");
-            document.getElementById("node-detail").innerHTML = "";
+            if (currentNode === node) {
+              currentNode = "";
+              clearDetail();
+            }
             return loadNodes();
           }
+          currentNode = node;
           loadNodes();
-          showDetail(node);
         })
         .catch(function (err) { a.setStatus(err.message); });
     });
