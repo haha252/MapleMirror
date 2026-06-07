@@ -23,6 +23,8 @@
         a.esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
         '<button class="admin-secondary" type="button" data-node-action="detail" data-node="' +
         a.esc(node.node_id) + '" aria-expanded="' + (node.node_id === currentNode ? "true" : "false") + '">详情</button>' +
+        '<a class="admin-secondary admin-link-button" href="/admin/nodes/' + encodeURIComponent(node.node_id) +
+        '/projects">项目管理</a>' +
         '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + a.esc(node.node_id) + '">重置</button>' +
         '<button class="admin-secondary" data-node-action="' + (node.state === "disabled" ? "enable" : "disable") +
         '" data-node="' + a.esc(node.node_id) + '">' + (node.state === "disabled" ? "启用" : "禁用") +
@@ -124,8 +126,7 @@
           "实际带宽": pressure.actual_bandwidth_bps ? a.bytes(pressure.actual_bandwidth_bps) + "/s" : "暂无采样",
           "压力比": pressure.pressure_ratio != null ? (Number(pressure.pressure_ratio) * 100).toFixed(1) + "%" : "暂无"
         }, "detail-plain") + '</section></div><h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") +
-        '</p><div class="admin-actions"><a class="admin-secondary admin-link-button" href="/admin/nodes/' +
-        encodeURIComponent(nodeID) + '/projects">项目管理</a></div>';
+        '</p>';
     });
   }
 
