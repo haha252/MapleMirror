@@ -47,6 +47,7 @@ type Bandwidth struct {
 }
 type Sync struct {
 	MaxWorkers        int    `yaml:"max_workers"`
+	MaxMirrorProjects int    `yaml:"max_mirror_projects"`
 	BandwidthLimit    string `yaml:"bandwidth_limit"`
 	BandwidthLimitBPS int64  `yaml:"-"`
 }
@@ -157,6 +158,9 @@ func validateNode(c *Node) error {
 	c.Bandwidth.TargetBPS = target
 	if c.Sync.MaxWorkers <= 0 {
 		return errors.New("同步线程数必须大于零")
+	}
+	if c.Sync.MaxMirrorProjects < 0 {
+		return errors.New("节点最大镜像项目数不得小于零")
 	}
 	limit, err := ParseBandwidthBPS("sync.bandwidth_limit", c.Sync.BandwidthLimit, true)
 	if err != nil {

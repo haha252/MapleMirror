@@ -105,6 +105,7 @@
 
   document.querySelectorAll("[data-nav]").forEach(function (link) {
     var page = currentPage() === "project-edit" ? "projects" : currentPage();
+    page = page === "node-projects" ? "nodes" : page;
     if (link.getAttribute("data-nav") === page) {
       link.setAttribute("aria-current", "page");
     } else {

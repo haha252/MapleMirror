@@ -33,6 +33,8 @@ func (s *Server) nodeActionAPI(w http.ResponseWriter, r *http.Request) {
 		s.nodeReports(w, r, nodeID)
 	case r.Method == http.MethodGet && action == "sla":
 		s.nodeSLA(w, r, nodeID)
+	case action == "projects":
+		s.nodeProjects(w, r, nodeID)
 	case r.Method == http.MethodPost && action == "disable":
 		s.disableNode(w, r, nodeID)
 	case r.Method == http.MethodPost && action == "enable":

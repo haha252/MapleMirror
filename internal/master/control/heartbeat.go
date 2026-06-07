@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mirror-server/internal/downloadurl"
+	"mirror-server/internal/master/assignment"
 	"mirror-server/internal/protocol"
 )
 
@@ -33,14 +34,29 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var previousMax int
+	if err := tx.QueryRowContext(ctx, `SELECT max_mirror_projects FROM nodes
+		WHERE id = ?`, session.NodeID).Scan(&previousMax); err != nil {
+		return HeartbeatResult{}, err
+	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
 		last_heartbeat_at = ?, public_download_base_url = ?,
 		target_bandwidth_bps = CASE WHEN ? > 0 THEN ? ELSE target_bandwidth_bps END,
+		max_mirror_projects = ?,
 		updated_at = ? WHERE id = ?`,
 		now, downloadBaseURL, hb.Pressure.TargetBandwidthBPS,
-		hb.Pressure.TargetBandwidthBPS, now, session.NodeID)
+		hb.Pressure.TargetBandwidthBPS, nonNegative(hb.MaxMirrorProjects),
+		now, session.NodeID)
 	if err != nil {
 		return HeartbeatResult{}, err
+	}
+	if previousMax != nonNegative(hb.MaxMirrorProjects) {
+		if err := assignment.ReconcileNode(ctx, tx, session.NodeID, now); err != nil {
+			return HeartbeatResult{}, err
+		}
+		if _, err := assignment.GenerateNodeTasks(ctx, tx, session.NodeID, now); err != nil {
+			return HeartbeatResult{}, err
+		}
 	}
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
@@ -185,6 +201,13 @@ func mustID() string {
 		return "id-error"
 	}
 	return id
+}
+
+func nonNegative(value int) int {
+	if value < 0 {
+		return 0
+	}
+	return value
 }
 
 func finish(tx interface{ Commit() error }, err error) error {

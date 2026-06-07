@@ -23,6 +23,7 @@ type Client struct {
 	PublicDownloadBaseURL string
 	Storage               string
 	TargetBandwidthBPS    int64
+	MaxMirrorProjects     int
 	TLSConfig             *tls.Config
 	HeartbeatInterval     time.Duration
 	Logger                *logging.Logger
@@ -140,6 +141,7 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 	body, _ := json.Marshal(protocol.Heartbeat{
 		Status: "syncing", ActiveDownloads: active, FreeBytes: 0,
 		PublicDownloadBaseURL: c.PublicDownloadBaseURL,
+		MaxMirrorProjects:     c.MaxMirrorProjects,
 		Pressure: protocol.PressureSample{
 			TargetBandwidthBPS: c.TargetBandwidthBPS,
 			ActualBandwidthBPS: 0,

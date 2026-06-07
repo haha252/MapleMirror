@@ -13,12 +13,15 @@ type NodeSummary struct {
 	ConnectionState    string `json:"connection_state"`
 	RoutingReady       bool   `json:"routing_ready"`
 	TargetBandwidthBPS int64  `json:"target_bandwidth_bps"`
+	MaxMirrorProjects  int    `json:"max_mirror_projects"`
+	AssignmentMode     string `json:"project_assignment_mode"`
 	LastHeartbeat      string `json:"last_heartbeat_at,omitempty"`
 }
 
 func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 	rows, err := r.DB.QueryContext(ctx, `SELECT id, public_name, state,
-		routing_ready, target_bandwidth_bps, COALESCE(last_heartbeat_at, '')
+		routing_ready, target_bandwidth_bps, max_mirror_projects,
+		project_assignment_mode, COALESCE(last_heartbeat_at, '')
 		FROM nodes ORDER BY created_at`)
 	if err != nil {
 		return nil, err
@@ -29,7 +32,8 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 		var item NodeSummary
 		var ready int
 		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State,
-			&ready, &item.TargetBandwidthBPS, &item.LastHeartbeat); err != nil {
+			&ready, &item.TargetBandwidthBPS, &item.MaxMirrorProjects,
+			&item.AssignmentMode, &item.LastHeartbeat); err != nil {
 			return nil, err
 		}
 		item.ConnectionState = item.State

@@ -1,5 +1,7 @@
 package adminui
 
+import "strings"
+
 type adminPage struct {
 	ID       string
 	Title    string
@@ -8,6 +10,12 @@ type adminPage struct {
 }
 
 func adminPageForPath(path string) (adminPage, bool) {
+	if strings.HasPrefix(path, "/admin/nodes/") && strings.HasSuffix(path, "/projects") {
+		return adminPage{
+			ID: "node-projects", Title: "节点项目管理",
+			Subtitle: "自动分配、容量上限与手动项目选择", Script: "node-projects.js",
+		}, true
+	}
 	pages := map[string]adminPage{
 		"/admin/": {
 			ID: "overview", Title: "管理总览",

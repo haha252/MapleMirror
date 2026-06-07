@@ -119,9 +119,11 @@
           "库存": (reports.inventory && reports.inventory.reported_at) || "暂无",
           "压力": pressure.reported_at || "暂无",
           "目标带宽": pressure.target_bandwidth_bps ? a.bytes(pressure.target_bandwidth_bps) + "/s" : "未上报",
-          "实际带宽": pressure.actual_bandwidth_bps ? a.bytes(pressure.actual_bandwidth_bps) + "/s" : "暂无采样",
-          "压力比": pressure.pressure_ratio != null ? (Number(pressure.pressure_ratio) * 100).toFixed(1) + "%" : "暂无"
-        }) + '<h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") + "</p>";
+        "实际带宽": pressure.actual_bandwidth_bps ? a.bytes(pressure.actual_bandwidth_bps) + "/s" : "暂无采样",
+        "压力比": pressure.pressure_ratio != null ? (Number(pressure.pressure_ratio) * 100).toFixed(1) + "%" : "暂无"
+        }) + '<h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") +
+        '</p><div class="admin-actions"><a class="admin-secondary admin-link-button" href="/admin/nodes/' +
+        encodeURIComponent(nodeID) + '/projects">项目管理</a></div>';
     });
   }
 

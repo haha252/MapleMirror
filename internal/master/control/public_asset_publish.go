@@ -15,5 +15,8 @@ func publishVerifiedAsset(ctx context.Context, tx *sql.Tx, assetID, now string) 
 	if err := assetstate.RebuildTargetInventory(ctx, tx, projectID, now); err != nil {
 		return err
 	}
-	return assetstate.CancelObsoleteDownloadTasks(ctx, tx, projectID, now)
+	if err := assetstate.CancelObsoleteDownloadTasks(ctx, tx, projectID, now); err != nil {
+		return err
+	}
+	return nil
 }

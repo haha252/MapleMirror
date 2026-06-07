@@ -37,6 +37,8 @@ bandwidth:
 sync:
   # 同步任务并发上限；节点控制客户端按该值限制同时执行的同步任务数。
   max_workers: 2
+  # 本节点最多自动承接的镜像项目数；0 表示不限制，保持全量镜像。
+  max_mirror_projects: 0
   # 单个同步下载限速；支持 MiB/s、MB/s、Mbps，"0" 表示不限制。
   bandwidth_limit: "0"
 

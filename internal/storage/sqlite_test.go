@@ -24,7 +24,10 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertTable(t, db, "client_blocks")
 	assertTable(t, db, "admin_web_sessions")
 	assertTable(t, db, "admin_ip_blocks")
+	assertTable(t, db, "node_project_assignments")
 	assertColumn(t, db, "node_tasks", "lease_expires_at")
+	assertColumn(t, db, "nodes", "max_mirror_projects")
+	assertColumn(t, db, "nodes", "project_assignment_mode")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {
@@ -32,7 +35,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	}
 	defer db.Close()
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 16 {
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 17 {
 		t.Fatalf("主节点迁移重复执行不符合预期：count=%d err=%v", count, err)
 	}
 }

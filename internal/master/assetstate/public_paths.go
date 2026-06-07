@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"mirror-server/internal/downloadurl"
+	"mirror-server/internal/master/assignment"
 )
 
 type publicPathAsset struct {
@@ -68,43 +69,14 @@ func ReconcilePublicPaths(ctx context.Context, tx *sql.Tx, projectID string) err
 }
 
 func RebuildTargetInventory(ctx context.Context, tx *sql.Tx, projectID, now string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO target_inventory
-		(node_id, asset_id, desired_state, updated_at)
-		SELECT n.id, a.id, 'required', ?
-		FROM nodes n JOIN releases r ON r.project_id = ?
-		JOIN assets a ON a.release_id = r.id
-		WHERE n.state != 'disabled' AND r.selected = 1
-		AND a.service_state IN ('candidate', 'pending')
-		ON CONFLICT(node_id, asset_id) DO UPDATE SET
-		desired_state = 'required', updated_at = excluded.updated_at`,
-		now, projectID)
-	if err != nil {
+	if err := assignment.ReconcileAllNodes(ctx, tx, now); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
-		updated_at = ? WHERE asset_id IN (
-		SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-		WHERE r.project_id = ? AND (r.selected = 0
-			OR a.service_state NOT IN ('candidate', 'pending')))`,
-		now, projectID)
-	return err
+	return assignment.RebuildProjectTargets(ctx, tx, projectID, now)
 }
 
 func CancelObsoleteDownloadTasks(ctx context.Context, tx *sql.Tx, projectID, now string) error {
-	_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'obsolete',
-		error_message = '资产已不在当前目标库存中', completed_at = ?,
-		updated_at = ?, lease_expires_at = NULL
-		WHERE task_type = 'asset_download'
-		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
-		AND asset_id IN (
-			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
-				AND ti.asset_id = a.id
-			WHERE r.project_id = ?
-			AND (a.service_state NOT IN ('candidate', 'pending')
-				OR ti.asset_id IS NULL OR ti.desired_state != 'required')
-		)`, now, now, projectID)
-	return err
+	return assignment.CancelObsoleteProjectTasks(ctx, tx, projectID, now)
 }
 
 func loadPathAssets(ctx context.Context, tx *sql.Tx, projectID string) ([]publicPathAsset, error) {

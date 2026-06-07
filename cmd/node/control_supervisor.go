@@ -92,7 +92,8 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 	}
 	return &nodecontrol.Client{
 		NodeID: nodeID, Address: s.address, PublicDownloadBaseURL: s.cfg.Server.PublicDownloadBaseURL,
-		TargetBandwidthBPS: s.cfg.Bandwidth.TargetBPS, TLSConfig: tlsCfg,
+		TargetBandwidthBPS: s.cfg.Bandwidth.TargetBPS,
+		MaxMirrorProjects:  s.cfg.Sync.MaxMirrorProjects, TLSConfig: tlsCfg,
 		Storage: s.cfg.Storage.Directory, HeartbeatInterval: interval,
 		Logger: s.logger, Executor: s.executor, DB: s.db, TaskLimiter: s.limiter,
 	}, nil

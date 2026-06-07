@@ -30,6 +30,10 @@ func TestHeartbeatAndPressureReportUseTargetBandwidth(t *testing.T) {
 			t.Errorf("heartbeat target bandwidth = %d", heartbeat.Pressure.TargetBandwidthBPS)
 			return
 		}
+		if heartbeat.MaxMirrorProjects != 3 {
+			t.Errorf("heartbeat max mirror projects = %d", heartbeat.MaxMirrorProjects)
+			return
+		}
 		sendAck(server, hb)
 		report, ok := expectType(t, server, protocol.TypePressureReport)
 		if !ok {
@@ -44,9 +48,13 @@ func TestHeartbeatAndPressureReportUseTargetBandwidth(t *testing.T) {
 			t.Errorf("unexpected pressure report: %+v", pressure)
 			return
 		}
+		if pressure.MaxMirrorProjects != 3 {
+			t.Errorf("pressure max mirror projects = %d", pressure.MaxMirrorProjects)
+			return
+		}
 		sendAck(server, report)
 	}()
-	clientCtl := Client{NodeID: "node-1", TargetBandwidthBPS: 12345}
+	clientCtl := Client{NodeID: "node-1", TargetBandwidthBPS: 12345, MaxMirrorProjects: 3}
 	if err := clientCtl.heartbeat(client, "req-1", 2); err != nil {
 		t.Fatal(err)
 	}

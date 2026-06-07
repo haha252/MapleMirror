@@ -42,6 +42,27 @@ func TestHeartbeatKeepsNodeNonRoutable(t *testing.T) {
 	}
 }
 
+func TestHeartbeatUpdatesMaxMirrorProjects(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+
+	_, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{
+		Status: "syncing", MaxMirrorProjects: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got int
+	if err := repo.DB.QueryRow(`SELECT max_mirror_projects FROM nodes
+		WHERE id = ?`, session.NodeID).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != 3 {
+		t.Fatalf("max_mirror_projects=%d want 3", got)
+	}
+}
+
 func TestHeartbeatWithInvalidPublicDownloadURLKeepsControlAlive(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

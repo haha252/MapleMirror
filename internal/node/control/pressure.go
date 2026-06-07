@@ -21,6 +21,7 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64)
 		PressureRatio:       pressureRatio(0, c.TargetBandwidthBPS),
 		ActiveDownloads:     active,
 		FreeBytes:           0,
+		MaxMirrorProjects:   c.MaxMirrorProjects,
 	})
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点发送压力报告",

@@ -50,6 +50,7 @@ type Heartbeat struct {
 	ActiveDownloads         int64          `json:"active_downloads"`
 	FreeBytes               int64          `json:"free_bytes"`
 	PublicDownloadBaseURL   string         `json:"public_download_base_url"`
+	MaxMirrorProjects       int            `json:"max_mirror_projects"`
 	Pressure                PressureSample `json:"pressure"`
 	InventoryDigest         string         `json:"inventory_digest"`
 	InventoryReportRevision uint64         `json:"inventory_report_revision"`
@@ -85,6 +86,7 @@ type PressureReport struct {
 	PressureRatio       float64   `json:"pressure_ratio"`
 	ActiveDownloads     int64     `json:"active_downloads"`
 	FreeBytes           int64     `json:"free_bytes"`
+	MaxMirrorProjects   int       `json:"max_mirror_projects"`
 }
 
 type SyncAsset struct {
