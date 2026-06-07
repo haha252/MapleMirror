@@ -7,20 +7,30 @@ import (
 )
 
 func statsBody(stats StatsDashboard, nodes []NodeSummary) template.HTML {
-	body := `<section class="stats-section"><h2>总计信息</h2><div class="metric-grid">`
+	body := `<section class="stats-section"><h2>总计信息</h2>` + metricsGrid(stats)
+	body += `<div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目版本</p>` +
+		rankList(stats.Resources) + `</section>` + trendChart(stats.Trend) + `</div></section>`
+	body += `<section class="stats-section"><h2>节点信息</h2><div id="stats-nodes">` + nodesTable(nodes) + `</div></section>`
+	return template.HTML(body)
+}
+
+func metricsGrid(stats StatsDashboard) string {
+	body := `<div id="stats-metrics" class="metric-grid">`
 	body += metricCard("总访问量", stats.TotalViews, num(stats.TotalViews.Total), "近 30 日 "+num(stats.TotalViews.Recent)+" 次访问")
 	body += metricCard("总下载量", stats.TotalDownloads, num(stats.TotalDownloads.Total), "近 30 日 "+num(stats.TotalDownloads.Recent)+" 次下载")
 	body += metricCard("总流量", stats.TotalTraffic, bytesText(stats.TotalTraffic.Total), "近 30 日 "+bytesText(stats.TotalTraffic.Recent))
-	body += `</div><div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目版本</p><div class="rank-list">`
-	for i, item := range stats.Resources {
+	return body + `</div>`
+}
+
+func rankList(items []ResourceRank) string {
+	body := `<div id="stats-ranks" class="rank-list">`
+	for i, item := range items {
 		body += rankItem(i+1, item)
 	}
-	if len(stats.Resources) == 0 {
+	if len(items) == 0 {
 		body += `<p class="muted empty">暂无下载数据</p>`
 	}
-	body += `</div></section>` + trendChart(stats.Trend) + `</div></section>`
-	body += `<section class="stats-section"><h2>节点信息</h2>` + nodesTable(nodes) + `</section>`
-	return template.HTML(body)
+	return body + `</div>`
 }
 
 func metricCard(title string, metric MetricStat, value, sub string) string {
@@ -76,5 +86,5 @@ func downloadDetail(n NodeSummary) string {
 	if n.DownloadReady {
 		return renderDetail("下载就绪", "是")
 	}
-	return renderDetail("下载就绪", "否 "+n.DownloadReadyReason)
+	return renderDetail("下载就绪", "否："+n.DownloadReadyReason)
 }

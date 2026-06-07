@@ -106,6 +106,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
+	mux.HandleFunc("/api/public/v1/stats", s.statsAPI)
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
 	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
 	mux.HandleFunc("/api/public/v1/web/challenges", s.webChallenge)

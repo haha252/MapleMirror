@@ -1,12 +1,13 @@
 (function () {
   const chart = document.getElementById("stats-chart");
   const tooltip = document.getElementById("stats-tooltip");
+  const metrics = document.getElementById("stats-metrics");
+  const ranks = document.getElementById("stats-ranks");
+  const nodes = document.getElementById("stats-nodes");
   if (!chart || !tooltip) return;
-  const data = JSON.parse(chart.dataset.trends || "[]");
-  if (!data.length) {
-    chart.innerHTML = '<p class="muted">暂无趋势数据</p>';
-    return;
-  }
+
+  let data = JSON.parse(chart.dataset.trends || "[]");
+  let frame = 0;
 
   function fmt(value) {
     return new Intl.NumberFormat("zh-CN").format(value || 0);
@@ -48,9 +49,13 @@
   }
 
   function render() {
+    tooltip.hidden = true;
+    if (!data.length) {
+      chart.innerHTML = '<p class="muted">暂无趋势数据</p>';
+      return;
+    }
     const size = chartSize();
-    const width = size.width;
-    const height = size.height;
+    const width = size.width, height = size.height;
     const pad = {left: width < 520 ? 50 : 70, right: 18, top: 18, bottom: 36};
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
@@ -83,23 +88,40 @@
     });
     html += "</svg>";
     chart.innerHTML = html;
-
-    chart.querySelectorAll(".chart-hit").forEach((hit) => {
-      hit.addEventListener("mousemove", function (event) {
-        const item = data[Number(hit.dataset.index)];
-        tooltip.hidden = false;
-        tooltip.innerHTML = "<b>" + item.day.slice(5) + "</b><br>访问量 " + fmt(item.views) +
-          "<br>下载量 " + fmt(item.downloads) + "<br>流量 " + bytes(item.sent_bytes);
-        moveTooltip(event);
-      });
-      hit.addEventListener("mouseleave", function () { tooltip.hidden = true; });
-    });
+    chart.querySelectorAll(".chart-hit").forEach(bindTooltip);
   }
 
-  let frame = 0;
+  function bindTooltip(hit) {
+    hit.addEventListener("mousemove", function (event) {
+      const item = data[Number(hit.dataset.index)];
+      tooltip.hidden = false;
+      tooltip.innerHTML = "<b>" + item.day.slice(5) + "</b><br>访问量 " + fmt(item.views) +
+        "<br>下载量 " + fmt(item.downloads) + "<br>流量 " + bytes(item.sent_bytes);
+      moveTooltip(event);
+    });
+    hit.addEventListener("mouseleave", function () { tooltip.hidden = true; });
+  }
+
   function scheduleRender() {
     window.cancelAnimationFrame(frame);
     frame = window.requestAnimationFrame(render);
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch("/api/public/v1/stats", {cache: "no-store"});
+      if (!res.ok) return;
+      const payload = await res.json();
+      const snapshot = payload.data || {};
+      if (snapshot.html) {
+        if (metrics && snapshot.html.metrics) metrics.innerHTML = snapshot.html.metrics.replace(/^<div[^>]*>|<\/div>$/g, "");
+        if (ranks && snapshot.html.ranks) ranks.innerHTML = snapshot.html.ranks.replace(/^<div[^>]*>|<\/div>$/g, "");
+        if (nodes && snapshot.html.nodes) nodes.innerHTML = snapshot.html.nodes;
+      }
+      data = Array.isArray(snapshot.trend) ? snapshot.trend : [];
+      chart.dataset.trends = JSON.stringify(data);
+      scheduleRender();
+    } catch (_) {}
   }
 
   render();
@@ -108,4 +130,8 @@
   } else {
     window.addEventListener("resize", scheduleRender);
   }
+  window.setInterval(refresh, 3000);
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) refresh();
+  });
 })();
