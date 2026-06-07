@@ -9,14 +9,7 @@ import (
 )
 
 func (s Store) loadMetric(ctx context.Context, kind, previousStart, start, end string, out *MetricStat) error {
-	totalSQL, dailySQL := metricSQL(kind)
-	if err := s.DB.QueryRowContext(ctx, totalSQL).Scan(&out.Total); err != nil {
-		return err
-	}
-	if err := s.DB.QueryRowContext(ctx, dailySQL, start, end).Scan(&out.Recent); err != nil {
-		return err
-	}
-	if err := s.DB.QueryRowContext(ctx, dailySQL, previousStart, dateOffset(start, -1)).Scan(&out.Previous); err != nil {
+	if err := s.loadMetricSummary(ctx, kind, previousStart, start, end, out); err != nil {
 		return err
 	}
 	rows, err := s.DB.QueryContext(ctx, metricTrendSQL(kind), start, end)
@@ -34,8 +27,22 @@ func (s Store) loadMetric(ctx context.Context, kind, previousStart, start, end s
 		series[day] = value
 	}
 	out.Trend = fillSeries(start, end, series)
-	out.TrendLabel = trendLabel(out.Recent, out.Previous)
 	return rows.Err()
+}
+
+func (s Store) loadMetricSummary(ctx context.Context, kind, previousStart, start, end string, out *MetricStat) error {
+	totalSQL, dailySQL := metricSQL(kind)
+	if err := s.DB.QueryRowContext(ctx, totalSQL).Scan(&out.Total); err != nil {
+		return err
+	}
+	if err := s.DB.QueryRowContext(ctx, dailySQL, start, end).Scan(&out.Recent); err != nil {
+		return err
+	}
+	if err := s.DB.QueryRowContext(ctx, dailySQL, previousStart, dateOffset(start, -1)).Scan(&out.Previous); err != nil {
+		return err
+	}
+	out.TrendLabel = trendLabel(out.Recent, out.Previous)
+	return nil
 }
 
 func (s Store) TopResources(ctx context.Context, start, end string, limit int) ([]ResourceRank, error) {

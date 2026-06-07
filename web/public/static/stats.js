@@ -8,6 +8,7 @@
 
   let data = JSON.parse(chart.dataset.trends || "[]");
   let frame = 0;
+  const metricNames = [["总访问量", "次访问", false], ["总下载量", "次下载", false], ["总流量", "", true]];
 
   function fmt(value) {
     return new Intl.NumberFormat("zh-CN").format(value || 0);
@@ -18,6 +19,40 @@
     if (value < 1024 * 1024 * 1024) return (value / 1024 / 1024).toFixed(2) + " MiB";
     if (value < 1024 * 1024 * 1024 * 1024) return (value / 1024 / 1024 / 1024).toFixed(2) + " GiB";
     return (value / 1024 / 1024 / 1024 / 1024).toFixed(2) + " TiB";
+  }
+
+  function esc(value) {
+    return String(value || "").replace(/[&<>"']/g, function (char) {
+      return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[char];
+    });
+  }
+
+  function trendLabel(recent, previous) {
+    if (!previous) return recent ? "+100%" : "0%";
+    const change = ((recent - previous) / previous) * 100;
+    return (change < 0 ? "" : "+") + change.toFixed(1) + "%";
+  }
+
+  function stateText(value) {
+    const state = String(value || "").toLowerCase();
+    if (state === "online" || state === "syncing" || state === "ready") return "在线";
+    if (state === "offline") return "离线";
+    if (state === "disabled") return "已禁用";
+    if (state === "pending") return "待接入";
+    return value || "";
+  }
+
+  function displayTime(value) {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    const pad = (n) => String(n).padStart(2, "0");
+    return parsed.getFullYear() + "/" + pad(parsed.getMonth() + 1) + "/" + pad(parsed.getDate()) +
+      " " + pad(parsed.getHours()) + ":" + pad(parsed.getMinutes());
+  }
+
+  function detail(label, value) {
+    return value ? '<span class="sub">' + esc(label) + "：" + esc(value) + "</span>" : "";
   }
 
   function moveTooltip(event) {
@@ -42,10 +77,7 @@
 
   function chartSize() {
     const rect = chart.getBoundingClientRect();
-    return {
-      width: Math.max(320, Math.round(rect.width || 320)),
-      height: Math.max(220, Math.round(rect.height || 220))
-    };
+    return {width: Math.max(320, Math.round(rect.width || 320)), height: Math.max(220, Math.round(rect.height || 220))};
   }
 
   function render() {
@@ -86,8 +118,7 @@
       }
       html += '<rect class="chart-hit" data-index="' + i + '" x="' + (x(i) - step / 2) + '" y="0" width="' + Math.max(step, 18) + '" height="' + height + '"/>';
     });
-    html += "</svg>";
-    chart.innerHTML = html;
+    chart.innerHTML = html + "</svg>";
     chart.querySelectorAll(".chart-hit").forEach(bindTooltip);
   }
 
@@ -102,23 +133,92 @@
     hit.addEventListener("mouseleave", function () { tooltip.hidden = true; });
   }
 
+  function renderMetrics(items) {
+    if (!metrics || !Array.isArray(items)) return;
+    metrics.innerHTML = items.map((row, i) => {
+      const meta = metricNames[i];
+      const value = meta[2] ? bytes(row[0]) : fmt(row[0]);
+      const recent = meta[2] ? bytes(row[1]) : fmt(row[1]) + " " + meta[1];
+      const label = trendLabel(row[1], row[2]);
+      const trendClass = label[0] === "-" ? "trend-down" : "trend-up";
+      return '<article class="metric-card panel-card"><div class="metric-card__top"><h3>' + meta[0] +
+        '</h3><span class="' + trendClass + '">' + label + '</span></div><strong>' +
+        value + '</strong><p class="muted">近 30 日 ' + recent + '</p></article>';
+    }).join("");
+  }
+
+  function renderRanks(items) {
+    if (!ranks || !Array.isArray(items)) return;
+    if (!items.length) {
+      ranks.innerHTML = '<p class="muted empty">暂无下载数据</p>';
+      return;
+    }
+    ranks.innerHTML = items.map((row, i) => {
+      const badge = i < 3 ? "rank-badge" : "rank-badge rank-badge--muted";
+      return '<div class="rank-item"><span class="' + badge + '"><span>' + (i + 1) +
+        '</span></span><div><strong>' + esc(row[0]) + '</strong><span>' +
+        esc((row[1] || "") + " " + (row[2] || "")) + '</span></div><b>' + fmt(row[3]) + '</b></div>';
+    }).join("");
+  }
+
+  function renderNodes(items) {
+    if (!nodes || !Array.isArray(items)) return;
+    let html = '<div class="node-table panel-card"><table><tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th><th>7天 SLA</th><th>总下载流量</th></tr>';
+    items.forEach((row) => {
+      const ready = Number(row[3]) === 1 ? detail("下载就绪", "是") : detail("下载就绪", "否：" + (row[4] || ""));
+      html += "<tr><td>" + esc(row[0]) + detail("最近心跳", displayTime(row[2])) +
+        "</td><td>" + esc(stateText(row[1])) + ready + "</td><td>" +
+        esc(row[5]) + "</td><td>" + esc(row[6]) + "</td><td>" + bytes(row[7]) + "</td></tr>";
+    });
+    nodes.innerHTML = html + "</table></div>";
+  }
+
+  function compactTrend(trend) {
+    if (!trend || !trend.s) return [];
+    const start = new Date(trend.s + "T00:00:00Z");
+    return (trend.v || []).map((views, i) => {
+      const day = new Date(start.getTime() + i * 86400000).toISOString().slice(0, 10);
+      return {day: day, views: views, downloads: (trend.d || [])[i] || 0, sent_bytes: (trend.b || [])[i] || 0};
+    });
+  }
+
+  function applyTodayPoint(point) {
+    if (!Array.isArray(point) || !point[0]) return;
+    const item = {day: point[0], views: point[1] || 0, downloads: point[2] || 0, sent_bytes: point[3] || 0};
+    const index = data.findIndex((row) => row.day === item.day);
+    if (index >= 0) {
+      data[index] = item;
+    } else {
+      data.push(item);
+      data = data.slice(-30);
+    }
+  }
+
   function scheduleRender() {
     window.cancelAnimationFrame(frame);
     frame = window.requestAnimationFrame(render);
   }
 
-  async function refresh() {
+  async function refreshFast() {
     try {
       const res = await fetch("/api/public/v1/stats", {cache: "no-store"});
       if (!res.ok) return;
-      const payload = await res.json();
-      const snapshot = payload.data || {};
-      if (snapshot.html) {
-        if (metrics && snapshot.html.metrics) metrics.innerHTML = snapshot.html.metrics.replace(/^<div[^>]*>|<\/div>$/g, "");
-        if (ranks && snapshot.html.ranks) ranks.innerHTML = snapshot.html.ranks.replace(/^<div[^>]*>|<\/div>$/g, "");
-        if (nodes && snapshot.html.nodes) nodes.innerHTML = snapshot.html.nodes;
-      }
-      data = Array.isArray(snapshot.trend) ? snapshot.trend : [];
+      const snapshot = await res.json();
+      renderMetrics(snapshot.m);
+      applyTodayPoint(snapshot.p);
+      chart.dataset.trends = JSON.stringify(data);
+      scheduleRender();
+    } catch (_) {}
+  }
+
+  async function refreshDetails() {
+    try {
+      const res = await fetch("/api/public/v1/stats/details", {cache: "no-store"});
+      if (!res.ok) return;
+      const snapshot = await res.json();
+      renderRanks(snapshot.r);
+      renderNodes(snapshot.n);
+      data = compactTrend(snapshot.t);
       chart.dataset.trends = JSON.stringify(data);
       scheduleRender();
     } catch (_) {}
@@ -130,8 +230,12 @@
   } else {
     window.addEventListener("resize", scheduleRender);
   }
-  window.setInterval(refresh, 3000);
+  window.setInterval(refreshFast, 3000);
+  window.setInterval(refreshDetails, 15000);
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) refresh();
+    if (!document.hidden) {
+      refreshFast();
+      refreshDetails();
+    }
   });
 })();
