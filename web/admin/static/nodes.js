@@ -107,21 +107,23 @@
       box = detailBox(nodeID);
       if (!box) return;
       box.innerHTML =
-        '<h3>同步诊断</h3>' + a.compactKv({
+        '<div class="detail-split">' +
+        '<section class="detail-pane"><h3>同步诊断</h3>' + a.compactKv({
           "同步阶段": sync.sync_phase || sync.error || "未知",
           "必需资产": sync.required_assets || 0,
           "已验证资产": sync.verified_assets || 0,
           "缺失资产": sync.missing_assets || 0,
           "失败任务": sync.failed_tasks || 0,
           "就绪原因": sync.routing_ready_reason || ""
-        }) + '<h3>最近报告</h3>' + a.compactKv({
+        }, "detail-plain") + '</section>' +
+        '<section class="detail-pane"><h3>最近报告</h3>' + a.compactKv({
           "心跳": (reports.heartbeat && reports.heartbeat.reported_at) || "暂无",
           "库存": (reports.inventory && reports.inventory.reported_at) || "暂无",
           "压力": pressure.reported_at || "暂无",
           "目标带宽": pressure.target_bandwidth_bps ? a.bytes(pressure.target_bandwidth_bps) + "/s" : "未上报",
-        "实际带宽": pressure.actual_bandwidth_bps ? a.bytes(pressure.actual_bandwidth_bps) + "/s" : "暂无采样",
-        "压力比": pressure.pressure_ratio != null ? (Number(pressure.pressure_ratio) * 100).toFixed(1) + "%" : "暂无"
-        }) + '<h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") +
+          "实际带宽": pressure.actual_bandwidth_bps ? a.bytes(pressure.actual_bandwidth_bps) + "/s" : "暂无采样",
+          "压力比": pressure.pressure_ratio != null ? (Number(pressure.pressure_ratio) * 100).toFixed(1) + "%" : "暂无"
+        }, "detail-plain") + '</section></div><h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") +
         '</p><div class="admin-actions"><a class="admin-secondary admin-link-button" href="/admin/nodes/' +
         encodeURIComponent(nodeID) + '/projects">项目管理</a></div>';
     });

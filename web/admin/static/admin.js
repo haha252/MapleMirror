@@ -91,8 +91,10 @@
     }).join("");
   }
 
-  function compactKv(data) {
-    return '<div class="detail-compact">' + Object.keys(data || {}).map(function (key) {
+  function compactKv(data, className) {
+    var classes = "detail-compact";
+    if (className) classes += " " + className;
+    return '<div class="' + classes + '">' + Object.keys(data || {}).map(function (key) {
       return '<div><span>' + esc(key) + '</span><strong>' +
         esc(data[key]) + "</strong></div>";
     }).join("") + "</div>";
