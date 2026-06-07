@@ -2,7 +2,9 @@ package public
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"strings"
 	"time"
 )
 
@@ -16,8 +18,8 @@ func statsBody(stats StatsDashboard, nodes []NodeSummary) template.HTML {
 
 func metricsGrid(stats StatsDashboard) string {
 	body := `<div id="stats-metrics" class="metric-grid">`
-	body += metricCard("总访问量", stats.TotalViews, num(stats.TotalViews.Total), "近 30 日 "+num(stats.TotalViews.Recent)+" 次访问")
-	body += metricCard("总下载量", stats.TotalDownloads, num(stats.TotalDownloads.Total), "近 30 日 "+num(stats.TotalDownloads.Recent)+" 次下载")
+	body += metricCard("总访问量", stats.TotalViews, numComma(stats.TotalViews.Total), "近 30 日 "+numComma(stats.TotalViews.Recent)+" 次访问")
+	body += metricCard("总下载量", stats.TotalDownloads, numComma(stats.TotalDownloads.Total), "近 30 日 "+numComma(stats.TotalDownloads.Recent)+" 次下载")
 	body += metricCard("总流量", stats.TotalTraffic, bytesText(stats.TotalTraffic.Total), "近 30 日 "+bytesText(stats.TotalTraffic.Recent))
 	return body + `</div>`
 }
@@ -48,10 +50,10 @@ func rankItem(rank int, item ResourceRank) string {
 	if rank > 3 {
 		badge += " rank-badge--muted"
 	}
-	return `<div class="rank-item"><span class="` + badge + `"><span>` + num(int64(rank)) +
+	return `<div class="rank-item"><span class="` + badge + `"><span>` + numComma(int64(rank)) +
 		`</span></span><div><strong>` + esc(item.ProjectName) + `</strong><span>` +
 		esc(item.Version+" "+item.Architecture) + `</span></div><b>` +
-		num(item.DownloadCount) + `</b></div>`
+		numComma(item.DownloadCount) + `</b></div>`
 }
 
 func trendChart(trends []DailyTrend) string {
@@ -87,4 +89,23 @@ func downloadDetail(n NodeSummary) string {
 		return renderDetail("下载就绪", "是")
 	}
 	return renderDetail("下载就绪", "否："+n.DownloadReadyReason)
+}
+
+func numComma(value int64) string {
+	s := template.HTMLEscapeString(strings.TrimSpace(fmt.Sprintf("%d", value)))
+	n := len(s)
+	if n <= 3 {
+		return s
+	}
+	var out strings.Builder
+	rem := n % 3
+	if rem == 0 {
+		rem = 3
+	}
+	out.WriteString(s[:rem])
+	for i := rem; i < n; i += 3 {
+		out.WriteByte(',')
+		out.WriteString(s[i : i+3])
+	}
+	return out.String()
 }
