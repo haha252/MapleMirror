@@ -91,6 +91,13 @@
     }).join("");
   }
 
+  function compactKv(data) {
+    return '<div class="detail-compact">' + Object.keys(data || {}).map(function (key) {
+      return '<div><span>' + esc(key) + '</span><strong>' +
+        esc(data[key]) + "</strong></div>";
+    }).join("") + "</div>";
+  }
+
   function connectionLabel(value) {
     var state = String(value || "").toLowerCase();
     if (state === "online" || state === "syncing" || state === "ready") return "在线";
@@ -118,6 +125,7 @@
     badge: badge,
     bytes: bytes,
     confirmAction: confirmAction,
+    compactKv: compactKv,
     connectionLabel: connectionLabel,
     esc: esc,
     kv: kv,

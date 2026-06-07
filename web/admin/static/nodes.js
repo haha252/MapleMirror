@@ -107,14 +107,14 @@
       box = detailBox(nodeID);
       if (!box) return;
       box.innerHTML =
-        '<h3>同步诊断</h3>' + a.kv({
+        '<h3>同步诊断</h3>' + a.compactKv({
           "同步阶段": sync.sync_phase || sync.error || "未知",
           "必需资产": sync.required_assets || 0,
           "已验证资产": sync.verified_assets || 0,
           "缺失资产": sync.missing_assets || 0,
           "失败任务": sync.failed_tasks || 0,
           "就绪原因": sync.routing_ready_reason || ""
-        }) + '<h3>最近报告</h3>' + a.kv({
+        }) + '<h3>最近报告</h3>' + a.compactKv({
           "心跳": (reports.heartbeat && reports.heartbeat.reported_at) || "暂无",
           "库存": (reports.inventory && reports.inventory.reported_at) || "暂无",
           "压力": pressure.reported_at || "暂无",

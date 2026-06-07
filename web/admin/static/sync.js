@@ -102,7 +102,7 @@
       if (selectedProject !== projectID) return;
       box = latestBox(projectID);
       if (!box) return;
-      box.innerHTML = a.kv({
+      box.innerHTML = a.compactKv({
         "扫描 ID": data.scan_id || "",
         "项目": data.project_id || "全部",
         "状态": data.state || "",
