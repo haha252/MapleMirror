@@ -81,6 +81,10 @@ func (s *Server) createBlock(r *http.Request, kind, key, reason, duration string
 			expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
 			key, maskIP(ip), reason, now, expires, now, now)
 	case "client":
+		key, err = normalizeClientBlockPrefix(key)
+		if err != nil {
+			return err
+		}
 		_, err = s.repo.DB.ExecContext(r.Context(), `INSERT INTO client_blocks
 			(client_prefix_key, reason, source, blocked_at, expires_at,
 			attempts_after_block, last_attempt_at, updated_at)
@@ -106,6 +110,28 @@ func normalizeAdminBlockIP(value string) (string, error) {
 		return v4.String(), nil
 	}
 	return ip.String(), nil
+}
+
+func normalizeClientBlockPrefix(value string) (string, error) {
+	if strings.Contains(value, "/") {
+		ip, network, err := net.ParseCIDR(value)
+		if err != nil {
+			return "", errors.New("公开下载客户端封禁必须是合法 IP 或主机前缀")
+		}
+		ones, bits := network.Mask.Size()
+		if ones != bits || !network.IP.Equal(ip) {
+			return "", errors.New("公开下载客户端封禁只支持单 IP 或 /32、/128 主机前缀")
+		}
+		return network.String(), nil
+	}
+	ip := net.ParseIP(value)
+	if ip == nil {
+		return "", errors.New("公开下载客户端封禁必须是合法 IP 或主机前缀")
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String() + "/32", nil
+	}
+	return ip.String() + "/128", nil
 }
 
 func (s *Server) deleteBlock(r *http.Request, kind, key string) error {
