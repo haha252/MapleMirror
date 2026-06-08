@@ -37,6 +37,7 @@ func TestScanMarksUnacceptedReleaseAssetRemoved(t *testing.T) {
 			assertAssetState(t, db, "p1:1:1", "removed")
 			assertWhereCount(t, db, "target_inventory", "asset_id = 'p1:1:1' AND desired_state = 'remove'", 1)
 			assertWhereCount(t, db, "node_tasks", "asset_id = 'p1:1:1' AND state = 'obsolete'", 1)
+			assertWhereCount(t, db, "node_tasks", "asset_id = 'p1:1:1' AND task_type = 'asset_delete' AND state = 'pending'", 1)
 			assertRemovedAssetIsPubliclyInvisible(t, db)
 		})
 	}

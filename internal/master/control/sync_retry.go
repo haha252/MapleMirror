@@ -18,11 +18,11 @@ var retryBackoffSchedule = []time.Duration{
 
 func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID string, result protocol.SyncTaskResult, now time.Time) (string, int, string, error) {
 	var attempts int
-	var state, leaseExpires string
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(attempts, 0), state,
+	var state, leaseExpires, taskType string
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(attempts, 0), state, task_type,
 		COALESCE(lease_expires_at, '') FROM node_tasks
 		WHERE id = ? AND node_id = ?`, result.TaskID, nodeID).
-		Scan(&attempts, &state, &leaseExpires); err != nil {
+		Scan(&attempts, &state, &taskType, &leaseExpires); err != nil {
 		return "", 0, "", err
 	}
 
@@ -30,7 +30,7 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 	if !syncTaskCompletable(state, leaseExpires, nowText) {
 		return "stale_result", attempts, "", nil
 	}
-	current, err := syncTaskCurrent(ctx, tx, nodeID, result.TaskID, result.AssetID)
+	current, err := syncTaskCurrent(ctx, tx, nodeID, result.TaskID, taskType, result.AssetID)
 	if err != nil {
 		return "", 0, "", err
 	}
@@ -89,9 +89,19 @@ func syncTaskCompletable(state, leaseExpires, now string) bool {
 	return (state == "sent" || state == "running") && leaseExpires != "" && leaseExpires >= now
 }
 
-func syncTaskCurrent(ctx context.Context, tx *sql.Tx, nodeID, taskID, assetID string) (bool, error) {
+func syncTaskCurrent(ctx context.Context, tx *sql.Tx, nodeID, taskID, taskType, assetID string) (bool, error) {
 	if assetID == "" {
 		return true, nil
+	}
+	if taskType == "asset_delete" {
+		var ok int
+		err := tx.QueryRowContext(ctx, `SELECT EXISTS(
+			SELECT 1 FROM node_tasks t
+			JOIN target_inventory ti ON ti.node_id = t.node_id
+				AND ti.asset_id = t.asset_id AND ti.desired_state = 'remove'
+			WHERE t.id = ? AND t.node_id = ? AND t.asset_id = ?
+		)`, taskID, nodeID, assetID).Scan(&ok)
+		return ok == 1, err
 	}
 	var ok int
 	err := tx.QueryRowContext(ctx, `SELECT EXISTS(

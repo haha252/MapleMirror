@@ -65,6 +65,19 @@ func assertRequiredTargets(t *testing.T, db *sql.DB, want int) {
 	}
 }
 
+func assertTaskCount(t *testing.T, db *sql.DB, taskType, state string, want int) {
+	t.Helper()
+	var got int
+	err := db.QueryRow(`SELECT COUNT(*) FROM node_tasks
+		WHERE task_type = ? AND state = ?`, taskType, state).Scan(&got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("%s %s tasks=%d want %d", taskType, state, got, want)
+	}
+}
+
 func mustExec(t *testing.T, db *sql.DB, query string, args ...any) {
 	t.Helper()
 	if _, err := db.Exec(query, args...); err != nil {

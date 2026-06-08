@@ -12,13 +12,22 @@ func inspectSucceededSyncResult(ctx context.Context, tx *sql.Tx,
 	if result.Result != "succeeded" || result.AssetID == "" {
 		return result, inventoryAcceptResult{}, false, nil
 	}
+	var taskType string
+	err := tx.QueryRowContext(ctx, `SELECT task_type FROM node_tasks
+		WHERE id = ?`, result.TaskID).Scan(&taskType)
+	if err == sql.ErrNoRows || taskType != "asset_download" {
+		return result, inventoryAcceptResult{}, false, nil
+	}
+	if err != nil {
+		return result, inventoryAcceptResult{}, false, err
+	}
 	inventory := inventoryAcceptResult{
 		AssetID:     result.AssetID,
 		LocalDigest: result.LocalDigestSHA256,
 		LocalSize:   result.SizeBytes,
 		State:       "verified",
 	}
-	err := tx.QueryRowContext(ctx, `SELECT digest_sha256, size_bytes FROM assets
+	err = tx.QueryRowContext(ctx, `SELECT digest_sha256, size_bytes FROM assets
 		WHERE id = ?`, result.AssetID).Scan(&inventory.ExpectedDigest, &inventory.ExpectedSize)
 	if err == sql.ErrNoRows {
 		return result, inventoryAcceptResult{}, false, nil
@@ -52,5 +61,19 @@ func upsertSyncResultInventory(ctx context.Context, tx *sql.Tx, nodeID string,
 		size_bytes = excluded.size_bytes, verified_at = excluded.verified_at,
 		state = excluded.state`,
 		nodeID, inventory.AssetID, inventory.LocalDigest, inventory.LocalSize, now, inventory.State)
+	return err
+}
+
+func markDeletedInventory(ctx context.Context, tx *sql.Tx, nodeID string,
+	result protocol.SyncTaskResult, now string) error {
+	var taskType string
+	err := tx.QueryRowContext(ctx, `SELECT task_type FROM node_tasks
+		WHERE id = ? AND node_id = ?`, result.TaskID, nodeID).Scan(&taskType)
+	if err != nil || taskType != "asset_delete" || result.AssetID == "" {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE node_inventory SET state = 'removed',
+		verified_at = ?, local_digest_sha256 = '', size_bytes = 0
+		WHERE node_id = ? AND asset_id = ?`, now, nodeID, result.AssetID)
 	return err
 }

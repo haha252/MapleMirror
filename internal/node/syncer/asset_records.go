@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"mirror-server/internal/protocol"
@@ -44,7 +45,19 @@ func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {
 		}
 		return taskResult(task, "succeeded", "", 0, "本地资产不存在")
 	}
-	_ = os.Remove(filepath.Join(e.Storage, rel))
+	clean := filepath.Clean(rel)
+	if filepath.IsAbs(clean) || clean == "." || relEscapes(clean) {
+		return taskResult(task, "temporary_error", "", 0, "本地资产路径不安全")
+	}
+	if err := os.Remove(filepath.Join(e.Storage, clean)); err != nil && !os.IsNotExist(err) {
+		if e.Logger != nil {
+			e.Logger.Warn(context.Background(), "节点删除本地资产文件失败",
+				slog.String("task_id", task.TaskID),
+				slog.String("asset_id", task.Asset.AssetID),
+				slog.String("error", err.Error()))
+		}
+		return taskResult(task, "temporary_error", "", 0, "删除本地资产文件失败")
+	}
 	_, err = e.DB.Exec(`UPDATE local_assets SET state = 'removed' WHERE asset_id = ?`, task.Asset.AssetID)
 	if err != nil {
 		if e.Logger != nil {
@@ -61,6 +74,10 @@ func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {
 			slog.String("asset_id", task.Asset.AssetID))
 	}
 	return taskResult(task, "succeeded", "", 0, "本地资产已清理")
+}
+
+func relEscapes(path string) bool {
+	return path == ".." || strings.HasPrefix(path, ".."+string(os.PathSeparator))
 }
 
 func (e Executor) upsertAsset(assetID, rel, digest string, size int64) error {

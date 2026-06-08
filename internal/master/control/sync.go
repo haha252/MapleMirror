@@ -129,6 +129,11 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 			}
 		}
 	}
+	if taskState == "succeeded" {
+		if err := markDeletedInventory(ctx, tx, session.NodeID, checkedResult, now); err != nil {
+			return HeartbeatResult{}, err
+		}
+	}
 	ready, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now)
 	if err != nil {
 		return HeartbeatResult{}, err

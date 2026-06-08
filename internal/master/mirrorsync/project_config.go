@@ -66,7 +66,11 @@ func disableProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 	if err != nil {
 		return err
 	}
-	return assignment.CancelObsoleteProjectTasks(ctx, tx, projectID, now)
+	if err := assignment.CancelObsoleteProjectTasks(ctx, tx, projectID, now); err != nil {
+		return err
+	}
+	_, err = assignment.GenerateDeleteTasks(ctx, tx, now)
+	return err
 }
 
 func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now string) error {
