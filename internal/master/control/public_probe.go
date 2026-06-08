@@ -107,10 +107,7 @@ func (s *PublicProbeService) verifyAfterGrace(nodeID, baseURL string,
 
 func (s *PublicProbeService) verify(nodeID, baseURL string,
 	challenge protocol.PublicProbeChallenge) (error, bool) {
-	client := s.Client
-	if client == nil {
-		client = &http.Client{Timeout: s.Config.Timeout}
-	}
+	client := publicProbeHTTPClient(s.Client, s.Config.Timeout)
 	target, err := publicProbeURL(baseURL, challenge.ChallengeID)
 	if err != nil {
 		return err, false

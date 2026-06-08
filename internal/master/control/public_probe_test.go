@@ -9,9 +9,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,17 +67,14 @@ func TestPublicProbeVerifySignedResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(protocol.PublicProbeResponse{
+	service := PublicProbeService{Repo: repo,
+		Config: PublicProbeConfig{Timeout: time.Second},
+		Client: publicProbeTestClient(protocol.PublicProbeResponse{
 			NodeID: "node-1", ChallengeID: challenge.ChallengeID,
 			Nonce: challenge.Nonce, ExpiresAt: challenge.ExpiresAt,
 			Signature: signature,
-		})
-	}))
-	defer server.Close()
-	service := PublicProbeService{Repo: repo,
-		Config: PublicProbeConfig{Timeout: time.Second}}
-	err, network := service.verify("node-1", server.URL, challenge)
+		})}
+	err, network := service.verify("node-1", "https://node.example.com", challenge)
 	if err != nil || network {
 		t.Fatalf("signed public probe should verify: err=%v network=%v", err, network)
 	}
@@ -91,19 +92,52 @@ func TestPublicProbeVerifyRejectsWrongNonceAsAnswerError(t *testing.T) {
 	}
 	signature, _ := publicprobe.Sign(key, "node-1", challenge.ChallengeID,
 		"other", challenge.ExpiresAt)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(protocol.PublicProbeResponse{
+	service := PublicProbeService{Repo: repo,
+		Config: PublicProbeConfig{Timeout: time.Second},
+		Client: publicProbeTestClient(protocol.PublicProbeResponse{
 			NodeID: "node-1", ChallengeID: challenge.ChallengeID,
 			Nonce: "other", ExpiresAt: challenge.ExpiresAt,
 			Signature: signature,
-		})
-	}))
-	defer server.Close()
-	service := PublicProbeService{Repo: repo,
-		Config: PublicProbeConfig{Timeout: time.Second}}
-	err, network := service.verify("node-1", server.URL, challenge)
+		})}
+	err, network := service.verify("node-1", "https://node.example.com", challenge)
 	if err == nil || network {
 		t.Fatalf("wrong nonce should be answer error: err=%v network=%v", err, network)
+	}
+}
+
+func TestPublicProbeRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
+	restore := stubPublicProbeLookup(t, net.ParseIP("127.0.0.1"))
+	defer restore()
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write([]byte(`{"status":"unexpected"}`))
+	}))
+	defer server.Close()
+	service := PublicProbeService{Config: PublicProbeConfig{Timeout: time.Second}}
+	challenge := protocol.PublicProbeChallenge{
+		ChallengeID: "challenge-1", ExpiresAt: time.Now().Add(time.Minute).UTC(),
+	}
+
+	err, network := service.verify("node-1", publicProbePublicURL(t, server.URL), challenge)
+	if err == nil || !network || !strings.Contains(err.Error(), "内网") {
+		t.Fatalf("expected DNS private network rejection, err=%v network=%v", err, network)
+	}
+	if hits != 0 {
+		t.Fatalf("DNS-private public probe should not reach server, hits=%d", hits)
+	}
+}
+
+func TestSafePublicProbeDialRejectsPrivateResolvedRanges(t *testing.T) {
+	for _, rawIP := range []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "0.0.0.0"} {
+		t.Run(rawIP, func(t *testing.T) {
+			restore := stubPublicProbeLookup(t, net.ParseIP(rawIP))
+			defer restore()
+			_, err := safePublicProbeDialContext(context.Background(), "tcp", "node.example.com:443")
+			if err == nil || !strings.Contains(err.Error(), "内网") {
+				t.Fatalf("expected private resolved address rejection, got %v", err)
+			}
+		})
 	}
 }
 
@@ -159,4 +193,43 @@ func publicProbeTestCertificate(t *testing.T) (*ecdsa.PrivateKey, string) {
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	return key, string(certPEM)
+}
+
+type probeRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f probeRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func publicProbeTestClient(body protocol.PublicProbeResponse) *http.Client {
+	return &http.Client{Transport: probeRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		data, _ := json.Marshal(body)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(string(data))),
+			Request:    req,
+		}, nil
+	})}
+}
+
+func stubPublicProbeLookup(t *testing.T, ip net.IP) func() {
+	t.Helper()
+	previous := publicProbeLookupIPAddr
+	publicProbeLookupIPAddr = func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: ip}}, nil
+	}
+	return func() { publicProbeLookupIPAddr = previous }
+}
+
+func publicProbePublicURL(t *testing.T, serverURL string) string {
+	t.Helper()
+	parsed, err := url.Parse(serverURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "http://node.example.test:" + port
 }
