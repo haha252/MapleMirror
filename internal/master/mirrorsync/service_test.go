@@ -70,6 +70,47 @@ func TestTriggerAllCreatesPerProjectScanRows(t *testing.T) {
 	assertProjectNextScan(t, db, "p2")
 }
 
+func TestTriggerAllSyncsEmptyProjectConfig(t *testing.T) {
+	db, store := seedProjectConfigTask(t)
+	defer db.Close()
+	service := Service{
+		Scanner:  Scanner{Store: store, GitHub: fakeGitHub{releases: testReleases()}},
+		Projects: NewProjectLoader("", config.Projects{}),
+	}
+
+	scanID, err := service.Trigger(context.Background(), "", "req-empty")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanID != "" {
+		t.Fatalf("empty project list should not create scan, got %q", scanID)
+	}
+	assertProjectEnabled(t, db, "p1", false)
+	assertTargetState(t, db, "remove")
+	assertWhereCount(t, db, "node_tasks", "state = 'obsolete'", 4)
+}
+
+func TestTriggerAllSyncsDisabledProjectConfig(t *testing.T) {
+	db, store := seedProjectConfigTask(t)
+	defer db.Close()
+	projects := config.Projects{Projects: []config.Project{testProject("p1", "owner/repo", false)}}
+	service := Service{
+		Scanner:  Scanner{Store: store, GitHub: fakeGitHub{releases: testReleases()}},
+		Projects: NewProjectLoader("", projects),
+	}
+
+	scanID, err := service.Trigger(context.Background(), "", "req-disabled")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanID != "" {
+		t.Fatalf("disabled project should not create scan, got %q", scanID)
+	}
+	assertProjectEnabled(t, db, "p1", false)
+	assertTargetState(t, db, "remove")
+	assertWhereCount(t, db, "node_tasks", "state = 'obsolete'", 4)
+}
+
 func TestSyncProjectConfigMarksChangedProjectDue(t *testing.T) {
 	wal := true
 	db, err := storage.OpenMaster(config.Database{

@@ -77,6 +77,9 @@ func (s Service) Trigger(ctx context.Context, projectID, requestID string) (stri
 			slog.String("request_id", requestID),
 			slog.String("error", loadErr.Error()))
 	}
+	if err := s.syncProjectConfig(ctx, projects); err != nil {
+		return "", err
+	}
 	if projectID == "" {
 		return s.triggerAll(ctx, projects, requestID)
 	}
@@ -210,7 +213,7 @@ func (s Service) reloadProjects(ctx context.Context) error {
 		}
 		projects = s.Projects.Current()
 	}
-	if syncErr := s.Scanner.Store.SyncProjectConfig(ctx, projects); syncErr != nil {
+	if syncErr := s.syncProjectConfig(ctx, projects); syncErr != nil {
 		if s.Logger != nil {
 			s.Logger.Warn(ctx, "项目扫描状态同步失败",
 				slog.String("error", syncErr.Error()))
@@ -218,6 +221,10 @@ func (s Service) reloadProjects(ctx context.Context) error {
 		return syncErr
 	}
 	return nil
+}
+
+func (s Service) syncProjectConfig(ctx context.Context, projects config.Projects) error {
+	return s.Scanner.Store.SyncProjectConfig(ctx, projects)
 }
 
 func (s Service) projectFileState() projectFileState {
