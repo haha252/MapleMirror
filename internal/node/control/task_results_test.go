@@ -139,7 +139,7 @@ func TestRunOnceClearsInterruptedLocalRunningTasks(t *testing.T) {
 	_, err := db.Exec(`INSERT INTO local_sync_tasks
 		(task_id, asset_id, task_type, state, updated_at)
 		VALUES ('task-1', 'asset-1', 'asset_download', 'running', ?)`,
-		time.Now().UTC().Format(time.RFC3339Nano))
+		time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano))
 	if err != nil {
 		t.Fatal(err)
 	}

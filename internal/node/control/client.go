@@ -135,10 +135,11 @@ func (c Client) resetInterruptedLocalTasks() error {
 	if c.DB == nil {
 		return nil
 	}
+	cutoff := time.Now().UTC().Add(-c.syncTaskTimeout()).Format(time.RFC3339Nano)
 	_, err := c.DB.Exec(`UPDATE local_sync_tasks SET state = 'interrupted',
 		error_message = 'control connection restarted while task was running',
-		updated_at = ? WHERE state = 'running'`,
-		time.Now().UTC().Format(time.RFC3339Nano))
+		updated_at = ? WHERE state = 'running' AND updated_at <= ?`,
+		time.Now().UTC().Format(time.RFC3339Nano), cutoff)
 	return err
 }
 

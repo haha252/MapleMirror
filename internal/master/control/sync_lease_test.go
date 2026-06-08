@@ -15,7 +15,7 @@ func TestStartSessionResetsLeasedRunningTaskForRedispatch(t *testing.T) {
 
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
-	lease := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	lease := time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
 	_, err := repo.DB.Exec(`INSERT INTO node_tasks
 		(id, node_id, task_type, asset_id, state, request_id, created_at,
 		updated_at, lease_expires_at)
@@ -32,6 +32,36 @@ func TestStartSessionResetsLeasedRunningTaskForRedispatch(t *testing.T) {
 		WHERE id = 'task-running'`).Scan(&state, &leaseAfter)
 	if err != nil || state != "pending" || leaseAfter != "" {
 		t.Fatalf("重连后运行任务应重派 state=%q lease=%q err=%v", state, leaseAfter, err)
+	}
+}
+
+func TestStartSessionPreservesUnexpiredLeasedRunningTask(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	lease := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	_, err := repo.DB.Exec(`INSERT INTO node_tasks
+		(id, node_id, task_type, asset_id, state, request_id, created_at,
+		updated_at, lease_expires_at)
+		VALUES ('task-running', ?, 'asset_download', 'asset-1', 'running',
+		'req-1', 'old', 'old', ?)`, session.NodeID, lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.StartSession(context.Background(), "sha256:aa", "req-reconnect"); err != nil {
+		t.Fatal(err)
+	}
+	var state, leaseAfter string
+	err = repo.DB.QueryRow(`SELECT state, COALESCE(lease_expires_at, '') FROM node_tasks
+		WHERE id = 'task-running'`).Scan(&state, &leaseAfter)
+	if err != nil || state != "running" || leaseAfter != lease {
+		t.Fatalf("unexpired running task changed state=%q lease=%q err=%v", state, leaseAfter, err)
+	}
+	_, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || ok {
+		t.Fatalf("unexpired running task should not redispatch, ok=%v err=%v", ok, err)
 	}
 }
 
