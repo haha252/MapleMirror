@@ -1,12 +1,16 @@
 package syncer
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 )
+
+var sourceLookupIPAddr = net.DefaultResolver.LookupIPAddr
 
 func validateSourceURL(rawURL string, allowPrivate bool) error {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
@@ -45,6 +49,10 @@ func privateSourceHost(host string) bool {
 	if ip == nil {
 		return false
 	}
+	return privateSourceIP(ip)
+}
+
+func privateSourceIP(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()
 }
@@ -55,6 +63,9 @@ func sourceHTTPClient(base *http.Client, allowPrivate bool) *http.Client {
 	}
 	copy := *base
 	previous := base.CheckRedirect
+	if !allowPrivate {
+		copy.Transport = secureSourceTransport(base.Transport)
+	}
 	copy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if err := validateParsedSourceURL(req.URL, allowPrivate); err != nil {
 			return err
@@ -65,4 +76,47 @@ func sourceHTTPClient(base *http.Client, allowPrivate bool) *http.Client {
 		return nil
 	}
 	return &copy
+}
+
+func secureSourceTransport(base http.RoundTripper) http.RoundTripper {
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	transport, ok := base.(*http.Transport)
+	if !ok {
+		return base
+	}
+	copy := transport.Clone()
+	copy.DialContext = secureSourceDialContext
+	copy.DialTLSContext = nil
+	return copy
+}
+
+func secureSourceDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := sourceLookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(resolved) == 0 {
+		return nil, fmt.Errorf("婧愮珯鍦板潃 %s 鏃犳硶瑙ｆ瀽", host)
+	}
+	for _, addr := range resolved {
+		if privateSourceIP(addr.IP) {
+			return nil, errors.New("婧愮珯鍦板潃涓嶅緱瑙ｆ瀽鍒版湰鏈烘垨鍐呯綉鍦板潃")
+		}
+	}
+	dialer := net.Dialer{}
+	var lastErr error
+	for _, addr := range resolved {
+		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(addr.IP.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
