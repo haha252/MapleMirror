@@ -194,6 +194,14 @@ func TestNodesExposeDownloadReadyReasons(t *testing.T) {
 			},
 			reason: "节点尚未提供公网下载地址",
 		},
+		{
+			name: "target removed",
+			setupSQL: []string{
+				"UPDATE nodes SET routing_ready = 0 WHERE id = 'node-1'",
+				"UPDATE target_inventory SET desired_state = 'remove' WHERE node_id = 'node-1' AND asset_id = 'asset-1'",
+			},
+			reason: "暂无可公开下载的资产副本",
+		},
 	}
 
 	for _, tc := range cases {

@@ -63,6 +63,11 @@ func TestNextSyncTaskSkipsInvalidPeerFallbackSources(t *testing.T) {
 	seedPeerNode(t, repo, "node-5", "危险地址", "https://unsafe.example.com/prefix")
 	seedVerifiedPeerAsset(t, repo, "node-5", "asset-1",
 		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+	seedPeerNode(t, repo, "node-6", "已下线目标", "https://removed.example.com")
+	seedVerifiedPeerAsset(t, repo, "node-6", "asset-1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+	mustExecControl(t, repo.DB, `UPDATE target_inventory SET desired_state = 'remove'
+		WHERE node_id = 'node-6' AND asset_id = 'asset-1'`)
 	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
 
 	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
@@ -116,6 +121,14 @@ func seedVerifiedPeerAsset(t *testing.T, repo Repository, nodeID, assetID, diges
 	_, err := repo.DB.Exec(`INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
 		VALUES (?, ?, ?, ?, 'now', 'verified')`, nodeID, assetID, digest, size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.DB.Exec(`INSERT INTO target_inventory
+		(node_id, asset_id, desired_state, updated_at)
+		VALUES (?, ?, 'required', 'now')
+		ON CONFLICT(node_id, asset_id) DO UPDATE SET desired_state = 'required'`,
+		nodeID, assetID)
 	if err != nil {
 		t.Fatal(err)
 	}

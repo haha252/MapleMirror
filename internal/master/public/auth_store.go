@@ -160,6 +160,7 @@ func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) 
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
+		AND r.selected = 1 AND p.enabled = 1
 		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id`, assetID)
 	if err != nil {
 		return out, err

@@ -156,8 +156,11 @@ func (s *Store) challengeMemory() *challengeMemory {
 
 func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.size_bytes, n.public_download_base_url
-		FROM assets a`+routableAssetReplicaSQL+`
-		WHERE a.id = ? AND a.service_state = 'candidate'`, assetID)
+		FROM assets a
+		JOIN releases r ON r.id = a.release_id
+		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
+		WHERE a.id = ? AND a.service_state = 'candidate'
+		AND r.selected = 1 AND p.enabled = 1`, assetID)
 	if err != nil {
 		return 0, err
 	}

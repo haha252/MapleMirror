@@ -55,6 +55,9 @@ func TestIssueAuthorizationSkipsUnsafeDownloadBaseURL(t *testing.T) {
 	mustExec(t, db, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
 		VALUES ('node-2', 'asset-1', 'sha256:aa', 12, '2026-01-01T00:00:01Z', 'verified')`)
+	mustExec(t, db, `INSERT INTO target_inventory
+		(node_id, asset_id, desired_state, updated_at)
+		VALUES ('node-2', 'asset-1', 'required', 'now')`)
 	mustExec(t, db, `UPDATE nodes SET public_download_base_url = 'https://node-1.example.com/prefix',
 		last_heartbeat_at = '2026-01-01T00:00:03Z' WHERE id = 'node-1'`)
 	store := Store{DB: db}

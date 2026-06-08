@@ -145,6 +145,8 @@ func (s Store) loadNodeDownloadReadyState(ctx context.Context, nodeID string) (n
 		JOIN assets a ON a.id = ni.asset_id AND a.service_state = 'candidate'
 		JOIN releases r ON r.id = a.release_id AND r.selected = 1
 		JOIN projects p ON p.id = r.project_id AND p.enabled = 1
+		JOIN target_inventory ti ON ti.node_id = ni.node_id
+			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
 		WHERE ni.node_id = ?`, nodeID).
 		Scan(&status.PublicCopies, &status.DownloadableCopies,
 			&status.VerifiedMismatchCopies, &status.UnverifiedCopies); err != nil {

@@ -2,6 +2,7 @@ package public
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 )
@@ -89,6 +90,8 @@ func TestCreateChallengeRejectsUnroutableReplicaConditions(t *testing.T) {
 			WHERE node_id = 'node-1' AND asset_id = 'asset-1'`},
 		{name: "size mismatch", sql: `UPDATE node_inventory SET size_bytes = 13
 			WHERE node_id = 'node-1' AND asset_id = 'asset-1'`},
+		{name: "target removed", sql: `UPDATE target_inventory SET desired_state = 'remove'
+			WHERE node_id = 'node-1' AND asset_id = 'asset-1'`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -101,6 +104,72 @@ func TestCreateChallengeRejectsUnroutableReplicaConditions(t *testing.T) {
 				"asset-1", "192.0.2.1/32", 4, time.Minute, "req-1")
 			if err == nil {
 				t.Fatal("不可路由副本不应创建挑战")
+			}
+		})
+	}
+}
+
+func TestRemovedTargetIsUnavailableAndNotAuthorizable(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := Store{DB: db}
+	challenge, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req-before")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `UPDATE target_inventory SET desired_state = 'remove'
+		WHERE node_id = 'node-1' AND asset_id = 'asset-1'`)
+
+	assets, err := store.Assets(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != 1 || assets[0].Available {
+		t.Fatalf("removed target should not be available: %+v", assets)
+	}
+	_, err = store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req-after")
+	if err != sql.ErrNoRows {
+		t.Fatalf("removed target should reject new challenge: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, _, err = store.IssueAuthorization(ctx, challenge, time.Minute, "req-auth")
+	if err == nil {
+		t.Fatal("removed target should not issue authorization")
+	}
+}
+
+func TestIssueAuthorizationRejectsAfterProjectOrReleaseUnavailable(t *testing.T) {
+	cases := []struct {
+		name string
+		sql  string
+	}{
+		{name: "project disabled", sql: `UPDATE projects SET enabled = 0 WHERE id = 'p1'`},
+		{name: "release unselected", sql: `UPDATE releases SET selected = 0 WHERE id = 'rel-1'`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openMaster(t)
+			seedRoutableAsset(t, db)
+			store := Store{DB: db}
+			challenge, err := store.CreateChallenge(context.Background(), "api_pow",
+				"asset-1", "192.0.2.1/32", 4, time.Minute, "req-before")
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustExec(t, db, tc.sql)
+			_, err = store.CreateChallenge(context.Background(), "api_pow",
+				"asset-1", "192.0.2.1/32", 4, time.Minute, "req-after")
+			if err != sql.ErrNoRows {
+				t.Fatalf("unavailable asset should reject new challenge: %v", err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			defer cancel()
+			_, _, err = store.IssueAuthorization(ctx, challenge, time.Minute, "req-auth")
+			if err == nil {
+				t.Fatal("unavailable asset should not issue authorization")
 			}
 		})
 	}

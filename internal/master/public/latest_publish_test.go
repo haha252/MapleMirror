@@ -66,6 +66,12 @@ func seedLatestSwitchState(t *testing.T, db *sql.DB) {
 	mustExec(t, db, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
 		VALUES ('node-1', 'asset-old', 'sha256:old', 10, '2026-01-01T00:00:01Z', 'verified')`)
+	mustExec(t, db, `INSERT INTO target_inventory
+		(node_id, asset_id, desired_state, updated_at)
+		VALUES ('node-1', 'asset-old', 'required', 'now')`)
+	mustExec(t, db, `INSERT INTO target_inventory
+		(node_id, asset_id, desired_state, updated_at)
+		VALUES ('node-1', 'asset-new', 'required', 'now')`)
 }
 
 func assertDownloadPathAsset(t *testing.T, store Store, want string) {

@@ -51,6 +51,9 @@ func seedRoutableAsset(t *testing.T, db *sql.DB) {
 	mustExec(t, db, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
 		VALUES ('node-1', 'asset-1', 'sha256:aa', 12, '2026-01-01T00:00:01Z', 'verified')`)
+	mustExec(t, db, `INSERT INTO target_inventory
+		(node_id, asset_id, desired_state, updated_at)
+		VALUES ('node-1', 'asset-1', 'required', 'now')`)
 }
 
 func seedAvailabilitySamples(t *testing.T, db *sql.DB, nodeID string) {

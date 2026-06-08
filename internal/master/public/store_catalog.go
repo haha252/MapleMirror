@@ -53,6 +53,9 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.id, r.tag_name, r.prerelease,
 		a.file_name, a.architecture, a.system, a.size_bytes, a.digest_sha256,
 		EXISTS(SELECT 1 FROM node_inventory ni
+			JOIN target_inventory ti ON ti.node_id = ni.node_id
+				AND ti.asset_id = a.id
+				AND ti.desired_state = 'required'
 			JOIN nodes n ON n.id = ni.node_id
 				AND n.state NOT IN ('disabled', 'offline')
 				AND n.last_heartbeat_at IS NOT NULL
@@ -121,6 +124,9 @@ func (s Store) downloadAsset(ctx context.Context, where string, args ...any) (Do
 	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.name, p.repository, a.id,
 		r.tag_name, a.file_name, a.architecture, a.system, a.size_bytes,
 		EXISTS(SELECT 1 FROM node_inventory ni
+			JOIN target_inventory ti ON ti.node_id = ni.node_id
+				AND ti.asset_id = a.id
+				AND ti.desired_state = 'required'
 			JOIN nodes n ON n.id = ni.node_id
 				AND n.state NOT IN ('disabled', 'offline')
 				AND n.last_heartbeat_at IS NOT NULL
