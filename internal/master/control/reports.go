@@ -29,6 +29,13 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	now := r.runtime().InventoryBatchTime(session.NodeID, report.Revision, time.Now().UTC())
+	stale, err := acceptInventoryRevision(ctx, tx, session, report, now)
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
+	if stale {
+		return r.acceptStaleInventoryReport(ctx, tx, session, seq, report, now)
+	}
 	reported := make(map[string]bool, len(report.Items))
 	quarantined := false
 	for _, item := range report.Items {

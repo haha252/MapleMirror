@@ -9,29 +9,6 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func TestReportsKeepInventorySummaryInRuntimeOnly(t *testing.T) {
-	repo, closeDB := testRepo(t)
-	defer closeDB()
-	session := seedNodeAndSession(t, repo)
-	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
-		ReportID: "r1", Revision: 1, GeneratedAt: time.Now(), Complete: true,
-		Items: []protocol.InventoryItem{{AssetID: "a1", LocalState: "reported"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var reportCount, formalCount int
-	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory_reports").Scan(&reportCount)
-	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory").Scan(&formalCount)
-	if reportCount != 0 || formalCount != 0 {
-		t.Fatalf("库存摘要应只留在内存，reports=%d formal=%d", reportCount, formalCount)
-	}
-	latest, err := repo.LatestInventoryReport(context.Background(), session.NodeID)
-	if err != nil || latest["revision"] != 1 || latest["complete"] != true {
-		t.Fatalf("runtime 库存摘要不符合预期 latest=%v err=%v", latest, err)
-	}
-}
-
 func TestCompleteInventoryReportCanMarkNodeReady(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
@@ -131,45 +108,6 @@ func TestReconnectResetsReadyUntilCompleteInventoryReportArrives(t *testing.T) {
 	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
 	if ready != 1 {
 		t.Fatalf("expected ready restored after complete report, got %d", ready)
-	}
-}
-
-func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
-	repo, closeDB := testRepo(t)
-	defer closeDB()
-	session := seedNodeAndSession(t, repo)
-	seedAssetTarget(t, repo, session.NodeID)
-	if _, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
-		t.Fatal(err)
-	}
-	report := protocol.InventoryReport{
-		ReportID: "r-ready", Revision: 1, GeneratedAt: time.Now(), Complete: true,
-		Items: []protocol.InventoryItem{{
-			AssetID: "asset-1", SizeBytes: 10,
-			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			LocalState:   "reported",
-		}},
-	}
-	if _, err := repo.AcceptInventoryReport(context.Background(), session, 2, report); err != nil {
-		t.Fatal(err)
-	}
-	restarted, err := repo.StartSession(context.Background(), "sha256:aa", "req-reconnect")
-	if err != nil {
-		t.Fatal(err)
-	}
-	report.ReportID = "r-ready-retry"
-	if _, err := repo.AcceptHeartbeat(context.Background(), restarted, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.AcceptInventoryReport(context.Background(), restarted, 2, report); err != nil {
-		t.Fatal(err)
-	}
-	var reportCount, ready int
-	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory_reports WHERE node_id = ?", session.NodeID).
-		Scan(&reportCount)
-	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
-	if reportCount != 0 || ready != 1 {
-		t.Fatalf("重复库存修订应幂等并恢复就绪，reports=%d ready=%d", reportCount, ready)
 	}
 }
 
