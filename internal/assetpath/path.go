@@ -10,6 +10,14 @@ import (
 
 var ErrInvalidPath = errors.New("资产路径不合法")
 
+var windowsReservedNames = map[string]struct{}{
+	"CON": {}, "PRN": {}, "AUX": {}, "NUL": {},
+	"COM1": {}, "COM2": {}, "COM3": {}, "COM4": {}, "COM5": {},
+	"COM6": {}, "COM7": {}, "COM8": {}, "COM9": {},
+	"LPT1": {}, "LPT2": {}, "LPT3": {}, "LPT4": {}, "LPT5": {},
+	"LPT6": {}, "LPT7": {}, "LPT8": {}, "LPT9": {},
+}
+
 type Parts struct {
 	ProjectID string
 	Version   string
@@ -73,5 +81,17 @@ func safePart(value string) string {
 	if value == "" {
 		return "asset"
 	}
+	if isWindowsReservedName(value) {
+		return "asset-" + value
+	}
 	return value
+}
+
+func isWindowsReservedName(value string) bool {
+	name := value
+	if dot := strings.IndexByte(name, '.'); dot >= 0 {
+		name = name[:dot]
+	}
+	_, reserved := windowsReservedNames[strings.ToUpper(name)]
+	return reserved
 }

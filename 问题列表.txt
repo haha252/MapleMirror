@@ -59,10 +59,3 @@
 影响：后台扫描 goroutine 可能无限阻塞，后续 due project 不再推进；手动扫描请求也可能挂住直到请求上下文取消。
 建议修复方向：生产构造 http.Client{Timeout: ...}，或在每次 scan/list release 外层加 context.WithTimeout；JSON body 也可加合理大小限制。
 建议补充测试：使用阻塞的 fake HTTP server，断言扫描在超时内失败并释放调度循环。
-严重级别：中
-文件:行号：internal/assetpath/path.go (line 56)
-问题：路径清洗未处理 Windows 保留设备名，例如 CON、NUL、AUX、COM1；这些名称即使带扩展名在 Windows 上也可能触发特殊设备语义或创建失败。
-触发条件：project/tag/asset filename 清洗后等于保留名，例如 CON.zip、NUL、COM1.txt。
-影响：Windows 节点同步提交文件时失败或反复 retry，资产长期无法完成同步。
-建议修复方向：在 safePart 中对清洗后的 basename 做大小写无关 reserved-name 检查，命中时加安全前缀/后缀。
-建议补充测试：覆盖 SafeRelativePath("p","v","CON.zip")、SafeRelativePath("NUL","v","a.zip")、SafeRelativePath("p","COM1","a.zip")，并断言生成路径不含保留组件。
