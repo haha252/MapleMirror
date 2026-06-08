@@ -52,10 +52,3 @@
 影响：手动扫描语义与配置状态不一致，旧项目 target 可能继续保持 enabled/required 一段时间。
 建议修复方向：Trigger 加载项目后先执行一次 Store.SyncProjectConfig，再分支到单项目/全量扫描；或让 triggerAll 即使没有 enabled project 也同步配置。
 建议补充测试：数据库预置旧 enabled project，ProjectLoader 返回空列表，调用 Trigger(ctx, "", reqID)，断言旧项目 disabled 且 target 为 remove。
-严重级别：中
-文件:行号：internal/master/mirrorsync/github.go (line 39)
-问题：生产路径的 GitHub release 扫描默认使用 http.DefaultClient，没有超时；master main 构造 HTTPGitHubClient 时也没有注入带 timeout 的 client。
-触发条件：GitHub API 或网络连接建立后长期不返回，或响应体卡住。
-影响：后台扫描 goroutine 可能无限阻塞，后续 due project 不再推进；手动扫描请求也可能挂住直到请求上下文取消。
-建议修复方向：生产构造 http.Client{Timeout: ...}，或在每次 scan/list release 外层加 context.WithTimeout；JSON body 也可加合理大小限制。
-建议补充测试：使用阻塞的 fake HTTP server，断言扫描在超时内失败并释放调度循环。

@@ -143,7 +143,10 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *
 	store := mirrorsync.Store{DB: db, Runtime: runtime}
 	service := mirrorsync.Service{
 		Scanner: mirrorsync.Scanner{
-			Store: store, GitHub: mirrorsync.HTTPGitHubClient{Token: token}, Logger: logger,
+			Store: store, GitHub: mirrorsync.HTTPGitHubClient{
+				Client: &http.Client{Timeout: mirrorsync.DefaultGitHubClientTimeout},
+				Token:  token,
+			}, Logger: logger,
 		},
 		Projects: projects, Interval: interval, Logger: logger,
 	}

@@ -14,9 +14,12 @@ type GitHubClient interface {
 }
 
 type HTTPGitHubClient struct {
-	Client *http.Client
-	Token  string
+	Client  *http.Client
+	Token   string
+	Timeout time.Duration
 }
+
+const DefaultGitHubClientTimeout = 2 * time.Minute
 
 type GitHubRelease struct {
 	ID          int64
@@ -37,9 +40,12 @@ type GitHubAsset struct {
 }
 
 func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitHubRelease, error) {
+	timeout := c.requestTimeout()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	client := c.Client
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: timeout}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		"https://api.github.com/repos/"+repo+"/releases?per_page=100", nil)
@@ -94,4 +100,11 @@ func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitH
 		items = append(items, rel)
 	}
 	return items, nil
+}
+
+func (c HTTPGitHubClient) requestTimeout() time.Duration {
+	if c.Timeout > 0 {
+		return c.Timeout
+	}
+	return DefaultGitHubClientTimeout
 }
