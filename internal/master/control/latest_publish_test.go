@@ -13,6 +13,7 @@ func TestVerifiedPendingLatestPublishesCandidate(t *testing.T) {
 	session := seedNodeAndSession(t, repo)
 	seedPendingLatestTarget(t, repo, session.NodeID)
 	seedDownloadTask(t, repo, session.NodeID, "task-new", "asset-new", 0, "")
+	markTaskRunning(t, repo, "task-new")
 
 	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
 		TaskID:            "task-new",

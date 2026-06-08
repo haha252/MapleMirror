@@ -15,6 +15,7 @@ func TestSucceededSyncTaskResultStoresVerifiedInventory(t *testing.T) {
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
 	seedDownloadTask(t, repo, session.NodeID, "task-ok", "asset-1", 0, "")
+	markTaskRunning(t, repo, "task-ok")
 
 	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
 		TaskID:            "task-ok",
@@ -43,6 +44,7 @@ func TestSucceededSyncTaskResultMismatchQuarantinesPublicAsset(t *testing.T) {
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
 	seedDownloadTask(t, repo, session.NodeID, "task-bad", "asset-1", 0, "")
+	markTaskRunning(t, repo, "task-bad")
 
 	result, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
 		TaskID:            "task-bad",

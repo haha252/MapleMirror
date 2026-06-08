@@ -33,6 +33,7 @@ func TestAcceptSyncTaskResultAppliesRetryBackoff(t *testing.T) {
 	}
 
 	for _, item := range expected {
+		markTaskRunning(t, repo, "task-1")
 		start := time.Now().UTC()
 		_, err := repo.AcceptSyncTaskResult(context.Background(), session, item.sequence, protocol.SyncTaskResult{
 			TaskID:  "task-1",
@@ -72,6 +73,7 @@ func TestDigestMismatchTaskResultRetriesWithoutQuarantine(t *testing.T) {
 	session := seedNodeAndSession(t, repo)
 	seedAssetTarget(t, repo, session.NodeID)
 	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+	markTaskRunning(t, repo, "task-1")
 
 	start := time.Now().UTC()
 	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
@@ -104,6 +106,7 @@ func TestTemporaryErrorWithVerifiedPeerRetriesImmediately(t *testing.T) {
 	seedPeerNode(t, repo, "node-2", "源节点", "https://node-2.example.com")
 	seedVerifiedPeerAsset(t, repo, "node-2", "asset-1",
 		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+	markTaskRunning(t, repo, "task-1")
 
 	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
 		TaskID:  "task-1",

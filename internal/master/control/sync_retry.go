@@ -18,12 +18,18 @@ var retryBackoffSchedule = []time.Duration{
 
 func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID string, result protocol.SyncTaskResult, now time.Time) (string, int, string, error) {
 	var attempts int
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(attempts, 0) FROM node_tasks
-		WHERE id = ? AND node_id = ?`, result.TaskID, nodeID).Scan(&attempts); err != nil {
+	var state, leaseExpires string
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(attempts, 0), state,
+		COALESCE(lease_expires_at, '') FROM node_tasks
+		WHERE id = ? AND node_id = ?`, result.TaskID, nodeID).
+		Scan(&attempts, &state, &leaseExpires); err != nil {
 		return "", 0, "", err
 	}
 
 	nowText := now.Format(time.RFC3339Nano)
+	if !syncTaskCompletable(state, leaseExpires, nowText) {
+		return "stale_result", attempts, "", nil
+	}
 	current, err := syncTaskCurrent(ctx, tx, nodeID, result.TaskID, result.AssetID)
 	if err != nil {
 		return "", 0, "", err
@@ -77,6 +83,10 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 			nullable(result.Message), nowText, result.TaskID, nodeID)
 		return "failed", attempts, "", err
 	}
+}
+
+func syncTaskCompletable(state, leaseExpires, now string) bool {
+	return (state == "sent" || state == "running") && leaseExpires != "" && leaseExpires >= now
 }
 
 func syncTaskCurrent(ctx context.Context, tx *sql.Tx, nodeID, taskID, assetID string) (bool, error) {

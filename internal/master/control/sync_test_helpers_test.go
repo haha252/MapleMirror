@@ -3,6 +3,7 @@ package control
 import (
 	"database/sql"
 	"testing"
+	"time"
 )
 
 func seedAssetTarget(t *testing.T, repo Repository, nodeID string) {
@@ -41,4 +42,11 @@ func mustExecControl(t *testing.T, db *sql.DB, stmt string, args ...any) {
 	if _, err := db.Exec(stmt, args...); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func markTaskRunning(t *testing.T, repo Repository, taskID string) {
+	t.Helper()
+	lease := time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)
+	mustExecControl(t, repo.DB, `UPDATE node_tasks SET state = 'running',
+		lease_expires_at = ? WHERE id = ?`, lease, taskID)
 }

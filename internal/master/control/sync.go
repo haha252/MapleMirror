@@ -113,7 +113,7 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	quarantined := false
-	if hasInventory && taskState != "obsolete" {
+	if hasInventory && taskState != "obsolete" && taskState != "stale_result" {
 		if err := upsertSyncResultInventory(ctx, tx, session.NodeID, inventory, now); err != nil {
 			return HeartbeatResult{}, err
 		}
