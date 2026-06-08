@@ -139,12 +139,16 @@ func appendBlockIndex(salt []byte, index uint32) []byte {
 }
 
 func loadOrCreateSecret(path string) ([]byte, error) {
-	if data, err := os.ReadFile(path); err == nil {
+	data, err := os.ReadFile(path)
+	if err == nil {
 		secret, decErr := base64.RawStdEncoding.DecodeString(strings.TrimSpace(string(data)))
 		if decErr != nil || len(secret) < 32 {
 			return nil, errors.New("管理面板会话密钥文件内容无效")
 		}
 		return secret, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("读取管理面板会话密钥失败：%w", err)
 	}
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
