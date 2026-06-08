@@ -29,9 +29,10 @@ type Handler struct {
 	ProbeStore   interface {
 		Response(string) (protocol.PublicProbeResponse, bool)
 	}
-	mu      sync.Mutex
-	active  map[string]int
-	budgets map[string]int64
+	mu             sync.Mutex
+	active         map[string]int
+	budgets        map[string]int64
+	pendingTraffic map[string][]pendingTrafficEvent
 }
 
 type localAsset struct {
@@ -94,6 +95,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.leave(claims.AuthorizationID)
+	if h.rejectPendingTraffic(w, r, claims.AuthorizationID) {
+		return
+	}
 	sent, err := h.authorizationBytes(claims.AuthorizationID)
 	limit := h.authorizationLimit(claims)
 	if err != nil || (r.Method != http.MethodHead && sent >= limit) {

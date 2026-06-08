@@ -21,7 +21,9 @@ func (h *Handler) leave(id string) {
 	defer h.mu.Unlock()
 	if h.active[id] <= 1 {
 		delete(h.active, id)
-		delete(h.budgets, id)
+		if !h.hasPendingTrafficLocked(id) {
+			delete(h.budgets, id)
+		}
 		return
 	}
 	h.active[id]--
