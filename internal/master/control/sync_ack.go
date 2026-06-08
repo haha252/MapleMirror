@@ -27,7 +27,10 @@ func (r Repository) AcceptSyncTaskAck(ctx context.Context, session Session, seq 
 	if state == "" || state == "accepted" {
 		state = "running"
 	}
-	if state != "running" && state != "failed" {
+	if state == "failed" {
+		return HeartbeatResult{}, fmt.Errorf("同步任务 ACK 无效：失败状态必须通过任务结果上报")
+	}
+	if state != "running" {
 		state = "running"
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
