@@ -69,6 +69,10 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		if err != nil {
 			return HeartbeatResult{}, err
 		}
+		completedReconcileTasks, err := completeInventoryReconcileTasks(ctx, tx, session.NodeID, now)
+		if err != nil {
+			return HeartbeatResult{}, err
+		}
 		if _, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
 			return HeartbeatResult{}, err
 		}
@@ -83,6 +87,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 				slog.Int("running_tasks", running),
 				slog.Int("generated_repair_tasks", generatedTasks),
 				slog.Int("cleared_satisfied_tasks", clearedTasks),
+				slog.Int("completed_reconcile_tasks", completedReconcileTasks),
 				slog.Bool("routing_ready", ready))
 		}
 	}

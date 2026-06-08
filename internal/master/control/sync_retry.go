@@ -42,6 +42,10 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 			nowText, nowText, result.TaskID, nodeID)
 		return "obsolete", attempts, "", err
 	}
+	if taskType == "inventory_reconcile" && result.Result == "succeeded" {
+		state, err := acknowledgeInventoryReconcileResult(ctx, tx, nodeID, result, nowText)
+		return state, attempts, "", err
+	}
 	switch result.Result {
 	case "succeeded":
 		_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'succeeded',
