@@ -7,21 +7,6 @@
 
 未发现当前代码证据表明 raw /api/admin/v1/* 已在 server.management_listen 意外暴露：cmd/master/admin_service.go:92-98 只挂载 /admin、/admin/、/static/ 和 /，cmd/master/admin_service_test.go:24-31 也固定 raw admin API 为 404。
 
-中：internal/node/syncer/commit.go:52、internal/node/syncer/commit.go:56、internal/node/syncer/commit.go:61、internal/node/syncer/commit.go:62
-问题：moveAssetFile 的跨目录/跨盘 fallback 会先复制到目标目录临时文件，然后 os.Remove(dst)，再 os.Rename(tmp, dst)。如果删除正式文件后 rename 失败，旧的 verified 文件已被删除，DB 状态仍可能保持 verified。
-触发条件：目标路径已有正式资产，第一次 os.Rename(src,dst) 失败进入 fallback；os.Remove(dst) 成功后，os.Rename(tmp,dst) 因权限、杀软、并发占用或文件系统错误失败。
-影响：正式文件被删除但本地库存未同步降级，公开下载会短期返回不可用；inventory 校验前 master 仍可能认为 node 持有该资产。
-建议修复方向：使用同目录临时文件后用平台安全的 replace/rename 语义；Windows 下避免先删后改名，或失败后尝试恢复旧文件并把 local_assets 标记 missing/mismatch。
-建议补充测试：模拟 os.Remove(dst) 成功但 replace 失败的路径，断言旧文件不丢失，或 DB 状态被降级且不会继续对外标记 verified。
-
-严重级别：高
-文件:行号：internal/master/control/sync_retry.go:40、internal/master/control/sync.go:111、internal/master/control/sync.go:143
-问题：sync_task_result 的 succeeded 分支先把任务置为 succeeded，随后 upsertVerifiedInventory 即使发现本地 digest/size 与资产期望不一致，也只把 node_inventory.state 写成 mismatch，不会把任务改回失败/重试，也不会触发 public asset quarantine。
-触发条件：节点对候选公开资产任务回报 Result: "succeeded"，但 LocalDigestSHA256 或 SizeBytes 与 assets 表不一致。
-影响：任务终态变成 succeeded，库存却是 mismatch；节点不会立即重试，routing_ready 可能长期不能恢复。对公开候选资产，这也绕过了 inventory_report 路径中的隔离逻辑。
-建议修复方向：succeeded 结果必须把 digest/size 校验作为成功前置条件；不一致时按 digest_mismatch/size_mismatch 进入重试或失败。若资产满足公开候选条件，应复用 quarantine 判定。
-建议补充测试：新增公开候选资产的 succeeded + wrong digest/size 测试，断言任务不为 succeeded，库存不为可用；按期望断言进入 retry 或 quarantine。
-
 严重级别：中
 文件:行号：internal/master/control/reports.go:30、internal/master/control/inventory_repair.go:18、internal/master/control/inventory_repair.go:40
 问题：完整库存对账把节点提交的 GeneratedAt 当作本批 verified_at，并用这个时间加载“本批已上报库存”。分片库存只有在每个分片的 GeneratedAt 完全相同时才会被视为同一批。
@@ -29,12 +14,4 @@
 影响：前一片已验证资产会在最终完整报告时被误判为缺失，生成不必要 repair task，routing_ready 被错误拉低。恶意或时钟异常节点可用输入时间制造错误修复风暴。
 建议修复方向：不要用客户端时间作为批次键；使用服务端接收批次 ID、revision 加 node/session 维度，或在完整报告协议中显式携带总量/分页并由服务端聚合。
 建议补充测试：新增两段 inventory report 使用不同 GeneratedAt 的分片测试，断言第一片资产不会被标记 missing，也不会生成 repair task。
-
-严重级别：中
-文件:行号：internal/master/control/enrollment.go:51、internal/master/control/repository.go:111、internal/master/admin/pairing.go:139、internal/master/control/approval.go:99
-问题：登记请求保存并展示的 public_key_fingerprint 完全来自节点请求体，审批时也只比对管理员提交值与数据库中的同一字段；代码没有从 CSR 公钥重新计算该指纹并校验一致性。
-触发条件：节点提交合法 CSR，但请求体中的 PublicKeyFingerprint 填入任意值；管理员按 UI/控制台展示的该值审批。
-影响：证书实际会签给 CSR 公钥，但审批信任仪式中的指纹可被节点伪造，管理员看到的“公钥指纹”不一定对应被签发密钥，削弱 enrollment/approval 的人工确认边界。
-建议修复方向：服务端解析 CSR 后从 csr.PublicKey 计算规范化指纹，存储/展示服务端计算值；请求体指纹只作为可选诊断字段，若存在且不一致则拒绝登记。
-建议补充测试：构造 CSR 与请求体指纹不一致的 enrollment，断言创建或审批失败；再测一致时可正常审批。
 

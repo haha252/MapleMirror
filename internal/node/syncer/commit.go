@@ -2,12 +2,19 @@ package syncer
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 
 	"mirror-server/internal/protocol"
+)
+
+var (
+	assetRename = os.Rename
+	assetRemove = os.Remove
 )
 
 func (e Executor) commitAsset(task protocol.SyncTask, tmpPath, finalPath, rel, digest string, size int64) protocol.SyncTaskResult {
@@ -50,19 +57,51 @@ func (e Executor) reuseOrReplaceTarget(task protocol.SyncTask, tmpPath, finalPat
 }
 
 func moveAssetFile(src, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
+	if err := assetRename(src, dst); err == nil {
 		return nil
 	}
 	tmp, err := copyAssetToTargetDir(src, filepath.Dir(dst))
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp)
-	_ = os.Remove(dst)
-	if err := os.Rename(tmp, dst); err != nil {
+	defer assetRemove(tmp)
+	return replaceAssetFile(src, tmp, dst)
+}
+
+func replaceAssetFile(src, tmp, dst string) error {
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		if err := assetRename(tmp, dst); err != nil {
+			return err
+		}
+		return assetRemove(src)
+	}
+	backup, err := backupPath(dst)
+	if err != nil {
 		return err
 	}
-	return os.Remove(src)
+	if err := assetRename(dst, backup); err != nil {
+		return err
+	}
+	replaced := false
+	defer func() {
+		if replaced {
+			_ = assetRemove(backup)
+		}
+	}()
+	if err := assetRename(tmp, dst); err != nil {
+		_ = assetRename(backup, dst)
+		return err
+	}
+	replaced = true
+	return assetRemove(src)
+}
+
+func backupPath(dst string) (string, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".old-"+hex.EncodeToString(suffix[:])), nil
 }
 
 func copyAssetToTargetDir(src, dir string) (string, error) {

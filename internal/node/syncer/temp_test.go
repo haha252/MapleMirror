@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -125,6 +126,40 @@ func TestMoveAssetFileReplacesExistingTarget(t *testing.T) {
 	}
 	if _, err := os.Stat(src); !os.IsNotExist(err) {
 		t.Fatalf("source temp file should be moved, err=%v", err)
+	}
+}
+
+func TestMoveAssetFileRestoresTargetWhenReplacementRenameFails(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "source.tmp")
+	dst := filepath.Join(dir, "asset.zip")
+	if err := os.WriteFile(src, []byte("fresh"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldRename := assetRename
+	assetRename = func(from, to string) error {
+		if from == src && to == dst {
+			return errors.New("force copy fallback")
+		}
+		if strings.HasPrefix(filepath.Base(from), ".asset-") && to == dst {
+			return errors.New("force replacement failure")
+		}
+		return oldRename(from, to)
+	}
+	t.Cleanup(func() { assetRename = oldRename })
+
+	if err := moveAssetFile(src, dst); err == nil {
+		t.Fatal("replacement failure should be returned")
+	}
+	data, err := os.ReadFile(dst)
+	if err != nil || string(data) != "stale" {
+		t.Fatalf("old target should be restored data=%q err=%v", string(data), err)
+	}
+	if data, err := os.ReadFile(src); err != nil || string(data) != "fresh" {
+		t.Fatalf("source should remain for retry data=%q err=%v", string(data), err)
 	}
 }
 
