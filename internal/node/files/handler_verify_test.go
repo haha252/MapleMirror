@@ -53,6 +53,23 @@ func TestHandlerRejectsFreshModifiedFile(t *testing.T) {
 	assertLocalAssetState(t, db, "mismatch")
 }
 
+func TestHandlerRejectsFreshModifiedFileWithBackdatedMTime(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	freshAt := time.Now().Add(-10 * time.Second).UTC()
+	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
+		WHERE asset_id = 'asset-1'`, testDigestABCDEF, freshAt.Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tamperAssetWithBackdatedMTime(t, storageDir, freshAt)
+
+	rec := serveVerifiedAsset(t, db, storageDir, signer)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("backdated modified file should be rejected: %d", rec.Code)
+	}
+	assertLocalAssetState(t, db, "mismatch")
+}
+
 func TestHandlerMarksExpiredMismatchedFile(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
@@ -88,6 +105,18 @@ func TestHandlerMarksExpiredMissingFile(t *testing.T) {
 		t.Fatalf("过期后文件缺失应拒绝下载：%d", rec.Code)
 	}
 	assertLocalAssetState(t, db, "missing")
+}
+
+func tamperAssetWithBackdatedMTime(t *testing.T, storageDir string, verifiedAt time.Time) {
+	t.Helper()
+	path := filepath.Join(storageDir, "p1", "v1", "a.zip")
+	if err := os.WriteFile(path, []byte("zzzzzz"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backdated := verifiedAt.Add(-time.Second)
+	if err := os.Chtimes(path, backdated, backdated); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func serveVerifiedAsset(t *testing.T, db *sql.DB, storageDir string, signer downloadtoken.Signer) *httptest.ResponseRecorder {

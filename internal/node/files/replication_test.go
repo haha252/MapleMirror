@@ -59,6 +59,30 @@ func TestHandlerRejectsModifiedReplicationAsset(t *testing.T) {
 	assertLocalAssetState(t, db, "mismatch")
 }
 
+func TestHandlerRejectsBackdatedModifiedReplicationAsset(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	freshAt := time.Now().Add(-10 * time.Second).UTC()
+	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
+		WHERE asset_id = 'asset-1'`, testDigestABCDEF, freshAt.Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tamperAssetWithBackdatedMTime(t, storageDir, freshAt)
+	token := signReplicationToken(t, signer, downloadtoken.ReplicationClaims{
+		AssetID: "asset-1", SourceNodeID: "node-1", TargetNodeID: "node-2",
+		ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		RequestID: "req-1", TaskID: "task-1",
+	})
+	req := httptest.NewRequest(http.MethodGet, "/internal/replication/asset-1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("backdated modified replication asset should be rejected: %d", rec.Code)
+	}
+	assertLocalAssetState(t, db, "mismatch")
+}
+
 func TestHandlerRejectsReplicationWithoutToken(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	req := httptest.NewRequest(http.MethodGet, "/internal/replication/asset-1", nil)

@@ -224,7 +224,7 @@ func prepareNodeFile(t *testing.T) (*sql.DB, string, downloadtoken.Signer) {
 	}
 	_, err = db.Exec(`INSERT INTO local_assets
 		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
-		VALUES ('asset-1', ?, 'sha256:aa', 6, ?, 'verified')`,
+		VALUES ('asset-1', ?, 'sha256:bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721', 6, ?, 'verified')`,
 		filepath.Join("p1", "v1", "a.zip"), time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		t.Fatal(err)
