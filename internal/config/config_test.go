@@ -38,6 +38,32 @@ func TestMasterAllowsExplicitManagementNetworkListenForWebPanel(t *testing.T) {
 	}
 }
 
+func TestMasterPublicProbeDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, MasterExample, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadMaster(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Node.PublicProbeEnabled == nil || !*c.Node.PublicProbeEnabled ||
+		c.Node.PublicProbeInterval != "30s" ||
+		c.Node.PublicProbeNetworkFailures != 2 {
+		t.Fatalf("public probe defaults mismatch: %+v", c.Node)
+	}
+}
+
+func TestMasterRejectsInvalidPublicProbeConfig(t *testing.T) {
+	text := strings.Replace(string(MasterExample),
+		`public_probe_ttl: "20s"`, `public_probe_ttl: "4s"`, 1)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	_ = os.WriteFile(path, []byte(text), 0o600)
+	if _, err := LoadMaster(path, nil); err == nil {
+		t.Fatal("node.public_probe_ttl should be greater than public_probe_timeout")
+	}
+}
+
 func TestMissingConfigurationWritesChineseExample(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "node.yaml")
 	_, err := LoadNode(path, nil)

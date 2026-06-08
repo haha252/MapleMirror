@@ -23,6 +23,7 @@ import (
 	nodecontrol "mirror-server/internal/node/control"
 	"mirror-server/internal/node/files"
 	"mirror-server/internal/node/health"
+	nodeprobe "mirror-server/internal/node/probe"
 	"mirror-server/internal/node/syncer"
 	"mirror-server/internal/requestid"
 	"mirror-server/internal/storage"
@@ -77,19 +78,21 @@ func main() {
 		os.Exit(1)
 	}
 	startEnrollmentClient(cfg, database, logger)
-	startControlClient(cfg, database, logger)
+	probeStore := publicProbeStore(cfg, database, logger)
+	startControlClient(cfg, database, logger, probeStore)
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Version: version,
 	}, "X-Request-ID", "X-Request-ID"))
-	if handler := fileHandler(cfg, database, logger); handler != nil {
+	if handler := fileHandler(cfg, database, logger, probeStore); handler != nil {
 		mux.Handle("/downloads/", requestid.Middleware(handler, "X-Request-ID", "X-Request-ID"))
 		mux.Handle("/", requestid.Middleware(handler, "X-Request-ID", "X-Request-ID"))
 	}
 	runServer(cfg.Server.Listen, mux, logger)
 }
 
-func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger) http.Handler {
+func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger,
+	probes *nodeprobe.Store) http.Handler {
 	signer, err := downloadtoken.NewVerifierFromPublicFile(cfg.Download.VerifyPublicKeyFile)
 	if err != nil {
 		logger.Error(context.Background(), "下载令牌验证公钥加载失败，文件服务未启动", slog.String("error", err.Error()))
@@ -101,7 +104,22 @@ func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger) http.Handl
 		return nil
 	}
 	return &files.Handler{DB: db, Storage: cfg.Storage.Directory, NodeID: nodeID,
-		Signer: signer, TrustedCIDRs: cfg.Proxy.TrustedCIDRs, Logger: logger}
+		Signer: signer, TrustedCIDRs: cfg.Proxy.TrustedCIDRs, Logger: logger,
+		ProbeStore: probes}
+}
+
+func publicProbeStore(cfg config.Node, db *sql.DB, logger *logging.Logger) *nodeprobe.Store {
+	nodeID, err := (nodecontrol.IdentityStore{DB: db}).NodeID()
+	if err != nil {
+		return nil
+	}
+	store, err := nodeprobe.NewStore(nodeID, cfg.TLS.KeyFile)
+	if err != nil {
+		logger.Warn(context.Background(), "节点公网探测签名材料加载失败",
+			slog.String("error", err.Error()))
+		return nil
+	}
+	return store
 }
 
 func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
@@ -167,7 +185,8 @@ func interactiveEnrollIfNeeded(path string, cfg *config.Node, db *sql.DB) error 
 	return enroller.RunUntilComplete(15 * time.Minute)
 }
 
-func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
+func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger,
+	probes *nodeprobe.Store) {
 	if cfg.TLS.CAFile == "" || cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
 		logger.Warn(context.Background(), "节点控制证书材料未配置，控制连接未启动")
 		return
@@ -182,7 +201,9 @@ func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
 		executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
 			TempDir: cfg.Storage.TempDirectory, Logger: logger,
 			Probe: syncer.NewSourceProbe(nil), BandwidthLimitBPS: cfg.Sync.BandwidthLimitBPS},
-		limiter: nodecontrol.NewTaskLimiter(cfg.Sync.MaxWorkers),
+		limiter:   nodecontrol.NewTaskLimiter(cfg.Sync.MaxWorkers),
+		bandwidth: nodecontrol.NewNetworkBandwidthSampler(),
+		probes:    probes,
 	}
 	go supervisor.run()
 	logger.Info(context.Background(), "节点主动控制连接已启动", slog.String("master", address.Host))

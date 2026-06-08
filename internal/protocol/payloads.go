@@ -44,6 +44,29 @@ type Welcome struct {
 	RoutingReady            bool   `json:"routing_ready"`
 }
 
+type HeartbeatAckPayload struct {
+	AcceptedSequence uint64                `json:"accepted_sequence"`
+	ServerTime       time.Time             `json:"server_time"`
+	ManagedState     string                `json:"managed_state"`
+	RoutingReady     bool                  `json:"routing_ready"`
+	PublicProbe      *PublicProbeChallenge `json:"public_probe,omitempty"`
+}
+
+type PublicProbeChallenge struct {
+	ChallengeID string    `json:"challenge_id"`
+	Nonce       string    `json:"nonce"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	Algorithm   string    `json:"algorithm"`
+}
+
+type PublicProbeResponse struct {
+	NodeID      string    `json:"node_id"`
+	ChallengeID string    `json:"challenge_id"`
+	Nonce       string    `json:"nonce"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	Signature   string    `json:"signature"`
+}
+
 type Heartbeat struct {
 	Status                  string         `json:"status"`
 	UptimeSeconds           uint64         `json:"uptime_seconds"`

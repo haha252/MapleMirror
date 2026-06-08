@@ -177,10 +177,12 @@ func publicHandler(cfg config.Master, quota config.Quota, projects config.Projec
 func startControlServices(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {
 	timeout, _ := time.ParseDuration(cfg.Node.HeartbeatTimeout)
 	interval, _ := time.ParseDuration(cfg.Node.HeartbeatInterval)
+	probes := publicProbeService(cfg, repo, logger)
 	if cfg.Server.ControlListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
 		tlsCfg, err := controltls.ControlServer(cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile, cfg.Node.TLS.ClientCAFile)
 		startTLSListener(cfg.Server.ControlListen, tlsCfg, err, logger, mastercontrol.ControlServer{
 			Repo: repo, HeartbeatInterval: interval, HeartbeatTimeout: timeout, Logger: logger,
+			PublicProbes: probes,
 		}.Handle)
 	}
 	if cfg.Server.EnrollmentListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
@@ -200,4 +202,18 @@ func startControlServices(cfg config.Master, repo mastercontrol.Repository, logg
 		}.Handle)
 	}
 	startHeartbeatSweep(repo, timeout, logger)
+}
+
+func publicProbeService(cfg config.Master, repo mastercontrol.Repository,
+	logger *logging.Logger) *mastercontrol.PublicProbeService {
+	if cfg.Node.PublicProbeEnabled == nil || !*cfg.Node.PublicProbeEnabled {
+		return nil
+	}
+	interval, _ := time.ParseDuration(cfg.Node.PublicProbeInterval)
+	timeout, _ := time.ParseDuration(cfg.Node.PublicProbeTimeout)
+	ttl, _ := time.ParseDuration(cfg.Node.PublicProbeTTL)
+	return &mastercontrol.PublicProbeService{Repo: repo, Logger: logger,
+		Config: mastercontrol.PublicProbeConfig{Enabled: true,
+			Interval: interval, Timeout: timeout, TTL: ttl,
+			NetworkFailures: cfg.Node.PublicProbeNetworkFailures}}
 }

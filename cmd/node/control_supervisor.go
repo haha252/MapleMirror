@@ -14,16 +14,19 @@ import (
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/logging"
 	nodecontrol "mirror-server/internal/node/control"
+	nodeprobe "mirror-server/internal/node/probe"
 	"mirror-server/internal/node/syncer"
 )
 
 type controlSupervisor struct {
-	cfg      config.Node
-	db       *sql.DB
-	logger   *logging.Logger
-	address  string
-	executor syncer.Executor
-	limiter  *nodecontrol.TaskLimiter
+	cfg       config.Node
+	db        *sql.DB
+	logger    *logging.Logger
+	address   string
+	executor  syncer.Executor
+	limiter   *nodecontrol.TaskLimiter
+	bandwidth nodecontrol.BandwidthSampler
+	probes    *nodeprobe.Store
 }
 
 func (s controlSupervisor) run() {
@@ -96,6 +99,7 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 		MaxMirrorProjects:  s.cfg.Sync.MaxMirrorProjects, TLSConfig: tlsCfg,
 		Storage: s.cfg.Storage.Directory, HeartbeatInterval: interval,
 		Logger: s.logger, Executor: s.executor, DB: s.db, TaskLimiter: s.limiter,
+		Bandwidth: s.bandwidth, ProbeStore: s.probes,
 	}, nil
 }
 

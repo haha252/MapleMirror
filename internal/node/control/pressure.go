@@ -10,15 +10,16 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64) error {
+func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
+	actualBandwidth int64) error {
 	active := c.activeDownloads()
 	body, _ := json.Marshal(protocol.PressureReport{
 		ReportID:            reqID + "-pressure",
 		SampledAt:           time.Now().UTC(),
 		SampleWindowSeconds: int64(c.heartbeatWindowSeconds()),
 		TargetBandwidthBPS:  c.TargetBandwidthBPS,
-		ActualBandwidthBPS:  0,
-		PressureRatio:       pressureRatio(0, c.TargetBandwidthBPS),
+		ActualBandwidthBPS:  actualBandwidth,
+		PressureRatio:       pressureRatio(actualBandwidth, c.TargetBandwidthBPS),
 		ActiveDownloads:     active,
 		FreeBytes:           0,
 		MaxMirrorProjects:   c.MaxMirrorProjects,
@@ -29,6 +30,7 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64)
 			slog.String("request_id", reqID),
 			slog.Uint64("sequence", sequence),
 			slog.Int64("target_bandwidth_bps", c.TargetBandwidthBPS),
+			slog.Int64("actual_bandwidth_bps", actualBandwidth),
 			slog.Int64("active_downloads", active))
 	}
 	if err := c.writeFrame(conn, protocol.Envelope{
@@ -44,6 +46,13 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64)
 
 func (c Client) activeDownloads() int64 {
 	return c.TaskLimiter.Active()
+}
+
+func (c Client) sampleBandwidth() int64 {
+	if c.Bandwidth == nil {
+		return 0
+	}
+	return c.Bandwidth.SampleBandwidthBPS(c.HeartbeatInterval)
 }
 
 func (c Client) heartbeatWindowSeconds() int {

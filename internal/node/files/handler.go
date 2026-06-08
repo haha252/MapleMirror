@@ -2,6 +2,7 @@ package files
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"mime"
@@ -14,6 +15,7 @@ import (
 	"mirror-server/internal/assetpath"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/protocol"
 	"mirror-server/internal/requestid"
 )
 
@@ -24,9 +26,12 @@ type Handler struct {
 	Signer       downloadtoken.Signer
 	TrustedCIDRs []string
 	Logger       *logging.Logger
-	mu           sync.Mutex
-	active       map[string]int
-	budgets      map[string]int64
+	ProbeStore   interface {
+		Response(string) (protocol.PublicProbeResponse, bool)
+	}
+	mu      sync.Mutex
+	active  map[string]int
+	budgets map[string]int64
 }
 
 type localAsset struct {
@@ -43,6 +48,10 @@ type assetRequest struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/.well-known/mirror-node/probes/") {
+		h.servePublicProbe(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/internal/replication/") {
 		h.serveReplication(w, r)
 		return
@@ -123,6 +132,31 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				slog.String("error", err.Error()))
 		}
 	}
+}
+
+func (h *Handler) servePublicProbe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpError(w, r, http.StatusMethodNotAllowed, "请求方法不支持")
+		return
+	}
+	challengeID := strings.TrimPrefix(r.URL.Path,
+		"/.well-known/mirror-node/probes/")
+	if challengeID == "" || strings.Contains(challengeID, "/") {
+		httpError(w, r, http.StatusNotFound, "探测挑战不存在")
+		return
+	}
+	if h.ProbeStore == nil {
+		httpError(w, r, http.StatusNotFound, "探测挑战不存在")
+		return
+	}
+	response, ok := h.ProbeStore.Response(challengeID)
+	if !ok {
+		httpError(w, r, http.StatusNotFound, "探测挑战不存在")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func parseAssetRequest(r *http.Request) (assetRequest, error) {

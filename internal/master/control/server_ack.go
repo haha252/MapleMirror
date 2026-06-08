@@ -11,6 +11,9 @@ import (
 func (s ControlServer) writeMessageAck(conn net.Conn, session Session, reqID string,
 	msg protocol.Envelope, result HeartbeatResult) error {
 	messageType := protocol.TypeHeartbeatAck
+	if msg.MessageType == protocol.TypeHeartbeat && s.PublicProbes != nil {
+		result.PublicProbe = s.PublicProbes.ChallengeForHeartbeat(session.NodeID)
+	}
 	payload := HeartbeatAck(result)
 	if msg.MessageType == protocol.TypeTrafficEvent {
 		messageType = protocol.TypeTrafficEventAck

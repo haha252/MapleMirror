@@ -26,8 +26,16 @@ func TestHeartbeatAndPressureReportUseTargetBandwidth(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if heartbeat.Pressure.TargetBandwidthBPS != 12345 {
+		if heartbeat.Pressure.TargetBandwidthBPS != 12500 {
 			t.Errorf("heartbeat target bandwidth = %d", heartbeat.Pressure.TargetBandwidthBPS)
+			return
+		}
+		if heartbeat.Pressure.ActualBandwidthBPS != 600 {
+			t.Errorf("heartbeat actual bandwidth = %d", heartbeat.Pressure.ActualBandwidthBPS)
+			return
+		}
+		if heartbeat.Pressure.Ratio != 0.048 {
+			t.Errorf("heartbeat pressure ratio = %v", heartbeat.Pressure.Ratio)
 			return
 		}
 		if heartbeat.MaxMirrorProjects != 3 {
@@ -44,8 +52,12 @@ func TestHeartbeatAndPressureReportUseTargetBandwidth(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if pressure.TargetBandwidthBPS != 12345 || pressure.SampleWindowSeconds <= 0 {
+		if pressure.TargetBandwidthBPS != 12500 || pressure.SampleWindowSeconds <= 0 {
 			t.Errorf("unexpected pressure report: %+v", pressure)
+			return
+		}
+		if pressure.ActualBandwidthBPS != 600 || pressure.PressureRatio != 0.048 {
+			t.Errorf("pressure bandwidth fields = %+v", pressure)
 			return
 		}
 		if pressure.MaxMirrorProjects != 3 {
@@ -54,14 +66,29 @@ func TestHeartbeatAndPressureReportUseTargetBandwidth(t *testing.T) {
 		}
 		sendAck(server, report)
 	}()
-	clientCtl := Client{NodeID: "node-1", TargetBandwidthBPS: 12345, MaxMirrorProjects: 3}
-	if err := clientCtl.heartbeat(client, "req-1", 2); err != nil {
+	clientCtl := Client{NodeID: "node-1", TargetBandwidthBPS: 12500, MaxMirrorProjects: 3}
+	if err := clientCtl.heartbeat(client, "req-1", 2, 600); err != nil {
 		t.Fatal(err)
 	}
-	if err := clientCtl.sendPressureReport(client, "req-1", 3); err != nil {
+	if err := clientCtl.sendPressureReport(client, "req-1", 3, 600); err != nil {
 		t.Fatal(err)
 	}
 	<-done
+}
+
+func TestNetworkBandwidthSamplerUsesWindowDelta(t *testing.T) {
+	values := []uint64{1000, 4600}
+	sampler := &NetworkBandwidthSampler{read: func() (uint64, error) {
+		value := values[0]
+		values = values[1:]
+		return value, nil
+	}}
+	if got := sampler.SampleBandwidthBPS(6 * time.Second); got != 0 {
+		t.Fatalf("first sample should establish baseline, got %d", got)
+	}
+	if got := sampler.SampleBandwidthBPS(6 * time.Second); got != 600 {
+		t.Fatalf("sample bandwidth = %d", got)
+	}
 }
 
 func TestTaskLimiterCapsConcurrentExecution(t *testing.T) {

@@ -16,6 +16,7 @@ type HeartbeatResult struct {
 	AcceptedSequence uint64
 	ManagedState     string
 	RoutingReady     bool
+	PublicProbe      *protocol.PublicProbeChallenge
 }
 
 func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq uint64, hb protocol.Heartbeat) (HeartbeatResult, error) {
@@ -167,11 +168,12 @@ func stringArgs(values []string) []any {
 }
 
 func HeartbeatAck(result HeartbeatResult) json.RawMessage {
-	body, _ := json.Marshal(map[string]any{
-		"accepted_sequence": result.AcceptedSequence,
-		"server_time":       time.Now().UTC(),
-		"managed_state":     result.ManagedState,
-		"routing_ready":     result.RoutingReady,
+	body, _ := json.Marshal(protocol.HeartbeatAckPayload{
+		AcceptedSequence: result.AcceptedSequence,
+		ServerTime:       time.Now().UTC(),
+		ManagedState:     result.ManagedState,
+		RoutingReady:     result.RoutingReady,
+		PublicProbe:      result.PublicProbe,
 	})
 	return body
 }

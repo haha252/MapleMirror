@@ -18,6 +18,7 @@ type ControlServer struct {
 	HeartbeatInterval time.Duration
 	HeartbeatTimeout  time.Duration
 	Logger            *logging.Logger
+	PublicProbes      *PublicProbeService
 }
 
 func (s ControlServer) Handle(conn net.Conn) {

@@ -32,25 +32,24 @@ type Client struct {
 	}
 	DB          *sql.DB
 	TaskLimiter *TaskLimiter
+	Bandwidth   BandwidthSampler
+	ProbeStore  interface {
+		Accept(protocol.PublicProbeChallenge) error
+	}
 }
 
 func (c Client) RunOnce() (time.Duration, error) {
 	if err := c.resetInterruptedLocalTasks(); err != nil {
 		return 0, err
 	}
-	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点开始连接主节点",
-			slog.String("node_id", c.NodeID),
-			slog.String("master", c.Address))
-	}
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", c.Address, c.TLSConfig)
+	c.logDebug("node control connection starting",
+		slog.String("node_id", c.NodeID), slog.String("master", c.Address))
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second},
+		"tcp", c.Address, c.TLSConfig)
 	if err != nil {
-		if c.Logger != nil {
-			c.Logger.Debug(context.Background(), "节点连接主节点失败",
-				slog.String("node_id", c.NodeID),
-				slog.String("master", c.Address),
-				slog.String("error", err.Error()))
-		}
+		c.logDebug("node control connection failed",
+			slog.String("node_id", c.NodeID), slog.String("master", c.Address),
+			slog.String("error", err.Error()))
 		return 0, err
 	}
 	defer conn.Close()
@@ -58,58 +57,68 @@ func (c Client) RunOnce() (time.Duration, error) {
 	if err := c.hello(conn, reqID); err != nil {
 		return 0, err
 	}
+	welcome, err := c.readWelcome(conn)
+	if err != nil {
+		return 0, err
+	}
+	interval := time.Duration(welcome.HeartbeatIntervalSecond) * time.Second
+	c.logDebug("node received control welcome",
+		slog.String("node_id", c.NodeID), slog.String("master", c.Address),
+		slog.Int("heartbeat_interval_seconds", welcome.HeartbeatIntervalSecond),
+		slog.Int("heartbeat_timeout_seconds", welcome.HeartbeatTimeoutSecond),
+		slog.String("managed_state", welcome.ManagedState),
+		slog.Bool("routing_ready", welcome.RoutingReady))
+	if err := c.sendSessionReports(conn, reqID); err != nil {
+		return interval, err
+	}
+	return interval, nil
+}
+
+func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
 	_ = conn.SetReadDeadline(time.Now().Add(controlIOTimeout))
 	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
 	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil {
-		return 0, err
+		return protocol.Welcome{}, err
 	}
 	if msg.MessageType == protocol.TypeProtocolError {
-		return 0, parseRejectionError(msg)
+		return protocol.Welcome{}, parseRejectionError(msg)
+	}
+	if msg.MessageType != protocol.TypeWelcome {
+		return protocol.Welcome{}, errors.New("master returned unexpected control response")
 	}
 	var welcome protocol.Welcome
-	if msg.MessageType != protocol.TypeWelcome {
-		return 0, errors.New("主节点返回了非预期的控制响应")
-	}
 	if err := json.Unmarshal(msg.Payload, &welcome); err != nil {
-		return 0, err
+		return protocol.Welcome{}, err
 	}
-	interval := time.Duration(welcome.HeartbeatIntervalSecond) * time.Second
-	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点收到主节点欢迎信息",
-			slog.String("node_id", c.NodeID),
-			slog.String("master", c.Address),
-			slog.Int("heartbeat_interval_seconds", welcome.HeartbeatIntervalSecond),
-			slog.Int("heartbeat_timeout_seconds", welcome.HeartbeatTimeoutSecond),
-			slog.String("managed_state", welcome.ManagedState),
-			slog.Bool("routing_ready", welcome.RoutingReady))
+	return welcome, nil
+}
+
+func (c Client) sendSessionReports(conn net.Conn, reqID string) error {
+	actualBandwidth := c.sampleBandwidth()
+	if err := c.heartbeat(conn, reqID, 2, actualBandwidth); err != nil {
+		return err
 	}
-	if err := c.heartbeat(conn, reqID, 2); err != nil {
-		return interval, err
-	}
-	if err := c.sendPressureReport(conn, reqID, 3); err != nil {
-		return interval, err
+	if err := c.sendPressureReport(conn, reqID, 3, actualBandwidth); err != nil {
+		return err
 	}
 	nextSeq, err := c.sendPendingTraffic(conn, reqID, 4)
 	if err != nil {
-		return interval, err
+		return err
 	}
 	nextSeq, err = c.sendPendingTaskResults(conn, reqID, nextSeq)
 	if err != nil {
-		return interval, err
+		return err
 	}
 	nextSeq, err = c.sendRunningTaskAcks(conn, reqID, nextSeq)
 	if err != nil {
-		return interval, err
+		return err
 	}
 	nextSeq, err = c.sendFullInventoryReport(conn, reqID, nextSeq)
 	if err != nil {
-		return interval, err
+		return err
 	}
-	if err := c.readOptionalTask(conn, reqID, nextSeq); err != nil {
-		return interval, err
-	}
-	return interval, nil
+	return c.readOptionalTask(conn, reqID, nextSeq)
 }
 
 func (c Client) resetInterruptedLocalTasks() error {
@@ -117,7 +126,7 @@ func (c Client) resetInterruptedLocalTasks() error {
 		return nil
 	}
 	_, err := c.DB.Exec(`UPDATE local_sync_tasks SET state = 'interrupted',
-		error_message = '控制连接重新建立后停止续报运行状态',
+		error_message = 'control connection restarted while task was running',
 		updated_at = ? WHERE state = 'running'`,
 		time.Now().UTC().Format(time.RFC3339Nano))
 	return err
@@ -136,7 +145,8 @@ func (c Client) hello(conn net.Conn, reqID string) error {
 	})
 }
 
-func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
+func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
+	actualBandwidth int64) error {
 	active := c.activeDownloads()
 	body, _ := json.Marshal(protocol.Heartbeat{
 		Status: "syncing", ActiveDownloads: active, FreeBytes: 0,
@@ -144,16 +154,12 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 		MaxMirrorProjects:     c.MaxMirrorProjects,
 		Pressure: protocol.PressureSample{
 			TargetBandwidthBPS: c.TargetBandwidthBPS,
-			ActualBandwidthBPS: 0,
-			Ratio:              pressureRatio(0, c.TargetBandwidthBPS),
+			ActualBandwidthBPS: actualBandwidth,
+			Ratio:              pressureRatio(actualBandwidth, c.TargetBandwidthBPS),
 		},
 	})
-	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点发送心跳",
-			slog.String("node_id", c.NodeID),
-			slog.String("request_id", reqID),
-			slog.Uint64("sequence", sequence))
-	}
+	c.logDebug("node heartbeat sent", slog.String("node_id", c.NodeID),
+		slog.String("request_id", reqID), slog.Uint64("sequence", sequence))
 	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: protocol.TypeHeartbeat, SentAt: time.Now().UTC(),
@@ -165,82 +171,30 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64) error {
 	if err != nil {
 		return err
 	}
-	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点收到心跳确认",
-			slog.String("node_id", c.NodeID),
-			slog.String("request_id", reqID),
-			slog.String("message_type", msg.MessageType))
+	if err := c.acceptPublicProbe(msg); err != nil {
+		return err
 	}
+	c.logDebug("node heartbeat ack received", slog.String("node_id", c.NodeID),
+		slog.String("request_id", reqID), slog.String("message_type", msg.MessageType))
 	return nil
 }
 
-func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) error {
-	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
-	_ = conn.SetReadDeadline(time.Time{})
-	if err != nil {
+func (c Client) acceptPublicProbe(msg protocol.Envelope) error {
+	if c.ProbeStore == nil {
 		return nil
 	}
-	if msg.MessageType == protocol.TypeProtocolError {
-		return parseRejectionError(msg)
+	var ack protocol.HeartbeatAckPayload
+	if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+		return err
 	}
-	if msg.MessageType != protocol.TypeSyncTask {
+	if ack.PublicProbe == nil {
 		return nil
 	}
-	task, err := c.decodeSyncTask(msg, reqID)
-	if err != nil {
-		return err
-	}
-	if c.Executor == nil {
-		c.logSyncExecutorDisabled(reqID, task.TaskID)
-		return c.sendTaskResult(conn, reqID, sequence, disabledExecutorResult(task))
-	}
-	if err := c.sendTaskAck(conn, reqID, sequence, task); err != nil {
-		return err
-	}
-	c.executeTaskAsync(task)
-	return nil
+	return c.ProbeStore.Accept(*ack.PublicProbe)
 }
 
-func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64, task protocol.SyncTask) error {
-	body, _ := json.Marshal(protocol.SyncTaskAck{
-		TaskID: task.TaskID, State: "running",
-	})
+func (c Client) logDebug(message string, attrs ...slog.Attr) {
 	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点确认同步任务开始执行",
-			slog.String("node_id", c.NodeID),
-			slog.String("request_id", reqID),
-			slog.String("task_id", task.TaskID),
-			slog.String("asset_id", task.Asset.AssetID))
+		c.Logger.Debug(context.Background(), message, attrs...)
 	}
-	if err := c.writeFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-ack",
-		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
-		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
-	}); err != nil {
-		return err
-	}
-	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
-	return err
-}
-
-func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64, result protocol.SyncTaskResult) error {
-	body, _ := json.Marshal(result)
-	if c.Logger != nil {
-		c.Logger.Debug(context.Background(), "节点回传同步任务结果",
-			slog.String("node_id", c.NodeID),
-			slog.String("request_id", reqID),
-			slog.String("task_id", result.TaskID),
-			slog.String("asset_id", result.AssetID),
-			slog.String("result", result.Result))
-	}
-	if err := c.writeFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-result",
-		MessageType: protocol.TypeSyncTaskResult, SentAt: time.Now().UTC(),
-		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
-	}); err != nil {
-		return err
-	}
-	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
-	return err
 }

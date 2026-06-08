@@ -63,11 +63,16 @@ type DownloadToken struct {
 	SigningKeyFile        string `yaml:"signing_key_file"`
 }
 type NodeControl struct {
-	HeartbeatTimeout  string `yaml:"heartbeat_timeout"`
-	HeartbeatInterval string `yaml:"heartbeat_interval"`
-	EnrollmentTimeout string `yaml:"enrollment_timeout"`
-	PairingCodeTTL    string `yaml:"pairing_code_ttl"`
-	TLS               TLS    `yaml:"tls"`
+	HeartbeatTimeout           string `yaml:"heartbeat_timeout"`
+	HeartbeatInterval          string `yaml:"heartbeat_interval"`
+	PublicProbeEnabled         *bool  `yaml:"public_probe_enabled"`
+	PublicProbeInterval        string `yaml:"public_probe_interval"`
+	PublicProbeTimeout         string `yaml:"public_probe_timeout"`
+	PublicProbeTTL             string `yaml:"public_probe_ttl"`
+	PublicProbeNetworkFailures int    `yaml:"public_probe_network_failures"`
+	EnrollmentTimeout          string `yaml:"enrollment_timeout"`
+	PairingCodeTTL             string `yaml:"pairing_code_ttl"`
+	TLS                        TLS    `yaml:"tls"`
 }
 type TLS struct {
 	CAFile            string `yaml:"ca_file"`
@@ -123,6 +128,18 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.DownloadToken.VerifyPublicKeyFile, "secrets/download-token-ed25519.pub", "download_token.verify_public_key_file", warn)
 	setString(&c.Node.HeartbeatTimeout, "30s", "node.heartbeat_timeout", warn)
 	setString(&c.Node.HeartbeatInterval, "10s", "node.heartbeat_interval", warn)
+	if c.Node.PublicProbeEnabled == nil {
+		value := true
+		c.Node.PublicProbeEnabled = &value
+		warnDefault(warn, "node.public_probe_enabled", "true")
+	}
+	setString(&c.Node.PublicProbeInterval, "30s", "node.public_probe_interval", warn)
+	setString(&c.Node.PublicProbeTimeout, "5s", "node.public_probe_timeout", warn)
+	setString(&c.Node.PublicProbeTTL, "20s", "node.public_probe_ttl", warn)
+	if c.Node.PublicProbeNetworkFailures == 0 {
+		c.Node.PublicProbeNetworkFailures = 2
+		warnDefault(warn, "node.public_probe_network_failures", "2")
+	}
 	setString(&c.Node.EnrollmentTimeout, "10m", "node.enrollment_timeout", warn)
 	setString(&c.Node.PairingCodeTTL, "5m", "node.pairing_code_ttl", warn)
 	setString(&c.Node.TLS.CAFile, "secrets/master-ca.pem", "node.tls.ca_file", warn)
@@ -160,7 +177,24 @@ func validateMaster(c Master) error {
 	if err := validateLogging(c.Logging); err != nil {
 		return err
 	}
-	for field, value := range map[string]string{"database.busy_timeout": c.Database.BusyTimeout, "scan.interval": c.Scan.Interval, "altcha.challenge_ttl": c.ALTCHA.ChallengeTTL, "api_pow.challenge_ttl": c.APIPoW.ChallengeTTL, "download_token.ttl": c.DownloadToken.TTL, "node.heartbeat_timeout": c.Node.HeartbeatTimeout, "node.heartbeat_interval": c.Node.HeartbeatInterval, "node.enrollment_timeout": c.Node.EnrollmentTimeout, "node.pairing_code_ttl": c.Node.PairingCodeTTL, "admin.web.session_ttl": c.Admin.Web.SessionTTL, "admin.web.login_failure_window": c.Admin.Web.LoginFailureWindow, "admin.web.login_ban_duration": c.Admin.Web.LoginBanDuration} {
+	durations := map[string]string{
+		"database.busy_timeout":          c.Database.BusyTimeout,
+		"scan.interval":                  c.Scan.Interval,
+		"altcha.challenge_ttl":           c.ALTCHA.ChallengeTTL,
+		"api_pow.challenge_ttl":          c.APIPoW.ChallengeTTL,
+		"download_token.ttl":             c.DownloadToken.TTL,
+		"node.heartbeat_timeout":         c.Node.HeartbeatTimeout,
+		"node.heartbeat_interval":        c.Node.HeartbeatInterval,
+		"node.public_probe_interval":     c.Node.PublicProbeInterval,
+		"node.public_probe_timeout":      c.Node.PublicProbeTimeout,
+		"node.public_probe_ttl":          c.Node.PublicProbeTTL,
+		"node.enrollment_timeout":        c.Node.EnrollmentTimeout,
+		"node.pairing_code_ttl":          c.Node.PairingCodeTTL,
+		"admin.web.session_ttl":          c.Admin.Web.SessionTTL,
+		"admin.web.login_failure_window": c.Admin.Web.LoginFailureWindow,
+		"admin.web.login_ban_duration":   c.Admin.Web.LoginBanDuration,
+	}
+	for field, value := range durations {
 		if err := validDuration(field, value); err != nil {
 			return err
 		}
@@ -169,6 +203,14 @@ func validateMaster(c Master) error {
 	heartbeatInterval, _ := time.ParseDuration(c.Node.HeartbeatInterval)
 	if heartbeatInterval >= heartbeatTimeout {
 		return errors.New("node.heartbeat_interval 必须小于 node.heartbeat_timeout")
+	}
+	publicProbeTimeout, _ := time.ParseDuration(c.Node.PublicProbeTimeout)
+	publicProbeTTL, _ := time.ParseDuration(c.Node.PublicProbeTTL)
+	if publicProbeTTL <= publicProbeTimeout {
+		return errors.New("node.public_probe_ttl 必须大于 node.public_probe_timeout")
+	}
+	if c.Node.PublicProbeNetworkFailures <= 0 {
+		return errors.New("node.public_probe_network_failures 必须大于零")
 	}
 	if _, err := time.LoadLocation(c.Stats.Timezone); err != nil {
 		return fmt.Errorf("统计时区 stats.timezone 无效：%w", err)
