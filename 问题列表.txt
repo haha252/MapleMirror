@@ -1,0 +1,113 @@
+中：internal/clientip/clientip.go:45
+问题：可信代理场景下直接取 X-Forwarded-For 第一段作为客户端 IP。
+触发条件：管理监听在 proxy.trusted_cidrs 后面，前置代理没有覆盖而是追加/透传客户端自带的 X-Forwarded-For。攻击者可伪造第一段 IP。
+影响：登录失败封禁和 session 绑定都依赖 adminui.clientIP，可通过变换伪造 XFF 绕过 admin_ip_blocks，也能让 session 绑定到攻击者指定的 IP 字符串。
+建议修复方向：要求前置代理覆盖 XFF，或在后端按可信代理链从右向左解析“第一个非可信地址”，并拒绝畸形链；管理面板最好支持独立的可信代理配置。
+建议补充测试：可信代理远端、XFF 为 spoof, real 时不得采用 spoof；多级代理链应只接受预期客户端地址。
+
+低：cmd/master/admin_service.go:92
+问题：当前管理监听没有挂载 raw /api/admin/v1/*，但 internal/master/admin/* 的 Bearer/mTLS 旧实现仍存在且可被误接入；配置结构也已不再解析 admin.token_*、admin.high_risk_require_mtls。
+触发条件：后续维护者复用 internal/master/admin.Server.Handler() 或恢复 raw mux 挂载。
+影响：安全模型会分裂成 Web session 与旧 Bearer/mTLS 两套边界，容易重新暴露裸 API。
+建议修复方向：删除或构建标签隔离旧 raw admin server；如保留，明确只用于测试/迁移，并加注释和集成测试保证生产 adminHandler 不挂载。
+建议补充测试：保留现有 GET /api/admin/v1/nodes 为 404 的集成测试，并增加所有 /api/admin/v1/ 前缀在管理监听均不可达的覆盖。
+
+未发现当前代码证据表明 raw /api/admin/v1/* 已在 server.management_listen 意外暴露：cmd/master/admin_service.go:92-98 只挂载 /admin、/admin/、/static/ 和 /，cmd/master/admin_service_test.go:24-31 也固定 raw admin API 为 404。
+
+严重级别：中
+文件:行号：internal/master/control/heartbeat.go (line 62)、internal/master/control/heartbeat.go (line 64)、internal/master/public/download_url.go (line 9)、web/public/static/download-pow.js (line 41)
+问题：public_download_base_url 只校验为任意 HTTP/HTTPS URL，授权响应再无 host/path 约束地拼接为 download_url，前端直接 window.location.assign()。
+触发条件：已接入节点上报或配置异常/恶意的 public_download_base_url，例如非预期域名、明文 HTTP、带路径前缀的第三方地址。
+影响：主站公开下载页可成为带 PoW 背书的跨站跳转入口，并把 download_token 追加到非预期节点 URL；若使用 HTTP 或第三方域，令牌泄露和钓鱼风险上升。
+建议修复方向：在 master 接受心跳时引入下载节点域名 allowlist 或注册期绑定校验；生产环境默认拒绝 HTTP；拼接 URL 使用 net/url 规范化并禁止危险 path/query 基址。
+建议补充测试：心跳上报非 allowlist host、HTTP URL、带 query/path 的 base URL 时不可进入可下载路由；授权响应只返回受信下载域。
+
+严重级别：低
+文件:行号：web/public/static/download-pow.js (line 41)、web/public/static/download-pow.js (line 43)、web/public/static/download-pow.js (line 78)、internal/master/public/page_render.go (line 34)
+问题：浏览器下载把 download_token 放入 query 参数跳转，但公开页面没有设置 Referrer-Policy 等安全头。
+触发条件：用户完成 PoW 后跳转到节点 download_url?token=...，后续链路经过浏览器历史、代理访问日志、下载节点日志或非预期重定向。
+影响：短时 token 更容易出现在 URL 日志和历史记录中；若下载节点或中间层产生跨站跳转，query token 有被转发为 Referer 的风险。
+建议修复方向：优先让同源/受控下载入口使用 Authorization: Bearer；必须 query 传递时，在主站页面和节点响应设置 Referrer-Policy: no-referrer，并确保访问日志脱敏 query。
+建议补充测试：页面响应包含 Referrer-Policy；节点文件服务日志不记录完整 query token；带 token URL 重定向场景不外泄 Referer。
+
+只读审计完成，未修改文件、未提交、未建分支。按代码证据只报告以下问题：
+
+严重级别：中
+文件:行号：internal/bootstrap/master.go:35、internal/bootstrap/master.go:39、internal/bootstrap/master.go:48、internal/bootstrap/master.go:55
+问题：主节点 bootstrap 的 master CA 私钥路径硬编码为 secrets/master-ca.key，且 MasterNeedsMaterials 不检查该文件。
+触发条件：用户调整安全材料目录或只保留配置字段可见的 node.tls.ca_file/cert_file/key_file 等文件，但 secrets/master-ca.key 不在预期位置。
+影响：配置无法完整表达 master CA key 位置；后续补生成控制/管理证书时会依赖一个文档和示例都没有暴露的隐式路径，导致初始化失败或材料分散到非预期目录。
+建议修复方向：新增显式配置字段，或把 master CA key 路径从 node.tls.ca_file 规则化推导并纳入文档；同时让 MasterNeedsMaterials 检查它。
+建议补充测试：覆盖自定义 TLS/secret 路径下 EnsureMasterMaterials 和 MasterNeedsMaterials 的一致性。
+
+严重级别：中
+文件:行号：internal/config/common.go:48、internal/config/yaml_repair.go:30、internal/config/yaml_repair.go:40
+问题：YAML repair 在加载阶段直接 os.WriteFile(path, encoded, 0o600) 覆盖原配置，没有临时文件 + rename，也没有先整体校验再替换。
+触发条件：现有 YAML 缺字段、缺注释或触发迁移，LoadMaster/LoadProjects/LoadQuota/LoadNode 调用 repair。
+影响：进程中断、磁盘错误或并发读取时可能留下半写配置；即使后续 validate 失败，文件也已被 repair 改写。
+建议修复方向：改为写同目录临时文件、fsync/rename；必要时先对修复后的数据 unmarshal + validate 成功后再替换。
+建议补充测试：模拟 repair 后 validate 失败，断言原文件不被替换；增加同目录临时文件替换路径测试。
+
+严重级别：低
+文件:行号：docs/数据模型与事务.md:120、cmd/master/main.go:180、cmd/master/main.go:187、internal/controltls/config.go:18、internal/controltls/config.go:37
+问题：活动文档仍写主节点 node.tls.ca_file/cert_file/key_file “路径字段已预留，未启用”，但启动代码已经加载这些 TLS 材料并用于控制/登记通道。
+触发条件：运维按当前 docs/数据模型与事务.md 判断 TLS 字段只是预留。
+影响：文档合同和实际启动行为冲突，可能导致部署时遗漏证书材料或误判控制面安全边界。
+建议修复方向：更新活动文档，把该表项改为“已启用”，并说明 control/enrollment/admin 各自加载哪些文件。
+建议补充测试：文档层面可补充配置合同检查，至少覆盖 docs/*.md 中不再出现已启用字段的“未启用”描述。
+
+补充核对：configs/*.example.yaml 与 internal/config/templates/*.example.yaml 本次比对没有发现漂移；docs/old-docs/ 未作为合同面审计。
+
+中：internal/node/syncer/executor_helpers.go:23、internal/node/syncer/source_probe.go:115、internal/node/syncer/fallback.go:28
+问题：node 端对 primary DownloadURL 和 fallback source.DownloadURL 没有做本地 URL 策略校验。sourceOrigin 只检查 scheme/host 非空，fetchWithToken 直接 http.NewRequestWithContext + client.Do。
+触发条件：master 下发的资产 source_url 或 peer fallback URL 指向内网/localhost/非预期 HTTP 地址；例如恶意或误配置节点通过 public_download_base_url 提供 http://127.0.0.1:...，primary 不可用后目标 node 会请求该 fallback URL。
+影响：形成 node 侧 SSRF 请求面。即使最终 digest/size 不匹配不会落盘，请求本身已经发出，可能探测或访问目标 node 所在网络的内部 HTTP 服务。
+建议修复方向：在 node syncer 侧增加统一 URL policy，至少限制 http/https、拒绝 loopback/link-local/private CIDR、拒绝 userinfo、限制重定向后的目标仍满足策略；fallback URL 还应要求路径为 /internal/replication/{asset_id} 并校验 token claims 的 source/target。
+建议补充测试：为 fetchPrimary/fetchFallback 增加 localhost、私网 IP、重定向到私网、非法 scheme 的拒绝测试，并断言不会发起 GET。
+
+中：internal/node/files/download_verify.go:16、internal/node/files/download_verify.go:34、internal/node/files/handler.go:109、internal/node/files/handler.go:119、internal/node/files/handler_verify_test.go:37
+问题：公开文件服务在 verified_at 1 分钟 freshness 窗口内跳过 hash 校验，只在 ServeContent 前检查文件大小。现有测试 TestHandlerSkipsFreshVerificationWindow 明确覆盖了同大小内容被替换后仍返回 200。
+触发条件：本地资产刚被标记 verified 后，磁盘上的同路径文件在 1 分钟内被同大小不同内容替换；随后持有效下载 token 请求该资产。
+影响：digest 校验被 freshness 窗口绕过，node 可向公网客户端下载与 DB digest 不一致的内容，并记录正常流量事件。
+建议修复方向：公开下载路径不要跳过内容校验，或改为更强的轻量校验条件，例如文件 inode/mtime/size 快照绑定；至少对 verified_at fresh 的文件也检查 mtime 不晚于 verified_at。复制服务 serveReplication 也只有 size 校验，建议复用同一校验策略。
+建议补充测试：把 TestHandlerSkipsFreshVerificationWindow 改成同大小篡改应拒绝；为 /internal/replication/ 增加同大小篡改不应 ServeContent 的测试。
+
+中：internal/node/syncer/commit.go:52、internal/node/syncer/commit.go:56、internal/node/syncer/commit.go:61、internal/node/syncer/commit.go:62
+问题：moveAssetFile 的跨目录/跨盘 fallback 会先复制到目标目录临时文件，然后 os.Remove(dst)，再 os.Rename(tmp, dst)。如果删除正式文件后 rename 失败，旧的 verified 文件已被删除，DB 状态仍可能保持 verified。
+触发条件：目标路径已有正式资产，第一次 os.Rename(src,dst) 失败进入 fallback；os.Remove(dst) 成功后，os.Rename(tmp,dst) 因权限、杀软、并发占用或文件系统错误失败。
+影响：正式文件被删除但本地库存未同步降级，公开下载会短期返回不可用；inventory 校验前 master 仍可能认为 node 持有该资产。
+建议修复方向：使用同目录临时文件后用平台安全的 replace/rename 语义；Windows 下避免先删后改名，或失败后尝试恢复旧文件并把 local_assets 标记 missing/mismatch。
+建议补充测试：模拟 os.Remove(dst) 成功但 replace 失败的路径，断言旧文件不丢失，或 DB 状态被降级且不会继续对外标记 verified。
+
+严重级别：高
+文件:行号：internal/master/control/sync_retry.go:40、internal/master/control/sync.go:111、internal/master/control/sync.go:143
+问题：sync_task_result 的 succeeded 分支先把任务置为 succeeded，随后 upsertVerifiedInventory 即使发现本地 digest/size 与资产期望不一致，也只把 node_inventory.state 写成 mismatch，不会把任务改回失败/重试，也不会触发 public asset quarantine。
+触发条件：节点对候选公开资产任务回报 Result: "succeeded"，但 LocalDigestSHA256 或 SizeBytes 与 assets 表不一致。
+影响：任务终态变成 succeeded，库存却是 mismatch；节点不会立即重试，routing_ready 可能长期不能恢复。对公开候选资产，这也绕过了 inventory_report 路径中的隔离逻辑。
+建议修复方向：succeeded 结果必须把 digest/size 校验作为成功前置条件；不一致时按 digest_mismatch/size_mismatch 进入重试或失败。若资产满足公开候选条件，应复用 quarantine 判定。
+建议补充测试：新增公开候选资产的 succeeded + wrong digest/size 测试，断言任务不为 succeeded，库存不为可用；按期望断言进入 retry 或 quarantine。
+
+严重级别：中
+文件:行号：internal/master/control/reports.go:30、internal/master/control/inventory_repair.go:18、internal/master/control/inventory_repair.go:40
+问题：完整库存对账把节点提交的 GeneratedAt 当作本批 verified_at，并用这个时间加载“本批已上报库存”。分片库存只有在每个分片的 GeneratedAt 完全相同时才会被视为同一批。
+触发条件：节点分片上报库存，前一片 Complete=false，后一片 Complete=true，但两片 GeneratedAt 不同。现有测试只覆盖相同 GeneratedAt。
+影响：前一片已验证资产会在最终完整报告时被误判为缺失，生成不必要 repair task，routing_ready 被错误拉低。恶意或时钟异常节点可用输入时间制造错误修复风暴。
+建议修复方向：不要用客户端时间作为批次键；使用服务端接收批次 ID、revision 加 node/session 维度，或在完整报告协议中显式携带总量/分页并由服务端聚合。
+建议补充测试：新增两段 inventory report 使用不同 GeneratedAt 的分片测试，断言第一片资产不会被标记 missing，也不会生成 repair task。
+
+严重级别：中
+文件:行号：internal/master/control/enrollment.go:51、internal/master/control/repository.go:111、internal/master/admin/pairing.go:139、internal/master/control/approval.go:99
+问题：登记请求保存并展示的 public_key_fingerprint 完全来自节点请求体，审批时也只比对管理员提交值与数据库中的同一字段；代码没有从 CSR 公钥重新计算该指纹并校验一致性。
+触发条件：节点提交合法 CSR，但请求体中的 PublicKeyFingerprint 填入任意值；管理员按 UI/控制台展示的该值审批。
+影响：证书实际会签给 CSR 公钥，但审批信任仪式中的指纹可被节点伪造，管理员看到的“公钥指纹”不一定对应被签发密钥，削弱 enrollment/approval 的人工确认边界。
+建议修复方向：服务端解析 CSR 后从 csr.PublicKey 计算规范化指纹，存储/展示服务端计算值；请求体指纹只作为可选诊断字段，若存在且不一致则拒绝登记。
+建议补充测试：构造 CSR 与请求体指纹不一致的 enrollment，断言创建或审批失败；再测一致时可正常审批。
+
+严重级别：中
+文件:行号：scripts/build-windows.bat (line 24)、scripts/build-linux-amd64.sh (line 22)、web/embed.go (line 7)
+问题：构建脚本在缺少 clang/zig 时声明“使用浏览器 JS 回退”，但不会删除或校验现有 web/public/static/pow.wasm；随后 go:embed public/static/* 会把仓库里可能陈旧的 pow.wasm 打进二进制。
+触发条件：web/wasm/pow.c 或 worker ABI 修改后，在无 wasm 工具链环境执行构建。
+影响：线上可能运行陈旧 WASM，而不是源码对应的实现或真正 JS fallback，导致 PoW 页面行为与源码不一致。
+建议修复方向：发布构建缺少 wasm 工具链时直接失败；或引入生成产物哈希校验；若选择 fallback，应显式移除/不嵌入 pow.wasm 并测试 404 fallback 路径。
+建议补充测试：模拟无 clang/zig 构建，断言不会嵌入陈旧 pow.wasm；增加 pow.c 与嵌入 wasm 版本/哈希一致性检查。
+
