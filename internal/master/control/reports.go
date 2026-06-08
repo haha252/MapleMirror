@@ -120,6 +120,9 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 	if err != nil {
 		return result, err
 	}
+	if !inventoryTargetRequired(ctx, tx, nodeID, item.AssetID) {
+		return result, nil
+	}
 	result.ExpectedDigest = expectedDigest
 	result.ExpectedSize = expectedSize
 	result.PublicAsset = publicCandidateAsset(ctx, tx, item.AssetID)
@@ -151,6 +154,17 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 	result.LocalDigest = localDigest
 	result.LocalSize = localSize
 	return result, err
+}
+
+func inventoryTargetRequired(ctx context.Context, tx interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, nodeID, assetID string) bool {
+	var ok int
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS(
+		SELECT 1 FROM target_inventory
+		WHERE node_id = ? AND asset_id = ? AND desired_state = 'required'
+	)`, nodeID, assetID).Scan(&ok)
+	return err == nil && ok == 1
 }
 
 func (r Repository) AcceptPressureReport(ctx context.Context, session Session, seq uint64, report protocol.PressureReport) (HeartbeatResult, error) {
