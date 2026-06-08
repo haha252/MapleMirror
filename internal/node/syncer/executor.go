@@ -3,11 +3,11 @@ package syncer
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"mirror-server/internal/logging"
 	"mirror-server/internal/protocol"
@@ -115,14 +115,24 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 				slog.Int("fallback_sources", len(task.FallbackSources)),
 				slog.String("error", err.Error()))
 		}
-		digest, size, err = e.fetchFallback(ctx, task, tmpPath)
-		if err != nil {
-			if e.Logger != nil && len(task.FallbackSources) == 0 {
+		if len(task.FallbackSources) == 0 {
+			_ = os.Remove(tmpPath)
+			if errors.Is(err, errAssetTooLarge) {
+				return taskResult(task, "size_mismatch", digest, size, "资产大小超过期望")
+			}
+			if e.Logger != nil {
 				e.Logger.Warn(context.Background(), "节点源站不可用且没有可用节点副本，等待主节点重试",
 					slog.String("task_id", task.TaskID),
 					slog.String("asset_id", task.Asset.AssetID))
 			}
+			return taskResult(task, "temporary_error", digest, size, "下载资产失败")
+		}
+		digest, size, err = e.fetchFallback(ctx, task, tmpPath)
+		if err != nil {
 			_ = os.Remove(tmpPath)
+			if errors.Is(err, errAssetTooLarge) {
+				return taskResult(task, "size_mismatch", digest, size, "资产大小超过期望")
+			}
 			return taskResult(task, "temporary_error", digest, size, "下载资产失败")
 		}
 	}
@@ -164,85 +174,4 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 			slog.Int64("size_bytes", size))
 	}
 	return result
-}
-
-func (e Executor) reuseVerifiedAsset(task protocol.SyncTask) (protocol.SyncTaskResult, bool) {
-	var rel, digest string
-	var size int64
-	err := e.DB.QueryRow(`SELECT relative_path, digest_sha256, size_bytes FROM local_assets
-		WHERE asset_id = ? AND state = 'verified'`, task.Asset.AssetID).Scan(&rel, &digest, &size)
-	if err != nil {
-		return protocol.SyncTaskResult{}, false
-	}
-	if digest != task.Asset.DigestSHA256 || size != task.Asset.SizeBytes {
-		return protocol.SyncTaskResult{}, false
-	}
-	if gotDigest, gotSize, err := fileDigest(filepath.Join(e.Storage, rel)); err != nil ||
-		gotDigest != digest || gotSize != size {
-		return protocol.SyncTaskResult{}, false
-	}
-	return taskResult(task, "succeeded", digest, size, "资产已由并发任务落盘"), true
-}
-
-func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {
-	if e.Logger != nil {
-		e.Logger.Debug(context.Background(), "节点开始删除本地资产",
-			slog.String("task_id", task.TaskID),
-			slog.String("asset_id", task.Asset.AssetID))
-	}
-	var rel string
-	err := e.DB.QueryRow(`SELECT relative_path FROM local_assets WHERE asset_id = ?`, task.Asset.AssetID).Scan(&rel)
-	if err != nil {
-		if e.Logger != nil {
-			e.Logger.Debug(context.Background(), "节点删除任务对应资产不存在",
-				slog.String("task_id", task.TaskID),
-				slog.String("asset_id", task.Asset.AssetID))
-		}
-		return taskResult(task, "succeeded", "", 0, "本地资产不存在")
-	}
-	_ = os.Remove(filepath.Join(e.Storage, rel))
-	_, err = e.DB.Exec(`UPDATE local_assets SET state = 'removed' WHERE asset_id = ?`, task.Asset.AssetID)
-	if err != nil {
-		if e.Logger != nil {
-			e.Logger.Warn(context.Background(), "节点更新本地删除状态失败",
-				slog.String("task_id", task.TaskID),
-				slog.String("asset_id", task.Asset.AssetID),
-				slog.String("error", err.Error()))
-		}
-		return taskResult(task, "temporary_error", "", 0, "更新本地状态失败")
-	}
-	if e.Logger != nil {
-		e.Logger.Debug(context.Background(), "节点本地资产删除完成",
-			slog.String("task_id", task.TaskID),
-			slog.String("asset_id", task.Asset.AssetID))
-	}
-	return taskResult(task, "succeeded", "", 0, "本地资产已清理")
-}
-
-func (e Executor) upsertAsset(assetID, rel, digest string, size int64) error {
-	if _, err := e.DB.Exec(`UPDATE local_assets SET state = 'superseded',
-		verified_at = ? WHERE relative_path = ? AND asset_id != ?
-		AND state = 'verified'`,
-		time.Now().UTC().Format(time.RFC3339Nano), rel, assetID); err != nil {
-		return err
-	}
-	_, err := e.DB.Exec(`INSERT INTO local_assets
-		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
-		VALUES (?, ?, ?, ?, ?, 'verified')
-		ON CONFLICT(asset_id) DO UPDATE SET relative_path = excluded.relative_path,
-		digest_sha256 = excluded.digest_sha256, size_bytes = excluded.size_bytes,
-		verified_at = excluded.verified_at, state = 'verified'`,
-		assetID, rel, digest, size, time.Now().UTC().Format(time.RFC3339Nano))
-	return err
-}
-
-func (e Executor) recordTask(task protocol.SyncTask, state, message string) error {
-	_, err := e.DB.Exec(`INSERT INTO local_sync_tasks
-		(task_id, asset_id, task_type, state, error_message, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(task_id) DO UPDATE SET state = excluded.state,
-		error_message = excluded.error_message, updated_at = excluded.updated_at`,
-		task.TaskID, task.Asset.AssetID, task.TaskType, state, nullable(message),
-		time.Now().UTC().Format(time.RFC3339Nano))
-	return err
 }

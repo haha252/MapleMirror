@@ -7,14 +7,6 @@
 建议补充测试：新增两段 inventory report 使用不同 GeneratedAt 的分片测试，断言第一片资产不会被标记 missing，也不会生成 repair task。
 
 严重级别：高
-文件:行号：internal/node/syncer/executor_helpers.go (line 47)、internal/node/syncer/executor_helpers.go (line 54)、internal/node/syncer/executor.go (line 140)
-问题：同步下载对响应体没有按 task.Asset.SizeBytes 做硬上限，先完整写入临时文件，下载结束后才判断大小。
-触发条件：源站或 peer fallback 返回远大于期望大小的 2xx 响应，或持续输出数据。
-影响：下载节点磁盘可被写满；sync.max_workers 被大文件/无限流占住，后续同步任务阻塞。
-建议修复方向：把期望大小传入 fetchWithToken，使用 io.LimitReader/计数 reader 在 SizeBytes + 1 处立即中断并删除临时文件；可先检查 Content-Length，但不能只依赖它。
-建议补充测试：httptest 返回 SizeBytes+1 和持续流两类响应，断言节点提前返回 size_mismatch/temporary_error，临时文件被清理且写入字节不超过上限。
-
-严重级别：高
 文件:行号：cmd/node/main.go (line 201)、internal/node/syncer/executor_helpers.go (line 27)、internal/node/syncer/executor_helpers.go (line 29)、internal/node/control/task_results.go (line 111)
 问题：生产构造 Executor 未配置 HTTP client；fetchWithToken 回落到无超时的 http.DefaultClient，异步任务又用 context.Background() 执行。
 触发条件：源站或 fallback peer 接受连接后不返回 body、不结束 body，或网络半开。

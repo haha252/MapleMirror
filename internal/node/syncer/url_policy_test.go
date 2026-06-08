@@ -20,7 +20,7 @@ func TestFetchWithTokenRejectsLoopbackBeforeRequest(t *testing.T) {
 	defer server.Close()
 
 	_, _, err := (Executor{}).fetchWithToken(context.Background(),
-		server.URL, filepath.Join(t.TempDir(), "asset.tmp"), "")
+		server.URL, filepath.Join(t.TempDir(), "asset.tmp"), "", 6)
 	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected private source rejection, got %v", err)
 	}
@@ -41,7 +41,7 @@ func TestFetchWithTokenRejectsRedirectToPrivateHost(t *testing.T) {
 		}, nil
 	})}
 	_, _, err := (Executor{Client: client}).fetchWithToken(context.Background(),
-		"https://example.com/asset.zip", filepath.Join(t.TempDir(), "asset.tmp"), "")
+		"https://example.com/asset.zip", filepath.Join(t.TempDir(), "asset.tmp"), "", 6)
 	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected redirect target rejection, got %v", err)
 	}

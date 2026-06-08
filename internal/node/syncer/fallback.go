@@ -25,7 +25,7 @@ func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmp
 			lastErr = err
 			continue
 		}
-		digest, size, err := e.fetchWithToken(ctx, source.DownloadURL, tmpPath, source.Token)
+		digest, size, err := e.fetchWithToken(ctx, source.DownloadURL, tmpPath, source.Token, task.Asset.SizeBytes)
 		releasePeerFallback()
 		if err != nil {
 			lastErr = err

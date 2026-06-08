@@ -15,7 +15,7 @@ func TestDownloadKeepsTempFilesOutsideAssetTreeWhenConfiguredInside(t *testing.T
 	db, storageDir, _ := prepareSyncer(t)
 	tempDir := filepath.Join(storageDir, "tmp")
 	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("tampered"))
+		_, _ = w.Write([]byte("abcdeg"))
 	}))
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)

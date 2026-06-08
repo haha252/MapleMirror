@@ -172,7 +172,7 @@ func TestDownloadRejectsPeerDigestMismatch(t *testing.T) {
 	}))
 	defer primary.Close()
 	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("tampered"))
+		_, _ = w.Write([]byte("abcdeg"))
 	}))
 	defer fallback.Close()
 
