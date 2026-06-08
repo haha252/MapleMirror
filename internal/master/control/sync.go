@@ -104,7 +104,11 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	}
 	nowValue := time.Now().UTC()
 	now := nowValue.Format(time.RFC3339Nano)
-	checkedResult, inventory, hasInventory, err := inspectSucceededSyncResult(ctx, tx, result)
+	boundResult, err := bindTaskResultAsset(ctx, tx, session.NodeID, result)
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
+	checkedResult, inventory, hasInventory, err := inspectSucceededSyncResult(ctx, tx, boundResult)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
