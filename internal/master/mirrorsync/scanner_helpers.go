@@ -25,6 +25,7 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 	if err != nil {
 		return 0, 0, err
 	}
+	acceptedIDs := map[int64]struct{}{}
 	var accepted, rejected int
 	for _, asset := range assets {
 		allowed, reason, err := assetAllowed(asset.Name, project.AssetInclude, project.AssetExclude)
@@ -74,6 +75,7 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 		if err != nil {
 			return accepted, rejected, err
 		}
+		acceptedIDs[asset.ID] = struct{}{}
 		if logger != nil {
 			logger.Debug(ctx, "资产已进入镜像候选",
 				slog.String("project_id", project.ID),
@@ -85,6 +87,9 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 				slog.String("digest_sha256", digest))
 		}
 		accepted++
+	}
+	if err := markUnacceptedReleaseAssetsRemoved(ctx, tx, releaseID, acceptedIDs, now); err != nil {
+		return accepted, rejected, err
 	}
 	return accepted, rejected, nil
 }
