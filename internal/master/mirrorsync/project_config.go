@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/master/assignment"
 )
 
 func (s Store) SyncProjectConfig(ctx context.Context, projects config.Projects) error {
@@ -62,7 +63,10 @@ func disableProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 		updated_at = ? WHERE asset_id IN (
 		SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
 		WHERE r.project_id = ?)`, now, projectID)
-	return err
+	if err != nil {
+		return err
+	}
+	return assignment.CancelObsoleteProjectTasks(ctx, tx, projectID, now)
 }
 
 func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now string) error {

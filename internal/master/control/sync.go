@@ -47,7 +47,7 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 		AND (
 			t.state = 'pending'
 			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
-		)
+		)`+eligibleSyncTaskSQL("t")+`
 	ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1`, nodeID, now).
 		Scan(&task.TaskID, &task.TaskType, &assetID,
 			&projectID, &version, &fileName, &size,
@@ -66,9 +66,9 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'sent',
 		lease_expires_at = ?, updated_at = ? WHERE id = ? AND node_id = ? AND (
-			state = 'pending'
+		state = 'pending'
 			OR (state = 'retry_wait' AND (retry_after IS NULL OR retry_after = '' OR retry_after <= ?))
-		)`, leaseExpires, now, task.TaskID, nodeID, now)
+		)`+eligibleSyncTaskSQL("node_tasks")+``, leaseExpires, now, task.TaskID, nodeID, now)
 	if err != nil {
 		return protocol.SyncTask{}, false, err
 	}
