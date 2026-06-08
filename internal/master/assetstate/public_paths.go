@@ -120,6 +120,11 @@ func choosePublicAsset(ctx context.Context, tx *sql.Tx, group []publicPathAsset)
 func hasRoutableReplica(ctx context.Context, tx *sql.Tx, assetID string) (bool, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT n.public_download_base_url
 		FROM node_inventory ni JOIN assets a ON a.id = ni.asset_id
+			AND a.service_state IN ('candidate', 'pending')
+		JOIN releases r ON r.id = a.release_id AND r.selected = 1
+		JOIN projects p ON p.id = r.project_id AND p.enabled = 1
+		JOIN target_inventory ti ON ti.node_id = ni.node_id
+			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
 		JOIN nodes n ON n.id = ni.node_id
 		WHERE ni.asset_id = ? AND ni.state = 'verified'
 		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
