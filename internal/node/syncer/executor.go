@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"mirror-server/internal/logging"
 	"mirror-server/internal/protocol"
@@ -23,6 +24,8 @@ type Executor struct {
 	BandwidthLimitBPS      int64
 	AllowPrivateSourceURLs bool
 }
+
+const DefaultHTTPClientTimeout = 30 * time.Minute
 
 func (e Executor) Execute(ctx context.Context, task protocol.SyncTask) protocol.SyncTaskResult {
 	if e.Logger != nil {

@@ -17,6 +17,8 @@ import (
 
 const controlIOTimeout = 10 * time.Second
 
+const defaultSyncTaskTimeout = 30 * time.Minute
+
 type Client struct {
 	NodeID                string
 	Address               string
@@ -32,10 +34,18 @@ type Client struct {
 	}
 	DB          *sql.DB
 	TaskLimiter *TaskLimiter
+	TaskTimeout time.Duration
 	Bandwidth   BandwidthSampler
 	ProbeStore  interface {
 		Accept(protocol.PublicProbeChallenge) error
 	}
+}
+
+func (c Client) syncTaskTimeout() time.Duration {
+	if c.TaskTimeout > 0 {
+		return c.TaskTimeout
+	}
+	return defaultSyncTaskTimeout
 }
 
 func (c Client) RunOnce() (time.Duration, error) {

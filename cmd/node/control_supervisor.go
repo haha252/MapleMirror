@@ -99,7 +99,8 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 		MaxMirrorProjects:  s.cfg.Sync.MaxMirrorProjects, TLSConfig: tlsCfg,
 		Storage: s.cfg.Storage.Directory, HeartbeatInterval: interval,
 		Logger: s.logger, Executor: s.executor, DB: s.db, TaskLimiter: s.limiter,
-		Bandwidth: s.bandwidth, ProbeStore: s.probes,
+		TaskTimeout: syncer.DefaultHTTPClientTimeout,
+		Bandwidth:   s.bandwidth, ProbeStore: s.probes,
 	}, nil
 }
 

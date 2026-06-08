@@ -107,14 +107,22 @@ func scanPendingTaskResult(rows *sql.Rows) (protocol.SyncTaskResult, error) {
 
 func (c Client) executeTaskAsync(task protocol.SyncTask) {
 	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), c.syncTaskTimeout())
+		defer cancel()
 		var result protocol.SyncTaskResult
-		err := c.TaskLimiter.Run(context.Background(), func() {
-			result = c.Executor.Execute(context.Background(), task)
+		err := c.TaskLimiter.Run(ctx, func() {
+			result = c.Executor.Execute(ctx, task)
 		})
 		if err != nil {
 			result = protocol.SyncTaskResult{
 				TaskID: task.TaskID, AssetID: task.Asset.AssetID,
-				Result: "temporary_error", Message: "等待同步 worker 失败",
+				Result: "temporary_error", Message: "同步任务等待或执行超时",
+			}
+		}
+		if result.Result == "" && ctx.Err() != nil {
+			result = protocol.SyncTaskResult{
+				TaskID: task.TaskID, AssetID: task.Asset.AssetID,
+				Result: "temporary_error", Message: "同步任务执行超时",
 			}
 		}
 		if c.Logger != nil {

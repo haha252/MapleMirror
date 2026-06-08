@@ -6,14 +6,6 @@
 建议修复方向：不要用客户端时间作为批次键；使用服务端接收批次 ID、revision 加 node/session 维度，或在完整报告协议中显式携带总量/分页并由服务端聚合。
 建议补充测试：新增两段 inventory report 使用不同 GeneratedAt 的分片测试，断言第一片资产不会被标记 missing，也不会生成 repair task。
 
-严重级别：高
-文件:行号：cmd/node/main.go (line 201)、internal/node/syncer/executor_helpers.go (line 27)、internal/node/syncer/executor_helpers.go (line 29)、internal/node/control/task_results.go (line 111)
-问题：生产构造 Executor 未配置 HTTP client；fetchWithToken 回落到无超时的 http.DefaultClient，异步任务又用 context.Background() 执行。
-触发条件：源站或 fallback peer 接受连接后不返回 body、不结束 body，或网络半开。
-影响：worker 可永久卡住，任务结果不上报；master 侧会持续看到任务未完成，节点同步停滞。
-建议修复方向：为同步 GET 配置显式超时，或为每个任务创建可取消/带 deadline 的 context；超时后返回 temporary_error 并释放 worker。
-建议补充测试：用阻塞的 httptest handler 验证下载在配置超时后退出，local_sync_tasks 不保持 running，pending result 可上报。
-
 严重级别：中
 文件:行号：internal/master/control/sync_retry.go (line 21)、internal/master/control/sync_retry.go (line 41)、internal/master/control/sync_retry.go (line 66)
 问题：AcceptSyncTaskResult 只按 task_id/node_id 接受结果，更新时没有限定任务当前必须是 sent/running 或 lease 有效。
@@ -37,3 +29,40 @@
 影响：目标下载节点可能向解析后的内网地址发起带 bearer token 的同步请求，形成 SSRF/内网探测面。
 建议修复方向：自定义 DialContext，在实际解析出的每个 IP 上执行私网/回环/链路本地拦截；redirect 后也复用同一 DialContext 校验。
 建议补充测试：用 fake resolver/DialContext 模拟域名解析到 127.0.0.1、10.0.0.1、169.254.169.254，断言 primary 和 fallback 都在建连前失败且服务端无请求。
+
+
+严重级别：高
+文件:行号：internal/master/mirrorsync/scanner_helpers.go (line 29)
+问题：已存在的资产在后续扫描中被上游删除或被 include/exclude 新规则拒绝时，不会从 candidate 降级。writeReleaseAssets 对 rejected asset 只是 continue，对当前扫描缺失的旧 asset 没有清理；但公开列表和授权仍按 assets.service_state='candidate' 暴露。
+触发条件：第一次扫描接受 v1/foo.zip；之后 GitHub release 删除该 asset，或配置规则改为排除它；release 仍保持 selected。
+影响：过期资产继续出现在公开 catalog/授权路径，也可能继续作为 required target 生成或保留同步任务。
+建议修复方向：扫描 selected release 时记录当前接受的 asset 集合，将同 release 下不再接受/不再存在的旧 asset 标记为 superseded/removed，并同步 target inventory 为 remove。
+建议补充测试：先扫描接受资产，再扫描同 release 缺失/被规则拒绝的资产，断言 assets.service_state != candidate，公开 Assets/授权不可见，target 不再 required。
+严重级别：高
+文件:行号：internal/master/mirrorsync/project_config.go (line 56)
+问题：项目禁用或从配置移除时只把 target_inventory.desired_state 改成 remove，没有取消已有 node_tasks；而 NextSyncTask 的领取查询只看任务状态和 retry 时间，不校验项目/资产/target 当前是否仍 required。
+触发条件：项目已有 pending/retry_wait/sent/running 的 asset_download 任务；随后项目被禁用或从 projects.yaml 删除；节点重新拉取任务。
+影响：节点仍可能下载已禁用/已删除项目的资产，浪费带宽和磁盘，并让废弃副本再次进入节点本地库存。
+建议修复方向：disableProjectTargets 后调用已有的 obsolete/cancel 逻辑，或在 NextSyncTask claim 时 join 校验 project enabled、release selected、asset candidate、target required。
+建议补充测试：seed 一个 pending 任务，调用 SyncProjectConfig 禁用/移除项目，断言任务变 obsolete 且 NextSyncTask 不再返回它。
+严重级别：中
+文件:行号：internal/master/mirrorsync/service.go (line 103)
+问题：手动触发“全部扫描”时，如果当前项目列表为空或全禁用，triggerAll 直接循环结束，不会调用 SyncProjectConfig，因此不会把旧项目/旧 target 立即下线。
+触发条件：管理员删除或禁用所有项目后，调用 /admin/api/sync/scans 且 project_id 为空；此时尚未由后台 reload 修复。
+影响：手动扫描语义与配置状态不一致，旧项目 target 可能继续保持 enabled/required 一段时间。
+建议修复方向：Trigger 加载项目后先执行一次 Store.SyncProjectConfig，再分支到单项目/全量扫描；或让 triggerAll 即使没有 enabled project 也同步配置。
+建议补充测试：数据库预置旧 enabled project，ProjectLoader 返回空列表，调用 Trigger(ctx, "", reqID)，断言旧项目 disabled 且 target 为 remove。
+严重级别：中
+文件:行号：internal/master/mirrorsync/github.go (line 39)
+问题：生产路径的 GitHub release 扫描默认使用 http.DefaultClient，没有超时；master main 构造 HTTPGitHubClient 时也没有注入带 timeout 的 client。
+触发条件：GitHub API 或网络连接建立后长期不返回，或响应体卡住。
+影响：后台扫描 goroutine 可能无限阻塞，后续 due project 不再推进；手动扫描请求也可能挂住直到请求上下文取消。
+建议修复方向：生产构造 http.Client{Timeout: ...}，或在每次 scan/list release 外层加 context.WithTimeout；JSON body 也可加合理大小限制。
+建议补充测试：使用阻塞的 fake HTTP server，断言扫描在超时内失败并释放调度循环。
+严重级别：中
+文件:行号：internal/assetpath/path.go (line 56)
+问题：路径清洗未处理 Windows 保留设备名，例如 CON、NUL、AUX、COM1；这些名称即使带扩展名在 Windows 上也可能触发特殊设备语义或创建失败。
+触发条件：project/tag/asset filename 清洗后等于保留名，例如 CON.zip、NUL、COM1.txt。
+影响：Windows 节点同步提交文件时失败或反复 retry，资产长期无法完成同步。
+建议修复方向：在 safePart 中对清洗后的 basename 做大小写无关 reserved-name 检查，命中时加安全前缀/后缀。
+建议补充测试：覆盖 SafeRelativePath("p","v","CON.zip")、SafeRelativePath("NUL","v","a.zip")、SafeRelativePath("p","COM1","a.zip")，并断言生成路径不含保留组件。
