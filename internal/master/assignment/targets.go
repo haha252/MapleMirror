@@ -62,11 +62,19 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 
 func CancelObsoleteProjectTasks(ctx context.Context, tx *sql.Tx, projectID, now string) error {
 	_, err := tx.ExecContext(ctx, obsoleteTaskSQL(`r.project_id = ?`), now, now, projectID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, obsoleteDeleteTaskSQL(`r.project_id = ?`), now, now, projectID)
 	return err
 }
 
 func CancelObsoleteNodeTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
 	_, err := tx.ExecContext(ctx, obsoleteTaskSQL(`node_tasks.node_id = ?`), now, now, nodeID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, obsoleteDeleteTaskSQL(`node_tasks.node_id = ?`), now, now, nodeID)
 	return err
 }
 
@@ -83,4 +91,21 @@ func obsoleteTaskSQL(extra string) string {
 			WHERE ` + extra + `
 			AND (a.service_state NOT IN ('candidate', 'pending')
 				OR ti.asset_id IS NULL OR ti.desired_state != 'required'))`
+}
+
+func obsoleteDeleteTaskSQL(extra string) string {
+	return `UPDATE node_tasks SET state = 'obsolete',
+		error_message = '删除目标已不在当前移除目标中', completed_at = ?,
+		updated_at = ?, lease_expires_at = NULL
+		WHERE task_type = 'asset_delete'
+		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
+		AND asset_id IN (
+			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
+				AND ti.asset_id = a.id
+			LEFT JOIN node_inventory ni ON ni.node_id = node_tasks.node_id
+				AND ni.asset_id = a.id
+			WHERE ` + extra + `
+			AND (ti.asset_id IS NULL OR ti.desired_state != 'remove'
+				OR ni.asset_id IS NULL OR ni.state != 'verified'))`
 }
