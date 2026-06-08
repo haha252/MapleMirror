@@ -79,6 +79,21 @@ func TestNextSyncTaskSkipsInvalidPeerFallbackSources(t *testing.T) {
 	}
 }
 
+func TestReplicationTokenTTLIsCapped(t *testing.T) {
+	repo := Repository{}
+	if got := repo.replicationTokenTTL(); got != maxReplicationTokenTTL {
+		t.Fatalf("default replication ttl=%s want=%s", got, maxReplicationTokenTTL)
+	}
+	repo.ReplicationTokenTTL = 30 * time.Second
+	if got := repo.replicationTokenTTL(); got != 30*time.Second {
+		t.Fatalf("short replication ttl=%s", got)
+	}
+	repo.ReplicationTokenTTL = 15 * time.Minute
+	if got := repo.replicationTokenTTL(); got != maxReplicationTokenTTL {
+		t.Fatalf("long replication ttl should be capped, got=%s", got)
+	}
+}
+
 func withReplicationSigner(t *testing.T, repo Repository) Repository {
 	t.Helper()
 	privatePath := filepath.Join(t.TempDir(), "token.key")

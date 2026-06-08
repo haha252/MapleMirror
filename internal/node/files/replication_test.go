@@ -32,6 +32,53 @@ func TestHandlerServesReplicationTokenAsset(t *testing.T) {
 	}
 }
 
+func TestHandlerRejectsReusedReplicationToken(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	token := signReplicationToken(t, signer, downloadtoken.ReplicationClaims{
+		AssetID: "asset-1", SourceNodeID: "node-1", TargetNodeID: "node-2",
+		ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		RequestID: "req-1", TaskID: "task-1",
+	})
+	handler := &Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}
+	req := httptest.NewRequest(http.MethodGet, "/internal/replication/asset-1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first replication request should succeed: %d", rec.Code)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/internal/replication/asset-1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("reused replication token should be rejected: %d", rec.Code)
+	}
+}
+
+func TestHandlerRejectsReplicationQueryTokenAndHead(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	token := signReplicationToken(t, signer, downloadtoken.ReplicationClaims{
+		AssetID: "asset-1", SourceNodeID: "node-1", TargetNodeID: "node-2",
+		ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		RequestID: "req-1", TaskID: "task-1",
+	})
+	handler := &Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}
+	req := httptest.NewRequest(http.MethodGet, "/internal/replication/asset-1?token="+token, nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("replication query token should be rejected: %d", rec.Code)
+	}
+	req = httptest.NewRequest(http.MethodHead, "/internal/replication/asset-1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("replication HEAD should be rejected: %d", rec.Code)
+	}
+}
+
 func TestHandlerRejectsModifiedReplicationAsset(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	fresh := time.Now().Add(-10 * time.Second).UTC().Format(time.RFC3339Nano)

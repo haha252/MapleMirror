@@ -10,7 +10,7 @@ import (
 )
 
 func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+	if r.Method != http.MethodGet {
 		httpError(w, r, http.StatusMethodNotAllowed, "请求方法不支持")
 		return
 	}
@@ -19,9 +19,14 @@ func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusNotFound, "资产不存在")
 		return
 	}
-	claims, err := h.Signer.VerifyReplication(bearer(r))
+	token := replicationBearer(r)
+	claims, err := h.Signer.VerifyReplication(token)
 	if err != nil || claims.SourceNodeID != h.NodeID || claims.AssetID != assetID || claims.TargetNodeID == "" {
 		httpError(w, r, http.StatusUnauthorized, "复制令牌无效")
+		return
+	}
+	if !h.claimReplicationToken(token) {
+		httpError(w, r, http.StatusUnauthorized, "复制令牌已使用")
 		return
 	}
 	asset, err := h.localAsset(assetID)
@@ -47,6 +52,27 @@ func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Replication-Task-ID", claims.TaskID)
 	http.ServeContent(w, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
+}
+
+func replicationBearer(r *http.Request) string {
+	const prefix = "Bearer "
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, prefix) {
+		return strings.TrimPrefix(auth, prefix)
+	}
+	return ""
+}
+
+func (h *Handler) claimReplicationToken(token string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.replicationUse == nil {
+		h.replicationUse = make(map[string]struct{})
+	}
+	if _, ok := h.replicationUse[token]; ok {
+		return false
+	}
+	h.replicationUse[token] = struct{}{}
+	return true
 }
 
 func replicationAssetID(r *http.Request) (string, error) {

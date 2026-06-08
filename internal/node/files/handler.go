@@ -20,17 +20,17 @@ import (
 )
 
 type Handler struct {
-	DB           *sql.DB
-	Storage      string
-	NodeID       string
-	Signer       downloadtoken.Signer
-	TrustedCIDRs []string
-	Logger       *logging.Logger
-	ProbeStore   interface {
+	DB              *sql.DB
+	Storage, NodeID string
+	Signer          downloadtoken.Signer
+	TrustedCIDRs    []string
+	Logger          *logging.Logger
+	ProbeStore      interface {
 		Response(string) (protocol.PublicProbeResponse, bool)
 	}
 	mu             sync.Mutex
 	active         map[string]int
+	replicationUse map[string]struct{}
 	budgets        map[string]int64
 	pendingTraffic map[string][]pendingTrafficEvent
 }

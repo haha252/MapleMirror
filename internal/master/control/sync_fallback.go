@@ -11,6 +11,7 @@ import (
 )
 
 const maxSyncFallbackSources = 3
+const maxReplicationTokenTTL = 2 * time.Minute
 
 func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string, task protocol.SyncTask) []protocol.SyncFallbackSource {
 	rows, err := r.DB.QueryContext(ctx, `SELECT n.id, n.public_name, n.public_download_base_url
@@ -59,10 +60,10 @@ func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string
 }
 
 func (r Repository) replicationTokenTTL() time.Duration {
-	if r.ReplicationTokenTTL > 0 {
+	if r.ReplicationTokenTTL > 0 && r.ReplicationTokenTTL < maxReplicationTokenTTL {
 		return r.ReplicationTokenTTL
 	}
-	return 15 * time.Minute
+	return maxReplicationTokenTTL
 }
 
 func joinReplicationURL(baseURL, assetID string) (string, error) {
