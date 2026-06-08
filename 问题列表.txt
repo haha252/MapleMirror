@@ -1,12 +1,3 @@
-低：cmd/master/admin_service.go:92
-问题：当前管理监听没有挂载 raw /api/admin/v1/*，但 internal/master/admin/* 的 Bearer/mTLS 旧实现仍存在且可被误接入；配置结构也已不再解析 admin.token_*、admin.high_risk_require_mtls。
-触发条件：后续维护者复用 internal/master/admin.Server.Handler() 或恢复 raw mux 挂载。
-影响：安全模型会分裂成 Web session 与旧 Bearer/mTLS 两套边界，容易重新暴露裸 API。
-建议修复方向：删除或构建标签隔离旧 raw admin server；如保留，明确只用于测试/迁移，并加注释和集成测试保证生产 adminHandler 不挂载。
-建议补充测试：保留现有 GET /api/admin/v1/nodes 为 404 的集成测试，并增加所有 /api/admin/v1/ 前缀在管理监听均不可达的覆盖。
-
-未发现当前代码证据表明 raw /api/admin/v1/* 已在 server.management_listen 意外暴露：cmd/master/admin_service.go:92-98 只挂载 /admin、/admin/、/static/ 和 /，cmd/master/admin_service_test.go:24-31 也固定 raw admin API 为 404。
-
 严重级别：中
 文件:行号：internal/master/control/reports.go:30、internal/master/control/inventory_repair.go:18、internal/master/control/inventory_repair.go:40
 问题：完整库存对账把节点提交的 GeneratedAt 当作本批 verified_at，并用这个时间加载“本批已上报库存”。分片库存只有在每个分片的 GeneratedAt 完全相同时才会被视为同一批。
@@ -15,3 +6,42 @@
 建议修复方向：不要用客户端时间作为批次键；使用服务端接收批次 ID、revision 加 node/session 维度，或在完整报告协议中显式携带总量/分页并由服务端聚合。
 建议补充测试：新增两段 inventory report 使用不同 GeneratedAt 的分片测试，断言第一片资产不会被标记 missing，也不会生成 repair task。
 
+严重级别：高
+文件:行号：internal/node/syncer/executor_helpers.go (line 47)、internal/node/syncer/executor_helpers.go (line 54)、internal/node/syncer/executor.go (line 140)
+问题：同步下载对响应体没有按 task.Asset.SizeBytes 做硬上限，先完整写入临时文件，下载结束后才判断大小。
+触发条件：源站或 peer fallback 返回远大于期望大小的 2xx 响应，或持续输出数据。
+影响：下载节点磁盘可被写满；sync.max_workers 被大文件/无限流占住，后续同步任务阻塞。
+建议修复方向：把期望大小传入 fetchWithToken，使用 io.LimitReader/计数 reader 在 SizeBytes + 1 处立即中断并删除临时文件；可先检查 Content-Length，但不能只依赖它。
+建议补充测试：httptest 返回 SizeBytes+1 和持续流两类响应，断言节点提前返回 size_mismatch/temporary_error，临时文件被清理且写入字节不超过上限。
+
+严重级别：高
+文件:行号：cmd/node/main.go (line 201)、internal/node/syncer/executor_helpers.go (line 27)、internal/node/syncer/executor_helpers.go (line 29)、internal/node/control/task_results.go (line 111)
+问题：生产构造 Executor 未配置 HTTP client；fetchWithToken 回落到无超时的 http.DefaultClient，异步任务又用 context.Background() 执行。
+触发条件：源站或 fallback peer 接受连接后不返回 body、不结束 body，或网络半开。
+影响：worker 可永久卡住，任务结果不上报；master 侧会持续看到任务未完成，节点同步停滞。
+建议修复方向：为同步 GET 配置显式超时，或为每个任务创建可取消/带 deadline 的 context；超时后返回 temporary_error 并释放 worker。
+建议补充测试：用阻塞的 httptest handler 验证下载在配置超时后退出，local_sync_tasks 不保持 running，pending result 可上报。
+
+严重级别：中
+文件:行号：internal/master/control/sync_retry.go (line 21)、internal/master/control/sync_retry.go (line 41)、internal/master/control/sync_retry.go (line 66)
+问题：AcceptSyncTaskResult 只按 task_id/node_id 接受结果，更新时没有限定任务当前必须是 sent/running 或 lease 有效。
+触发条件：节点重复发送同一任务结果、迟到结果落到 retry_wait/failed/pending 状态，或异常客户端在未重新派发时上报新 sequence 的 result。
+影响：可绕过 retry_after 退避，快速把任务推到 failed；也可把未处于运行态的任务标成 succeeded 并写入 node_inventory。
+建议修复方向：处理 result 时增加状态/lease 条件，只接受当前可完成的 sent/running 任务；对 stale result 返回 ACK 但不改变任务和库存，或明确拒绝且不推进序号。
+建议补充测试：覆盖 retry_wait、failed、cancelled、succeeded 状态收到 sync_task_result 时不得改变状态、attempts、node_inventory。
+
+严重级别：中
+文件:行号：internal/master/control/sessions.go (line 79)、internal/master/control/sessions.go (line 83)、cmd/node/control_supervisor.go (line 52)、internal/master/control/sync.go (line 67)
+问题：每次新控制会话都会无条件把该节点 sent/running 任务重置为 pending，没有检查 lease_expires_at；但 node 控制端是短轮询 RunOnce()。
+触发条件：大文件下载超过一个心跳/轮询间隔，下一轮控制连接建立时任务仍在运行。
+影响：同一任务会被反复重派；node 端同资产锁能避免重复下载，但重复 goroutine 会等待并占用 worker/队列，放大长任务和慢源站造成的阻塞。
+建议修复方向：StartSession 只重置 lease 过期的 sent/running，未过期任务依赖 running ACK 续租；必要时在 CloseSession 标记断连但不立即重派。
+建议补充测试：构造未过期 running 任务，调用 StartSession 后应保持 running；构造过期 lease 才恢复 pending 并允许 NextSyncTask 派发。
+
+严重级别：中
+文件:行号：internal/node/syncer/url_policy.go (line 33)、internal/node/syncer/url_policy.go (line 39)、internal/node/syncer/url_policy.go (line 44)、internal/master/control/sync_fallback.go (line 16)
+问题：源 URL 防护只检查字面 hostname 是否是 IP/localhost，不解析 DNS 后的地址；fallback URL 又来自其他节点上报并持久化的 public_download_base_url。
+触发条件：已登记节点上报 https://attacker.example 这类公网形式 base URL，但 DNS 解析到内网、链路本地或回环地址，并且该节点被选为 fallback 源。
+影响：目标下载节点可能向解析后的内网地址发起带 bearer token 的同步请求，形成 SSRF/内网探测面。
+建议修复方向：自定义 DialContext，在实际解析出的每个 IP 上执行私网/回环/链路本地拦截；redirect 后也复用同一 DialContext 校验。
+建议补充测试：用 fake resolver/DialContext 模拟域名解析到 127.0.0.1、10.0.0.1、169.254.169.254，断言 primary 和 fallback 都在建连前失败且服务端无请求。

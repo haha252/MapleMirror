@@ -23,19 +23,28 @@ import (
 
 func TestAdminHandlerOnlyServesWebPanel(t *testing.T) {
 	handler := newAdminHandlerForTest(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/v1/nodes", nil)
-	req.RemoteAddr = "127.0.0.1:55000"
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("raw admin api status = %d", rec.Code)
+	for _, path := range []string{
+		"/api/admin/v1",
+		"/api/admin/v1/",
+		"/api/admin/v1/nodes",
+		"/api/admin/v1/pairing-codes",
+		"/api/admin/v1/projects/p1/reset",
+		"/api/admin/v1/sync/scans",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "127.0.0.1:55000"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("raw admin api %s status = %d", path, rec.Code)
+		}
 	}
 
 	cookie := adminLoginCookie(t, handler)
-	req = httptest.NewRequest(http.MethodGet, "/admin/api/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/nodes", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
 	req.AddCookie(cookie)
-	rec = httptest.NewRecorder()
+	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("web api status = %d body=%s", rec.Code, rec.Body.String())
