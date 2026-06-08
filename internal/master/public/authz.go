@@ -30,7 +30,8 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战校验失败")
 		return
 	}
-	auth, debug, err := s.Store.IssueAuthorization(r.Context(), loaded, s.TokenTTL, requestID(r))
+	auth, debug, token, err := s.Store.IssueSignedAuthorization(r.Context(),
+		loaded, s.TokenTTL, requestID(r), s.Signer.Sign)
 	if err != nil {
 		code, stable := http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR"
 		message := "下载授权签发失败"
@@ -48,6 +49,10 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 			message = "今日流量额度不足，请稍后再试"
 			s.autoBlockAfterQuotaError(r, loaded.ClientPrefixKey, in.AssetID, err)
 		}
+		if err == errChallengeBusy {
+			code, stable = http.StatusConflict, "CHALLENGE_IN_PROGRESS"
+			message = "挑战正在处理，请稍后重试"
+		}
 		if s.Logger != nil {
 			s.Logger.Debug(r.Context(), "下载授权签发失败",
 				slog.String("request_id", requestID(r)),
@@ -57,19 +62,6 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 				slog.String("error", err.Error()))
 		}
 		writeError(w, r, code, stable, message)
-		return
-	}
-	token, err := s.Signer.Sign(auth.Claims)
-	if err != nil {
-		if s.Logger != nil {
-			s.Logger.Warn(r.Context(), "下载令牌签名失败",
-				slog.String("request_id", requestID(r)),
-				slog.String("authorization_id", auth.Claims.AuthorizationID),
-				slog.String("asset_id", in.AssetID),
-				slog.String("client_prefix", loaded.ClientPrefixKey),
-				slog.String("error", err.Error()))
-		}
-		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "下载令牌签发失败")
 		return
 	}
 	if s.Logger != nil {

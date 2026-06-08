@@ -147,6 +147,18 @@ func (s *Store) consumeChallenge(id string) bool {
 	return s.challengeMemory().consume(id, time.Now().UTC())
 }
 
+func (s *Store) beginChallenge(id string) (Challenge, bool, bool) {
+	return s.challengeMemory().begin(id, time.Now().UTC())
+}
+
+func (s *Store) finishChallenge(id string) {
+	s.challengeMemory().finish(id)
+}
+
+func (s *Store) releaseChallenge(id string) {
+	s.challengeMemory().release(id)
+}
+
 func (s *Store) challengeMemory() *challengeMemory {
 	if s.Challenges == nil {
 		s.Challenges = newChallengeMemory()

@@ -13,6 +13,7 @@ const (
 type challengeMemory struct {
 	mu      sync.Mutex
 	items   map[string]Challenge
+	pending map[string]struct{}
 	buckets map[string]challengeBucket
 	stop    chan struct{}
 }
@@ -25,6 +26,7 @@ type challengeBucket struct {
 func newChallengeMemory() *challengeMemory {
 	return &challengeMemory{
 		items:   map[string]Challenge{},
+		pending: map[string]struct{}{},
 		buckets: map[string]challengeBucket{},
 		stop:    make(chan struct{}),
 	}
@@ -60,6 +62,35 @@ func (m *challengeMemory) consume(id string, now time.Time) bool {
 	return true
 }
 
+func (m *challengeMemory) begin(id string, now time.Time) (Challenge, bool, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	challenge, ok := m.items[id]
+	if !ok || challengeExpired(challenge, now) {
+		delete(m.items, id)
+		delete(m.pending, id)
+		return Challenge{}, false, false
+	}
+	if _, ok := m.pending[id]; ok {
+		return Challenge{}, true, true
+	}
+	m.pending[id] = struct{}{}
+	return challenge, true, false
+}
+
+func (m *challengeMemory) finish(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.items, id)
+	delete(m.pending, id)
+}
+
+func (m *challengeMemory) release(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.pending, id)
+}
+
 func (m *challengeMemory) allow(kind, prefix string, now time.Time) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -93,6 +124,7 @@ func (m *challengeMemory) cleanupLocked(now time.Time) {
 	for id, challenge := range m.items {
 		if challengeExpired(challenge, now) {
 			delete(m.items, id)
+			delete(m.pending, id)
 		}
 	}
 	for key, bucket := range m.buckets {

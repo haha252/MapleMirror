@@ -1,6 +1,7 @@
 package public
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"strconv"
@@ -74,6 +75,24 @@ func mustExec(t *testing.T, db *sql.DB, query string) {
 	t.Helper()
 	if _, err := db.Exec(query); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertChallengeLoadable(t *testing.T, store Store, challengeID string) {
+	t.Helper()
+	if _, err := store.LoadChallenge(context.Background(), challengeID); err != nil {
+		t.Fatalf("challenge should remain retryable: %v", err)
+	}
+}
+
+func assertPublicTableCount(t *testing.T, db *sql.DB, table string, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("%s count=%d want %d", table, got, want)
 	}
 }
 

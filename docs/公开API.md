@@ -50,7 +50,7 @@
 | `403` | `CHALLENGE_FAILED` | 网页挑战或 PoW 校验失败 |
 | `403` | `CLIENT_BLOCKED` | 客户端命中静态或订阅黑名单 |
 | `404` | `ASSET_NOT_FOUND` | 项目、版本或资产不存在 |
-| `409` | `CHALLENGE_CONSUMED` | 挑战已被使用 |
+| `409` | `CHALLENGE_IN_PROGRESS` | 同一挑战正在签发授权，请稍后重试 |
 | `409` | `NO_ROUTABLE_NODE` | 当前没有可用下载节点 |
 | `416` | `RANGE_NOT_SATISFIABLE` | Range 不合法或超出文件范围 |
 | `429` | `REQUEST_QUOTA_EXHAUSTED` | 地址级或网段级请求额度不足 |
@@ -247,7 +247,7 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 }
 ```
 
-成功响应与网页授权一致。挑战提交后必须被消费，重复提交返回 `CHALLENGE_CONSUMED`。
+成功响应与网页授权一致。挑战只在授权记录、流量预留和下载令牌签名整体成功后才被消费；额度不足、无可路由节点、签名失败或服务端错误不会消费挑战，客户端可在挑战过期前重试。同一挑战并发提交时，正在处理中的请求返回 `CHALLENGE_IN_PROGRESS`。
 
 授权签发前会再次检查黑名单，覆盖“挑战创建后客户端被封禁”的窗口。命中后返回 `403 CLIENT_BLOCKED`，不会签发下载令牌。
 
