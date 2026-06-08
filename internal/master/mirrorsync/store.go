@@ -191,19 +191,6 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 	return out, nil
 }
 
-func (s Store) RetryTask(ctx context.Context, nodeID, taskID string) error {
-	result, err := s.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
-		error_message = NULL, attempts = 0, retry_after = NULL, updated_at = ?
-		WHERE id = ? AND node_id = ?`, nowText(), taskID, nodeID)
-	if err != nil {
-		return err
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
 func (s Store) CancelTask(ctx context.Context, nodeID, taskID string) error {
 	return updateTask(ctx, s.DB, nodeID, taskID, "cancelled", "管理员取消")
 }
