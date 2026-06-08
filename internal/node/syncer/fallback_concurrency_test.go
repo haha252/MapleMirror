@@ -23,7 +23,8 @@ func TestDownloadUsesUniqueTempPathForDuplicateTaskExecution(t *testing.T) {
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir}
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}
 	var wg sync.WaitGroup
 	results := make(chan protocol.SyncTaskResult, 2)
 	for i := 0; i < 2; i++ {
@@ -63,7 +64,8 @@ func TestConcurrentDuplicateFallbackDownloadReusesVerifiedAsset(t *testing.T) {
 	}))
 	defer fallback.Close()
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir}
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}
 	var wg sync.WaitGroup
 	results := make(chan protocol.SyncTaskResult, 2)
 	for i := 0; i < 2; i++ {
@@ -108,7 +110,8 @@ func TestPeerFallbackConcurrencyIsLimitedToThree(t *testing.T) {
 		mu.Unlock()
 	}))
 	defer fallback.Close()
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir}
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}
 	var wg sync.WaitGroup
 	results := make(chan protocol.SyncTaskResult, 6)
 	for i := 0; i < 6; i++ {

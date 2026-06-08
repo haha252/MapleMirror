@@ -15,8 +15,8 @@ func TestFetchWithTokenAppliesBandwidthLimit(t *testing.T) {
 	defer server.Close()
 	tmp := t.TempDir() + "/asset.tmp"
 	started := time.Now()
-	_, size, err := (Executor{BandwidthLimitBPS: 20}).fetchWithToken(context.Background(),
-		server.URL, tmp, "")
+	_, size, err := (Executor{BandwidthLimitBPS: 20,
+		AllowPrivateSourceURLs: true}).fetchWithToken(context.Background(), server.URL, tmp, "")
 	if err != nil {
 		t.Fatal(err)
 	}

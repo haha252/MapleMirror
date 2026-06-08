@@ -15,10 +15,11 @@ import (
 const sourceProbeTTL = time.Minute
 
 type SourceProbe struct {
-	client *http.Client
-	mu     sync.Mutex
-	cache  map[string]probeResult
-	active map[string]chan struct{}
+	client       *http.Client
+	allowPrivate bool
+	mu           sync.Mutex
+	cache        map[string]probeResult
+	active       map[string]chan struct{}
 }
 
 type probeResult struct {
@@ -34,17 +35,31 @@ func NewSourceProbe(client *http.Client) *SourceProbe {
 	return &SourceProbe{client: client, cache: map[string]probeResult{}, active: map[string]chan struct{}{}}
 }
 
+func NewUnsafeSourceProbe(client *http.Client) *SourceProbe {
+	probe := NewSourceProbe(client)
+	probe.allowPrivate = true
+	return probe
+}
+
 func (e Executor) fetchPrimary(ctx context.Context, task protocol.SyncTask, tmpPath string) (string, int64, error) {
 	if e.Probe == nil {
 		return e.fetch(ctx, task.Asset.DownloadURL, tmpPath)
 	}
-	if err := e.Probe.Check(ctx, task.Asset.DownloadURL); err != nil {
+	if err := e.Probe.check(ctx, task.Asset.DownloadURL, e.AllowPrivateSourceURLs); err != nil {
 		return "", 0, err
 	}
 	return e.fetch(ctx, task.Asset.DownloadURL, tmpPath)
 }
 
 func (p *SourceProbe) Check(ctx context.Context, rawURL string) error {
+	return p.check(ctx, rawURL, false)
+}
+
+func (p *SourceProbe) check(ctx context.Context, rawURL string, allowPrivate bool) error {
+	allowPrivate = allowPrivate || p.allowPrivate
+	if err := validateSourceURL(rawURL, allowPrivate); err != nil {
+		return err
+	}
 	origin, err := sourceOrigin(rawURL)
 	if err != nil {
 		return err
@@ -67,7 +82,7 @@ func (p *SourceProbe) Check(ctx context.Context, rawURL string) error {
 	wait := make(chan struct{})
 	p.active[origin] = wait
 	p.mu.Unlock()
-	err = p.probe(ctx, origin)
+	err = p.probe(ctx, origin, allowPrivate)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.active, origin)
@@ -96,12 +111,12 @@ func (r probeResult) errValue() error {
 	return errors.New(r.err)
 }
 
-func (p *SourceProbe) probe(ctx context.Context, origin string) error {
+func (p *SourceProbe) probe(ctx context.Context, origin string, allowPrivate bool) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, origin, nil)
 	if err != nil {
 		return err
 	}
-	resp, err := p.client.Do(req)
+	resp, err := sourceHTTPClient(p.client, allowPrivate).Do(req)
 	if err != nil {
 		return fmt.Errorf("源站连通性探测失败: %w", err)
 	}

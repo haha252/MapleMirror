@@ -32,7 +32,8 @@ func TestDownloadUsesPrimarySourceWhenAvailable(t *testing.T) {
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir}).download(context.Background(), task)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
 		t.Fatalf("primary download should succeed: %+v", result)
 	}
@@ -56,7 +57,8 @@ func TestDownloadFallsBackToPeerWhenPrimaryFails(t *testing.T) {
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir}).download(context.Background(), task)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" || result.LocalDigestSHA256 != digest("abcdef") {
 		t.Fatalf("fallback download should succeed: %+v", result)
 	}
@@ -86,7 +88,8 @@ func TestDownloadPreflightsPrimaryAndSkipsFileGetWhenSourceUnavailable(t *testin
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL+"/asset.zip", fallback.URL, digest("abcdef"), 6)
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir, Probe: NewSourceProbe(primary.Client())}
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		Probe: NewSourceProbe(primary.Client()), AllowPrivateSourceURLs: true}
 	result := executor.download(context.Background(), task)
 	if result.Result != "succeeded" {
 		t.Fatalf("fallback download should succeed after failed preflight: %+v", result)
@@ -115,7 +118,7 @@ func TestSourceProbeCoalescesConcurrentChecks(t *testing.T) {
 		http.Error(w, "github unavailable", http.StatusBadGateway)
 	}))
 	defer primary.Close()
-	probe := NewSourceProbe(primary.Client())
+	probe := NewUnsafeSourceProbe(primary.Client())
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
@@ -152,6 +155,7 @@ func TestDownloadReturnsTemporaryErrorWhenSourceUnavailableAndNoPeer(t *testing.
 	task.FallbackSources = nil
 	result := (Executor{
 		DB: db, Storage: storageDir, TempDir: tempDir, Probe: NewSourceProbe(primary.Client()),
+		AllowPrivateSourceURLs: true,
 	}).download(context.Background(), task)
 	if result.Result != "temporary_error" {
 		t.Fatalf("unavailable source with no peer should be temporary_error: %+v", result)
@@ -173,7 +177,8 @@ func TestDownloadRejectsPeerDigestMismatch(t *testing.T) {
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir}).download(context.Background(), task)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "digest_mismatch" {
 		t.Fatalf("peer digest mismatch should fail: %+v", result)
 	}

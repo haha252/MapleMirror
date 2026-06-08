@@ -19,7 +19,8 @@ func TestDownloadKeepsTempFilesOutsideAssetTreeWhenConfiguredInside(t *testing.T
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir}).download(context.Background(), task)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "digest_mismatch" {
 		t.Fatalf("expected digest mismatch, got %+v", result)
 	}
@@ -94,7 +95,8 @@ func TestDownloadReplacesStaleIncompleteTargetAfterValidation(t *testing.T) {
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir}).download(context.Background(), task)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
 		t.Fatalf("validated download should replace stale target: %+v", result)
 	}
@@ -141,7 +143,8 @@ func TestDownloadSupersedesOldLocalAssetOnSamePath(t *testing.T) {
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir}).download(context.Background(), task)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
 		t.Fatalf("download should succeed: %+v", result)
 	}
