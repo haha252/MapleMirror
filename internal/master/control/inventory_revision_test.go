@@ -61,12 +61,14 @@ func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
 	if _, err := repo.AcceptInventoryReport(context.Background(), restarted, 2, report); err != nil {
 		t.Fatal(err)
 	}
-	var reportCount, ready int
+	var reportCount, ready, tasks int
 	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_inventory_reports WHERE node_id = ?", session.NodeID).
 		Scan(&reportCount)
 	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
-	if reportCount != 1 || ready != 0 {
-		t.Fatalf("重复库存修订应幂等确认且不恢复就绪，reports=%d ready=%d", reportCount, ready)
+	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM node_tasks WHERE node_id = ?", session.NodeID).Scan(&tasks)
+	if reportCount != 1 || ready != 1 || tasks != 0 {
+		t.Fatalf("重复库存修订应幂等恢复就绪且不生成任务，reports=%d ready=%d tasks=%d",
+			reportCount, ready, tasks)
 	}
 }
 
@@ -101,6 +103,11 @@ func TestStaleInventoryRevisionDoesNotReconcileNewTargets(t *testing.T) {
 		WHERE node_id = ? AND asset_id = 'asset-2'`, session.NodeID).Scan(&staleTasks)
 	if staleRows != 0 || staleTasks != 0 {
 		t.Fatalf("stale revision should not reconcile new target, inventory=%d tasks=%d", staleRows, staleTasks)
+	}
+	var ready int
+	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
+	if ready != 0 {
+		t.Fatalf("stale revision should only recompute current readiness, ready=%d", ready)
 	}
 	report.ReportID = "r-new"
 	report.Revision = 2

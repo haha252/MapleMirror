@@ -42,6 +42,11 @@ func (r Repository) acceptStaleInventoryReport(ctx context.Context, tx *sql.Tx, 
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
 	}
+	if report.Complete {
+		if _, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
+			return HeartbeatResult{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return HeartbeatResult{}, err
 	}
