@@ -5,10 +5,11 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
 export GOCACHE="$ROOT/.cache/go-build"
-OUT="$ROOT/dist/linux-amd64"
+OUT="$ROOT/dist/windows-amd64"
 mkdir -p "$OUT"
 
-go test ./...
+scripts/check-file-lines.sh
+
 if command -v clang >/dev/null 2>&1; then
   clang --target=wasm32 -O3 -nostdlib \
     "-Wl,--no-entry" "-Wl,--export-memory" "-Wl,--export=get_buffer" \
@@ -23,18 +24,20 @@ else
   printf '%s\n' "未找到 clang 或 zig，无法生成网页 PoW WASM，发布构建已停止。"
   exit 1
 fi
-scripts/check-file-lines.sh
+
+go test ./...
 
 REV=$(git rev-parse --short HEAD 2>/dev/null || printf '%s' unknown)
 VERSION="dev-$REV"
-export GOOS=linux
+export GOOS=windows
 export GOARCH=amd64
 export CGO_ENABLED=0
 
-go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-master" ./cmd/master
-go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-node" ./cmd/node
+go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-master.exe" ./cmd/master
+go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-node.exe" ./cmd/node
+
 rm -rf "$OUT/configs"
 cp -R "$ROOT/configs" "$OUT/configs"
 rm -rf "$OUT/web"
 
-printf '%s\n' "Linux amd64 构建完成：$OUT"
+printf '%s\n' "Windows amd64 构建完成：$OUT"
