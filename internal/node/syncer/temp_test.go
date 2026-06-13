@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,13 +13,13 @@ import (
 func TestDownloadKeepsTempFilesOutsideAssetTreeWhenConfiguredInside(t *testing.T) {
 	db, storageDir, _ := prepareSyncer(t)
 	tempDir := filepath.Join(storageDir, "tmp")
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("abcdeg"))
 	}))
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "digest_mismatch" {
 		t.Fatalf("expected digest mismatch, got %+v", result)
@@ -90,13 +89,13 @@ func TestDownloadReplacesStaleIncompleteTargetAfterValidation(t *testing.T) {
 	if err := os.WriteFile(finalPath, []byte("partial"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("abcdef"))
 	}))
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
 		t.Fatalf("validated download should replace stale target: %+v", result)
@@ -172,13 +171,13 @@ func TestDownloadSupersedesOldLocalAssetOnSamePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("abcdef"))
 	}))
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
 		t.Fatalf("download should succeed: %+v", result)

@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
@@ -19,20 +18,20 @@ import (
 func TestDownloadUsesPrimarySourceWhenAvailable(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
 	primaryHits := 0
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		primaryHits++
 		_, _ = w.Write([]byte("abcdef"))
 	}))
 	defer primary.Close()
 	fallbackHits := 0
-	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fallbackHits++
 		_, _ = w.Write([]byte("abcdef"))
 	}))
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
 		t.Fatalf("primary download should succeed: %+v", result)
@@ -44,11 +43,11 @@ func TestDownloadUsesPrimarySourceWhenAvailable(t *testing.T) {
 
 func TestDownloadFallsBackToPeerWhenPrimaryFails(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "github unavailable", http.StatusBadGateway)
 	}))
 	defer primary.Close()
-	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer peer-token" {
 			t.Fatalf("missing peer token header: %q", got)
 		}
@@ -57,7 +56,7 @@ func TestDownloadFallsBackToPeerWhenPrimaryFails(t *testing.T) {
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" || result.LocalDigestSHA256 != digest("abcdef") {
 		t.Fatalf("fallback download should succeed: %+v", result)
@@ -70,7 +69,7 @@ func TestDownloadFallsBackToPeerWhenPrimaryFails(t *testing.T) {
 func TestDownloadPreflightsPrimaryAndSkipsFileGetWhenSourceUnavailable(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
 	var headHits, getHits int
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			headHits++
 			http.Error(w, "github unavailable", http.StatusBadGateway)
@@ -81,14 +80,14 @@ func TestDownloadPreflightsPrimaryAndSkipsFileGetWhenSourceUnavailable(t *testin
 	}))
 	defer primary.Close()
 	var fallbackHits int
-	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fallbackHits++
 		_, _ = w.Write([]byte("abcdef"))
 	}))
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL+"/asset.zip", fallback.URL, digest("abcdef"), 6)
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		Probe: NewSourceProbe(primary.Client()), AllowPrivateSourceURLs: true}
 	result := executor.download(context.Background(), task)
 	if result.Result != "succeeded" {
@@ -112,7 +111,7 @@ func TestDownloadPreflightsPrimaryAndSkipsFileGetWhenSourceUnavailable(t *testin
 func TestSourceProbeCoalescesConcurrentChecks(t *testing.T) {
 	var headHits int
 	release := make(chan struct{})
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		headHits++
 		<-release
 		http.Error(w, "github unavailable", http.StatusBadGateway)
@@ -141,7 +140,7 @@ func TestSourceProbeCoalescesConcurrentChecks(t *testing.T) {
 func TestDownloadReturnsTemporaryErrorWhenSourceUnavailableAndNoPeer(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
 	var getHits int
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			http.Error(w, "github unavailable", http.StatusBadGateway)
 			return
@@ -154,7 +153,7 @@ func TestDownloadReturnsTemporaryErrorWhenSourceUnavailableAndNoPeer(t *testing.
 	task := fallbackTask(primary.URL+"/asset.zip", "", digest("abcdef"), 6)
 	task.FallbackSources = nil
 	result := (Executor{
-		DB: db, Storage: storageDir, TempDir: tempDir, Probe: NewSourceProbe(primary.Client()),
+		DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(), Probe: NewSourceProbe(primary.Client()),
 		AllowPrivateSourceURLs: true,
 	}).download(context.Background(), task)
 	if result.Result != "temporary_error" {
@@ -167,17 +166,17 @@ func TestDownloadReturnsTemporaryErrorWhenSourceUnavailableAndNoPeer(t *testing.
 
 func TestDownloadRejectsPeerDigestMismatch(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "github unavailable", http.StatusBadGateway)
 	}))
 	defer primary.Close()
-	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("abcdeg"))
 	}))
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "digest_mismatch" {
 		t.Fatalf("peer digest mismatch should fail: %+v", result)

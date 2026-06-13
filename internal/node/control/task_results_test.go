@@ -3,6 +3,7 @@ package control
 import (
 	"crypto/tls"
 	"encoding/json"
+	"net"
 	"testing"
 	"time"
 
@@ -19,15 +20,7 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ln := testTLSServer(t)
-	defer ln.Close()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		conn, err := ln.Accept()
-		if err != nil {
-			return
-		}
+	dialer := newPipeDialer(t, func(conn net.Conn) {
 		defer conn.Close()
 		hello, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
 		if err != nil || hello.MessageType != protocol.TypeHello {
@@ -69,12 +62,13 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 			return
 		}
 		sendAck(conn, report)
-	}()
+	})
 	client := &Client{
-		NodeID:    "node-1",
-		Address:   ln.Addr().String(),
-		TLSConfig: &tls.Config{InsecureSkipVerify: true},
-		DB:        db,
+		NodeID:         "node-1",
+		Address:        "master.test:9443",
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},
+		DialTLSContext: dialer,
+		DB:             db,
 	}
 	if _, err := client.RunOnce(); err != nil {
 		t.Fatal(err)
@@ -87,7 +81,6 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 	if reportedAt == "" {
 		t.Fatal("待上报同步结果未标记为已上报")
 	}
-	<-done
 }
 
 func TestStorePendingTaskResultStopsRunningAck(t *testing.T) {

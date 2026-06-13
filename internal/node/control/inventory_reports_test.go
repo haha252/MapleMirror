@@ -22,15 +22,7 @@ func TestClientRunOnceReportsInventoryAfterPendingTaskResults(t *testing.T) {
 		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
 		VALUES ('asset-1', 'asset.bin', 'sha256:abc', 12, 'now', 'verified')`)
 
-	ln := testTLSServer(t)
-	defer ln.Close()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		conn, err := ln.Accept()
-		if err != nil {
-			return
-		}
+	dialer := newPipeDialer(t, func(conn net.Conn) {
 		defer conn.Close()
 		hello, ok := expectType(t, conn, protocol.TypeHello)
 		if !ok {
@@ -66,13 +58,14 @@ func TestClientRunOnceReportsInventoryAfterPendingTaskResults(t *testing.T) {
 			return
 		}
 		sendAck(conn, inventory)
-	}()
+	})
 
 	client := &Client{
-		NodeID:    "node-1",
-		Address:   ln.Addr().String(),
-		TLSConfig: &tls.Config{InsecureSkipVerify: true},
-		DB:        db,
+		NodeID:         "node-1",
+		Address:        "master.test:9443",
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},
+		DialTLSContext: dialer,
+		DB:             db,
 	}
 	if _, err := client.RunOnce(); err != nil {
 		t.Fatal(err)
@@ -84,7 +77,6 @@ func TestClientRunOnceReportsInventoryAfterPendingTaskResults(t *testing.T) {
 	if acked != 1 {
 		t.Fatalf("expected acked revision 1, got %d", acked)
 	}
-	<-done
 }
 
 func TestSendFullInventoryReportSplitsIntoChunks(t *testing.T) {

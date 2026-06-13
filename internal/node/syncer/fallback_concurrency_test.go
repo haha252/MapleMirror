@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -16,14 +15,14 @@ import (
 func TestDownloadUsesUniqueTempPathForDuplicateTaskExecution(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
 	var primaryHits int
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		primaryHits++
 		_, _ = w.Write([]byte("abcdef"))
 	}))
 	defer primary.Close()
 	task := fallbackTask(primary.URL, "", digest("abcdef"), 6)
 	task.FallbackSources = nil
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}
 	var wg sync.WaitGroup
 	results := make(chan protocol.SyncTaskResult, 2)
@@ -52,19 +51,19 @@ func TestDownloadUsesUniqueTempPathForDuplicateTaskExecution(t *testing.T) {
 
 func TestConcurrentDuplicateFallbackDownloadReusesVerifiedAsset(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "github unavailable", http.StatusBadGateway)
 	}))
 	defer primary.Close()
 	var fallbackHits int
-	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fallbackHits++
 		time.Sleep(30 * time.Millisecond)
 		_, _ = w.Write([]byte("abcdef"))
 	}))
 	defer fallback.Close()
 	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}
 	var wg sync.WaitGroup
 	results := make(chan protocol.SyncTaskResult, 2)
@@ -89,14 +88,14 @@ func TestConcurrentDuplicateFallbackDownloadReusesVerifiedAsset(t *testing.T) {
 
 func TestPeerFallbackConcurrencyIsLimitedToThree(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
-	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "github unavailable", http.StatusBadGateway)
 	}))
 	defer primary.Close()
 	var mu sync.Mutex
 	active := 0
 	maxActive := 0
-	fallback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		active++
 		if active > maxActive {
@@ -110,7 +109,7 @@ func TestPeerFallbackConcurrencyIsLimitedToThree(t *testing.T) {
 		mu.Unlock()
 	}))
 	defer fallback.Close()
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir,
+	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}
 	var wg sync.WaitGroup
 	results := make(chan protocol.SyncTaskResult, 6)

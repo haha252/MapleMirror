@@ -152,6 +152,8 @@ func TestProjectsResolveIconPathRelativeToConfig(t *testing.T) {
 func TestProjectsRejectInvalidIconPath(t *testing.T) {
 	cases := []string{
 		"icon_path: C:/tmp/a.svg",
+		"icon_path: C:\\tmp\\a.svg",
+		"icon_path: \\\\server\\share\\a.svg",
 		"icon_path: ../a.svg",
 		"icon_path: project-icons/a.txt",
 	}

@@ -1,15 +1,10 @@
 package control
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
+	"context"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
 	"errors"
-	"math/big"
 	"net"
 	"testing"
 	"time"
@@ -18,27 +13,17 @@ import (
 )
 
 func TestClientRunUsesServerInterval(t *testing.T) {
-	ln := testTLSServer(t)
-	defer ln.Close()
-
-	acceptTimes := make(chan time.Time, 2)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for i := 0; i < 2; i++ {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			acceptTimes <- time.Now()
-			go handleTestSession(conn)
-		}
-	}()
+	dialTimes := make(chan time.Time, 2)
+	dialer := newPipeDialer(t, func(conn net.Conn) {
+		dialTimes <- time.Now()
+		handleTestSession(conn)
+	})
 
 	client := &Client{
-		NodeID:    "node-1",
-		Address:   ln.Addr().String(),
-		TLSConfig: &tls.Config{InsecureSkipVerify: true},
+		NodeID:         "node-1",
+		Address:        "master.test:9443",
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},
+		DialTLSContext: dialer,
 	}
 	stop := make(chan struct{})
 	clientDone := make(chan struct{})
@@ -47,8 +32,8 @@ func TestClientRunUsesServerInterval(t *testing.T) {
 		client.Run(stop)
 	}()
 
-	first := <-acceptTimes
-	second := <-acceptTimes
+	first := <-dialTimes
+	second := <-dialTimes
 	gap := second.Sub(first)
 	if gap < 800*time.Millisecond {
 		t.Fatalf("客户端重连间隔过短：%s", gap)
@@ -59,20 +44,10 @@ func TestClientRunUsesServerInterval(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("客户端未能停止")
 	}
-	<-done
 }
 
 func TestClientRunOnceReturnsProtocolError(t *testing.T) {
-	ln := testTLSServer(t)
-	defer ln.Close()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		conn, err := ln.Accept()
-		if err != nil {
-			return
-		}
+	dialer := newPipeDialer(t, func(conn net.Conn) {
 		defer conn.Close()
 		hello, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
 		if err != nil || hello.MessageType != protocol.TypeHello {
@@ -92,12 +67,13 @@ func TestClientRunOnceReturnsProtocolError(t *testing.T) {
 			ReplyTo:         hello.MessageID,
 			Payload:         body,
 		})
-	}()
+	})
 
 	client := &Client{
-		NodeID:    "node-1",
-		Address:   ln.Addr().String(),
-		TLSConfig: &tls.Config{InsecureSkipVerify: true},
+		NodeID:         "node-1",
+		Address:        "master.test:9443",
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},
+		DialTLSContext: dialer,
 	}
 	_, err := client.RunOnce()
 	if err == nil {
@@ -110,7 +86,6 @@ func TestClientRunOnceReturnsProtocolError(t *testing.T) {
 	if rejection.Code != "CERTIFICATE_NOT_ACTIVE" {
 		t.Fatalf("期望 CERTIFICATE_NOT_ACTIVE，实际为 %q", rejection.Code)
 	}
-	<-done
 }
 
 func handleTestSession(conn net.Conn) {
@@ -147,34 +122,14 @@ func handleTestSession(conn net.Conn) {
 	sendAck(conn, pressure)
 }
 
-func testTLSServer(t *testing.T) net.Listener {
+func newPipeDialer(t *testing.T, handler func(net.Conn)) func(context.Context, string, string, *tls.Config) (net.Conn, error) {
 	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
+	return func(context.Context, string, string, *tls.Config) (net.Conn, error) {
+		client, server := net.Pipe()
+		go func() {
+			defer server.Close()
+			handler(server)
+		}()
+		return client, nil
 	}
-	tpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "127.0.0.1"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert := tls.Certificate{
-		Certificate: [][]byte{der},
-		PrivateKey:  key,
-		Leaf:        tpl,
-	}
-	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return ln
 }

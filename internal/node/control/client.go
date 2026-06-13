@@ -39,6 +39,7 @@ type Client struct {
 	ProbeStore  interface {
 		Accept(protocol.PublicProbeChallenge) error
 	}
+	DialTLSContext func(context.Context, string, string, *tls.Config) (net.Conn, error)
 }
 
 func (c Client) syncTaskTimeout() time.Duration {
@@ -54,8 +55,15 @@ func (c Client) RunOnce() (time.Duration, error) {
 	}
 	c.logDebug("node control connection starting",
 		slog.String("node_id", c.NodeID), slog.String("master", c.Address))
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second},
-		"tcp", c.Address, c.TLSConfig)
+	dialTLS := c.DialTLSContext
+	if dialTLS == nil {
+		dialTLS = func(ctx context.Context, network, address string, cfg *tls.Config) (net.Conn, error) {
+			_ = ctx
+			return tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second},
+				network, address, cfg)
+		}
+	}
+	conn, err := dialTLS(context.Background(), "tcp", c.Address, c.TLSConfig)
 	if err != nil {
 		c.logDebug("node control connection failed",
 			slog.String("node_id", c.NodeID), slog.String("master", c.Address),

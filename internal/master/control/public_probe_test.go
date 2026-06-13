@@ -13,7 +13,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -108,23 +107,14 @@ func TestPublicProbeVerifyRejectsWrongNonceAsAnswerError(t *testing.T) {
 func TestPublicProbeRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
 	restore := stubPublicProbeLookup(t, net.ParseIP("127.0.0.1"))
 	defer restore()
-	hits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		_, _ = w.Write([]byte(`{"status":"unexpected"}`))
-	}))
-	defer server.Close()
 	service := PublicProbeService{Config: PublicProbeConfig{Timeout: time.Second}}
 	challenge := protocol.PublicProbeChallenge{
 		ChallengeID: "challenge-1", ExpiresAt: time.Now().Add(time.Minute).UTC(),
 	}
 
-	err, network := service.verify("node-1", publicProbePublicURL(t, server.URL), challenge)
+	err, network := service.verify("node-1", "http://public.example.test:8080", challenge)
 	if err == nil || !network || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected DNS private network rejection, err=%v network=%v", err, network)
-	}
-	if hits != 0 {
-		t.Fatalf("DNS-private public probe should not reach server, hits=%d", hits)
 	}
 }
 

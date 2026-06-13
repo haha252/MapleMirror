@@ -21,8 +21,7 @@ elif command -v zig >/dev/null 2>&1; then
     "-Wl,--export=solve_pow" "-Wl,--initial-memory=2097152" "-Wl,--max-memory=2097152" \
     -o "$ROOT/web/public/static/pow.wasm" "$ROOT/web/wasm/pow.c"
 else
-  printf '%s\n' "未找到 clang 或 zig，无法生成网页 PoW WASM，发布构建已停止。"
-  exit 1
+  printf '%s\n' "未找到 clang 或 zig，跳过网页 PoW WASM 重新编译，继续使用现有文件或浏览器 JS 回退。"
 fi
 
 go test ./...

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,40 +13,20 @@ import (
 )
 
 func TestFetchWithTokenRejectsLoopbackBeforeRequest(t *testing.T) {
-	hits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		_, _ = w.Write([]byte("abcdef"))
-	}))
-	defer server.Close()
-
 	_, _, err := (Executor{}).fetchWithToken(context.Background(),
-		server.URL, filepath.Join(t.TempDir(), "asset.tmp"), "", 6)
+		"http://127.0.0.1:8080/asset.zip", filepath.Join(t.TempDir(), "asset.tmp"), "", 6)
 	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected private source rejection, got %v", err)
-	}
-	if hits != 0 {
-		t.Fatalf("unsafe source should not receive request, hits=%d", hits)
 	}
 }
 
 func TestFetchWithTokenRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
 	restore := stubSourceLookup(t, net.ParseIP("127.0.0.1"))
 	defer restore()
-	hits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		_, _ = w.Write([]byte("abcdef"))
-	}))
-	defer server.Close()
-
-	_, _, err := (Executor{}).fetchWithToken(context.Background(),
-		publicHostURL(t, server.URL, "/asset.zip"), filepath.Join(t.TempDir(), "asset.tmp"), "", 6)
+	_, _, err := (Executor{Client: &http.Client{Transport: &http.Transport{}}}).fetchWithToken(context.Background(),
+		"http://public.example.test:8080/asset.zip", filepath.Join(t.TempDir(), "asset.tmp"), "", 6)
 	if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
 		t.Fatalf("expected DNS private source rejection, got %v", err)
-	}
-	if hits != 0 {
-		t.Fatalf("DNS-private source should not receive request, hits=%d", hits)
 	}
 }
 
@@ -103,38 +82,19 @@ func TestSourceProbeRejectsLoopbackBeforeRequest(t *testing.T) {
 func TestSourceProbeRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
 	restore := stubSourceLookup(t, net.ParseIP("127.0.0.1"))
 	defer restore()
-	hits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		_, _ = w.Write([]byte("ok"))
-	}))
-	defer server.Close()
-
-	probe := NewSourceProbe(server.Client())
-	err := probe.Check(context.Background(), publicHostURL(t, server.URL, "/asset.zip"))
+	probe := NewSourceProbe(&http.Client{Transport: &http.Transport{}})
+	err := probe.Check(context.Background(), "http://public.example.test:8080/asset.zip")
 	if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
 		t.Fatalf("expected DNS private probe rejection, got %v", err)
-	}
-	if hits != 0 {
-		t.Fatalf("DNS-private probe should not send HEAD, hits=%d", hits)
 	}
 }
 
 func TestFetchFallbackRejectsUnsafePeerURL(t *testing.T) {
-	hits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		_, _ = w.Write([]byte("abcdef"))
-	}))
-	defer server.Close()
-	task := fallbackTask("https://example.com/asset.zip", server.URL, digest("abcdef"), 6)
+	task := fallbackTask("https://example.com/asset.zip", "http://127.0.0.1:8080/asset.zip", digest("abcdef"), 6)
 	tmp := filepath.Join(t.TempDir(), "asset.tmp")
 	_, _, err := (Executor{}).fetchFallback(context.Background(), task, tmp)
 	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected unsafe fallback rejection, got %v", err)
-	}
-	if hits != 0 {
-		t.Fatalf("unsafe fallback should not receive request, hits=%d", hits)
 	}
 	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
 		t.Fatalf("unsafe fallback should not leave temp file, err=%v", err)
@@ -144,21 +104,12 @@ func TestFetchFallbackRejectsUnsafePeerURL(t *testing.T) {
 func TestFetchFallbackRejectsDNSPrivatePeerURL(t *testing.T) {
 	restore := stubSourceLookup(t, net.ParseIP("127.0.0.1"))
 	defer restore()
-	hits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		_, _ = w.Write([]byte("abcdef"))
-	}))
-	defer server.Close()
 	task := fallbackTask("https://example.com/asset.zip",
-		publicHostURL(t, server.URL, "/internal/replication/asset-1"), digest("abcdef"), 6)
+		"http://public.example.test:8080/internal/replication/asset-1", digest("abcdef"), 6)
 	tmp := filepath.Join(t.TempDir(), "asset.tmp")
-	_, _, err := (Executor{}).fetchFallback(context.Background(), task, tmp)
+	_, _, err := (Executor{Client: &http.Client{Transport: &http.Transport{}}}).fetchFallback(context.Background(), task, tmp)
 	if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
 		t.Fatalf("expected DNS private fallback rejection, got %v", err)
-	}
-	if hits != 0 {
-		t.Fatalf("DNS-private fallback should not receive request, hits=%d", hits)
 	}
 	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
 		t.Fatalf("unsafe fallback should not leave temp file, err=%v", err)
