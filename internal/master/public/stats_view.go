@@ -58,19 +58,23 @@ func rankItem(rank int, item ResourceRank) string {
 
 func trendChart(trends []DailyTrend) string {
 	data, _ := json.Marshal(trends)
-	return `<section class="panel-card chart-card"><div class="chart-card__head"><h3>下载趋势</h3><p class="muted">最近 30 天访问量与下载量变化</p></div><div id="stats-chart" class="stats-chart" data-trends='` +
+	return `<section class="panel-card chart-card"><div class="chart-card__head">` +
+		`<h3>下载趋势</h3><p class="muted">最近 30 天访问量与下载量变化</p></div>` +
+		`<div id="stats-chart" class="stats-chart" data-trends='` +
 		template.HTMLEscapeString(string(data)) + `'></div><div id="stats-tooltip" class="stats-tooltip" hidden></div></section>`
 }
 
 func nodesTable(nodes []NodeSummary) string {
-	body := `<div class="node-table panel-card"><table><tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th><th>7天 SLA</th><th>总下载流量</th></tr>`
+	body := `<div class="node-table panel-card"><div class="node-table__scroll"><table>` +
+		`<tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th>` +
+		`<th>7天 SLA</th><th>总下载流量</th></tr>`
 	for _, n := range nodes {
 		body += `<tr><td>` + esc(n.PublicName) + renderDetail("最近心跳", displayTime(n.LastHeartbeat)) +
 			`</td><td>` + esc(stateText(n.State)) + downloadDetail(n) + `</td><td>` +
 			esc(n.SLA24H) + `</td><td>` + esc(n.SLA7D) + `</td><td>` +
 			bytesText(n.TotalSentBytes) + `</td></tr>`
 	}
-	body += `</table></div>`
+	body += `</table></div></div>`
 	return body
 }
 

@@ -82,13 +82,16 @@
 .download-pow-page {
   display: grid;
   place-items: center;
+  min-height: 360px;
   min-height: min(560px, 62vh);
 }
 
 .download-pow {
+  position: relative;
   display: grid;
   gap: 18px;
-  width: min(560px, 100%);
+  width: 100%;
+  max-width: 560px;
   padding: 24px;
 }
 
@@ -100,6 +103,12 @@
 .download-pow__head p,
 .download-pow__head h2 {
   margin-bottom: 0;
+}
+
+.download-pow__head h2,
+.download-pow__head p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .download-pow__actions {
@@ -122,6 +131,24 @@
   background: var(--panel-muted);
 }
 
+.download-pow__sponsors {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.download-pow__sponsors img {
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  object-fit: cover;
+}
+
 @media (max-width: 1120px) {
   .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -130,4 +157,55 @@
   .project-grid { grid-template-columns: 1fr; }
   .project-card__summary, .project-card__actions { align-items: flex-start; flex-direction: column; }
   .project-card__body { grid-template-columns: 1fr; }
+  .download-pow-page {
+    display: block;
+    min-height: 0;
+  }
+  .download-pow {
+    gap: 12px;
+    padding: 16px;
+    padding-bottom: 84px;
+  }
+  .download-pow__head {
+    gap: 4px;
+  }
+  .download-pow__head h2 {
+    font-size: 24px;
+    line-height: 1.18;
+  }
+  .download-pow .status {
+    margin-bottom: 0;
+    padding: 12px;
+  }
+  .download-pow__actions {
+    gap: 10px;
+  }
+  .download-pow__actions button,
+  .button-link {
+    min-height: 36px;
+    padding: 7px 12px;
+  }
+  .download-pow__sponsors {
+    right: 12px;
+    bottom: 12px;
+    gap: 6px;
+  }
+  .download-pow__sponsors img {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+@media (max-width: 390px) {
+  .download-pow {
+    padding: 14px;
+    padding-bottom: 76px;
+  }
+  .download-pow__head h2 {
+    font-size: 22px;
+  }
+  .download-pow__sponsors img {
+    width: 42px;
+    height: 42px;
+  }
 }

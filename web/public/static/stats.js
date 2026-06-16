@@ -116,7 +116,8 @@
       if (i % 5 === 0 || i === data.length - 1) {
         html += '<text class="chart-label" x="' + x(i) + '" y="' + (height - 8) + '" text-anchor="middle">' + item.day.slice(5) + "</text>";
       }
-      html += '<rect class="chart-hit" data-index="' + i + '" x="' + (x(i) - step / 2) + '" y="0" width="' + Math.max(step, 18) + '" height="' + height + '"/>';
+      html += '<rect class="chart-hit" data-index="' + i + '" x="' + (x(i) - step / 2) +
+        '" y="0" width="' + Math.max(step, 18) + '" height="' + height + '"/>';
     });
     chart.innerHTML = html + "</svg>";
     chart.querySelectorAll(".chart-hit").forEach(bindTooltip);
@@ -163,14 +164,16 @@
 
   function renderNodes(items) {
     if (!nodes || !Array.isArray(items)) return;
-    let html = '<div class="node-table panel-card"><table><tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th><th>7天 SLA</th><th>总下载流量</th></tr>';
+    let html = '<div class="node-table panel-card"><div class="node-table__scroll"><table>' +
+      '<tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th>' +
+      '<th>7天 SLA</th><th>总下载流量</th></tr>';
     items.forEach((row) => {
       const ready = Number(row[3]) === 1 ? detail("下载就绪", "是") : detail("下载就绪", "否：" + (row[4] || ""));
       html += "<tr><td>" + esc(row[0]) + detail("最近心跳", displayTime(row[2])) +
         "</td><td>" + esc(stateText(row[1])) + ready + "</td><td>" +
         esc(row[5]) + "</td><td>" + esc(row[6]) + "</td><td>" + bytes(row[7]) + "</td></tr>";
     });
-    nodes.innerHTML = html + "</table></div>";
+    nodes.innerHTML = html + "</table></div></div>";
   }
 
   function compactTrend(trend) {

@@ -1,0 +1,57 @@
+/* Theme controls */
+.theme-tools {
+  position: relative;
+}
+
+.palette-menu {
+  position: absolute;
+  right: 0;
+  top: 46px;
+  display: grid;
+  gap: 6px;
+  min-width: 148px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.palette-menu[hidden] {
+  display: none;
+}
+
+.palette-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.palette-choice:hover {
+  background: var(--panel-muted);
+}
+
+.palette-choice.is-active {
+  background: var(--panel-muted);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.palette-choice span {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(0, 0, 0, .18);
+  border-radius: 999px;
+}
+
+.palette-choice b {
+  font-size: 13px;
+  font-weight: 600;
+}

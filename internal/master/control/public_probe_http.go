@@ -2,7 +2,6 @@ package control
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -10,6 +9,10 @@ import (
 )
 
 var publicProbeLookupIPAddr = net.DefaultResolver.LookupIPAddr
+var publicProbeDialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+	var dialer net.Dialer
+	return dialer.DialContext(ctx, network, address)
+}
 
 func publicProbeHTTPClient(base *http.Client, timeout time.Duration) *http.Client {
 	if base == nil {
@@ -46,24 +49,13 @@ func safePublicProbeDialContext(ctx context.Context, network, address string) (n
 	if len(resolved) == 0 {
 		return nil, fmt.Errorf("公网探测地址 %s 无法解析", host)
 	}
-	for _, addr := range resolved {
-		if privatePublicProbeIP(addr.IP) {
-			return nil, errors.New("公网探测地址不得解析到本机或内网地址")
-		}
-	}
-	dialer := net.Dialer{}
 	var lastErr error
 	for _, addr := range resolved {
-		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(addr.IP.String(), port))
+		conn, err := publicProbeDialContext(ctx, network, net.JoinHostPort(addr.IP.String(), port))
 		if err == nil {
 			return conn, nil
 		}
 		lastErr = err
 	}
 	return nil, lastErr
-}
-
-func privatePublicProbeIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()
 }

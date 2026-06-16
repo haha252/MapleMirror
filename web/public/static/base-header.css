@@ -1,0 +1,139 @@
+/* Header and navigation */
+.site-header {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.site-header__left,
+.theme-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+
+@supports (color: color-mix(in srgb, #000 50%, #fff)) {
+  .site-header__left,
+  .theme-tools {
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+  }
+}
+
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  color: var(--text);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.site-brand__primary {
+  margin-left: 9px;
+}
+
+.site-brand img {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.site-nav,
+.theme-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-nav a,
+.icon-button {
+  min-width: 38px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.site-nav a {
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.icon-button {
+  width: 36px;
+  padding: 0;
+}
+
+.site-nav a:hover,
+.icon-button:hover {
+  background: var(--panel-muted);
+  color: var(--text);
+}
+
+.page-download .site-nav a[href="/"],
+.page-stats .site-nav a[href="/stats"],
+.page-about .site-nav a[href="/about"],
+.page-api-docs .site-nav a[href="/api-docs"] {
+  background: var(--panel-muted);
+  color: var(--text);
+}
+
+.site-nav svg,
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.site-nav svg *,
+.icon-button svg * {
+  fill: none;
+  stroke: currentColor;
+}
+
+.page-loading-bar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  width: 0;
+  height: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 14px rgba(255, 164, 54, .46);
+  opacity: 0;
+  transition: width .22s ease, opacity .18s ease;
+}
+
+.page-loading-bar.is-loading {
+  width: 82%;
+  opacity: 1;
+}

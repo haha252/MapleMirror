@@ -1,0 +1,138 @@
+/* Page shell */
+.site-main {
+  flex: 1;
+  width: 90vw;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 82px 0 44px;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.page-title-row h1 {
+  margin-bottom: 0;
+  font-size: 34px;
+  line-height: 1.15;
+}
+
+.page-subtitle {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.page-notice {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid #e5bd54;
+  border-radius: 8px;
+  background: #fff4c2;
+  color: #8a5600;
+  box-shadow: var(--shadow);
+}
+
+:root[data-theme="dark"] .page-notice {
+  border-color: #7b6121;
+  background: #3a2b06;
+  color: #ffd98a;
+}
+
+.page-intro {
+  max-width: 760px;
+  color: var(--muted);
+}
+
+/* Shared components */
+.theme-toggle,
+.download-button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #140f08;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.download-button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.sub {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.status[hidden] {
+  display: none;
+}
+
+.panel-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+/* Footer */
+.site-footer {
+  width: 90vw;
+  max-width: 1480px;
+  margin: 0 auto 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.site-footer__meta,
+.site-footer__built,
+.site-footer__contact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.site-footer__contact a {
+  overflow-wrap: anywhere;
+}
+
+.site-footer svg {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+  fill: currentColor;
+}

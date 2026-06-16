@@ -104,28 +104,48 @@ func TestPublicProbeVerifyRejectsWrongNonceAsAnswerError(t *testing.T) {
 	}
 }
 
-func TestPublicProbeRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
+func TestPublicProbeAllowsDNSPrivateAddressToReachDial(t *testing.T) {
 	restore := stubPublicProbeLookup(t, net.ParseIP("127.0.0.1"))
 	defer restore()
+	restoreDial := stubPublicProbeDial(t, func(context.Context, string, string) (net.Conn, error) {
+		return nil, context.DeadlineExceeded
+	})
+	defer restoreDial()
 	service := PublicProbeService{Config: PublicProbeConfig{Timeout: time.Second}}
 	challenge := protocol.PublicProbeChallenge{
 		ChallengeID: "challenge-1", ExpiresAt: time.Now().Add(time.Minute).UTC(),
 	}
 
 	err, network := service.verify("node-1", "http://public.example.test:8080", challenge)
-	if err == nil || !network || !strings.Contains(err.Error(), "内网") {
-		t.Fatalf("expected DNS private network rejection, err=%v network=%v", err, network)
+	if err == nil || !network || strings.Contains(err.Error(), "内网") {
+		t.Fatalf("expected DNS private address to reach dial, err=%v network=%v", err, network)
 	}
 }
 
-func TestSafePublicProbeDialRejectsPrivateResolvedRanges(t *testing.T) {
+func TestSafePublicProbeDialDoesNotRejectPrivateResolvedRanges(t *testing.T) {
 	for _, rawIP := range []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "0.0.0.0"} {
 		t.Run(rawIP, func(t *testing.T) {
 			restore := stubPublicProbeLookup(t, net.ParseIP(rawIP))
 			defer restore()
-			_, err := safePublicProbeDialContext(context.Background(), "tcp", "node.example.com:443")
-			if err == nil || !strings.Contains(err.Error(), "内网") {
-				t.Fatalf("expected private resolved address rejection, got %v", err)
+			var gotAddress string
+			restoreDial := stubPublicProbeDial(t, func(_ context.Context, _ string, address string) (net.Conn, error) {
+				gotAddress = address
+				client, server := net.Pipe()
+				server.Close()
+				return client, nil
+			})
+			defer restoreDial()
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			conn, err := safePublicProbeDialContext(ctx, "tcp", "node.example.com:443")
+			if err != nil {
+				t.Fatalf("should not pre-reject private resolved address, got %v", err)
+			}
+			if conn != nil {
+				conn.Close()
+			}
+			if gotAddress != net.JoinHostPort(rawIP, "443") {
+				t.Fatalf("expected dial to %s, got %q", rawIP, gotAddress)
 			}
 		})
 	}
@@ -185,12 +205,6 @@ func publicProbeTestCertificate(t *testing.T) (*ecdsa.PrivateKey, string) {
 	return key, string(certPEM)
 }
 
-type probeRoundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f probeRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
 func publicProbeTestClient(body protocol.PublicProbeResponse) *http.Client {
 	return &http.Client{Transport: probeRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		data, _ := json.Marshal(body)
@@ -209,6 +223,13 @@ func stubPublicProbeLookup(t *testing.T, ip net.IP) func() {
 		return []net.IPAddr{{IP: ip}}, nil
 	}
 	return func() { publicProbeLookupIPAddr = previous }
+}
+
+func stubPublicProbeDial(t *testing.T, dial func(context.Context, string, string) (net.Conn, error)) func() {
+	t.Helper()
+	previous := publicProbeDialContext
+	publicProbeDialContext = dial
+	return func() { publicProbeDialContext = previous }
 }
 
 func publicProbePublicURL(t *testing.T, serverURL string) string {

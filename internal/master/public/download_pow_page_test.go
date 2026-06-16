@@ -26,6 +26,8 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`"file_name":"a.zip"`,
 		`/static/public/pow-loader.js`,
 		`/static/public/download-pow.js`,
+		`/static/public/wechat.png`,
+		`/static/public/alipay.png`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected download verification page to include %q: %s", want, body)
