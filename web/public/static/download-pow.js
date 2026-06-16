@@ -10,19 +10,31 @@
   let running = false;
 
   function bytesText(value) {
+    const size = Number(value) || 0;
+    if (size <= 0) return "";
     const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let size = Number(value) || 0;
+    let scaled = size;
     let unit = 0;
-    while (size >= 1024 && unit < units.length - 1) {
-      size = size / 1024;
+    while (scaled >= 1024 && unit < units.length - 1) {
+      scaled = scaled / 1024;
       unit++;
     }
-    return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
+    return (unit === 0 ? String(scaled) : scaled.toFixed(2)) + " " + units[unit];
+  }
+
+  function showText(element, value) {
+    const text = String(value || "").trim();
+    element.textContent = text;
+    element.hidden = text === "";
   }
 
   function setStatus(message, level) {
     statusBox.textContent = message;
     statusBox.className = "status " + (level || "muted");
+  }
+
+  function powStartupMessage() {
+    return "PoW 验证组件启动失败。请升级当前浏览器，或更换为新版 Chrome、Edge、Firefox、Safari 后重试。";
   }
 
   async function postJSON(url, payload) {
@@ -53,7 +65,7 @@
       return;
     }
     if (!window.crypto || !window.crypto.subtle || !window.PowSolver) {
-      setStatus("当前浏览器不支持下载验证所需的加密能力。", "warn");
+      setStatus(powStartupMessage(), "warn status--strong");
       retryButton.hidden = false;
       return;
     }
@@ -65,7 +77,12 @@
       const altcha = challengeData.altcha || {};
       if (!challengeData.challenge_id || !altcha.challenge) throw new Error("挑战数据缺失");
       setStatus("正在计算验证答案...", "muted");
-      const number = await window.PowSolver.solve(altcha.challenge, challengeData.difficulty || 10);
+      let number;
+      try {
+        number = await window.PowSolver.solve(altcha.challenge, challengeData.difficulty || 10);
+      } catch (err) {
+        throw new Error(powStartupMessage());
+      }
       setStatus("正在领取下载授权...", "muted");
       const authResp = await postJSON("/api/public/v1/web/authorizations", {
         challenge_id: challengeData.challenge_id,
@@ -84,14 +101,13 @@
     }
   }
 
-  title.textContent = asset.file_name || "文件下载";
-  meta.textContent = [
-    asset.project_name,
+  showText(title, asset.project_name);
+  showText(meta, [
     asset.version,
     asset.system,
     asset.architecture,
     bytesText(asset.size_bytes)
-  ].filter(Boolean).join(" / ");
+  ].filter(Boolean).join(" / "));
   retryButton.addEventListener("click", start);
   start();
 })();

@@ -86,6 +86,10 @@
   min-height: min(560px, 62vh);
 }
 
+.page-download-pow .site-main {
+  padding-top: 36px;
+}
+
 .download-pow {
   position: relative;
   display: grid;
@@ -118,6 +122,22 @@
   flex-wrap: wrap;
 }
 
+.download-pow .status.warn {
+  border-color: #e5bd54;
+  background: #fff4c2;
+  color: #7a4700;
+}
+
+:root[data-theme="dark"] .download-pow .status.warn {
+  border-color: #8d6c20;
+  background: #3a2b06;
+  color: #ffd98a;
+}
+
+.download-pow .status--strong {
+  font-weight: 700;
+}
+
 .button-link {
   display: inline-flex;
   align-items: center;
@@ -131,18 +151,36 @@
   background: var(--panel-muted);
 }
 
-.download-pow__sponsors {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
+.download-pow__support {
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
+  gap: 18px;
+  align-items: end;
+  justify-content: space-between;
+}
+
+.download-pow__support-copy {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.download-pow__support-copy p {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.download-pow__sponsors {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
 .download-pow__sponsors img {
-  width: 54px;
-  height: 54px;
+  width: 92px;
+  height: 92px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
@@ -164,7 +202,6 @@
   .download-pow {
     gap: 12px;
     padding: 16px;
-    padding-bottom: 84px;
   }
   .download-pow__head {
     gap: 4px;
@@ -186,26 +223,27 @@
     padding: 7px 12px;
   }
   .download-pow__sponsors {
-    right: 12px;
-    bottom: 12px;
-    gap: 6px;
+    gap: 8px;
   }
   .download-pow__sponsors img {
-    width: 46px;
-    height: 46px;
+    width: 78px;
+    height: 78px;
+  }
+  .download-pow__support {
+    align-items: start;
+    flex-direction: column;
   }
 }
 
 @media (max-width: 390px) {
   .download-pow {
     padding: 14px;
-    padding-bottom: 76px;
   }
   .download-pow__head h2 {
     font-size: 22px;
   }
   .download-pow__sponsors img {
-    width: 42px;
-    height: 42px;
+    width: 70px;
+    height: 70px;
   }
 }

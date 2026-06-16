@@ -21,16 +21,33 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
 	}
 	for _, want := range []string{
-		`<title>a.zip - 下载验证</title>`,
+		`<title>下载验证 - 枫源镜像</title>`,
 		`"asset_id":"asset-1"`,
-		`"file_name":"a.zip"`,
+		`"project_name":"项目一"`,
+		`"version":"v1"`,
+		`"architecture":"amd64"`,
+		`"size_bytes":12`,
 		`/static/public/pow-loader.js`,
 		`/static/public/download-pow.js`,
 		`/static/public/wechat.png`,
 		`/static/public/alipay.png`,
+		`返回枫源镜像`,
+		`下载站费用高昂，如有能力，欢迎捐赠！`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected download verification page to include %q: %s", want, body)
+		}
+	}
+	for _, unwanted := range []string{
+		`<header class="site-header">`,
+		`完成浏览器验证后将自动开始下载`,
+		`正在准备安全验证`,
+		`<p class="muted">下载验证</p>`,
+		`a.zip`,
+		`返回首页`,
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("download verification page should not include %q: %s", unwanted, body)
 		}
 	}
 }
@@ -49,13 +66,26 @@ func TestReadableDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
 	}
 	for _, want := range []string{
-		`<title>a.zip - 下载验证</title>`,
+		`<title>下载验证 - 枫源镜像</title>`,
 		`"asset_id":"asset-1"`,
-		`"download_path":"/p1/v1/a.zip"`,
+		`"project_name":"项目一"`,
+		`"version":"v1"`,
+		`"architecture":"amd64"`,
 		`/static/public/download-pow.js`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected readable download page to include %q: %s", want, body)
+		}
+	}
+	for _, unwanted := range []string{
+		`<header class="site-header">`,
+		`完成浏览器验证后将自动开始下载`,
+		`正在准备安全验证`,
+		`<p class="muted">下载验证</p>`,
+		`a.zip`,
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("readable download verification page should not include %q: %s", unwanted, body)
 		}
 	}
 }

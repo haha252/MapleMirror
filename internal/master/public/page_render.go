@@ -13,6 +13,7 @@ type pageData struct {
 	Notice       string
 	Description  string
 	BodyClass    string
+	HideHeader   bool
 	Body         template.HTML
 	Styles       []string
 	Scripts      []string

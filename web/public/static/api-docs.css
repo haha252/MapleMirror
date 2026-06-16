@@ -18,6 +18,87 @@
   overflow: hidden;
 }
 
+.api-endpoint h2,
+.api-endpoint h3 {
+  margin: 0 0 12px;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.api-endpoint h2 {
+  font-size: 22px;
+}
+
+.api-endpoint h3 {
+  margin-top: 22px;
+  font-size: 17px;
+}
+
+.api-docs-intro p,
+.api-flow p {
+  max-width: 920px;
+}
+
+.api-jump-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.api-jump-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-muted);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.api-jump-links a:hover {
+  border-color: #ffa436;
+  color: #ffa436;
+}
+
+.api-note {
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, #ffa436 58%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, #ffa436 12%, var(--panel));
+  color: var(--text) !important;
+}
+
+.api-details {
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-muted);
+}
+
+.api-details summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.api-details .api-route {
+  margin-top: 14px;
+}
+
+.api-steps {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  padding-left: 24px;
+  color: color-mix(in srgb, var(--text) 86%, var(--muted));
+}
+
 .api-route {
   display: flex;
   align-items: center;
@@ -135,6 +216,11 @@
 
 @media (max-width: 760px) {
   .api-endpoint { padding: 16px; }
+  .api-endpoint h2 { font-size: 19px; }
+  .api-endpoint h3 { font-size: 16px; }
+  .api-jump-links {
+    display: grid;
+  }
   .api-route {
     align-items: flex-start;
     gap: 8px;

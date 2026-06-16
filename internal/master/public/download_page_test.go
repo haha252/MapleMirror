@@ -201,10 +201,18 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<body class="page-api-docs">`,
+		`方式一：跳转主站验证页下载`,
+		`方式二：程序调用 API 下载`,
+		`href="#web-download-flow"`,
+		`href="#api-download-flow"`,
+		`主站地址，不是下载节点地址`,
 		`/api/public/v1/projects`,
+		`/api/public/v1/projects/{project_id}/assets`,
 		`/api/public/v1/api/challenges`,
 		`/api/public/v1/api/authorizations`,
 		`/{project_id}/{version}/{file_name}`,
+		`download_url`,
+		`Authorization: Bearer &lt;download_token&gt;`,
 		`/static/public/api-docs.css`,
 		`class="api-method method-get"`,
 		`class="api-method method-post"`,

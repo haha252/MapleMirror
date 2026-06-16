@@ -25,6 +25,7 @@
 </head>
 <body class="{{.BodyClass}}">
 <div id="page-loading-bar" class="page-loading-bar" aria-hidden="true"></div>
+{{if not .HideHeader}}
 <header class="site-header">
   <div class="site-header__left">
     <div class="site-brand" aria-label="枫源镜像">
@@ -68,6 +69,7 @@
     <div id="palette-menu" class="palette-menu" hidden></div>
   </div>
 </header>
+{{end}}
 <main class="site-main">
   <div class="page-title-row">
     <h1>{{.Title}}</h1>

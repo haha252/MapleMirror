@@ -35,6 +35,17 @@ type downloadAssetUI struct {
 	UnavailableReason string `json:"unavailable_reason"`
 }
 
+type downloadPowAssetUI struct {
+	AssetID           string `json:"asset_id"`
+	ProjectName       string `json:"project_name"`
+	Version           string `json:"version"`
+	Architecture      string `json:"architecture"`
+	System            string `json:"system"`
+	SizeBytes         int64  `json:"size_bytes"`
+	Available         bool   `json:"available"`
+	UnavailableReason string `json:"unavailable_reason"`
+}
+
 func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		s.downloadReadablePowPage(w, r)
@@ -97,10 +108,10 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.renderPage(w, pageData{
 		Title:        "下载验证",
-		BrowserTitle: asset.FileName + " - 下载验证",
-		Subtitle:     "完成浏览器验证后将自动开始下载。",
+		BrowserTitle: "下载验证 - 枫源镜像",
 		Description:  "枫源镜像下载验证页",
 		BodyClass:    "page-download-pow",
+		HideHeader:   true,
 		Body:         body,
 		Styles:       []string{"/static/public/download.css"},
 		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
@@ -129,10 +140,10 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 	}
 	s.renderPage(w, pageData{
 		Title:        "下载验证",
-		BrowserTitle: asset.FileName + " - 下载验证",
-		Subtitle:     "完成浏览器验证后将自动开始下载。",
+		BrowserTitle: "下载验证 - 枫源镜像",
 		Description:  "枫源镜像下载验证页",
 		BodyClass:    "page-download-pow",
+		HideHeader:   true,
 		Body:         body,
 		Styles:       []string{"/static/public/download.css"},
 		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
@@ -187,7 +198,16 @@ func (s Server) renderDownloadPowBody(asset DownloadAssetSummary) (template.HTML
 	body := struct {
 		AssetJSON template.JS
 	}{AssetJSON: template.JS("{}")}
-	data, err := json.Marshal(asset)
+	data, err := json.Marshal(downloadPowAssetUI{
+		AssetID:           asset.AssetID,
+		ProjectName:       asset.ProjectName,
+		Version:           asset.Version,
+		Architecture:      asset.Architecture,
+		System:            asset.System,
+		SizeBytes:         asset.SizeBytes,
+		Available:         asset.Available,
+		UnavailableReason: asset.UnavailableReason,
+	})
 	if err != nil {
 		return "", err
 	}

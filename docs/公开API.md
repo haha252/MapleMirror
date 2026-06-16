@@ -115,13 +115,154 @@
 
 `architecture` 为空字符串表示该项目未启用架构区分；启用后返回提取值，未命中时返回 `None`。`system` 为空字符串表示该项目未启用系统区分；启用后只返回规范化值 `win`、`linux`、`darwin` 或未命中占位 `None`。
 
-## 4. 网页下载挑战授权接口
+## 4. 下载接入方式
+
+公开下载分为两条线。网页、官网、论坛、公告页或前端页面里的下载按钮，推荐跳转主站验证页；命令行工具、自动更新器、CI 脚本、下载器或后端服务，使用程序 API 链路。
+
+- [方式一：跳转主站验证页下载](#41-方式一跳转主站验证页下载)
+- [方式二：程序调用-api-下载](#42-方式二程序调用-api-下载)
+
+### 4.1 方式一：跳转主站验证页下载
+
+这种方式适合网页下载按钮。外部前端不需要自己处理挑战、PoW、下载令牌，也不需要关心当前由哪个下载节点提供文件。
+
+需要特别注意：这里要跳转的是**主站地址**，不是下载节点地址。外部前端应该把用户带到主站的验证页面，由主站完成验证、授权和节点选择，最后再跳转到真实下载节点开始下载。
+
+验证页路径格式：
+
+```text
+/{project_id}/{version}/{file_name}
+```
+
+示例：
+
+```text
+https://mirror.example.com/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk
+```
+
+这里的 `https://mirror.example.com` 应该是主站公共入口，不是某个下载节点的 `public_download_base_url`。
+
+如果前端还不知道有哪些项目，可以先查询项目列表：
+
+```text
+GET /api/public/v1/projects
+```
+
+这个接口可以用来获取 `project_id`、项目展示名和项目可用状态。前端一般只需要在初始化下载页、项目选择器或外部下载列表时调用它。
+
+拿到 `project_id` 后，前端可以查询该项目下有哪些版本和文件：
+
+```text
+GET /api/public/v1/projects/{project_id}/assets
+```
+
+返回结果里会包含 `version`、`file_name`、`architecture`、`system`、`size_bytes`、`digest_sha256` 和 `available` 等字段。前端可以根据这些字段生成下载按钮。用户点击按钮时，跳转到主站验证页：
+
+```text
+/{project_id}/{version}/{file_name}
+```
+
+例如，资产返回：
+
+```json
+{
+  "asset_id": "asset_123",
+  "version": "v1.2.3",
+  "file_name": "example-windows-amd64.zip",
+  "architecture": "amd64",
+  "system": "win",
+  "available": true
+}
+```
+
+前端下载按钮应该跳转到：
+
+```text
+https://mirror.example.com/example/v1.2.3/example-windows-amd64.zip
+```
+
+用户打开验证页后，主站会自动完成下面的流程：
+
+1. 展示下载验证页面。
+2. 在浏览器中完成下载挑战计算。
+3. 向主节点领取短时下载授权。
+4. 选择可用下载节点。
+5. 跳转到真实下载地址开始下载。
+
+外部网站不要直接拼接节点下载地址，也不要调用程序下载用的 `/api/public/v1/api/*` 接口来替代这个流程。本站网页验证采用 C 语言 WASM 计算，速度快，并由主站统一维护。
+
+### 4.2 方式二：程序调用 API 下载
+
+这种方式适合命令行工具、自动更新器、CI 脚本、下载器或后端服务。程序需要自己查询资产、完成 API PoW 验证，然后携带下载令牌访问下载节点。
+
+第一步，查询项目列表：
+
+```text
+GET /api/public/v1/projects
+```
+
+第二步，查询项目资产：
+
+```text
+GET /api/public/v1/projects/{project_id}/assets
+```
+
+程序应选择一个 `available=true` 的资产，并记录它的 `asset_id`。如果 `available=false`，表示当前没有可用下载节点持有这个文件，程序应该稍后重试。
+
+第三步，创建 API PoW 挑战：
+
+```text
+POST /api/public/v1/api/challenges
+
+{
+  "asset_id": "asset_123"
+}
+```
+
+第四步，计算 `nonce`。程序需要寻找一个 `nonce`，让下面这个字符串的 SHA-256 摘要满足响应里的 `leading_zero_bits`：
+
+```text
+download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}
+```
+
+第五步，提交 `nonce` 并领取下载授权：
+
+```text
+POST /api/public/v1/api/authorizations
+
+{
+  "challenge_id": "挑战标识",
+  "asset_id": "asset_123",
+  "nonce": "客户端找到的 nonce"
+}
+```
+
+成功后会返回 `download_url` 和 `download_token`。
+
+第六步，程序应直接访问授权响应里的 `download_url`，并通过请求头携带下载令牌：
+
+```text
+GET {download_url}
+Authorization: Bearer <download_token>
+```
+
+如果需要断点续传，可以使用单段 Range：
+
+```text
+GET {download_url}
+Authorization: Bearer <download_token>
+Range: bytes=1048576-2097151
+```
+
+`download_url` 通常指向下载节点。程序调用 API 的这条链路里，下载文件时访问节点地址是正确的；但网页按钮下载时，入口仍应该是主站验证页。
+
+## 5. 网页下载挑战授权接口
 
 网页页面可以使用公开 API 下的下载挑战接口；这些接口仅服务浏览器下载链路。当前响应仍兼容旧的 `altcha` 字段，浏览器端优先使用自研 WASM/Worker 前导零求解器。
 
-浏览器推荐入口为 `GET /{project_id}/{version}/{file_name}`，例如 `/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk`。首页下载按钮和外部网站都应跳转到该独立验证页，由页面完成网页挑战、领取下载授权并跳转到节点 `download_url` 发起下载；外部网站不要直接拼接节点下载 URL 或调用公开 API PoW 授权接口替代网页下载入口。旧版 `GET /download/{asset_id}` 暂时保留为兼容入口。网页验证与公开 API PoW 是两套独立合同，`altcha.*` 与 `api_pow.*` 参数仍不得混用。
+浏览器推荐入口为主站上的 `GET /{project_id}/{version}/{file_name}`，例如 `/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk`。首页下载按钮和外部网站都应跳转到该独立验证页，由页面完成网页挑战、领取下载授权并跳转到节点 `download_url` 发起下载；外部网站不要直接拼接节点下载 URL 或调用公开 API PoW 授权接口替代网页下载入口。旧版 `GET /download/{asset_id}` 暂时保留为兼容入口。网页验证与公开 API PoW 是两套独立合同，`altcha.*` 与 `api_pow.*` 参数仍不得混用。
 
-### 4.1 创建网页挑战
+### 5.1 创建网页挑战
 
 `POST /api/public/v1/web/challenges`
 
@@ -158,7 +299,7 @@
 }
 ```
 
-### 4.2 提交网页挑战并领取授权
+### 5.2 提交网页挑战并领取授权
 
 `POST /api/public/v1/web/authorizations`
 
@@ -190,9 +331,9 @@
 }
 ```
 
-## 5. 公开 API PoW 授权接口
+## 6. 公开 API PoW 授权接口
 
-### 5.1 创建 API PoW 挑战
+### 6.1 创建 API PoW 挑战
 
 `POST /api/public/v1/api/challenges`
 
@@ -233,7 +374,7 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 的二进制摘要满足前导零位数要求。默认难度是前导 `23` 个二进制零位。
 
-### 5.2 提交 API PoW 并领取授权
+### 6.2 提交 API PoW 并领取授权
 
 `POST /api/public/v1/api/authorizations`
 
@@ -253,7 +394,7 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 若授权签发因为 `REQUEST_QUOTA_EXHAUSTED` 或 `TRAFFIC_LIMIT_EXCEEDED` 失败，主节点会把客户端前缀写入本站自动封禁表。默认封禁 7 天，时长由 `quota.yaml` 的 `blocklist.auto_ban_duration` 调整；过期后自动不再生效。订阅源黑名单不受该过期时间影响，只跟随订阅源当前快照。
 
-## 6. 授权查询
+## 7. 授权查询
 
 `GET /api/public/v1/authorizations/{authorization_id}`
 
@@ -281,7 +422,7 @@ Authorization: Bearer <download_token>
 }
 ```
 
-## 7. 节点下载接口
+## 8. 节点下载接口
 
 节点文件服务路径由主节点返回的 `download_url` 决定。推荐形式：
 
@@ -293,7 +434,7 @@ Range: bytes=0-1048575
 
 浏览器下载场景可使用一次性查询参数传递令牌，例如 `?token=<download_token>`；节点日志必须脱敏并避免把完整 URL 写入普通日志。旧 `/downloads/{asset_id}` 路径仅用于兼容已签发或外部缓存的旧链接。
 
-### 7.1 成功响应头
+### 8.1 成功响应头
 
 | 响应头 | 说明 |
 | --- | --- |
@@ -304,7 +445,7 @@ Range: bytes=0-1048575
 | `X-Request-ID` | 节点侧请求 ID |
 | `X-Authorization-Request-ID` | 主节点签发请求 ID，可选 |
 
-### 7.2 Range 示例
+### 8.2 Range 示例
 
 请求：
 
@@ -326,7 +467,7 @@ X-Request-ID: 节点请求标识
 
 M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，实现应返回 `400 INVALID_REQUEST` 或 `416 RANGE_NOT_SATISFIABLE`，并保持错误码稳定。
 
-## 8. 下载令牌声明
+## 9. 下载令牌声明
 
 下载令牌至少绑定：
 
@@ -344,7 +485,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 
 下载令牌使用 Ed25519 非对称签名：主节点持私钥签发，下载节点只持公钥验证。令牌格式仍为 `base64url(payload).base64url(signature)`。伪造、过期、跨节点、跨资产复用的令牌必须被拒绝。
 
-## 9. M5 统计字段
+## 10. M5 统计字段
 
 统计页和部分 API 返回下列字段：
 
@@ -359,7 +500,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 | `daily_bytes` | 当前统计日真实发送字节 |
 | `node_sla` | 24h、7d、30d SLA |
 
-## 10. M4 实现说明
+## 11. M4 实现说明
 
 - 主节点公共接口挂载在 `server.public_listen`。
 - 下载节点文件服务挂载在 `/{project_id}/{version}/{file_name}`；旧 `/downloads/{asset_id}` 仅作为兼容路径保留。
@@ -368,7 +509,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 - `download_url` 返回主节点当前选定下载节点的完整公网下载地址；浏览器和 API 客户端应直接向该地址发起下载，请勿再经主节点转发文件流量。
 - M4 已支持单段 HTTP Range；multipart Range 不作为 M4 必须能力。
 
-## 11. 脱敏与兼容
+## 12. 脱敏与兼容
 
 - 公共 API 响应不得包含节点内部地址、控制端口、证书、磁盘路径、GitHub Token 或完整客户端 IP。
 - 日志不得记录完整 `download_token`、完整网页挑战 payload、完整 PoW 规范字符串或完整 URL 查询令牌。
@@ -376,11 +517,11 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 - JSON 字段新增必须保持向后兼容；删除或重命名字段前必须更新本文并经过阶段确认。
 - 所有中文错误、页面文案和文档使用 UTF-8。
 
-## 12. M5 额度与统计接口变化
+## 13. M5 额度与统计接口变化
 
 M5 启用后，公开 API 不再使用 `QUOTA_NOT_ENABLED` 占位错误。网页挑战授权和公开 API PoW 授权在签发下载令牌前必须完成真实请求额度扣减和每日流量预算预留。
 
-### 12.1 新增或变更错误码
+### 13.1 新增或变更错误码
 
 | HTTP 状态 | 错误码 | 含义 |
 | --- | --- | --- |
@@ -390,7 +531,7 @@ M5 启用后，公开 API 不再使用 `QUOTA_NOT_ENABLED` 占位错误。网页
 
 错误响应仍使用中文 `message`、稳定 `code` 和 `request_id`，并返回 `X-Request-ID`。
 
-### 12.2 授权查询响应
+### 13.2 授权查询响应
 
 `GET /api/public/v1/authorizations/{authorization_id}` 在 M5 后可返回真实入账字段：
 
@@ -416,7 +557,7 @@ M5 启用后，公开 API 不再使用 `QUOTA_NOT_ENABLED` 占位错误。网页
 
 `sent_bytes` 只表示已由主节点幂等入账的真实发送字节，可能滞后于节点正在传输的瞬时值。
 
-### 12.3 统计数据页字段
+### 13.3 统计数据页字段
 
 M5 后统计数据页展示：
 
@@ -430,22 +571,22 @@ M5 后统计数据页展示：
 
 公开统计不得展示完整客户端 IP、额度桶精确余额、单个授权明细、单个请求 ID 列表、节点内部地址或控制面信息。
 
-### 12.4 节点状态页字段
+### 13.4 节点状态页字段
 
 M5 后节点状态页展示公开节点名称、公开连接状态、下载就绪、最近更新时间、负载分档和近 `24h`、`7d`、`30d` SLA。样本不足时显示“统计样本不足”。`download_ready` 只表示该节点当前至少有一个仍处于 `target_inventory.required` 的可公开下载已校验资产副本，`routing_ready` 仍保留为同步/对账合同，不再作为节点页主标识。节点连接状态只表达 `online`、`offline`、`disabled` 等可用性，不表示全量同步进度；全量同步进度只在管理诊断中展示。
 M6 起，主节点会定期通过下载节点 `public_download_base_url` 访问 `/.well-known/mirror-node/probes/{challenge_id}` 并验签；公网不可达达到配置阈值，或响应字段/签名错误时，节点连接状态会被标记为 `offline`。
 
 节点状态页不得展示真实带宽目标、内部压力原始值、管理地址、控制通道地址、证书信息、磁盘路径、完整客户端 IP 或下载令牌。
 
-### 12.5 M4 令牌兼容
+### 13.5 M4 令牌兼容
 
 M5 上线前已签发且未过期的 M4 下载令牌仍按签名、节点、资产、客户端前缀和过期时间校验。若该授权缺少 M5 流量预留，主节点在首次流量事件入账时走兼容路径补建或标记旧授权预留；已真实发送的字节必须入账，后续超限请求可拒绝或撤销。
 
-## 13. M6 最终对外字段和安全边界
+## 14. M6 最终对外字段和安全边界
 
 M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段必须保持向后兼容；删除或重命名前必须先更新本文并经过阶段确认。
 
-### 13.1 最终对外字段
+### 14.1 最终对外字段
 
 | 接口或页面 | 可公开字段 |
 | --- | --- |
@@ -458,7 +599,7 @@ M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段
 | 统计页面 | 下载授权次数、开始传输授权数、当日真实流量、累计真实流量、项目聚合统计、统计时区、最近更新时间 |
 | 节点状态页面 | 公开节点名、公开连接状态、下载就绪、最近更新时间、负载分档、24h/7d/30d SLA、样本不足提示 |
 
-### 13.2 仍不得公开的内部字段
+### 14.2 仍不得公开的内部字段
 
 - 管理面板密码、会话 Cookie、下载令牌私钥、配对码明文、证书私钥、完整 CSR 或证书正文。
 - 完整客户端 IP、完整客户端网段、额度桶精确余额、黑名单和豁免规则明细。
@@ -466,7 +607,7 @@ M6 将公开 API 和公共页面收口为首版最终交付合同。新增字段
 - GitHub Token、源站敏感请求头、同步任务内部错误全文。
 - 单个流量事件完整明细、完整请求 URL 查询令牌、可绕过挑战的 PoW 或网页挑战内部材料。
 
-### 13.3 M6 安全和负载验收
+### 14.3 M6 安全和负载验收
 
 | 用例 | 公开 API 通过标准 |
 | --- | --- |
