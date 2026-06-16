@@ -108,7 +108,7 @@ func markInventoryStaleOnAssetChange(ctx context.Context, tx *sql.Tx, assetID, d
 	if oldDigest == digest && oldSize == size {
 		return nil
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE node_inventory SET state = 'mismatch',
+	_, err = tx.ExecContext(ctx, `UPDATE node_inventory SET state = 'stale',
 		verified_at = ? WHERE asset_id = ? AND state = 'verified'`, now, assetID)
 	return err
 }

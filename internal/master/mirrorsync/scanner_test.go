@@ -190,6 +190,18 @@ func assertAssetState(t *testing.T, db *sql.DB, assetID, want string) {
 	}
 }
 
+func assertInventoryState(t *testing.T, db *sql.DB, nodeID, assetID, want string) {
+	t.Helper()
+	var got string
+	if err := db.QueryRow(`SELECT state FROM node_inventory
+		WHERE node_id = ? AND asset_id = ?`, nodeID, assetID).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("节点库存状态错误 node_id=%s asset_id=%s got=%q want=%q", nodeID, assetID, got, want)
+	}
+}
+
 func assertProjectEnabled(t *testing.T, db *sql.DB, projectID string, want bool) {
 	t.Helper()
 	var got int
