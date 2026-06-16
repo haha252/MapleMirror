@@ -48,7 +48,7 @@ func (r Repository) RecordPublicProbeNetworkFailure(ctx context.Context,
 	if err != nil || failures < threshold {
 		return false, err
 	}
-	return true, r.markPublicProbeOffline(ctx, nodeID, "public probe network failure")
+	return true, nil
 }
 
 func (r Repository) RecordPublicProbeAnswerFailure(ctx context.Context,

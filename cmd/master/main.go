@@ -163,7 +163,8 @@ func publicHandler(cfg config.Master, quota config.Quota, projects config.Projec
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
 		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
-		cfg.Proxy.TrustedCIDRs, projects, projectsPath, runtime, logger)
+		cfg.Proxy.TrustedCIDRs, projects, projectsPath, runtime, logger,
+		cfg.Node.PublicProbeNetworkFailures)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +180,7 @@ func publicHandler(cfg config.Master, quota config.Quota, projects config.Projec
 
 func startControlServices(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {
 	timeout, _ := time.ParseDuration(cfg.Node.HeartbeatTimeout)
+	grace, _ := time.ParseDuration(cfg.Node.HeartbeatOfflineGrace)
 	interval, _ := time.ParseDuration(cfg.Node.HeartbeatInterval)
 	probes := publicProbeService(cfg, repo, logger)
 	if cfg.Server.ControlListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
@@ -204,7 +206,7 @@ func startControlServices(cfg config.Master, repo mastercontrol.Repository, logg
 			MasterCAPEM: string(caData),
 		}.Handle)
 	}
-	startHeartbeatSweep(repo, timeout, logger)
+	startHeartbeatSweep(repo, timeout, grace, logger)
 }
 
 func publicProbeService(cfg config.Master, repo mastercontrol.Repository,

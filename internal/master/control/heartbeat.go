@@ -78,6 +78,7 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 
 type OfflineSweepResult struct {
 	OfflineNodes       int64
+	DelayedNodes       int64
 	ActiveDelayedNodes int64
 }
 
@@ -86,33 +87,49 @@ func normalizedPublicDownloadBaseURL(value string) string {
 	return out
 }
 
-func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int64, error) {
-	result, err := r.SweepOffline(ctx, timeout)
+func (r Repository) MarkOffline(ctx context.Context, timeout time.Duration, grace ...time.Duration) (int64, error) {
+	result, err := r.SweepOffline(ctx, timeout, grace...)
 	return result.OfflineNodes, err
 }
 
-func (r Repository) SweepOffline(ctx context.Context, timeout time.Duration) (OfflineSweepResult, error) {
-	cutoff := time.Now().UTC().Add(-timeout).Format(time.RFC3339Nano)
+func (r Repository) SweepOffline(ctx context.Context, timeout time.Duration, grace ...time.Duration) (OfflineSweepResult, error) {
+	offlineGrace := time.Duration(0)
+	if len(grace) > 0 {
+		offlineGrace = grace[0]
+	}
+	if offlineGrace < 0 {
+		offlineGrace = 0
+	}
+	nowTime := time.Now().UTC()
+	softCutoff := nowTime.Add(-timeout).Format(time.RFC3339Nano)
+	hardCutoff := nowTime.Add(-(timeout + offlineGrace)).Format(time.RFC3339Nano)
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return OfflineSweepResult{}, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM nodes WHERE state NOT IN ('disabled', 'offline')
-		AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)`, cutoff)
+	rows, err := tx.QueryContext(ctx, `SELECT id,
+		COALESCE(NULLIF(last_heartbeat_at, ''), NULLIF(updated_at, ''), created_at, '')
+		FROM nodes WHERE state NOT IN ('disabled', 'offline')
+		AND COALESCE(NULLIF(last_heartbeat_at, ''), NULLIF(updated_at, ''), created_at, '') < ?`,
+		softCutoff)
 	if err != nil {
 		return OfflineSweepResult{}, err
 	}
 	defer rows.Close()
 	var ids []string
-	var active int64
+	var active, delayed int64
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var id, effectiveHeartbeat string
+		if err := rows.Scan(&id, &effectiveHeartbeat); err != nil {
 			return OfflineSweepResult{}, err
 		}
 		if r.runtime().ActiveSession(id) {
 			active++
+			continue
+		}
+		if effectiveHeartbeat >= hardCutoff {
+			delayed++
 			continue
 		}
 		ids = append(ids, id)
@@ -124,9 +141,9 @@ func (r Repository) SweepOffline(ctx context.Context, timeout time.Duration) (Of
 		return OfflineSweepResult{}, err
 	}
 	if len(ids) == 0 {
-		return OfflineSweepResult{ActiveDelayedNodes: active}, tx.Commit()
+		return OfflineSweepResult{DelayedNodes: delayed, ActiveDelayedNodes: active}, tx.Commit()
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTime.Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'offline',
 		routing_ready = 0, updated_at = ? WHERE id IN (`+placeholders(len(ids))+`)`,
 		append([]any{now}, stringArgs(ids)...)...)
@@ -145,7 +162,7 @@ func (r Repository) SweepOffline(ctx context.Context, timeout time.Duration) (Of
 	for _, id := range ids {
 		r.runtime().CloseNodeSessions(id)
 	}
-	return OfflineSweepResult{OfflineNodes: int64(len(ids)), ActiveDelayedNodes: active}, nil
+	return OfflineSweepResult{OfflineNodes: int64(len(ids)), DelayedNodes: delayed, ActiveDelayedNodes: active}, nil
 }
 
 func placeholders(n int) string {

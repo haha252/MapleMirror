@@ -78,6 +78,38 @@ func TestRecentlyReconnectedNodeKeepsVerifiedReplicaRoutable(t *testing.T) {
 	}
 }
 
+func TestPublicProbeNetworkFailuresBlockDownloadRoutingOnly(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	mustExec(t, db, `UPDATE nodes SET public_probe_network_failures = 5,
+		last_public_probe_result = 'network_error',
+		last_public_probe_error = 'i/o timeout' WHERE id = 'node-1'`)
+	store := Store{DB: db, PublicProbeNetworkFailures: 5}
+
+	assets, err := store.Assets(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != 1 || assets[0].Available {
+		t.Fatalf("公网探测失败达到阈值时文件不应可下载：%+v", assets)
+	}
+	_, err = store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req-1")
+	if err != sql.ErrNoRows {
+		t.Fatalf("公网探测失败达到阈值时不应创建下载挑战：%v", err)
+	}
+
+	mustExec(t, db, `UPDATE nodes SET public_probe_network_failures = 0,
+		last_public_probe_result = 'success', last_public_probe_error = '' WHERE id = 'node-1'`)
+	assets, err = store.Assets(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != 1 || !assets[0].Available {
+		t.Fatalf("公网探测恢复成功后文件应重新可下载：%+v", assets)
+	}
+}
+
 func TestCreateChallengeRejectsUnroutableReplicaConditions(t *testing.T) {
 	cases := []struct {
 		name string

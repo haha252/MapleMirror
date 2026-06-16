@@ -64,6 +64,7 @@ type DownloadToken struct {
 }
 type NodeControl struct {
 	HeartbeatTimeout           string `yaml:"heartbeat_timeout"`
+	HeartbeatOfflineGrace      string `yaml:"heartbeat_offline_grace"`
 	HeartbeatInterval          string `yaml:"heartbeat_interval"`
 	PublicProbeEnabled         *bool  `yaml:"public_probe_enabled"`
 	PublicProbeInterval        string `yaml:"public_probe_interval"`
@@ -126,19 +127,20 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.DownloadToken.TTL, "15m", "download_token.ttl", warn)
 	setString(&c.DownloadToken.SigningPrivateKeyFile, "secrets/download-token-ed25519.key", "download_token.signing_private_key_file", warn)
 	setString(&c.DownloadToken.VerifyPublicKeyFile, "secrets/download-token-ed25519.pub", "download_token.verify_public_key_file", warn)
-	setString(&c.Node.HeartbeatTimeout, "30s", "node.heartbeat_timeout", warn)
+	setString(&c.Node.HeartbeatTimeout, "60s", "node.heartbeat_timeout", warn)
+	setString(&c.Node.HeartbeatOfflineGrace, "60s", "node.heartbeat_offline_grace", warn)
 	setString(&c.Node.HeartbeatInterval, "10s", "node.heartbeat_interval", warn)
 	if c.Node.PublicProbeEnabled == nil {
 		value := true
 		c.Node.PublicProbeEnabled = &value
 		warnDefault(warn, "node.public_probe_enabled", "true")
 	}
-	setString(&c.Node.PublicProbeInterval, "30s", "node.public_probe_interval", warn)
-	setString(&c.Node.PublicProbeTimeout, "5s", "node.public_probe_timeout", warn)
-	setString(&c.Node.PublicProbeTTL, "20s", "node.public_probe_ttl", warn)
+	setString(&c.Node.PublicProbeInterval, "60s", "node.public_probe_interval", warn)
+	setString(&c.Node.PublicProbeTimeout, "10s", "node.public_probe_timeout", warn)
+	setString(&c.Node.PublicProbeTTL, "30s", "node.public_probe_ttl", warn)
 	if c.Node.PublicProbeNetworkFailures == 0 {
-		c.Node.PublicProbeNetworkFailures = 2
-		warnDefault(warn, "node.public_probe_network_failures", "2")
+		c.Node.PublicProbeNetworkFailures = 5
+		warnDefault(warn, "node.public_probe_network_failures", "5")
 	}
 	setString(&c.Node.EnrollmentTimeout, "10m", "node.enrollment_timeout", warn)
 	setString(&c.Node.PairingCodeTTL, "5m", "node.pairing_code_ttl", warn)
@@ -184,6 +186,7 @@ func validateMaster(c Master) error {
 		"api_pow.challenge_ttl":          c.APIPoW.ChallengeTTL,
 		"download_token.ttl":             c.DownloadToken.TTL,
 		"node.heartbeat_timeout":         c.Node.HeartbeatTimeout,
+		"node.heartbeat_offline_grace":   c.Node.HeartbeatOfflineGrace,
 		"node.heartbeat_interval":        c.Node.HeartbeatInterval,
 		"node.public_probe_interval":     c.Node.PublicProbeInterval,
 		"node.public_probe_timeout":      c.Node.PublicProbeTimeout,

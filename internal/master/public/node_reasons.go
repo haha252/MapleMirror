@@ -20,6 +20,9 @@ type nodeDownloadReadyState struct {
 	DownloadableCopies     int
 	VerifiedMismatchCopies int
 	UnverifiedCopies       int
+	PublicProbeBlocked     bool
+	PublicProbeFailures    int
+	PublicProbeError       string
 }
 
 func (s Store) nodeRoutingReadyInfo(ctx context.Context, nodeID, state, lastHeartbeat string) reasonInfo {
@@ -85,6 +88,10 @@ func (s Store) nodeDownloadReadyInfo(ctx context.Context, nodeID, state, lastHea
 		return reasonInfo{Summary: "节点尚未提供公网下载地址", Detail: detail}
 	case lastHeartbeat == "":
 		return reasonInfo{Summary: "节点尚未上报心跳，不能提供下载", Detail: detail}
+	case status.PublicProbeBlocked:
+		probeDetail := fmt.Sprintf("%s，公网探测连续失败 %d 次，最近错误 %s",
+			detail, status.PublicProbeFailures, blankAsDash(status.PublicProbeError))
+		return reasonInfo{Summary: "节点在线，但公网下载入口探测失败", Detail: probeDetail}
 	case status.VerifiedMismatchCopies > 0:
 		return reasonInfo{Summary: "副本暂不可下载", Detail: detail}
 	case status.DownloadableCopies > 0:
@@ -151,6 +158,15 @@ func (s Store) loadNodeDownloadReadyState(ctx context.Context, nodeID string) (n
 		Scan(&status.PublicCopies, &status.DownloadableCopies,
 			&status.VerifiedMismatchCopies, &status.UnverifiedCopies); err != nil {
 		return nodeDownloadReadyState{}, err
+	}
+	if s.PublicProbeNetworkFailures > 0 {
+		err := s.DB.QueryRowContext(ctx, `SELECT public_probe_network_failures,
+			COALESCE(last_public_probe_error, '') FROM nodes WHERE id = ?`, nodeID).
+			Scan(&status.PublicProbeFailures, &status.PublicProbeError)
+		if err != nil {
+			return nodeDownloadReadyState{}, err
+		}
+		status.PublicProbeBlocked = status.PublicProbeFailures >= s.PublicProbeNetworkFailures
 	}
 	return status, nil
 }

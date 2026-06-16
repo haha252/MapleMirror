@@ -35,9 +35,9 @@ func TestPublicProbeNetworkFailureNeedsThreshold(t *testing.T) {
 	offline, err = repo.RecordPublicProbeNetworkFailure(
 		context.Background(), "node-1", 2, "dial failed again")
 	if err != nil || !offline {
-		t.Fatalf("second network failure should offline: offline=%v err=%v", offline, err)
+		t.Fatalf("second network failure should reach threshold: offline=%v err=%v", offline, err)
 	}
-	assertProbeNodeState(t, repo, "node-1", "offline", 2)
+	assertProbeNodeState(t, repo, "node-1", "online", 2)
 }
 
 func TestPublicProbeAnswerFailureOfflinesImmediately(t *testing.T) {

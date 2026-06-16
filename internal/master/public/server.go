@@ -33,7 +33,7 @@ type Server struct {
 func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration,
 	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
 	projects config.Projects, projectsPath string, runtime *mastercontrol.RuntimeStore,
-	logger *logging.Logger) (Server, error) {
+	logger *logging.Logger, publicProbeNetworkFailures int) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
@@ -45,7 +45,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 	return Server{
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
 			Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota),
-			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime},
+			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime,
+			PublicProbeNetworkFailures: publicProbeNetworkFailures},
 		Signer:           signer,
 		ALTCHATTL:        altchaTTL,
 		ALTCHADifficulty: altchaDifficulty,

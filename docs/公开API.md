@@ -574,7 +574,7 @@ M5 后统计数据页展示：
 ### 13.4 节点状态页字段
 
 M5 后节点状态页展示公开节点名称、公开连接状态、下载就绪、最近更新时间、负载分档和近 `24h`、`7d`、`30d` SLA。样本不足时显示“统计样本不足”。`download_ready` 只表示该节点当前至少有一个仍处于 `target_inventory.required` 的可公开下载已校验资产副本，`routing_ready` 仍保留为同步/对账合同，不再作为节点页主标识。节点连接状态只表达 `online`、`offline`、`disabled` 等可用性，不表示全量同步进度；全量同步进度只在管理诊断中展示。
-M6 起，主节点会定期通过下载节点 `public_download_base_url` 访问 `/.well-known/mirror-node/probes/{challenge_id}` 并验签；公网不可达达到配置阈值，或响应字段/签名错误时，节点连接状态会被标记为 `offline`。
+M6 起，主节点会定期通过下载节点 `public_download_base_url` 访问 `/.well-known/mirror-node/probes/{challenge_id}` 并验签；公网不可达达到配置阈值时，节点会暂停公开下载路由但不改变控制面连接状态；响应字段/签名错误时，节点连接状态会被标记为 `offline`。
 
 节点状态页不得展示真实带宽目标、内部压力原始值、管理地址、控制通道地址、证书信息、磁盘路径、完整客户端 IP 或下载令牌。
 

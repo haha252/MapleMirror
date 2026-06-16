@@ -82,20 +82,22 @@ download_token:
 
 # 下载节点控制面配置。
 node:
-  # 主节点判定下载节点离线的心跳超时时间。
-  heartbeat_timeout: "30s"
+  # 主节点判定下载节点心跳延迟的软超时时间。
+  heartbeat_timeout: "60s"
+  # 心跳超过 heartbeat_timeout 后继续等待的离线宽限时间，超过两者之和才标记离线。
+  heartbeat_offline_grace: "60s"
   # 主节点下发给下载节点的建议心跳间隔，必须小于 heartbeat_timeout。
   heartbeat_interval: "10s"
   # 是否启用主节点对下载节点公网 HTTP 入口的防伪探测。
   public_probe_enabled: true
   # 主节点对每个在线下载节点发起公网探测的最小间隔。
-  public_probe_interval: "30s"
+  public_probe_interval: "60s"
   # 主节点访问下载节点公网探测路径的单次超时时间。
-  public_probe_timeout: "5s"
+  public_probe_timeout: "10s"
   # 下载节点公网探测挑战从下发到过期的有效时间，必须大于 public_probe_timeout。
-  public_probe_ttl: "20s"
-  # DNS、TCP、TLS 或超时等网络类公网探测失败达到该次数后标记节点离线。
-  public_probe_network_failures: 2
+  public_probe_ttl: "30s"
+  # DNS、TCP、TLS 或超时等网络类公网探测失败达到该次数后暂停公开下载路由，不标记控制面离线。
+  public_probe_network_failures: 5
   # 下载节点首次登记请求的有效时间。
   enrollment_timeout: "10m"
   # 控制台生成的一次性配对码有效时间。

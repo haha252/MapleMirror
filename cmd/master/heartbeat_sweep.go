@@ -9,7 +9,7 @@ import (
 	mastercontrol "mirror-server/internal/master/control"
 )
 
-func startHeartbeatSweep(repo mastercontrol.Repository, timeout time.Duration, logger *logging.Logger) {
+func startHeartbeatSweep(repo mastercontrol.Repository, timeout, grace time.Duration, logger *logging.Logger) {
 	if timeout <= 0 {
 		return
 	}
@@ -21,11 +21,12 @@ func startHeartbeatSweep(repo mastercontrol.Repository, timeout time.Duration, l
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			result, err := repo.SweepOffline(context.Background(), timeout)
+			result, err := repo.SweepOffline(context.Background(), timeout, grace)
 			if err != nil {
 				if logger != nil {
 					logger.Warn(context.Background(), "节点离线巡检失败",
 						slog.String("heartbeat_timeout", timeout.String()),
+						slog.String("heartbeat_offline_grace", grace.String()),
 						slog.String("error", err.Error()))
 				}
 				continue
@@ -36,12 +37,16 @@ func startHeartbeatSweep(repo mastercontrol.Repository, timeout time.Duration, l
 			if result.OfflineNodes == 0 {
 				logger.Debug(context.Background(), "节点离线巡检完成",
 					slog.String("heartbeat_timeout", timeout.String()),
+					slog.String("heartbeat_offline_grace", grace.String()),
+					slog.Int64("delayed_nodes", result.DelayedNodes),
 					slog.Int64("offline_nodes", 0),
 					slog.Int64("active_delayed_nodes", result.ActiveDelayedNodes))
 				continue
 			}
 			logger.Warn(context.Background(), "节点心跳超时，已标记离线",
 				slog.String("heartbeat_timeout", timeout.String()),
+				slog.String("heartbeat_offline_grace", grace.String()),
+				slog.Int64("delayed_nodes", result.DelayedNodes),
 				slog.Int64("offline_nodes", result.OfflineNodes),
 				slog.Int64("active_delayed_nodes", result.ActiveDelayedNodes))
 		}

@@ -31,7 +31,8 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 		}
 		out[i].DownloadReady = status.DownloadableCopies > 0 &&
 			out[i].State != "disabled" && out[i].State != "offline" &&
-			out[i].LastHeartbeat != "" && out[i].PublicDownloadBaseURL != ""
+			out[i].LastHeartbeat != "" && out[i].PublicDownloadBaseURL != "" &&
+			!status.PublicProbeBlocked
 		if !out[i].DownloadReady {
 			info := s.nodeDownloadReadyInfo(ctx, out[i].NodeID, out[i].State, out[i].LastHeartbeat, out[i].PublicDownloadBaseURL, status)
 			out[i].DownloadReadyReason = info.Summary

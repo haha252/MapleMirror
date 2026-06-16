@@ -15,13 +15,14 @@ import (
 var errChallengeQuota = errors.New("挑战创建过于频繁")
 
 type Store struct {
-	DB         *sql.DB
-	Quota      quotaPolicy
-	Location   *time.Location
-	Challenges *challengeMemory
-	MaxBytes   maxBytesPolicy
-	RangeLimit int
-	Runtime    *mastercontrol.RuntimeStore
+	DB                         *sql.DB
+	Quota                      quotaPolicy
+	Location                   *time.Location
+	Challenges                 *challengeMemory
+	MaxBytes                   maxBytesPolicy
+	RangeLimit                 int
+	Runtime                    *mastercontrol.RuntimeStore
+	PublicProbeNetworkFailures int
 }
 
 type ProjectSummary struct {
@@ -167,12 +168,13 @@ func (s *Store) challengeMemory() *challengeMemory {
 }
 
 func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {
+	args := append(s.routableAssetReplicaArgs(), assetID)
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.size_bytes, n.public_download_base_url
 		FROM assets a
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
-		AND r.selected = 1 AND p.enabled = 1`, assetID)
+		AND r.selected = 1 AND p.enabled = 1`, args...)
 	if err != nil {
 		return 0, err
 	}

@@ -24,6 +24,7 @@ func TestLoadMasterExample(t *testing.T) {
 		t.Fatal("网页验证安全合同被修改")
 	}
 	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" ||
+		c.Node.HeartbeatTimeout != "60s" || c.Node.HeartbeatOfflineGrace != "60s" ||
 		c.Node.TLS.CAKeyFile == "" || c.Admin.Web.UsersFile == "" {
 		t.Fatal("控制面配置默认值缺失")
 	}
@@ -48,15 +49,17 @@ func TestMasterPublicProbeDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.Node.PublicProbeEnabled == nil || !*c.Node.PublicProbeEnabled ||
-		c.Node.PublicProbeInterval != "30s" ||
-		c.Node.PublicProbeNetworkFailures != 2 {
+		c.Node.PublicProbeInterval != "60s" ||
+		c.Node.PublicProbeTimeout != "10s" ||
+		c.Node.PublicProbeTTL != "30s" ||
+		c.Node.PublicProbeNetworkFailures != 5 {
 		t.Fatalf("public probe defaults mismatch: %+v", c.Node)
 	}
 }
 
 func TestMasterRejectsInvalidPublicProbeConfig(t *testing.T) {
 	text := strings.Replace(string(MasterExample),
-		`public_probe_ttl: "20s"`, `public_probe_ttl: "4s"`, 1)
+		`public_probe_ttl: "30s"`, `public_probe_ttl: "4s"`, 1)
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	_ = os.WriteFile(path, []byte(text), 0o600)
 	if _, err := LoadMaster(path, nil); err == nil {

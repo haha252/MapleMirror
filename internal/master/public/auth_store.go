@@ -185,6 +185,7 @@ type routableAssetInfo struct {
 
 func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (routableAssetInfo, error) {
 	var out routableAssetInfo
+	args := append(s.routableAssetReplicaArgs(), assetID)
 	rows, err := tx.QueryContext(ctx, `SELECT n.id, n.public_name, r.project_id,
 		r.tag_name, a.file_name, n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1),
 		a.size_bytes, a.architecture, a.system FROM assets a
@@ -192,7 +193,7 @@ func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) 
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
 		AND r.selected = 1 AND p.enabled = 1
-		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id`, assetID)
+		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id`, args...)
 	if err != nil {
 		return out, err
 	}

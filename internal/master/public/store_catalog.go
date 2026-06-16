@@ -14,7 +14,8 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 			AND a.service_state = 'candidate') AS available,
 		COALESCE(MAX(CASE WHEN r.selected = 1 THEN r.published_at ELSE '' END), '')
 		FROM projects p LEFT JOIN releases r ON r.project_id = p.id
-		WHERE p.enabled = 1 GROUP BY p.id, p.repository, p.name ORDER BY p.name, p.id`)
+		WHERE p.enabled = 1 GROUP BY p.id, p.repository, p.name ORDER BY p.name, p.id`,
+		s.routableAssetReplicaArgs()...)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +51,7 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 }
 
 func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, error) {
+	args := append(s.routableAssetReplicaArgs(), projectID)
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.id, r.tag_name, r.prerelease,
 		a.file_name, a.architecture, a.system, a.size_bytes, a.digest_sha256,
 		EXISTS(SELECT 1 FROM node_inventory ni
@@ -61,13 +63,14 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 				AND n.last_heartbeat_at IS NOT NULL
 				AND n.last_heartbeat_at != ''
 				AND n.public_download_base_url != ''
+				AND (? <= 0 OR n.public_probe_network_failures < ?)
 			WHERE ni.asset_id = a.id AND ni.state = 'verified'
 			AND ni.local_digest_sha256 = a.digest_sha256
 			AND ni.size_bytes = a.size_bytes) AS available,
 		COALESCE(r.published_at, '')
 		FROM assets a JOIN releases r ON r.id = a.release_id
 		WHERE r.project_id = ? AND r.selected = 1 AND a.service_state = 'candidate'
-		ORDER BY r.published_at DESC, a.file_name`, projectID)
+		ORDER BY r.published_at DESC, a.file_name`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,6 +124,7 @@ func (s Store) DownloadAssetByPath(ctx context.Context, value string) (DownloadA
 func (s Store) downloadAsset(ctx context.Context, where string, args ...any) (DownloadAssetSummary, error) {
 	var item DownloadAssetSummary
 	var available int
+	queryArgs := append(s.routableAssetReplicaArgs(), args...)
 	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.name, p.repository, a.id,
 		r.tag_name, a.file_name, a.architecture, a.system, a.size_bytes,
 		EXISTS(SELECT 1 FROM node_inventory ni
@@ -132,13 +136,14 @@ func (s Store) downloadAsset(ctx context.Context, where string, args ...any) (Do
 				AND n.last_heartbeat_at IS NOT NULL
 				AND n.last_heartbeat_at != ''
 				AND n.public_download_base_url != ''
+				AND (? <= 0 OR n.public_probe_network_failures < ?)
 			WHERE ni.asset_id = a.id AND ni.state = 'verified'
 			AND ni.local_digest_sha256 = a.digest_sha256
 			AND ni.size_bytes = a.size_bytes) AS available
 		FROM assets a JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id
 		WHERE `+where+` AND p.enabled = 1 AND r.selected = 1
-		AND a.service_state = 'candidate'`, args...)
+		AND a.service_state = 'candidate'`, queryArgs...)
 	if err != nil {
 		return DownloadAssetSummary{}, err
 	}

@@ -95,14 +95,14 @@ func (s *PublicProbeService) verifyAfterGrace(nodeID, baseURL string,
 		return
 	}
 	if network {
-		offline, recordErr := s.Repo.RecordPublicProbeNetworkFailure(
+		thresholdReached, recordErr := s.Repo.RecordPublicProbeNetworkFailure(
 			context.Background(), nodeID, s.Config.NetworkFailures, err.Error())
-		s.logProbeFailure(nodeID, err, recordErr, offline, "network")
+		s.logProbeFailure(nodeID, err, recordErr, false, thresholdReached, "network")
 		return
 	}
 	recordErr := s.Repo.RecordPublicProbeAnswerFailure(context.Background(),
 		nodeID, err.Error())
-	s.logProbeFailure(nodeID, err, recordErr, true, "answer")
+	s.logProbeFailure(nodeID, err, recordErr, true, true, "answer")
 }
 
 func (s *PublicProbeService) verify(nodeID, baseURL string,
@@ -155,12 +155,13 @@ func (s *PublicProbeService) verifyBody(nodeID string,
 }
 
 func (s *PublicProbeService) logProbeFailure(nodeID string, probeErr, recordErr error,
-	offline bool, kind string) {
+	offline, thresholdReached bool, kind string) {
 	if s.Logger == nil {
 		return
 	}
 	attrs := []slog.Attr{slog.String("node_id", nodeID),
 		slog.String("kind", kind), slog.Bool("offline", offline),
+		slog.Bool("threshold_reached", thresholdReached),
 		slog.String("error", probeErr.Error())}
 	if recordErr != nil {
 		attrs = append(attrs, slog.String("record_error", recordErr.Error()))

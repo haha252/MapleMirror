@@ -12,4 +12,10 @@ const routableAssetReplicaSQL = `
 			AND n.state NOT IN ('disabled', 'offline')
 			AND n.last_heartbeat_at IS NOT NULL
 			AND n.last_heartbeat_at != ''
-			AND n.public_download_base_url != ''`
+			AND n.public_download_base_url != ''
+			AND (? <= 0 OR n.public_probe_network_failures < ?)`
+
+func (s Store) routableAssetReplicaArgs() []any {
+	threshold := s.PublicProbeNetworkFailures
+	return []any{threshold, threshold}
+}
