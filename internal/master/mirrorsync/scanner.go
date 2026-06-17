@@ -133,7 +133,13 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 			slog.Int("rejected_assets", summary.RejectedAssets),
 			slog.Int("generated_tasks", generated))
 	}
-	return summary, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return ScanSummary{}, err
+	}
+	if generated > 0 {
+		s.Store.NotifyProjectTaskNodes(ctx, project.ID)
+	}
+	return summary, nil
 }
 
 func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, releases []GitHubRelease, now string, logger *logging.Logger) (ScanSummary, error) {

@@ -17,6 +17,7 @@ func (s Store) SyncProjectConfig(ctx context.Context, projects config.Projects) 
 
 	now := nowText()
 	seen := make([]string, 0, len(projects.Projects))
+	changedProjects := map[string]bool{}
 	for _, project := range projects.Projects {
 		if err := upsertProjectConfig(ctx, tx, project, now); err != nil {
 			return err
@@ -29,12 +30,23 @@ func (s Store) SyncProjectConfig(ctx context.Context, projects config.Projects) 
 			if err := disableProjectTargets(ctx, tx, project.ID, now); err != nil {
 				return err
 			}
+			changedProjects[project.ID] = true
 		}
 	}
-	if err := disableMissingProjects(ctx, tx, seen, now); err != nil {
+	missing, err := disableMissingProjects(ctx, tx, seen, now)
+	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	for _, projectID := range missing {
+		changedProjects[projectID] = true
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for projectID := range changedProjects {
+		s.NotifyProjectTaskNodes(ctx, projectID)
+	}
+	return nil
 }
 
 func upsertProjectConfig(ctx context.Context, tx *sql.Tx, project config.Project, now string) error {
@@ -73,10 +85,10 @@ func disableProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 	return err
 }
 
-func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now string) error {
+func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now string) ([]string, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT id FROM projects WHERE enabled = 1`)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -88,29 +100,29 @@ func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now 
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return err
+			return nil, err
 		}
 		if !keep[id] {
 			missing = append(missing, id)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, err
 	}
 	for _, id := range missing {
 		if _, err := tx.ExecContext(ctx, `UPDATE projects SET enabled = 0,
 			updated_at = ? WHERE id = ?`, now, id); err != nil {
-			return err
+			return nil, err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE project_scan_state SET enabled = 0,
 			updated_at = ? WHERE project_id = ?`, now, id); err != nil {
-			return err
+			return nil, err
 		}
 		if err := disableProjectTargets(ctx, tx, id, now); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return missing, nil
 }
 
 func upsertProjectScanState(ctx context.Context, tx *sql.Tx, project config.Project, now string) error {
