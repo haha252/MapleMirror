@@ -44,6 +44,7 @@ type Client struct {
 	DialTLSContext       func(context.Context, string, string, *tls.Config) (net.Conn, error)
 	runningTaskAckLogged map[string]time.Time
 	runningTaskAckSent   map[string]time.Time
+	interruptedLocalTasksRecovered bool
 }
 
 func (c Client) syncTaskTimeout() time.Duration {
@@ -53,10 +54,10 @@ func (c Client) syncTaskTimeout() time.Duration {
 	return defaultSyncTaskTimeout
 }
 
-func (c Client) RunOnce() (time.Duration, error) {
+func (c *Client) RunOnce() (time.Duration, error) {
 	c.runningTaskAckLogged = map[string]time.Time{}
 	c.runningTaskAckSent = map[string]time.Time{}
-	if err := c.resetInterruptedLocalTasks(); err != nil {
+	if err := c.recoverInterruptedLocalTasksOnce(); err != nil {
 		return 0, err
 	}
 	c.logDebug("node control connection starting",
@@ -96,6 +97,17 @@ func (c Client) RunOnce() (time.Duration, error) {
 		return interval, err
 	}
 	return interval, nil
+}
+
+func (c *Client) recoverInterruptedLocalTasksOnce() error {
+	if c.interruptedLocalTasksRecovered {
+		return nil
+	}
+	if err := c.resetInterruptedLocalTasks(); err != nil {
+		return err
+	}
+	c.interruptedLocalTasksRecovered = true
+	return nil
 }
 
 func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
