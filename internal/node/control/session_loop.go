@@ -80,12 +80,7 @@ func (c Client) sendHeartbeatWindow(conn net.Conn, reqID string,
 
 func (c Client) sendNextControlWork(conn net.Conn, reqID string,
 	state *sessionLoopState) (bool, error) {
-	next, sent, err := c.sendNextTrafficEvent(conn, reqID, state.sequence)
-	if err != nil || sent {
-		state.sequence = next
-		return sent, err
-	}
-	next, sent, err = c.sendNextPendingTaskResult(conn, reqID, state.sequence)
+	next, sent, err := c.sendNextPendingTaskResult(conn, reqID, state.sequence)
 	if err != nil || sent {
 		state.sequence = next
 		return sent, err
@@ -97,6 +92,11 @@ func (c Client) sendNextControlWork(conn net.Conn, reqID string,
 	}
 	next, sent, err = c.sendNextInventoryReportChunk(conn, reqID, state.sequence,
 		&state.pendingInventory)
+	if err != nil || sent {
+		state.sequence = next
+		return sent, err
+	}
+	next, sent, err = c.sendNextTrafficEvent(conn, reqID, state.sequence)
 	state.sequence = next
 	return sent, err
 }
