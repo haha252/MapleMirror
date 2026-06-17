@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +90,44 @@ func TestClientRunOnceReturnsProtocolError(t *testing.T) {
 	}
 }
 
+func TestClientRunOnceKeepsSendingHeartbeatsOnOneConnection(t *testing.T) {
+	heartbeats := make(chan uint64, 2)
+	done := make(chan struct{})
+	dialer := newPipeDialer(t, func(conn net.Conn) {
+		defer close(done)
+		handleLongSession(t, conn, heartbeats)
+	})
+
+	client := Client{
+		NodeID:         "node-1",
+		Address:        "master.test:9443",
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},
+		DialTLSContext: dialer,
+	}
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := client.RunOnce()
+		errCh <- err
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("fake master did not receive repeated heartbeats")
+	}
+	if len(heartbeats) < 2 {
+		t.Fatalf("expected at least two heartbeats on one connection, got %d", len(heartbeats))
+	}
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("expected RunOnce to finish with connection close error")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("client did not leave closed control connection")
+	}
+}
+
 func handleTestSession(conn net.Conn) {
 	defer conn.Close()
 	hello, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
@@ -122,6 +162,47 @@ func handleTestSession(conn net.Conn) {
 	sendAck(conn, pressure)
 }
 
+func handleLongSession(t *testing.T, conn net.Conn, heartbeats chan<- uint64) {
+	t.Helper()
+	defer conn.Close()
+	hello, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	if err != nil || hello.MessageType != protocol.TypeHello {
+		return
+	}
+	welcomeBody, _ := json.Marshal(protocol.Welcome{
+		HeartbeatIntervalSecond: 1,
+		ManagedState:            "syncing",
+		RoutingReady:            false,
+	})
+	_ = protocol.WriteFrame(conn, protocol.Envelope{
+		ProtocolVersion: protocol.Version,
+		MessageID:       "welcome",
+		MessageType:     protocol.TypeWelcome,
+		SentAt:          time.Now().UTC(),
+		NodeID:          hello.NodeID,
+		RequestID:       hello.RequestID,
+		ReplyTo:         hello.MessageID,
+		Payload:         welcomeBody,
+	})
+	for len(heartbeats) < 2 {
+		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+		_ = conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			return
+		}
+		switch msg.MessageType {
+		case protocol.TypeHeartbeat:
+			heartbeats <- msg.Sequence
+			sendAck(conn, msg)
+		case protocol.TypePressureReport:
+			sendAck(conn, msg)
+		default:
+			sendAck(conn, msg)
+		}
+	}
+}
+
 func newPipeDialer(t *testing.T, handler func(net.Conn)) func(context.Context, string, string, *tls.Config) (net.Conn, error) {
 	t.Helper()
 	return func(context.Context, string, string, *tls.Config) (net.Conn, error) {
@@ -132,4 +213,9 @@ func newPipeDialer(t *testing.T, handler func(net.Conn)) func(context.Context, s
 		}()
 		return client, nil
 	}
+}
+
+func runOnceEndedByPeer(err error) bool {
+	return err == nil || errors.Is(err, io.EOF) ||
+		strings.Contains(err.Error(), "closed pipe")
 }

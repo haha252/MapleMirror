@@ -16,22 +16,8 @@ func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uin
 	if c.DB == nil {
 		return sequence, nil
 	}
-	rows, err := c.DB.Query(`SELECT task_id, asset_id, result, COALESCE(local_digest_sha256, ''),
-		size_bytes, COALESCE(message, '') FROM pending_sync_task_results
-		WHERE reported_at IS NULL ORDER BY created_at LIMIT 20`)
+	results, err := c.loadPendingTaskResults(20)
 	if err != nil {
-		return sequence, err
-	}
-	defer rows.Close()
-	var results []protocol.SyncTaskResult
-	for rows.Next() {
-		result, err := scanPendingTaskResult(rows)
-		if err != nil {
-			return sequence, err
-		}
-		results = append(results, result)
-	}
-	if err := rows.Err(); err != nil {
 		return sequence, err
 	}
 	for _, result := range results {
@@ -59,23 +45,8 @@ func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64
 	if c.DB == nil {
 		return sequence, nil
 	}
-	rows, err := c.DB.Query(`SELECT task_id
-		FROM local_sync_tasks WHERE state = 'running' ORDER BY updated_at LIMIT 50`)
+	items, err := c.loadRunningTaskAcks(50)
 	if err != nil {
-		return sequence, err
-	}
-	defer rows.Close()
-	var items []protocol.SyncTaskAck
-	for rows.Next() {
-		var ack protocol.SyncTaskAck
-		if err := rows.Scan(&ack.TaskID); err != nil {
-			return sequence, err
-		}
-		ack.State = "running"
-		ack.Message = "任务仍在执行"
-		items = append(items, ack)
-	}
-	if err := rows.Err(); err != nil {
 		return sequence, err
 	}
 	for _, ack := range items {

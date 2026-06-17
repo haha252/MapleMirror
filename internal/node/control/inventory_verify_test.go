@@ -13,13 +13,18 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func TestSendFullInventoryReportRefreshesMissingFile(t *testing.T) {
+func TestInventoryReportUsesExplicitMissingRefresh(t *testing.T) {
 	db := openNodeDB(t)
 	defer db.Close()
 	mustExecNode(t, db, `INSERT INTO local_assets
 		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
 		VALUES ('asset-1', 'missing.bin', 'sha256:abc', 12, 'now', 'verified')`)
-	report := sendInventoryReportForTest(t, db, t.TempDir())
+	dir := t.TempDir()
+	ctl := &Client{NodeID: "node-1", DB: db, Storage: dir}
+	if err := ctl.RefreshLocalInventory(); err != nil {
+		t.Fatal(err)
+	}
+	report := sendInventoryReportForTest(t, db, dir)
 	if len(report.Items) != 1 || report.Items[0].LocalState != "missing" {
 		t.Fatalf("expected refreshed missing inventory item, got %+v", report.Items)
 	}
@@ -30,7 +35,7 @@ func TestSendFullInventoryReportRefreshesMissingFile(t *testing.T) {
 	}
 }
 
-func TestSendFullInventoryReportRefreshesTamperedFile(t *testing.T) {
+func TestInventoryReportUsesExplicitTamperedRefresh(t *testing.T) {
 	db := openNodeDB(t)
 	defer db.Close()
 	dir := t.TempDir()
@@ -47,6 +52,10 @@ func TestSendFullInventoryReportRefreshesTamperedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctl := &Client{NodeID: "node-1", DB: db, Storage: dir}
+	if err := ctl.RefreshLocalInventory(); err != nil {
+		t.Fatal(err)
+	}
 	report := sendInventoryReportForTest(t, db, dir)
 	if len(report.Items) != 1 || report.Items[0].LocalState != "mismatch" {
 		t.Fatalf("expected refreshed mismatch inventory item, got %+v", report.Items)

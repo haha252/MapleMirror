@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type nodeReadyState struct {
@@ -61,7 +62,7 @@ func (s Store) nodeRoutingReadyInfo(ctx context.Context, nodeID, state, lastHear
 	case status.MissingTargets > 0:
 		return reasonInfo{Summary: "目标库存尚未全部校验完成", Detail: detail}
 	case !status.ActiveSession:
-		return reasonInfo{Summary: "最近心跳正常，但当前控制会话记录未保持活动", Detail: detail}
+		return reasonInfo{Summary: "控制连接不稳定，等待节点重连", Detail: detail}
 	default:
 		return reasonInfo{Summary: "未满足同步就绪条件", Detail: detail}
 	}
@@ -195,7 +196,27 @@ func (s Store) latestCloseReason(ctx context.Context, nodeID string) string {
 	if err != nil {
 		return ""
 	}
-	return reason
+	return publicCloseReason(reason)
+}
+
+func publicCloseReason(reason string) string {
+	switch {
+	case reason == "":
+		return ""
+	case reason == "心跳超时":
+		return "节点离线或心跳超时"
+	case reason == "控制连接超时":
+		return "控制连接超时，等待节点重连"
+	case containsControlTimeout(reason):
+		return "控制连接超时，等待节点重连"
+	default:
+		return reason
+	}
+}
+
+func containsControlTimeout(reason string) bool {
+	return strings.Contains(reason, "read tcp") &&
+		strings.Contains(reason, "i/o timeout")
 }
 
 func (s Store) latestInventoryReportComplete(ctx context.Context, nodeID string) (sql.NullBool, error) {

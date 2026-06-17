@@ -70,7 +70,7 @@ func TestClientRunOnceReportsPendingTaskResultBeforeReadingNewTask(t *testing.T)
 		DialTLSContext: dialer,
 		DB:             db,
 	}
-	if _, err := client.RunOnce(); err != nil {
+	if _, err := client.RunOnce(); !runOnceEndedByPeer(err) {
 		t.Fatal(err)
 	}
 	var reportedAt string

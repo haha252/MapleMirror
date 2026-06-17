@@ -13,7 +13,7 @@ func (c Client) sendPendingTraffic(conn net.Conn, reqID string, sequence uint64)
 	if c.DB == nil {
 		return sequence, nil
 	}
-	events, err := c.loadPendingTrafficEvents()
+	events, err := c.loadPendingTrafficEvents(20)
 	if err != nil {
 		return sequence, err
 	}
@@ -26,11 +26,29 @@ func (c Client) sendPendingTraffic(conn net.Conn, reqID string, sequence uint64)
 	return sequence, nil
 }
 
-func (c Client) loadPendingTrafficEvents() ([]protocol.TrafficEvent, error) {
+func (c Client) sendNextTrafficEvent(conn net.Conn, reqID string,
+	sequence uint64) (uint64, bool, error) {
+	if c.DB == nil {
+		return sequence, false, nil
+	}
+	events, err := c.loadPendingTrafficEvents(1)
+	if err != nil || len(events) == 0 {
+		return sequence, false, err
+	}
+	if err := c.sendTrafficEvent(conn, reqID, sequence, events[0]); err != nil {
+		return sequence, false, err
+	}
+	return sequence + 1, true, nil
+}
+
+func (c Client) loadPendingTrafficEvents(limit int) ([]protocol.TrafficEvent, error) {
+	if limit <= 0 {
+		limit = 1
+	}
 	rows, err := c.DB.Query(`SELECT event_sequence, authorization_id, node_request_id,
 		master_request_id, sent_bytes, created_at, asset_id, status
 		FROM pending_traffic_events WHERE confirmed_at IS NULL
-		ORDER BY event_sequence LIMIT 20`)
+		ORDER BY event_sequence LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -15,21 +15,13 @@ const maxSyncTasksPerSession = 10
 func (c Client) readOptionalTasks(conn net.Conn, reqID string, sequence uint64,
 	remaining int) (uint64, error) {
 	for remaining > 0 {
-		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-		msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
-		_ = conn.SetReadDeadline(time.Time{})
+		next, handled, err := c.readOptionalTaskWithTimeout(conn, reqID,
+			sequence, nil, 200*time.Millisecond)
 		if err != nil {
 			return sequence, nil
 		}
-		if msg.MessageType == protocol.TypeProtocolError {
-			return sequence, parseRejectionError(msg)
-		}
-		if msg.MessageType != protocol.TypeSyncTask {
+		if !handled {
 			return sequence, nil
-		}
-		next, err := c.handleDispatchedTask(conn, reqID, sequence, msg)
-		if err != nil {
-			return sequence, err
 		}
 		sequence = next
 		remaining--
@@ -48,6 +40,36 @@ func (c Client) readOptionalTasksWithBudget(conn net.Conn, reqID string,
 	next, err := c.readOptionalTasks(conn, reqID, sequence, *budget)
 	*budget -= int(next - sequence)
 	return next, err
+}
+
+func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
+	sequence uint64, budget *int, timeout time.Duration) (uint64, bool, error) {
+	if budget != nil && *budget <= 0 {
+		return sequence, false, nil
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	_ = conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		if timeoutErr, ok := err.(net.Error); ok && timeoutErr.Timeout() {
+			return sequence, false, nil
+		}
+		return sequence, false, err
+	}
+	if msg.MessageType == protocol.TypeProtocolError {
+		return sequence, false, parseRejectionError(msg)
+	}
+	if msg.MessageType != protocol.TypeSyncTask {
+		return sequence, false, nil
+	}
+	next, err := c.handleDispatchedTask(conn, reqID, sequence, msg)
+	if err != nil {
+		return sequence, false, err
+	}
+	if budget != nil {
+		*budget = *budget - 1
+	}
+	return next, true, nil
 }
 
 func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint64,

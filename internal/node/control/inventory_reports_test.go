@@ -67,7 +67,7 @@ func TestClientRunOnceReportsInventoryAfterPendingTaskResults(t *testing.T) {
 		DialTLSContext: dialer,
 		DB:             db,
 	}
-	if _, err := client.RunOnce(); err != nil {
+	if _, err := client.RunOnce(); !runOnceEndedByPeer(err) {
 		t.Fatal(err)
 	}
 	var acked uint64
@@ -127,6 +127,33 @@ func TestSendFullInventoryReportSplitsIntoChunks(t *testing.T) {
 		t.Fatalf("expected next sequence 5, got %d", nextSeq)
 	}
 	<-done
+}
+
+func TestPrepareInventoryReportUsesStoredSnapshot(t *testing.T) {
+	db := openNodeDB(t)
+	defer db.Close()
+	mustExecNode(t, db, `INSERT INTO local_assets
+		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
+		VALUES ('asset-missing', 'missing.bin', 'sha256:aa', 1, 'now', 'verified')`)
+	ctl := &Client{NodeID: "node-1", DB: db, Storage: t.TempDir()}
+
+	report, err := ctl.prepareInventoryReport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report == nil || len(report.Chunks) != 1 || len(report.Chunks[0]) != 1 {
+		t.Fatalf("unexpected inventory snapshot: %+v", report)
+	}
+	if report.Chunks[0][0].LocalState != "verified" {
+		t.Fatalf("control report should use stored state, got %q", report.Chunks[0][0].LocalState)
+	}
+	var state string
+	if err := db.QueryRow(`SELECT state FROM local_assets WHERE asset_id = 'asset-missing'`).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != "verified" {
+		t.Fatalf("control report should not mutate local inventory state, got %q", state)
+	}
 }
 
 func expectType(t *testing.T, conn interface{ Read([]byte) (int, error) }, typ string) (protocol.Envelope, bool) {

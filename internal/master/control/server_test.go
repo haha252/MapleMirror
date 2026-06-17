@@ -86,3 +86,17 @@ func TestReadHelloRejectsUnexpectedControlMessage(t *testing.T) {
 		t.Fatal("期望 hello 交换失败")
 	}
 }
+
+func TestControlReadCloseReasonClassifiesTimeout(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	_ = serverConn.SetReadDeadline(time.Now().Add(time.Nanosecond))
+	_, err := protocol.ReadFrame(serverConn, protocol.MaxFrameBytes)
+	if err == nil {
+		t.Fatal("expected read timeout")
+	}
+	if got := controlReadCloseReason(err); got != "控制连接超时" {
+		t.Fatalf("timeout reason=%q", got)
+	}
+}

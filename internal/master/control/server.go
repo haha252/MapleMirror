@@ -108,7 +108,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 	for {
 		msg, err := readControlFrame(conn, s.sessionReadTimeout())
 		if err != nil {
-			closeReason = err.Error()
+			closeReason = controlReadCloseReason(err)
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "控制会话读取结束",
 					slog.String("request_id", reqID),

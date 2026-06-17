@@ -127,9 +127,9 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.DownloadToken.TTL, "15m", "download_token.ttl", warn)
 	setString(&c.DownloadToken.SigningPrivateKeyFile, "secrets/download-token-ed25519.key", "download_token.signing_private_key_file", warn)
 	setString(&c.DownloadToken.VerifyPublicKeyFile, "secrets/download-token-ed25519.pub", "download_token.verify_public_key_file", warn)
-	setString(&c.Node.HeartbeatTimeout, "60s", "node.heartbeat_timeout", warn)
-	setString(&c.Node.HeartbeatOfflineGrace, "60s", "node.heartbeat_offline_grace", warn)
-	setString(&c.Node.HeartbeatInterval, "10s", "node.heartbeat_interval", warn)
+	setString(&c.Node.HeartbeatTimeout, "90s", "node.heartbeat_timeout", warn)
+	setString(&c.Node.HeartbeatOfflineGrace, "5m", "node.heartbeat_offline_grace", warn)
+	setString(&c.Node.HeartbeatInterval, "15s", "node.heartbeat_interval", warn)
 	if c.Node.PublicProbeEnabled == nil {
 		value := true
 		c.Node.PublicProbeEnabled = &value

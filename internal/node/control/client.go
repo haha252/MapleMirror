@@ -86,7 +86,7 @@ func (c Client) RunOnce() (time.Duration, error) {
 		slog.Int("heartbeat_timeout_seconds", welcome.HeartbeatTimeoutSecond),
 		slog.String("managed_state", welcome.ManagedState),
 		slog.Bool("routing_ready", welcome.RoutingReady))
-	if err := c.sendSessionReports(conn, reqID); err != nil {
+	if err := c.sendSessionReports(conn, reqID, interval); err != nil {
 		return interval, err
 	}
 	return interval, nil
@@ -110,43 +110,6 @@ func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
 		return protocol.Welcome{}, err
 	}
 	return welcome, nil
-}
-
-func (c Client) sendSessionReports(conn net.Conn, reqID string) error {
-	actualBandwidth := c.sampleBandwidth()
-	sequence := uint64(2)
-	taskBudget := maxSyncTasksPerSession
-	if err := c.heartbeat(conn, reqID, sequence, actualBandwidth); err != nil {
-		return err
-	}
-	sequence++
-	if err := c.sendPressureReport(conn, reqID, sequence, actualBandwidth); err != nil {
-		return err
-	}
-	sequence++
-	nextSeq, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, &taskBudget)
-	if err != nil {
-		return err
-	}
-	sequence = nextSeq
-	nextSeq, err = c.sendPendingTraffic(conn, reqID, sequence)
-	if err != nil {
-		return err
-	}
-	nextSeq, err = c.sendPendingTaskResults(conn, reqID, nextSeq, &taskBudget)
-	if err != nil {
-		return err
-	}
-	nextSeq, err = c.sendRunningTaskAcks(conn, reqID, nextSeq, &taskBudget)
-	if err != nil {
-		return err
-	}
-	nextSeq, err = c.sendFullInventoryReport(conn, reqID, nextSeq, &taskBudget)
-	if err != nil {
-		return err
-	}
-	_, err = c.readOptionalTasksWithBudget(conn, reqID, nextSeq, &taskBudget)
-	return err
 }
 
 func (c Client) resetInterruptedLocalTasks() error {

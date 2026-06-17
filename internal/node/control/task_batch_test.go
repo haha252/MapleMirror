@@ -106,7 +106,7 @@ func TestRunOnceReadsTaskDispatchedAfterPressureReport(t *testing.T) {
 		Executor:       recordingExecutor{tasks: executed},
 		TaskLimiter:    NewTaskLimiter(1),
 	}
-	if _, err := client.RunOnce(); err != nil {
+	if _, err := client.RunOnce(); !runOnceEndedByPeer(err) {
 		t.Fatal(err)
 	}
 	select {

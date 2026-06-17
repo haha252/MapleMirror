@@ -83,11 +83,11 @@ download_token:
 # 下载节点控制面配置。
 node:
   # 主节点判定下载节点心跳延迟的软超时时间。
-  heartbeat_timeout: "60s"
+  heartbeat_timeout: "90s"
   # 心跳超过 heartbeat_timeout 后继续等待的离线宽限时间，超过两者之和才标记离线。
-  heartbeat_offline_grace: "60s"
+  heartbeat_offline_grace: "5m"
   # 主节点下发给下载节点的建议心跳间隔，必须小于 heartbeat_timeout。
-  heartbeat_interval: "10s"
+  heartbeat_interval: "15s"
   # 是否启用主节点对下载节点公网 HTTP 入口的防伪探测。
   public_probe_enabled: true
   # 主节点对每个在线下载节点发起公网探测的最小间隔。

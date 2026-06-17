@@ -23,8 +23,8 @@ func TestLoadMasterExample(t *testing.T) {
 	if c.ALTCHA.Difficulty != 22 {
 		t.Fatal("网页验证安全合同被修改")
 	}
-	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "10s" ||
-		c.Node.HeartbeatTimeout != "60s" || c.Node.HeartbeatOfflineGrace != "60s" ||
+	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "15s" ||
+		c.Node.HeartbeatTimeout != "90s" || c.Node.HeartbeatOfflineGrace != "5m" ||
 		c.Node.TLS.CAKeyFile == "" || c.Admin.Web.UsersFile == "" {
 		t.Fatal("控制面配置默认值缺失")
 	}

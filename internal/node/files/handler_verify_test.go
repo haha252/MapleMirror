@@ -16,7 +16,7 @@ const testDigestABCDEF = "sha256:bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1
 
 func TestHandlerRefreshesExpiredVerificationBeforeDownload(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
-	old := time.Now().Add(-2 * time.Minute).UTC().Format(time.RFC3339Nano)
+	old := time.Now().Add(-4 * time.Minute).UTC().Format(time.RFC3339Nano)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
 		WHERE asset_id = 'asset-1'`, testDigestABCDEF, old)
 	if err != nil {
@@ -26,15 +26,10 @@ func TestHandlerRefreshesExpiredVerificationBeforeDownload(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "abcdef" {
 		t.Fatalf("过期校验通过后应下载成功：code=%d body=%q", rec.Code, rec.Body.String())
 	}
-	var state, verifiedAt string
-	err = db.QueryRow(`SELECT state, verified_at FROM local_assets
-		WHERE asset_id = 'asset-1'`).Scan(&state, &verifiedAt)
-	if err != nil || state != "verified" || verifiedAt == old {
-		t.Fatalf("应刷新本地校验时间：state=%q verified_at=%q err=%v", state, verifiedAt, err)
-	}
+	waitForVerifiedAtChange(t, db, old)
 }
 
-func TestHandlerRejectsFreshModifiedFile(t *testing.T) {
+func TestHandlerReusesFreshVerificationForModifiedFile(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	fresh := time.Now().Add(-10 * time.Second).UTC().Format(time.RFC3339Nano)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
@@ -47,13 +42,13 @@ func TestHandlerRejectsFreshModifiedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := serveVerifiedAsset(t, db, storageDir, signer)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("fresh window 内验证后改写的文件应拒绝下载：%d", rec.Code)
+	if rec.Code != http.StatusOK || rec.Body.String() != "zzzzzz" {
+		t.Fatalf("fresh window 内应复用校验结果：code=%d body=%q", rec.Code, rec.Body.String())
 	}
-	assertLocalAssetState(t, db, "mismatch")
+	assertLocalAssetState(t, db, "verified")
 }
 
-func TestHandlerRejectsFreshModifiedFileWithBackdatedMTime(t *testing.T) {
+func TestHandlerReusesFreshVerificationWithBackdatedMTime(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	freshAt := time.Now().Add(-10 * time.Second).UTC()
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
@@ -64,17 +59,17 @@ func TestHandlerRejectsFreshModifiedFileWithBackdatedMTime(t *testing.T) {
 	tamperAssetWithBackdatedMTime(t, storageDir, freshAt)
 
 	rec := serveVerifiedAsset(t, db, storageDir, signer)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("backdated modified file should be rejected: %d", rec.Code)
+	if rec.Code != http.StatusOK || rec.Body.String() != "zzzzzz" {
+		t.Fatalf("fresh backdated file should reuse cached verification: code=%d body=%q", rec.Code, rec.Body.String())
 	}
-	assertLocalAssetState(t, db, "mismatch")
+	assertLocalAssetState(t, db, "verified")
 }
 
 func TestHandlerMarksExpiredMismatchedFile(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
 		WHERE asset_id = 'asset-1'`, testDigestABCDEF,
-		time.Now().Add(-2*time.Minute).UTC().Format(time.RFC3339Nano))
+		time.Now().Add(-4*time.Minute).UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,17 +78,17 @@ func TestHandlerMarksExpiredMismatchedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := serveVerifiedAsset(t, db, storageDir, signer)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("过期后 hash 不一致应拒绝下载：%d", rec.Code)
+	if rec.Code != http.StatusOK || rec.Body.String() != "zzzzzz" {
+		t.Fatalf("过期但后台校验未完成前不应阻塞下载：code=%d body=%q", rec.Code, rec.Body.String())
 	}
-	assertLocalAssetState(t, db, "mismatch")
+	waitForLocalAssetState(t, db, "mismatch")
 }
 
 func TestHandlerMarksExpiredMissingFile(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
 		WHERE asset_id = 'asset-1'`, testDigestABCDEF,
-		time.Now().Add(-2*time.Minute).UTC().Format(time.RFC3339Nano))
+		time.Now().Add(-4*time.Minute).UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +99,7 @@ func TestHandlerMarksExpiredMissingFile(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("过期后文件缺失应拒绝下载：%d", rec.Code)
 	}
-	assertLocalAssetState(t, db, "missing")
+	waitForLocalAssetState(t, db, "missing")
 }
 
 func tamperAssetWithBackdatedMTime(t *testing.T, storageDir string, verifiedAt time.Time) {
@@ -139,9 +134,48 @@ func serveVerifiedAsset(t *testing.T, db *sql.DB, storageDir string, signer down
 
 func assertLocalAssetState(t *testing.T, db *sql.DB, want string) {
 	t.Helper()
+	state := localAssetState(t, db)
+	if state != want {
+		t.Fatalf("本地资产状态 got=%q want=%q", state, want)
+	}
+}
+
+func waitForLocalAssetState(t *testing.T, db *sql.DB, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if localAssetState(t, db) == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("本地资产状态 got=%q want=%q", localAssetState(t, db), want)
+}
+
+func localAssetState(t *testing.T, db *sql.DB) string {
+	t.Helper()
 	var state string
 	err := db.QueryRow(`SELECT state FROM local_assets WHERE asset_id = 'asset-1'`).Scan(&state)
-	if err != nil || state != want {
-		t.Fatalf("本地资产状态 got=%q want=%q err=%v", state, want, err)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return state
+}
+
+func waitForVerifiedAtChange(t *testing.T, db *sql.DB, old string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		var state, verifiedAt string
+		err := db.QueryRow(`SELECT state, verified_at FROM local_assets
+			WHERE asset_id = 'asset-1'`).Scan(&state, &verifiedAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state == "verified" && verifiedAt != old {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("后台校验未刷新本地校验时间")
 }

@@ -41,7 +41,15 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 		return err
 	}
 	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
-	return err
+	if err != nil {
+		return err
+	}
+	if c.Logger != nil {
+		c.Logger.Debug(context.Background(), "节点压力报告 ack received",
+			slog.String("node_id", c.NodeID),
+			slog.String("request_id", reqID))
+	}
+	return nil
 }
 
 func (c Client) activeDownloads() int64 {

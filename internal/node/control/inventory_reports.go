@@ -21,58 +21,87 @@ type inventoryCursor struct {
 	UpdatedAt         string
 }
 
+type pendingInventoryReport struct {
+	Revision    uint64
+	GeneratedAt time.Time
+	Chunks      [][]protocol.InventoryItem
+	Index       int
+}
+
 func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence uint64,
 	taskBudget *int) (uint64, error) {
-	if c.DB == nil {
-		return sequence, nil
+	var pending *pendingInventoryReport
+	for {
+		next, sent, err := c.sendNextInventoryReportChunk(conn, reqID, sequence,
+			taskBudget, &pending)
+		if err != nil || !sent {
+			return next, err
+		}
+		sequence = next
 	}
+}
+
+func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
+	sequence uint64, taskBudget *int, pending **pendingInventoryReport) (uint64, bool, error) {
+	if c.DB == nil {
+		return sequence, false, nil
+	}
+	if *pending == nil {
+		report, err := c.prepareInventoryReport()
+		if err != nil || report == nil {
+			return sequence, false, err
+		}
+		*pending = report
+	}
+	report := *pending
+	chunk := report.Chunks[report.Index]
+	reportID, _ := requestid.New()
+	err := c.sendInventoryReport(conn, reqID, sequence, protocol.InventoryReport{
+		ReportID:    reportID,
+		Revision:    report.Revision,
+		GeneratedAt: report.GeneratedAt,
+		Complete:    report.Index == len(report.Chunks)-1,
+		Items:       chunk,
+	})
+	if err != nil {
+		return sequence, false, err
+	}
+	sequence++
+	next, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+	if err != nil {
+		return sequence, false, err
+	}
+	report.Index++
+	if report.Index >= len(report.Chunks) {
+		err = c.storeInventoryCursor(inventoryCursor{
+			NextRevision:      report.Revision + 1,
+			LastAckedRevision: report.Revision,
+		})
+		*pending = nil
+	}
+	return next, true, err
+}
+
+func (c Client) prepareInventoryReport() (*pendingInventoryReport, error) {
 	cursor, err := c.loadInventoryCursor()
 	if err != nil {
-		return sequence, err
+		return nil, err
 	}
 	if !shouldSendFullInventoryReport(cursor, time.Now().UTC()) {
-		return sequence, nil
-	}
-	if err := c.refreshLocalInventory(); err != nil {
-		return sequence, err
+		return nil, nil
 	}
 	items, err := c.loadInventoryItems()
 	if err != nil {
-		return sequence, err
+		return nil, err
 	}
 	revision := cursor.NextRevision
 	if revision == 0 {
 		revision = 1
 	}
-	chunks := inventoryChunks(items)
-	generatedAt := time.Now().UTC()
-	for i, chunk := range chunks {
-		reportID, _ := requestid.New()
-		report := protocol.InventoryReport{
-			ReportID:    reportID,
-			Revision:    revision,
-			GeneratedAt: generatedAt,
-			Complete:    i == len(chunks)-1,
-			Items:       chunk,
-		}
-		if err := c.sendInventoryReport(conn, reqID, sequence, report); err != nil {
-			return sequence, err
-		}
-		sequence++
-		var next uint64
-		next, err = c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
-		if err != nil {
-			return sequence, err
-		}
-		sequence = next
-	}
-	if err := c.storeInventoryCursor(inventoryCursor{
-		NextRevision:      revision + 1,
-		LastAckedRevision: revision,
-	}); err != nil {
-		return sequence, err
-	}
-	return sequence, nil
+	return &pendingInventoryReport{
+		Revision: revision, GeneratedAt: time.Now().UTC(),
+		Chunks: inventoryChunks(items),
+	}, nil
 }
 
 func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64, report protocol.InventoryReport) error {

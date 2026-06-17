@@ -31,6 +31,7 @@ type Handler struct {
 	mu             sync.Mutex
 	active         map[string]int
 	replicationUse map[string]struct{}
+	verifyInFlight map[string]struct{}
 	budgets        map[string]int64
 	pendingTraffic map[string][]pendingTrafficEvent
 }
@@ -41,11 +42,6 @@ type localAsset struct {
 	DigestSHA256 string
 	SizeBytes    int64
 	VerifiedAt   string
-}
-
-type assetRequest struct {
-	LegacyAssetID string
-	RelativePath  string
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
