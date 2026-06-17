@@ -156,6 +156,48 @@ func TestRepairTaskResetsFailedDownloadTask(t *testing.T) {
 	}
 }
 
+func TestRepairTaskReusesTerminalDownloadTask(t *testing.T) {
+	for _, terminalState := range []string{"cancelled", "obsolete"} {
+		t.Run(terminalState, func(t *testing.T) {
+			repo, closeDB := testRepo(t)
+			defer closeDB()
+			session := seedNodeAndSession(t, repo)
+			seedAssetTarget(t, repo, session.NodeID)
+			mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+				(id, node_id, task_type, asset_id, state, request_id, created_at,
+				updated_at, attempts, error_message, completed_at)
+				VALUES ('task-terminal', ?, 'asset_download', 'asset-1', ?,
+				'req-1', 'old', 'old', 2, 'old error', 'old')`,
+				session.NodeID, terminalState)
+
+			_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+				ReportID: "r-missing-terminal", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+				Items: []protocol.InventoryItem{},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var tasks int
+			err = repo.DB.QueryRow(`SELECT COUNT(*) FROM node_tasks
+				WHERE node_id = ? AND asset_id = 'asset-1' AND task_type = 'asset_download'`,
+				session.NodeID).Scan(&tasks)
+			if err != nil || tasks != 1 {
+				t.Fatalf("terminal task should be reused, count=%d err=%v", tasks, err)
+			}
+			var state string
+			var attempts int
+			var completedAt string
+			err = repo.DB.QueryRow(`SELECT state, attempts, COALESCE(completed_at, '')
+				FROM node_tasks WHERE id = 'task-terminal'`).Scan(&state, &attempts, &completedAt)
+			if err != nil || state != "pending" || attempts != 0 || completedAt != "" {
+				t.Fatalf("terminal task should reset to pending, state=%s attempts=%d completed=%q err=%v",
+					state, attempts, completedAt, err)
+			}
+		})
+	}
+}
+
 func TestCompleteInventoryReportPreservesLeasedMissingDownloadTask(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

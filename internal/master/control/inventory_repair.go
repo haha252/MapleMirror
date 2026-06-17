@@ -165,8 +165,9 @@ func insertRepairTask(ctx context.Context, tx *sql.Tx, target repairTarget, now 
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
 		error_message = NULL, attempts = 0, retry_after = NULL, completed_at = NULL,
+		lease_expires_at = NULL,
 		updated_at = ? WHERE node_id = ? AND asset_id = ?
-		AND task_type = 'asset_download' AND state = 'failed'`,
+		AND task_type = 'asset_download' AND state IN ('failed', 'obsolete', 'cancelled')`,
 		now, target.NodeID, target.AssetID)
 	if err != nil {
 		return false, err
