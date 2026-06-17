@@ -114,29 +114,34 @@ func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
 
 func (c Client) sendSessionReports(conn net.Conn, reqID string) error {
 	actualBandwidth := c.sampleBandwidth()
-	if err := c.heartbeat(conn, reqID, 2, actualBandwidth); err != nil {
+	sequence := uint64(2)
+	if err := c.heartbeat(conn, reqID, sequence, actualBandwidth); err != nil {
 		return err
 	}
-	if err := c.sendPressureReport(conn, reqID, 3, actualBandwidth); err != nil {
+	sequence++
+	if err := c.sendPressureReport(conn, reqID, sequence, actualBandwidth); err != nil {
 		return err
 	}
-	nextSeq, err := c.sendPendingTraffic(conn, reqID, 4)
+	sequence++
+	taskBudget := maxSyncTasksPerSession
+	nextSeq, err := c.sendPendingTraffic(conn, reqID, sequence)
 	if err != nil {
 		return err
 	}
-	nextSeq, err = c.sendPendingTaskResults(conn, reqID, nextSeq)
+	nextSeq, err = c.sendPendingTaskResults(conn, reqID, nextSeq, &taskBudget)
 	if err != nil {
 		return err
 	}
-	nextSeq, err = c.sendRunningTaskAcks(conn, reqID, nextSeq)
+	nextSeq, err = c.sendRunningTaskAcks(conn, reqID, nextSeq, &taskBudget)
 	if err != nil {
 		return err
 	}
-	nextSeq, err = c.sendFullInventoryReport(conn, reqID, nextSeq)
+	nextSeq, err = c.sendFullInventoryReport(conn, reqID, nextSeq, &taskBudget)
 	if err != nil {
 		return err
 	}
-	return c.readOptionalTask(conn, reqID, nextSeq)
+	_, err = c.readOptionalTasksWithBudget(conn, reqID, nextSeq, &taskBudget)
+	return err
 }
 
 func (c Client) resetInterruptedLocalTasks() error {

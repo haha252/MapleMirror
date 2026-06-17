@@ -13,24 +13,30 @@ import (
 )
 
 const inventoryChunkSize = 1000
+const inventoryReportMinInterval = time.Minute
 
 type inventoryCursor struct {
 	NextRevision      uint64
 	LastAckedRevision uint64
+	UpdatedAt         string
 }
 
-func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
+func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence uint64,
+	taskBudget *int) (uint64, error) {
 	if c.DB == nil {
+		return sequence, nil
+	}
+	cursor, err := c.loadInventoryCursor()
+	if err != nil {
+		return sequence, err
+	}
+	if !shouldSendFullInventoryReport(cursor, time.Now().UTC()) {
 		return sequence, nil
 	}
 	if err := c.refreshLocalInventory(); err != nil {
 		return sequence, err
 	}
 	items, err := c.loadInventoryItems()
-	if err != nil {
-		return sequence, err
-	}
-	cursor, err := c.loadInventoryCursor()
 	if err != nil {
 		return sequence, err
 	}
@@ -53,6 +59,12 @@ func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence ui
 			return sequence, err
 		}
 		sequence++
+		var next uint64
+		next, err = c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+		if err != nil {
+			return sequence, err
+		}
+		sequence = next
 	}
 	if err := c.storeInventoryCursor(inventoryCursor{
 		NextRevision:      revision + 1,
@@ -121,9 +133,9 @@ func (c Client) loadInventoryCursor() (inventoryCursor, error) {
 		return inventoryCursor{}, err
 	}
 	var cursor inventoryCursor
-	err := c.DB.QueryRow(`SELECT next_revision, last_acked_revision
+	err := c.DB.QueryRow(`SELECT next_revision, last_acked_revision, updated_at
 		FROM inventory_report_cursor WHERE id = 1`).
-		Scan(&cursor.NextRevision, &cursor.LastAckedRevision)
+		Scan(&cursor.NextRevision, &cursor.LastAckedRevision, &cursor.UpdatedAt)
 	return cursor, err
 }
 
@@ -134,6 +146,17 @@ func (c Client) storeInventoryCursor(cursor inventoryCursor) error {
 		cursor.NextRevision, cursor.LastAckedRevision,
 		time.Now().UTC().Format(time.RFC3339Nano))
 	return err
+}
+
+func shouldSendFullInventoryReport(cursor inventoryCursor, now time.Time) bool {
+	if cursor.LastAckedRevision == 0 || cursor.UpdatedAt == "" {
+		return true
+	}
+	updatedAt, err := time.Parse(time.RFC3339Nano, cursor.UpdatedAt)
+	if err != nil {
+		return true
+	}
+	return now.Sub(updatedAt) >= inventoryReportMinInterval
 }
 
 func inventoryChunks(items []protocol.InventoryItem) [][]protocol.InventoryItem {

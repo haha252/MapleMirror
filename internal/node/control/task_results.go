@@ -11,7 +11,8 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
+func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uint64,
+	taskBudget *int) (uint64, error) {
 	if c.DB == nil {
 		return sequence, nil
 	}
@@ -43,11 +44,18 @@ func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uin
 			return sequence, err
 		}
 		sequence++
+		var next uint64
+		next, err = c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+		if err != nil {
+			return sequence, err
+		}
+		sequence = next
 	}
 	return sequence, nil
 }
 
-func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
+func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64,
+	taskBudget *int) (uint64, error) {
 	if c.DB == nil {
 		return sequence, nil
 	}
@@ -75,6 +83,11 @@ func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64
 			return sequence, err
 		}
 		sequence++
+		next, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+		if err != nil {
+			return sequence, err
+		}
+		sequence = next
 	}
 	return sequence, nil
 }

@@ -8,12 +8,11 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func TestShouldDispatchNextTaskOnlyAfterInventoryOrTaskResult(t *testing.T) {
+func TestShouldDispatchNextTaskAfterReportsResultsOrTaskAck(t *testing.T) {
 	for _, messageType := range []string{
 		protocol.TypeHeartbeat,
 		protocol.TypeTrafficEvent,
 		protocol.TypePressureReport,
-		protocol.TypeSyncTaskAck,
 	} {
 		if shouldDispatchNextTask(messageType) {
 			t.Fatalf("%s should not trigger sync task dispatch", messageType)
@@ -21,6 +20,7 @@ func TestShouldDispatchNextTaskOnlyAfterInventoryOrTaskResult(t *testing.T) {
 	}
 	for _, messageType := range []string{
 		protocol.TypeInventoryReport,
+		protocol.TypeSyncTaskAck,
 		protocol.TypeSyncTaskResult,
 	} {
 		if !shouldDispatchNextTask(messageType) {

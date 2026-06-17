@@ -74,6 +74,30 @@ func TestExpiredLeaseSyncTaskResultDoesNotPublishVerifiedAsset(t *testing.T) {
 	assertControlAssetState(t, repo, "asset-new", "pending")
 }
 
+func TestLeasedSentSyncTaskResultCanComplete(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+	lease := time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)
+	mustExecControl(t, repo.DB, `UPDATE node_tasks SET state = 'sent',
+		lease_expires_at = ? WHERE id = 'task-1'`, lease)
+
+	result, err := repo.AcceptSyncTaskResult(context.Background(), session, 1,
+		successfulTaskResult("task-1", "asset-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AcceptedSequence != 1 {
+		t.Fatalf("accepted sequence = %d, want 1", result.AcceptedSequence)
+	}
+	assertTaskUnchanged(t, repo, "task-1", "succeeded", 0, "")
+	assertTableCount(t, repo, "node_inventory",
+		"node_id = 'node-1' AND asset_id = 'asset-1' AND state = 'verified'", 1)
+}
+
 func successfulTaskResult(taskID, assetID string) protocol.SyncTaskResult {
 	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	size := int64(10)

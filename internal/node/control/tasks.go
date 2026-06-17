@@ -10,32 +10,64 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (c Client) readOptionalTask(conn net.Conn, reqID string, sequence uint64) error {
-	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
-	_ = conn.SetReadDeadline(time.Time{})
-	if err != nil {
-		return nil
+const maxSyncTasksPerSession = 10
+
+func (c Client) readOptionalTasks(conn net.Conn, reqID string, sequence uint64,
+	remaining int) (uint64, error) {
+	for remaining > 0 {
+		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+		_ = conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			return sequence, nil
+		}
+		if msg.MessageType == protocol.TypeProtocolError {
+			return sequence, parseRejectionError(msg)
+		}
+		if msg.MessageType != protocol.TypeSyncTask {
+			return sequence, nil
+		}
+		next, err := c.handleDispatchedTask(conn, reqID, sequence, msg)
+		if err != nil {
+			return sequence, err
+		}
+		sequence = next
+		remaining--
 	}
-	if msg.MessageType == protocol.TypeProtocolError {
-		return parseRejectionError(msg)
+	return sequence, nil
+}
+
+func (c Client) readOptionalTasksWithBudget(conn net.Conn, reqID string,
+	sequence uint64, budget *int) (uint64, error) {
+	if budget == nil {
+		return c.readOptionalTasks(conn, reqID, sequence, maxSyncTasksPerSession)
 	}
-	if msg.MessageType != protocol.TypeSyncTask {
-		return nil
+	if *budget <= 0 {
+		return sequence, nil
 	}
+	next, err := c.readOptionalTasks(conn, reqID, sequence, *budget)
+	*budget -= int(next - sequence)
+	return next, err
+}
+
+func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint64,
+	msg protocol.Envelope) (uint64, error) {
 	task, err := c.decodeSyncTask(msg, reqID)
 	if err != nil {
-		return err
+		return sequence, err
 	}
 	if c.Executor == nil {
 		c.logSyncExecutorDisabled(reqID, task.TaskID)
-		return c.sendTaskResult(conn, reqID, sequence, disabledExecutorResult(task))
+		if err := c.sendTaskResult(conn, reqID, sequence, disabledExecutorResult(task)); err != nil {
+			return sequence, err
+		}
+		return sequence + 1, nil
 	}
 	if err := c.sendTaskAck(conn, reqID, sequence, task); err != nil {
-		return err
+		return sequence, err
 	}
 	c.executeTaskAsync(task)
-	return nil
+	return sequence + 1, nil
 }
 
 func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,

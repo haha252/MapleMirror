@@ -176,9 +176,10 @@
       } else {
         body.innerHTML = rows.map(function (task) {
           var canOperate = task.state === "failed" || task.state === "retry_wait" || task.state === "pending";
+          var stateLabel = task.state === "succeeded" ? "success" : task.state;
           return "<tr><td><strong>" + a.esc(task.task_id) + '</strong><span class="sub">' +
             a.esc(task.task_type) + "</span></td><td>" + a.esc(task.asset_id || "") +
-            "</td><td>" + a.badge(task.state) + "</td><td>" +
+            "</td><td>" + a.badge(stateLabel) + "</td><td>" +
             a.esc(task.attempts || 0) + "</td><td>" + a.esc(task.error_message || "") +
             '</td><td><div class="admin-actions">' + (canOperate ?
               '<button class="admin-secondary" data-task-action="retry" data-node="' + a.esc(task.node_id) + '" data-task="' + a.esc(task.task_id) + '">重试</button>' +

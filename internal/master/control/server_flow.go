@@ -54,7 +54,7 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (He
 	}
 }
 
-func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID string) error {
+func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID string) (bool, error) {
 	task, ok, err := s.Repo.NextSyncTask(context.Background(), session.NodeID)
 	if err != nil || !ok {
 		if err != nil && s.Logger != nil {
@@ -63,7 +63,7 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 				slog.String("node_id", session.NodeID),
 				slog.String("error", err.Error()))
 		}
-		return err
+		return false, err
 	}
 	if s.Logger != nil {
 		s.Logger.Debug(context.Background(), "向节点下发同步任务",
@@ -77,11 +77,14 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 			slog.Int("fallback_sources", len(task.FallbackSources)))
 	}
 	body, _ := json.Marshal(task)
-	return writeControlFrame(conn, protocol.Envelope{
+	if err := writeControlFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: task.TaskID,
 		MessageType: protocol.TypeSyncTask, SentAt: time.Now().UTC(),
 		NodeID: session.NodeID, RequestID: reqID, Payload: body,
-	})
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {

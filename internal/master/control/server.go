@@ -104,6 +104,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 			slog.Int("heartbeat_interval_seconds", int(s.HeartbeatInterval.Seconds())),
 			slog.Int("heartbeat_timeout_seconds", int(s.HeartbeatTimeout.Seconds())))
 	}
+	dispatchedTasks := 0
 	for {
 		msg, err := readControlFrame(conn, s.sessionReadTimeout())
 		if err != nil {
@@ -221,7 +222,11 @@ func (s ControlServer) Handle(conn net.Conn) {
 		if !shouldDispatchNextTask(msg.MessageType) {
 			continue
 		}
-		if err := s.writeNextTask(conn, session, reqID); err != nil {
+		if dispatchedTasks >= maxSyncTasksPerControlSession {
+			continue
+		}
+		dispatched, err := s.writeNextTask(conn, session, reqID)
+		if err != nil {
 			closeReason = "同步任务下发失败: " + err.Error()
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "同步任务下发失败",
@@ -231,6 +236,9 @@ func (s ControlServer) Handle(conn net.Conn) {
 					slog.String("error", err.Error()))
 			}
 			return
+		}
+		if dispatched {
+			dispatchedTasks++
 		}
 	}
 }
