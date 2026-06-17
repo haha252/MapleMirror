@@ -43,6 +43,13 @@ func (e Executor) Execute(ctx context.Context, task protocol.SyncTask) protocol.
 	case "asset_delete":
 		return e.delete(task)
 	case "inventory_reconcile":
+		if err := e.forceNextInventoryReport(); err != nil {
+			return protocol.SyncTaskResult{
+				TaskID:  task.TaskID,
+				Result:  "temporary_error",
+				Message: "请求完整库存上报失败",
+			}
+		}
 		return protocol.SyncTaskResult{
 			TaskID:  task.TaskID,
 			Result:  "succeeded",
