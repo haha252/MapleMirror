@@ -89,6 +89,24 @@ func clearSatisfiedDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now st
 	return int(n), nil
 }
 
+func resetMissingDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
+	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+		error_message = NULL, retry_after = NULL, lease_expires_at = NULL,
+		updated_at = ? WHERE node_id = ? AND task_type = 'asset_download'
+		AND state IN ('sent', 'running', 'retry_wait')
+		AND asset_id IN (
+			SELECT ti.asset_id FROM target_inventory ti
+			LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
+			WHERE ti.node_id = ? AND ti.desired_state = 'required'
+			AND (ni.asset_id IS NULL OR ni.state != 'verified')
+		)`, now, nodeID, nodeID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
+
 func loadRepairTargets(ctx context.Context, tx *sql.Tx, nodeID string) ([]repairTarget, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT ti.node_id, ti.asset_id
 		FROM target_inventory ti

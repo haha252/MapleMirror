@@ -61,6 +61,10 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		if err := markMissingInventory(ctx, tx, session.NodeID, now, reported); err != nil {
 			return HeartbeatResult{}, err
 		}
+		resetTasks, err := resetMissingDownloadTasks(ctx, tx, session.NodeID, now)
+		if err != nil {
+			return HeartbeatResult{}, err
+		}
 		clearedTasks, err := clearSatisfiedDownloadTasks(ctx, tx, session.NodeID, now)
 		if err != nil {
 			return HeartbeatResult{}, err
@@ -85,6 +89,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 				slog.Bool("complete", report.Complete),
 				slog.Int("missing_targets", missing),
 				slog.Int("running_tasks", running),
+				slog.Int("reset_missing_tasks", resetTasks),
 				slog.Int("generated_repair_tasks", generatedTasks),
 				slog.Int("cleared_satisfied_tasks", clearedTasks),
 				slog.Int("completed_reconcile_tasks", completedReconcileTasks),

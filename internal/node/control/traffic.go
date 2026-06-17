@@ -18,10 +18,11 @@ func (c Client) sendPendingTraffic(conn net.Conn, reqID string, sequence uint64)
 		return sequence, err
 	}
 	for _, event := range events {
-		if err := c.sendTrafficEvent(conn, reqID, sequence, event); err != nil {
+		next, err := c.sendTrafficEvent(conn, reqID, sequence, event)
+		if err != nil {
 			return sequence, err
 		}
-		sequence++
+		sequence = next
 	}
 	return sequence, nil
 }
@@ -35,10 +36,11 @@ func (c Client) sendNextTrafficEvent(conn net.Conn, reqID string,
 	if err != nil || len(events) == 0 {
 		return sequence, false, err
 	}
-	if err := c.sendTrafficEvent(conn, reqID, sequence, events[0]); err != nil {
+	next, err := c.sendTrafficEvent(conn, reqID, sequence, events[0])
+	if err != nil {
 		return sequence, false, err
 	}
-	return sequence + 1, true, nil
+	return next, true, nil
 }
 
 func (c Client) loadPendingTrafficEvents(limit int) ([]protocol.TrafficEvent, error) {
@@ -77,21 +79,22 @@ func scanTraffic(rows *sql.Rows) (protocol.TrafficEvent, error) {
 	return event, nil
 }
 
-func (c Client) sendTrafficEvent(conn net.Conn, reqID string, sequence uint64, event protocol.TrafficEvent) error {
+func (c Client) sendTrafficEvent(conn net.Conn, reqID string, sequence uint64, event protocol.TrafficEvent) (uint64, error) {
 	body, _ := json.Marshal(event)
 	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID + "-traffic",
 		MessageType: protocol.TypeTrafficEvent, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
-		return err
+		return sequence, err
 	}
-	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeTrafficEventAck)
+	next := sequence + 1
+	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeTrafficEventAck)
 	if err != nil {
-		return err
+		return sequence, err
 	}
 	_, err = c.DB.Exec(`UPDATE pending_traffic_events SET confirmed_at = ?
 		WHERE event_sequence = ?`, time.Now().UTC().Format(time.RFC3339Nano),
 		event.EventSequence)
-	return err
+	return next, err
 }

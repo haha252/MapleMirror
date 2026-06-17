@@ -8,6 +8,7 @@ import (
 type TaskLimiter struct {
 	sem    chan struct{}
 	active int64
+	queued int64
 }
 
 func NewTaskLimiter(maxWorkers int) *TaskLimiter {
@@ -22,6 +23,52 @@ func (l *TaskLimiter) Active() int64 {
 		return 0
 	}
 	return atomic.LoadInt64(&l.active)
+}
+
+func (l *TaskLimiter) Capacity() int {
+	if l == nil {
+		return maxSyncTasksPerSession
+	}
+	return cap(l.sem)
+}
+
+func (l *TaskLimiter) InFlight() int64 {
+	if l == nil {
+		return 0
+	}
+	return atomic.LoadInt64(&l.queued)
+}
+
+func (l *TaskLimiter) Available() int {
+	if l == nil {
+		return maxSyncTasksPerSession
+	}
+	available := l.Capacity() - int(l.InFlight())
+	if available < 0 {
+		return 0
+	}
+	return available
+}
+
+func (l *TaskLimiter) Reserve() bool {
+	if l == nil {
+		return true
+	}
+	for {
+		current := atomic.LoadInt64(&l.queued)
+		if current >= int64(l.Capacity()) {
+			return false
+		}
+		if atomic.CompareAndSwapInt64(&l.queued, current, current+1) {
+			return true
+		}
+	}
+}
+
+func (l *TaskLimiter) Release() {
+	if l != nil {
+		atomic.AddInt64(&l.queued, -1)
+	}
 }
 
 func (l *TaskLimiter) Run(ctx context.Context, fn func()) error {

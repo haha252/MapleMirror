@@ -119,7 +119,7 @@ func TestSendFullInventoryReportSplitsIntoChunks(t *testing.T) {
 		}
 	}()
 	ctl := &Client{NodeID: "node-1", DB: db}
-	nextSeq, err := ctl.sendFullInventoryReport(client, "req-1", 3, nil)
+	nextSeq, err := ctl.sendFullInventoryReport(client, "req-1", 3)
 	if err != nil {
 		t.Fatal(err)
 	}

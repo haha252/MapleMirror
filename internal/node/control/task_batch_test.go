@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -22,6 +23,53 @@ func (e recordingExecutor) Execute(ctx context.Context, task protocol.SyncTask) 
 	}
 	return protocol.SyncTaskResult{
 		TaskID: task.TaskID, AssetID: task.Asset.AssetID, Result: "succeeded",
+	}
+}
+
+func TestReadOptionalTasksRefillsBeyondTenWhenCapacityAvailable(t *testing.T) {
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+	executed := make(chan string, 12)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 1; i <= 12; i++ {
+			taskID := fmt.Sprintf("task-%02d", i)
+			writeSyncTask(t, server, taskID)
+			ack, ok := expectType(t, server, protocol.TypeSyncTaskAck)
+			if !ok {
+				return
+			}
+			wantSeq := uint64(2 + i)
+			if ack.Sequence != wantSeq {
+				t.Errorf("%s ack sequence = %d, want %d", taskID, ack.Sequence, wantSeq)
+				return
+			}
+			sendAck(server, ack)
+		}
+	}()
+	ctl := Client{
+		NodeID:      "node-1",
+		Executor:    recordingExecutor{tasks: executed},
+		TaskLimiter: NewTaskLimiter(12),
+	}
+	next, err := ctl.readOptionalTasksToCapacity(client, "req-1", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next != 15 {
+		t.Fatalf("next sequence = %d, want 15", next)
+	}
+	<-done
+	seen := map[string]bool{}
+	for len(seen) < 12 {
+		select {
+		case id := <-executed:
+			seen[id] = true
+		case <-time.After(time.Second):
+			t.Fatalf("tasks not executed: %+v", seen)
+		}
 	}
 }
 
@@ -138,7 +186,7 @@ func TestPendingTaskResultNotMarkedReportedWithoutAck(t *testing.T) {
 		_, _ = protocol.ReadFrame(server, protocol.MaxFrameBytes)
 	}()
 	ctl := Client{NodeID: "node-1", DB: db}
-	if _, err := ctl.sendPendingTaskResults(client, "req-1", 3, nil); err == nil {
+	if _, err := ctl.sendPendingTaskResults(client, "req-1", 3); err == nil {
 		t.Fatal("expected missing ACK error")
 	}
 	<-done

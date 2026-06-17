@@ -10,7 +10,6 @@ import (
 
 func TestShouldDispatchNextTaskAfterReportsResultsOrTaskAck(t *testing.T) {
 	for _, messageType := range []string{
-		protocol.TypeHeartbeat,
 		protocol.TypeTrafficEvent,
 	} {
 		if shouldDispatchNextTask(messageType) {
@@ -18,6 +17,7 @@ func TestShouldDispatchNextTaskAfterReportsResultsOrTaskAck(t *testing.T) {
 		}
 	}
 	for _, messageType := range []string{
+		protocol.TypeHeartbeat,
 		protocol.TypePressureReport,
 		protocol.TypeInventoryReport,
 		protocol.TypeSyncTaskAck,
@@ -26,6 +26,21 @@ func TestShouldDispatchNextTaskAfterReportsResultsOrTaskAck(t *testing.T) {
 		if !shouldDispatchNextTask(messageType) {
 			t.Fatalf("%s should trigger sync task dispatch", messageType)
 		}
+	}
+}
+
+func TestRuntimeStoreSyncTaskSlotsAvailable(t *testing.T) {
+	store := NewRuntimeStore()
+	if got := store.SyncTaskSlotsAvailable("node-1"); got != 0 {
+		t.Fatalf("default slots=%d", got)
+	}
+	store.SetSyncTaskSlotsAvailable("node-1", 5)
+	if got := store.SyncTaskSlotsAvailable("node-1"); got != 5 {
+		t.Fatalf("stored slots=%d", got)
+	}
+	store.SetSyncTaskSlotsAvailable("node-1", -1)
+	if got := store.SyncTaskSlotsAvailable("node-1"); got != 0 {
+		t.Fatalf("negative slots should clamp to zero, got=%d", got)
 	}
 }
 

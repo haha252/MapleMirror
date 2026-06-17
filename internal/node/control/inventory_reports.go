@@ -28,12 +28,11 @@ type pendingInventoryReport struct {
 	Index       int
 }
 
-func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence uint64,
-	taskBudget *int) (uint64, error) {
+func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
 	var pending *pendingInventoryReport
 	for {
 		next, sent, err := c.sendNextInventoryReportChunk(conn, reqID, sequence,
-			taskBudget, &pending)
+			&pending)
 		if err != nil || !sent {
 			return next, err
 		}
@@ -42,7 +41,7 @@ func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence ui
 }
 
 func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
-	sequence uint64, taskBudget *int, pending **pendingInventoryReport) (uint64, bool, error) {
+	sequence uint64, pending **pendingInventoryReport) (uint64, bool, error) {
 	if c.DB == nil {
 		return sequence, false, nil
 	}
@@ -56,7 +55,7 @@ func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
 	report := *pending
 	chunk := report.Chunks[report.Index]
 	reportID, _ := requestid.New()
-	err := c.sendInventoryReport(conn, reqID, sequence, protocol.InventoryReport{
+	next, err := c.sendInventoryReport(conn, reqID, sequence, protocol.InventoryReport{
 		ReportID:    reportID,
 		Revision:    report.Revision,
 		GeneratedAt: report.GeneratedAt,
@@ -66,8 +65,7 @@ func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
 	if err != nil {
 		return sequence, false, err
 	}
-	sequence++
-	next, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 	if err != nil {
 		return sequence, false, err
 	}
@@ -104,7 +102,8 @@ func (c Client) prepareInventoryReport() (*pendingInventoryReport, error) {
 	}, nil
 }
 
-func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64, report protocol.InventoryReport) error {
+func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64,
+	report protocol.InventoryReport) (uint64, error) {
 	body, _ := json.Marshal(report)
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点发送完整库存上报",
@@ -125,16 +124,17 @@ func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64
 		Sequence:        sequence,
 		Payload:         body,
 	}); err != nil {
-		return err
+		return sequence, err
 	}
-	msg, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
+	next := sequence + 1
+	msg, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
 	if err != nil {
-		return err
+		return sequence, err
 	}
 	if msg.MessageType != protocol.TypeHeartbeatAck {
-		return fmt.Errorf("库存上报收到非预期响应类型: %s", msg.MessageType)
+		return sequence, fmt.Errorf("库存上报收到非预期响应类型: %s", msg.MessageType)
 	}
-	return nil
+	return next, nil
 }
 
 func (c Client) loadInventoryItems() ([]protocol.InventoryItem, error) {

@@ -104,7 +104,6 @@ func (s ControlServer) Handle(conn net.Conn) {
 			slog.Int("heartbeat_interval_seconds", int(s.HeartbeatInterval.Seconds())),
 			slog.Int("heartbeat_timeout_seconds", int(s.HeartbeatTimeout.Seconds())))
 	}
-	dispatchedTasks := 0
 	for {
 		msg, err := readControlFrame(conn, s.sessionReadTimeout())
 		if err != nil {
@@ -208,7 +207,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 					slog.Uint64("accepted_sequence", result.AcceptedSequence))
 			}
 		}
-		if err := s.writeMessageAck(conn, session, reqID, msg, result); err != nil {
+		if err := s.writeMessageAck(conn, session, reqID, msg, result.HeartbeatResult); err != nil {
 			closeReason = "控制响应发送失败: " + err.Error()
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "控制响应发送失败",
@@ -222,10 +221,8 @@ func (s ControlServer) Handle(conn net.Conn) {
 		if !shouldDispatchNextTask(msg.MessageType) {
 			continue
 		}
-		if dispatchedTasks >= maxSyncTasksPerControlSession {
-			continue
-		}
-		dispatched, err := s.writeNextTask(conn, session, reqID)
+		s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
+		dispatched, err := s.writeSyncTasks(conn, session, reqID)
 		if err != nil {
 			closeReason = "同步任务下发失败: " + err.Error()
 			if s.Logger != nil {
@@ -237,8 +234,13 @@ func (s ControlServer) Handle(conn net.Conn) {
 			}
 			return
 		}
-		if dispatched {
-			dispatchedTasks++
+		if dispatched > 0 && s.Logger != nil {
+			s.Logger.Debug(context.Background(), "同步任务清单已补发",
+				slog.String("request_id", reqID),
+				slog.String("session_id", session.ID),
+				slog.String("node_id", session.NodeID),
+				slog.Int("dispatched_tasks", dispatched),
+				slog.Int("sync_task_slots_available", result.SyncTaskSlotsAvailable))
 		}
 	}
 }

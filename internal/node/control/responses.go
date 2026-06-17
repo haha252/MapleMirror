@@ -18,7 +18,8 @@ func (c Client) writeFrame(conn net.Conn, envelope protocol.Envelope) error {
 	return err
 }
 
-func (c Client) readExpectedResponse(conn net.Conn, reqID string, expected ...string) (protocol.Envelope, error) {
+func (c Client) readExpectedResponse(conn net.Conn, reqID string,
+	sequence *uint64, expected ...string) (protocol.Envelope, error) {
 	deadline := time.Now().Add(controlIOTimeout)
 	for {
 		_ = conn.SetReadDeadline(deadline)
@@ -31,9 +32,14 @@ func (c Client) readExpectedResponse(conn net.Conn, reqID string, expected ...st
 			return protocol.Envelope{}, parseRejectionError(msg)
 		}
 		if msg.MessageType == protocol.TypeSyncTask {
-			if err := c.handleSyncTask(msg, reqID); err != nil {
+			if sequence == nil {
+				return protocol.Envelope{}, errors.New("收到同步任务但当前控制序号不可用")
+			}
+			next, err := c.handleDispatchedTask(conn, reqID, *sequence, msg)
+			if err != nil {
 				return protocol.Envelope{}, err
 			}
+			*sequence = next
 			continue
 		}
 		for _, messageType := range expected {
@@ -43,19 +49,6 @@ func (c Client) readExpectedResponse(conn net.Conn, reqID string, expected ...st
 		}
 		return protocol.Envelope{}, errors.New("主节点返回了非预期的控制响应")
 	}
-}
-
-func (c Client) handleSyncTask(msg protocol.Envelope, reqID string) error {
-	task, err := c.decodeSyncTask(msg, reqID)
-	if err != nil {
-		return err
-	}
-	if c.Executor == nil {
-		c.logSyncExecutorDisabled(reqID, task.TaskID)
-		return c.storePendingTaskResult(disabledExecutorResult(task))
-	}
-	c.executeTaskAsync(task)
-	return nil
 }
 
 func (c Client) decodeSyncTask(msg protocol.Envelope, reqID string) (protocol.SyncTask, error) {

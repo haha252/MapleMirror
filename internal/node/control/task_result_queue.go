@@ -8,7 +8,7 @@ import (
 )
 
 func (c Client) sendNextPendingTaskResult(conn net.Conn, reqID string,
-	sequence uint64, taskBudget *int) (uint64, bool, error) {
+	sequence uint64) (uint64, bool, error) {
 	if c.DB == nil {
 		return sequence, false, nil
 	}
@@ -17,7 +17,8 @@ func (c Client) sendNextPendingTaskResult(conn net.Conn, reqID string,
 		return sequence, false, err
 	}
 	result := results[0]
-	if err := c.sendTaskResult(conn, reqID, sequence, result); err != nil {
+	next, err := c.sendTaskResult(conn, reqID, sequence, result)
+	if err != nil {
 		return sequence, false, err
 	}
 	if _, err = c.DB.Exec(`UPDATE pending_sync_task_results SET reported_at = ?
@@ -25,8 +26,7 @@ func (c Client) sendNextPendingTaskResult(conn net.Conn, reqID string,
 		result.TaskID); err != nil {
 		return sequence, false, err
 	}
-	sequence++
-	next, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 	return next, true, err
 }
 
@@ -53,7 +53,7 @@ func (c Client) loadPendingTaskResults(limit int) ([]protocol.SyncTaskResult, er
 }
 
 func (c Client) sendNextRunningTaskAck(conn net.Conn, reqID string,
-	sequence uint64, taskBudget *int) (uint64, bool, error) {
+	sequence uint64) (uint64, bool, error) {
 	if c.DB == nil {
 		return sequence, false, nil
 	}
@@ -61,11 +61,11 @@ func (c Client) sendNextRunningTaskAck(conn net.Conn, reqID string,
 	if err != nil || len(items) == 0 {
 		return sequence, false, err
 	}
-	if err := c.sendRunningTaskAck(conn, reqID, sequence, items[0]); err != nil {
+	next, err := c.sendRunningTaskAck(conn, reqID, sequence, items[0])
+	if err != nil {
 		return sequence, false, err
 	}
-	sequence++
-	next, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 	return next, true, err
 }
 

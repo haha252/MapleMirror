@@ -114,6 +114,40 @@ func TestRepairTaskResetsFailedDownloadTask(t *testing.T) {
 	}
 }
 
+func TestCompleteInventoryReportResetsLeasedMissingDownloadTask(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	lease := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, asset_id, state, request_id, created_at,
+		updated_at, lease_expires_at)
+		VALUES ('task-running', ?, 'asset_download', 'asset-1', 'running',
+		'req-1', 'old', 'old', ?)`, session.NodeID, lease)
+	if _, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 2, protocol.InventoryReport{
+		ReportID: "r-missing-running", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state, leaseAfter string
+	err = repo.DB.QueryRow(`SELECT state, COALESCE(lease_expires_at, '')
+		FROM node_tasks WHERE id = 'task-running'`).Scan(&state, &leaseAfter)
+	if err != nil || state != "pending" || leaseAfter != "" {
+		t.Fatalf("missing complete inventory should reset running task, state=%s lease=%q err=%v",
+			state, leaseAfter, err)
+	}
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || !ok || task.TaskID != "task-running" {
+		t.Fatalf("reset task should redispatch immediately, ok=%v task=%+v err=%v", ok, task, err)
+	}
+}
+
 func TestCompleteInventoryReportCancelsSatisfiedPendingTask(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

@@ -16,7 +16,7 @@ func (c Client) readOptionalTasks(conn net.Conn, reqID string, sequence uint64,
 	remaining int) (uint64, error) {
 	for remaining > 0 {
 		next, handled, err := c.readOptionalTaskWithTimeout(conn, reqID,
-			sequence, nil, 200*time.Millisecond)
+			sequence, 200*time.Millisecond)
 		if err != nil {
 			return sequence, nil
 		}
@@ -29,22 +29,18 @@ func (c Client) readOptionalTasks(conn net.Conn, reqID string, sequence uint64,
 	return sequence, nil
 }
 
-func (c Client) readOptionalTasksWithBudget(conn net.Conn, reqID string,
-	sequence uint64, budget *int) (uint64, error) {
-	if budget == nil {
-		return c.readOptionalTasks(conn, reqID, sequence, maxSyncTasksPerSession)
-	}
-	if *budget <= 0 {
+func (c Client) readOptionalTasksToCapacity(conn net.Conn, reqID string,
+	sequence uint64) (uint64, error) {
+	available := c.availableSyncTaskSlots()
+	if available <= 0 {
 		return sequence, nil
 	}
-	next, err := c.readOptionalTasks(conn, reqID, sequence, *budget)
-	*budget -= int(next - sequence)
-	return next, err
+	return c.readOptionalTasks(conn, reqID, sequence, available)
 }
 
 func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
-	sequence uint64, budget *int, timeout time.Duration) (uint64, bool, error) {
-	if budget != nil && *budget <= 0 {
+	sequence uint64, timeout time.Duration) (uint64, bool, error) {
+	if c.availableSyncTaskSlots() <= 0 {
 		return sequence, false, nil
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
@@ -66,10 +62,30 @@ func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
 	if err != nil {
 		return sequence, false, err
 	}
-	if budget != nil {
-		*budget = *budget - 1
-	}
 	return next, true, nil
+}
+
+func (c Client) availableSyncTaskSlots() int {
+	if c.Executor == nil {
+		return maxSyncTasksPerSession
+	}
+	if c.TaskLimiter == nil {
+		return maxSyncTasksPerSession
+	}
+	return c.TaskLimiter.Available()
+}
+
+func (c Client) reserveSyncTaskSlot() bool {
+	if c.Executor == nil || c.TaskLimiter == nil {
+		return true
+	}
+	return c.TaskLimiter.Reserve()
+}
+
+func (c Client) releaseSyncTaskSlot() {
+	if c.Executor != nil && c.TaskLimiter != nil {
+		c.TaskLimiter.Release()
+	}
 }
 
 func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint64,
@@ -80,20 +96,29 @@ func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint6
 	}
 	if c.Executor == nil {
 		c.logSyncExecutorDisabled(reqID, task.TaskID)
-		if err := c.sendTaskResult(conn, reqID, sequence, disabledExecutorResult(task)); err != nil {
+		next, err := c.sendTaskResult(conn, reqID, sequence, disabledExecutorResult(task))
+		if err != nil {
 			return sequence, err
 		}
-		return sequence + 1, nil
+		return next, nil
 	}
-	if err := c.sendTaskAck(conn, reqID, sequence, task); err != nil {
+	if !c.reserveSyncTaskSlot() {
+		return c.sendTaskResult(conn, reqID, sequence, protocol.SyncTaskResult{
+			TaskID: task.TaskID, AssetID: task.Asset.AssetID,
+			Result: "temporary_error", Message: "节点同步执行槽已满",
+		})
+	}
+	next, err := c.sendTaskAck(conn, reqID, sequence, task)
+	if err != nil {
+		c.releaseSyncTaskSlot()
 		return sequence, err
 	}
 	c.executeTaskAsync(task)
-	return sequence + 1, nil
+	return next, nil
 }
 
 func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,
-	task protocol.SyncTask) error {
+	task protocol.SyncTask) (uint64, error) {
 	body, _ := json.Marshal(protocol.SyncTaskAck{
 		TaskID: task.TaskID, State: "running",
 	})
@@ -109,14 +134,15 @@ func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,
 		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
-		return err
+		return sequence, err
 	}
-	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
-	return err
+	next := sequence + 1
+	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	return next, err
 }
 
 func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64,
-	result protocol.SyncTaskResult) error {
+	result protocol.SyncTaskResult) (uint64, error) {
 	body, _ := json.Marshal(result)
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "node sync task result sent",
@@ -131,8 +157,9 @@ func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64,
 		MessageType: protocol.TypeSyncTaskResult, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
-		return err
+		return sequence, err
 	}
-	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
-	return err
+	next := sequence + 1
+	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	return next, err
 }

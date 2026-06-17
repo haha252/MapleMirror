@@ -11,46 +11,57 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (HeartbeatResult, error) {
+type controlMessageResult struct {
+	HeartbeatResult
+	SyncTaskSlotsAvailable int
+}
+
+func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (controlMessageResult, error) {
 	switch msg.MessageType {
 	case protocol.TypeHeartbeat:
 		var hb protocol.Heartbeat
 		if err := json.Unmarshal(msg.Payload, &hb); err != nil {
-			return HeartbeatResult{}, err
+			return controlMessageResult{}, err
 		}
-		return s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
+		result, err := s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
+		return controlMessageResult{HeartbeatResult: result, SyncTaskSlotsAvailable: hb.SyncTaskSlotsAvailable}, err
 	case protocol.TypeInventoryReport:
 		var report protocol.InventoryReport
 		if err := json.Unmarshal(msg.Payload, &report); err != nil {
-			return HeartbeatResult{}, err
+			return controlMessageResult{}, err
 		}
-		return s.Repo.AcceptInventoryReport(context.Background(), session, msg.Sequence, report)
+		result, err := s.Repo.AcceptInventoryReport(context.Background(), session, msg.Sequence, report)
+		return controlMessageResult{HeartbeatResult: result}, err
 	case protocol.TypePressureReport:
 		var report protocol.PressureReport
 		if err := json.Unmarshal(msg.Payload, &report); err != nil {
-			return HeartbeatResult{}, err
+			return controlMessageResult{}, err
 		}
-		return s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
+		result, err := s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
+		return controlMessageResult{HeartbeatResult: result, SyncTaskSlotsAvailable: report.SyncTaskSlotsAvailable}, err
 	case protocol.TypeSyncTaskAck:
 		var ack protocol.SyncTaskAck
 		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
-			return HeartbeatResult{}, err
+			return controlMessageResult{}, err
 		}
-		return s.Repo.AcceptSyncTaskAck(context.Background(), session, msg.Sequence, ack)
+		result, err := s.Repo.AcceptSyncTaskAck(context.Background(), session, msg.Sequence, ack)
+		return controlMessageResult{HeartbeatResult: result}, err
 	case protocol.TypeSyncTaskResult:
 		var result protocol.SyncTaskResult
 		if err := json.Unmarshal(msg.Payload, &result); err != nil {
-			return HeartbeatResult{}, err
+			return controlMessageResult{}, err
 		}
-		return s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
+		hbResult, err := s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
+		return controlMessageResult{HeartbeatResult: hbResult}, err
 	case protocol.TypeTrafficEvent:
 		var event protocol.TrafficEvent
 		if err := json.Unmarshal(msg.Payload, &event); err != nil {
-			return HeartbeatResult{}, err
+			return controlMessageResult{}, err
 		}
-		return s.Repo.AcceptTrafficEvent(context.Background(), session, msg.Sequence, event)
+		result, err := s.Repo.AcceptTrafficEvent(context.Background(), session, msg.Sequence, event)
+		return controlMessageResult{HeartbeatResult: result}, err
 	default:
-		return HeartbeatResult{}, fmt.Errorf("不支持的控制消息类型: %s", msg.MessageType)
+		return controlMessageResult{}, fmt.Errorf("不支持的控制消息类型: %s", msg.MessageType)
 	}
 }
 
@@ -85,6 +96,25 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 		return false, err
 	}
 	return true, nil
+}
+
+func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID string) (int, error) {
+	limit := s.Repo.runtime().SyncTaskSlotsAvailable(session.NodeID)
+	if limit <= 0 {
+		limit = defaultSyncTaskDispatchWindow
+	}
+	if limit > maxSyncTaskDispatchWindow {
+		limit = maxSyncTaskDispatchWindow
+	}
+	dispatched := 0
+	for dispatched < limit {
+		ok, err := s.writeNextTask(conn, session, reqID)
+		if err != nil || !ok {
+			return dispatched, err
+		}
+		dispatched++
+	}
+	return dispatched, nil
 }
 
 func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {

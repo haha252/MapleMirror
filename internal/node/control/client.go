@@ -138,12 +138,13 @@ func (c Client) hello(conn net.Conn, reqID string) error {
 }
 
 func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
-	actualBandwidth int64) error {
+	actualBandwidth int64) (uint64, error) {
 	active := c.activeDownloads()
 	body, _ := json.Marshal(protocol.Heartbeat{
 		Status: "syncing", ActiveDownloads: active, FreeBytes: 0,
-		PublicDownloadBaseURL: c.PublicDownloadBaseURL,
-		MaxMirrorProjects:     c.MaxMirrorProjects,
+		PublicDownloadBaseURL:  c.PublicDownloadBaseURL,
+		MaxMirrorProjects:      c.MaxMirrorProjects,
+		SyncTaskSlotsAvailable: c.availableSyncTaskSlots(),
 		Pressure: protocol.PressureSample{
 			TargetBandwidthBPS: c.TargetBandwidthBPS,
 			ActualBandwidthBPS: actualBandwidth,
@@ -157,18 +158,19 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 		MessageType: protocol.TypeHeartbeat, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
-		return err
+		return sequence, err
 	}
-	msg, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
+	next := sequence + 1
+	msg, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
 	if err != nil {
-		return err
+		return sequence, err
 	}
 	if err := c.acceptPublicProbe(msg); err != nil {
-		return err
+		return sequence, err
 	}
 	c.logDebug("node heartbeat ack received", slog.String("node_id", c.NodeID),
 		slog.String("request_id", reqID), slog.String("message_type", msg.MessageType))
-	return nil
+	return next, nil
 }
 
 func (c Client) acceptPublicProbe(msg protocol.Envelope) error {

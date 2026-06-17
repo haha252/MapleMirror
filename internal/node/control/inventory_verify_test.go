@@ -129,7 +129,7 @@ func sendInventoryReportForTest(t *testing.T, db *sql.DB, storage string) protoc
 		done <- report
 	}()
 	ctl := &Client{NodeID: "node-1", DB: db, Storage: storage}
-	if _, err := ctl.sendFullInventoryReport(client, "req-1", 3, nil); err != nil {
+	if _, err := ctl.sendFullInventoryReport(client, "req-1", 3); err != nil {
 		t.Fatal(err)
 	}
 	return <-done

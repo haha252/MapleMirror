@@ -117,7 +117,7 @@ func TestStorePendingTaskResultStopsRunningAck(t *testing.T) {
 	if err != nil || running != 0 {
 		t.Fatalf("失败任务不应再被 running ACK 查询到 running=%d err=%v", running, err)
 	}
-	next, err := client.sendRunningTaskAcks(nil, "req-1", 7, nil)
+	next, err := client.sendRunningTaskAcks(nil, "req-1", 7)
 	if err != nil {
 		t.Fatal(err)
 	}

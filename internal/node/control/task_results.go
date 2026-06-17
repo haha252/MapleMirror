@@ -11,8 +11,7 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uint64,
-	taskBudget *int) (uint64, error) {
+func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
 	if c.DB == nil {
 		return sequence, nil
 	}
@@ -21,7 +20,8 @@ func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uin
 		return sequence, err
 	}
 	for _, result := range results {
-		if err := c.sendTaskResult(conn, reqID, sequence, result); err != nil {
+		next, err := c.sendTaskResult(conn, reqID, sequence, result)
+		if err != nil {
 			return sequence, err
 		}
 		_, err = c.DB.Exec(`UPDATE pending_sync_task_results SET reported_at = ?
@@ -29,9 +29,7 @@ func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uin
 		if err != nil {
 			return sequence, err
 		}
-		sequence++
-		var next uint64
-		next, err = c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+		next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 		if err != nil {
 			return sequence, err
 		}
@@ -40,8 +38,7 @@ func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uin
 	return sequence, nil
 }
 
-func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64,
-	taskBudget *int) (uint64, error) {
+func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
 	if c.DB == nil {
 		return sequence, nil
 	}
@@ -50,11 +47,11 @@ func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64
 		return sequence, err
 	}
 	for _, ack := range items {
-		if err := c.sendRunningTaskAck(conn, reqID, sequence, ack); err != nil {
+		next, err := c.sendRunningTaskAck(conn, reqID, sequence, ack)
+		if err != nil {
 			return sequence, err
 		}
-		sequence++
-		next, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, taskBudget)
+		next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 		if err != nil {
 			return sequence, err
 		}
@@ -63,7 +60,7 @@ func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64
 	return sequence, nil
 }
 
-func (c Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64, ack protocol.SyncTaskAck) error {
+func (c Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64, ack protocol.SyncTaskAck) (uint64, error) {
 	body, _ := json.Marshal(ack)
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点续报运行中的同步任务",
@@ -76,10 +73,11 @@ func (c Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64,
 		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
-		return err
+		return sequence, err
 	}
-	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
-	return err
+	next := sequence + 1
+	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	return next, err
 }
 
 func scanPendingTaskResult(rows *sql.Rows) (protocol.SyncTaskResult, error) {
@@ -91,6 +89,7 @@ func scanPendingTaskResult(rows *sql.Rows) (protocol.SyncTaskResult, error) {
 
 func (c Client) executeTaskAsync(task protocol.SyncTask) {
 	go func() {
+		defer c.releaseSyncTaskSlot()
 		ctx, cancel := context.WithTimeout(context.Background(), c.syncTaskTimeout())
 		defer cancel()
 		var result protocol.SyncTaskResult

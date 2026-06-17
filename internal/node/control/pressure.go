@@ -11,18 +11,19 @@ import (
 )
 
 func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
-	actualBandwidth int64) error {
+	actualBandwidth int64) (uint64, error) {
 	active := c.activeDownloads()
 	body, _ := json.Marshal(protocol.PressureReport{
-		ReportID:            reqID + "-pressure",
-		SampledAt:           time.Now().UTC(),
-		SampleWindowSeconds: int64(c.heartbeatWindowSeconds()),
-		TargetBandwidthBPS:  c.TargetBandwidthBPS,
-		ActualBandwidthBPS:  actualBandwidth,
-		PressureRatio:       pressureRatio(actualBandwidth, c.TargetBandwidthBPS),
-		ActiveDownloads:     active,
-		FreeBytes:           0,
-		MaxMirrorProjects:   c.MaxMirrorProjects,
+		ReportID:               reqID + "-pressure",
+		SampledAt:              time.Now().UTC(),
+		SampleWindowSeconds:    int64(c.heartbeatWindowSeconds()),
+		TargetBandwidthBPS:     c.TargetBandwidthBPS,
+		ActualBandwidthBPS:     actualBandwidth,
+		PressureRatio:          pressureRatio(actualBandwidth, c.TargetBandwidthBPS),
+		ActiveDownloads:        active,
+		FreeBytes:              0,
+		MaxMirrorProjects:      c.MaxMirrorProjects,
+		SyncTaskSlotsAvailable: c.availableSyncTaskSlots(),
 	})
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点发送压力报告",
@@ -38,18 +39,19 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 		MessageType: protocol.TypePressureReport, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
-		return err
+		return sequence, err
 	}
-	_, err := c.readExpectedResponse(conn, reqID, protocol.TypeHeartbeatAck)
+	next := sequence + 1
+	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
 	if err != nil {
-		return err
+		return sequence, err
 	}
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点压力报告 ack received",
 			slog.String("node_id", c.NodeID),
 			slog.String("request_id", reqID))
 	}
-	return nil
+	return next, nil
 }
 
 func (c Client) activeDownloads() int64 {

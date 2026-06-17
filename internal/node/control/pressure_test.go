@@ -67,11 +67,19 @@ func TestHeartbeatAndPressureReportUseTargetBandwidth(t *testing.T) {
 		sendAck(server, report)
 	}()
 	clientCtl := Client{NodeID: "node-1", TargetBandwidthBPS: 12500, MaxMirrorProjects: 3}
-	if err := clientCtl.heartbeat(client, "req-1", 2, 600); err != nil {
+	next, err := clientCtl.heartbeat(client, "req-1", 2, 600)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := clientCtl.sendPressureReport(client, "req-1", 3, 600); err != nil {
+	if next != 3 {
+		t.Fatalf("heartbeat next sequence=%d, want 3", next)
+	}
+	next, err = clientCtl.sendPressureReport(client, "req-1", next, 600)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if next != 4 {
+		t.Fatalf("pressure next sequence=%d, want 4", next)
 	}
 	<-done
 }

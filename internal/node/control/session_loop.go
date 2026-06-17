@@ -9,7 +9,6 @@ const controlIdleRead = 200 * time.Millisecond
 
 type sessionLoopState struct {
 	sequence         uint64
-	taskBudget       int
 	nextHeartbeat    time.Time
 	pendingInventory *pendingInventoryReport
 }
@@ -22,7 +21,6 @@ func (c Client) sendSessionReports(conn net.Conn, reqID string,
 	c.HeartbeatInterval = interval
 	state := sessionLoopState{
 		sequence:      2,
-		taskBudget:    maxSyncTasksPerSession,
 		nextHeartbeat: time.Now(),
 	}
 	for {
@@ -47,7 +45,7 @@ func (c Client) sendSessionReports(conn net.Conn, reqID string,
 			continue
 		}
 		next, handled, err := c.readOptionalTaskWithTimeout(conn, reqID,
-			state.sequence, &state.taskBudget, wait)
+			state.sequence, wait)
 		state.sequence = next
 		if err != nil {
 			return err
@@ -61,17 +59,17 @@ func (c Client) sendSessionReports(conn net.Conn, reqID string,
 func (c Client) sendHeartbeatWindow(conn net.Conn, reqID string,
 	state *sessionLoopState, interval time.Duration) error {
 	actualBandwidth := c.sampleBandwidth()
-	if err := c.heartbeat(conn, reqID, state.sequence, actualBandwidth); err != nil {
+	next, err := c.heartbeat(conn, reqID, state.sequence, actualBandwidth)
+	if err != nil {
 		return err
 	}
-	state.sequence++
-	if err := c.sendPressureReport(conn, reqID, state.sequence, actualBandwidth); err != nil {
+	state.sequence = next
+	next, err = c.sendPressureReport(conn, reqID, state.sequence, actualBandwidth)
+	if err != nil {
 		return err
 	}
-	state.sequence++
-	state.taskBudget = maxSyncTasksPerSession
-	next, err := c.readOptionalTasksWithBudget(conn, reqID, state.sequence,
-		&state.taskBudget)
+	state.sequence = next
+	next, err = c.readOptionalTasksToCapacity(conn, reqID, state.sequence)
 	if err != nil {
 		return err
 	}
@@ -87,20 +85,18 @@ func (c Client) sendNextControlWork(conn net.Conn, reqID string,
 		state.sequence = next
 		return sent, err
 	}
-	next, sent, err = c.sendNextPendingTaskResult(conn, reqID, state.sequence,
-		&state.taskBudget)
+	next, sent, err = c.sendNextPendingTaskResult(conn, reqID, state.sequence)
 	if err != nil || sent {
 		state.sequence = next
 		return sent, err
 	}
-	next, sent, err = c.sendNextRunningTaskAck(conn, reqID, state.sequence,
-		&state.taskBudget)
+	next, sent, err = c.sendNextRunningTaskAck(conn, reqID, state.sequence)
 	if err != nil || sent {
 		state.sequence = next
 		return sent, err
 	}
 	next, sent, err = c.sendNextInventoryReportChunk(conn, reqID, state.sequence,
-		&state.taskBudget, &state.pendingInventory)
+		&state.pendingInventory)
 	state.sequence = next
 	return sent, err
 }

@@ -22,9 +22,10 @@ type runtimeSession struct {
 }
 
 type runtimeNode struct {
-	Heartbeat runtimeHeartbeat
-	Inventory runtimeInventoryReport
-	Pressure  runtimePressureReport
+	Heartbeat              runtimeHeartbeat
+	Inventory              runtimeInventoryReport
+	Pressure               runtimePressureReport
+	SyncTaskSlotsAvailable int
 }
 
 type runtimeHeartbeat struct {
@@ -168,6 +169,29 @@ func (s *RuntimeStore) MarkHeartbeat(nodeID string, hb runtimeHeartbeat) {
 	node := s.latest[nodeID]
 	node.Heartbeat = hb
 	s.latest[nodeID] = node
+}
+
+func (s *RuntimeStore) SetSyncTaskSlotsAvailable(nodeID string, slots int) {
+	if s == nil {
+		return
+	}
+	if slots < 0 {
+		slots = 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	node := s.latest[nodeID]
+	node.SyncTaskSlotsAvailable = slots
+	s.latest[nodeID] = node
+}
+
+func (s *RuntimeStore) SyncTaskSlotsAvailable(nodeID string) int {
+	if s == nil {
+		return 0
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.latest[nodeID].SyncTaskSlotsAvailable
 }
 
 func (s *RuntimeStore) MarkInventory(nodeID string, report runtimeInventoryReport) {
