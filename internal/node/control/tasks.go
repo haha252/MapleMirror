@@ -67,7 +67,7 @@ func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
 
 func (c Client) availableSyncTaskSlots() int {
 	if c.Executor == nil {
-		return maxSyncTasksPerSession
+		return 0
 	}
 	if c.TaskLimiter == nil {
 		return maxSyncTasksPerSession

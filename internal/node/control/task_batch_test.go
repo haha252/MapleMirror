@@ -122,7 +122,11 @@ func TestReadOptionalTasksReturnsProtocolError(t *testing.T) {
 			Payload:         body,
 		})
 	}()
-	ctl := Client{NodeID: "node-1"}
+	ctl := Client{
+		NodeID:      "node-1",
+		Executor:    recordingExecutor{tasks: make(chan string, 1)},
+		TaskLimiter: NewTaskLimiter(1),
+	}
 	if _, err := ctl.readOptionalTasks(client, "req-1", 3, 1); err == nil {
 		t.Fatal("expected optional task protocol error to propagate")
 	}
