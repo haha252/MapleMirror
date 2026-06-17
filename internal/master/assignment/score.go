@@ -44,7 +44,7 @@ func projectScoreSQL(onlyMirrorable bool) string {
 		where += ` AND EXISTS (
 			SELECT 1 FROM releases r JOIN assets a ON a.release_id = r.id
 			WHERE r.project_id = p.id AND r.selected = 1
-			AND a.service_state IN ('candidate', 'pending'))`
+			AND a.service_state IN ('candidate', 'pending', 'active'))`
 	}
 	return `SELECT p.id, p.name, COALESCE(SUM(dps.authorization_count), 0),
 		COALESCE(npa.assigned, 0), COALESCE(npa.pinned, 0),

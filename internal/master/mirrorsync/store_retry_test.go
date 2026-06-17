@@ -53,6 +53,18 @@ func TestRetryTaskRejectsAssetlessTask(t *testing.T) {
 	assertRetryTaskState(t, db, "task-1", "retry_wait")
 }
 
+func TestRetryTaskAcceptsLegacyActiveAsset(t *testing.T) {
+	db, store := retryStore(t)
+	seedRetryTask(t, db, "task-1", "retry_wait", "asset-1")
+	mustExecRetry(t, db, `UPDATE assets SET service_state = 'active'
+		WHERE id = 'asset-1'`)
+
+	if err := store.RetryTask(context.Background(), "node-1", "task-1"); err != nil {
+		t.Fatal(err)
+	}
+	assertRetryReset(t, db, "task-1")
+}
+
 func TestRetryTaskRejectsInactiveTargets(t *testing.T) {
 	cases := []struct {
 		name   string

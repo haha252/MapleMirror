@@ -28,6 +28,28 @@ func TestNextSyncTaskSkipsInvalidAssetDownloadTask(t *testing.T) {
 	}
 }
 
+func TestNextSyncTaskDispatchesLegacyActiveAssetDownloadTask(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	mustExecControl(t, repo.DB, `UPDATE assets SET service_state = 'active'
+		WHERE id = 'asset-1'`)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, asset_id, state, request_id, created_at, updated_at)
+		VALUES ('task-active', ?, 'asset_download', 'asset-1', 'pending', 'req', 'now', 'now')`,
+		session.NodeID)
+
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || task.TaskID != "task-active" {
+		t.Fatalf("legacy active asset download should dispatch, ok=%v task=%+v", ok, task)
+	}
+}
+
 func TestNextSyncTaskSkipsInvalidAssetDeleteTask(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

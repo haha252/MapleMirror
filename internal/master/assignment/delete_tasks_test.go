@@ -39,6 +39,19 @@ func TestReconcileGeneratesDeleteTaskForRemovedTarget(t *testing.T) {
 	assertTaskCount(t, db, "asset_download", "obsolete", 1)
 }
 
+func TestReconcileKeepsLegacyActiveAssetRequired(t *testing.T) {
+	db := testDB(t)
+	seedAssignmentNode(t, db, 1)
+	seedProject(t, db, "p1", "项目一", 10)
+	mustExec(t, db, `UPDATE assets SET service_state = 'active'
+		WHERE id = 'asset-p1'`)
+	reconcile(t, db)
+	generateNodeTasks(t, db, "node-1", "now")
+
+	assertRequiredTargets(t, db, 1)
+	assertTaskCount(t, db, "asset_download", "pending", 1)
+}
+
 func TestReconcileCancelsDeleteTaskWhenTargetRequiredAgain(t *testing.T) {
 	db := testDB(t)
 	seedAssignmentNode(t, db, 1)

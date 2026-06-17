@@ -9,7 +9,7 @@ func eligibleSyncTaskSQL(taskTable string) string {
 		JOIN projects cp ON cp.id = cr.project_id
 		WHERE ti.node_id = ` + taskTable + `.node_id AND ti.asset_id = ` + taskTable + `.asset_id
 		AND ti.desired_state = 'required'
-		AND ca.service_state IN ('candidate', 'pending')
+		AND ca.service_state IN ('candidate', 'pending', 'active')
 		AND cr.selected = 1 AND cp.enabled = 1
 	))
 	OR (` + taskTable + `.task_type = 'asset_delete' AND EXISTS (

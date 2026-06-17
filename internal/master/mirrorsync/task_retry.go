@@ -15,7 +15,7 @@ func (s Store) RetryTask(ctx context.Context, nodeID, taskID string) error {
 		AND EXISTS (
 			SELECT 1 FROM target_inventory ti
 			JOIN assets a ON a.id = node_tasks.asset_id
-				AND a.service_state IN ('candidate', 'pending')
+				AND a.service_state IN ('candidate', 'pending', 'active')
 			JOIN releases r ON r.id = a.release_id AND r.selected = 1
 			JOIN projects p ON p.id = r.project_id AND p.enabled = 1
 			WHERE ti.node_id = node_tasks.node_id

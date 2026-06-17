@@ -13,7 +13,7 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 		JOIN releases r ON r.project_id = npa.project_id AND r.selected = 1
 		JOIN assets a ON a.release_id = r.id
 		WHERE npa.node_id = ? AND npa.assigned = 1
-		AND a.service_state IN ('candidate', 'pending')
+		AND a.service_state IN ('candidate', 'pending', 'active')
 		ON CONFLICT(node_id, asset_id) DO UPDATE SET
 		desired_state = 'required', updated_at = excluded.updated_at`,
 		nodeID, now, nodeID)
@@ -29,7 +29,7 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 		LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
 			AND npa.project_id = p.id AND npa.assigned = 1
 		WHERE ti.node_id = ? AND (p.enabled = 0 OR r.selected = 0
-			OR a.service_state NOT IN ('candidate', 'pending') OR npa.project_id IS NULL))`,
+			OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
 		now, nodeID, nodeID)
 	return err
 }
@@ -42,7 +42,7 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 		JOIN releases r ON r.project_id = npa.project_id AND r.selected = 1
 		JOIN assets a ON a.release_id = r.id
 		WHERE npa.project_id = ? AND npa.assigned = 1
-		AND a.service_state IN ('candidate', 'pending')
+		AND a.service_state IN ('candidate', 'pending', 'active')
 		ON CONFLICT(node_id, asset_id) DO UPDATE SET
 		desired_state = 'required', updated_at = excluded.updated_at`,
 		now, projectID)
@@ -55,7 +55,7 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 		LEFT JOIN node_project_assignments npa ON npa.node_id = target_inventory.node_id
 			AND npa.project_id = r.project_id AND npa.assigned = 1
 		WHERE r.project_id = ? AND (r.selected = 0
-			OR a.service_state NOT IN ('candidate', 'pending') OR npa.project_id IS NULL))`,
+			OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
 		now, projectID)
 	return err
 }
@@ -89,7 +89,7 @@ func obsoleteTaskSQL(extra string) string {
 			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
 				AND ti.asset_id = a.id
 			WHERE ` + extra + `
-			AND (a.service_state NOT IN ('candidate', 'pending')
+			AND (a.service_state NOT IN ('candidate', 'pending', 'active')
 				OR ti.asset_id IS NULL OR ti.desired_state != 'required'))`
 }
 

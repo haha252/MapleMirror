@@ -114,7 +114,7 @@ func syncTaskCurrent(ctx context.Context, tx *sql.Tx, nodeID, taskID, taskType, 
 		JOIN target_inventory ti ON ti.node_id = t.node_id
 			AND ti.asset_id = t.asset_id AND ti.desired_state = 'required'
 		JOIN assets a ON a.id = t.asset_id
-			AND a.service_state IN ('candidate', 'pending')
+			AND a.service_state IN ('candidate', 'pending', 'active')
 		JOIN releases r ON r.id = a.release_id AND r.selected = 1
 		JOIN projects p ON p.id = r.project_id AND p.enabled = 1
 		WHERE t.id = ? AND t.node_id = ? AND t.asset_id = ?
@@ -138,7 +138,7 @@ func (r Repository) hasVerifiedPeer(ctx context.Context, tx *sql.Tx, nodeID, ass
 		AND n.last_heartbeat_at IS NOT NULL AND n.last_heartbeat_at != ''
 		AND n.public_download_base_url != '' AND ni.state = 'verified'
 		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
-		AND a.service_state IN ('candidate', 'pending') AND r.selected = 1 AND p.enabled = 1
+		AND a.service_state IN ('candidate', 'pending', 'active') AND r.selected = 1 AND p.enabled = 1
 		AND `+r.syncPeerPublicProbeSQL()+`
 	)`, r.syncPeerArgs(assetID, nodeID)...).Scan(&exists)
 	return err == nil && exists == 1
