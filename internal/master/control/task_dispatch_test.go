@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"mirror-server/internal/protocol"
 )
@@ -50,10 +51,11 @@ func TestWriteSyncTasksDoesNotConsumeReportedCapacity(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
+	lease := time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)
 	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
-		(id, node_id, task_type, state, request_id, created_at, updated_at)
-		VALUES ('task-sent', ?, 'inventory_reconcile', 'sent', 'req', 'now', 'now')`,
-		session.NodeID)
+		(id, node_id, task_type, state, request_id, created_at, updated_at, lease_expires_at)
+		VALUES ('task-sent', ?, 'inventory_reconcile', 'sent', 'req', 'now', 'now', ?)`,
+		session.NodeID, lease)
 	for i := 1; i <= 3; i++ {
 		taskID := fmt.Sprintf("task-%d", i)
 		mustExecControl(t, repo.DB, `INSERT INTO node_tasks
@@ -85,6 +87,34 @@ func TestWriteSyncTasksDoesNotConsumeReportedCapacity(t *testing.T) {
 		t.Fatalf("reported capacity should not be consumed, got=%d known=%v", got, known)
 	}
 	<-done
+}
+
+func TestOutstandingSentSyncTasksIgnoresExpiredLeases(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	expired := time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
+	active := time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, state, request_id, created_at, updated_at, lease_expires_at)
+		VALUES ('task-expired', ?, 'inventory_reconcile', 'sent', 'req', 'now', 'now', ?)`,
+		session.NodeID, expired)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, state, request_id, created_at, updated_at, lease_expires_at)
+		VALUES ('task-active', ?, 'inventory_reconcile', 'sent', 'req', 'now', 'now', ?)`,
+		session.NodeID, active)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, state, request_id, created_at, updated_at)
+		VALUES ('task-no-lease', ?, 'inventory_reconcile', 'sent', 'req', 'now', 'now')`,
+		session.NodeID)
+
+	outstanding, err := repo.outstandingSentSyncTasks(context.Background(), session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outstanding != 1 {
+		t.Fatalf("only unexpired sent lease should count, got %d", outstanding)
+	}
 }
 
 func TestAcceptSyncTaskAckMarksTaskRunning(t *testing.T) {

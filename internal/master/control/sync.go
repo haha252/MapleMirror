@@ -47,8 +47,11 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 		AND (
 			t.state = 'pending'
 			OR (t.state = 'retry_wait' AND (t.retry_after IS NULL OR t.retry_after = '' OR t.retry_after <= ?))
+			OR (t.state IN ('sent', 'running') AND (
+				t.lease_expires_at IS NULL OR t.lease_expires_at = '' OR t.lease_expires_at <= ?
+			))
 		)`+eligibleSyncTaskSQL("t")+`
-	ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1`, nodeID, now).
+	ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1`, nodeID, now, now).
 		Scan(&task.TaskID, &task.TaskType, &assetID,
 			&projectID, &version, &fileName, &size,
 			&downloadURL, &digest,
@@ -68,7 +71,10 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 		lease_expires_at = ?, updated_at = ? WHERE id = ? AND node_id = ? AND (
 		state = 'pending'
 			OR (state = 'retry_wait' AND (retry_after IS NULL OR retry_after = '' OR retry_after <= ?))
-		)`+eligibleSyncTaskSQL("node_tasks")+``, leaseExpires, now, task.TaskID, nodeID, now)
+			OR (state IN ('sent', 'running') AND (
+				lease_expires_at IS NULL OR lease_expires_at = '' OR lease_expires_at <= ?
+			))
+		)`+eligibleSyncTaskSQL("node_tasks")+``, leaseExpires, now, task.TaskID, nodeID, now, now)
 	if err != nil {
 		return protocol.SyncTask{}, false, err
 	}

@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestNextSyncTaskSkipsInvalidAssetDownloadTask(t *testing.T) {
@@ -91,6 +92,59 @@ func TestNextSyncTaskDispatchesCurrentAssetDeleteTask(t *testing.T) {
 	}
 	if !ok || task.TaskID != "task-delete-current" || task.TaskType != "asset_delete" {
 		t.Fatalf("current asset_delete should dispatch, ok=%v task=%+v", ok, task)
+	}
+}
+
+func TestNextSyncTaskReclaimsExpiredSentTaskWithoutReconnect(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	expired := time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, asset_id, state, request_id, created_at,
+		updated_at, lease_expires_at)
+		VALUES ('task-expired-sent', ?, 'asset_download', 'asset-1', 'sent',
+		'req', 'now', 'now', ?)`, session.NodeID, expired)
+
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || task.TaskID != "task-expired-sent" {
+		t.Fatalf("expired sent task should redispatch, ok=%v task=%+v", ok, task)
+	}
+	var state, lease string
+	err = repo.DB.QueryRow(`SELECT state, COALESCE(lease_expires_at, '')
+		FROM node_tasks WHERE id = 'task-expired-sent'`).Scan(&state, &lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != "sent" || lease == "" || lease <= expired {
+		t.Fatalf("redispatched task lease not renewed state=%s lease=%q", state, lease)
+	}
+}
+
+func TestNextSyncTaskReclaimsExpiredRunningTaskWithoutReconnect(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	expired := time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, asset_id, state, request_id, created_at,
+		updated_at, lease_expires_at)
+		VALUES ('task-expired-running', ?, 'asset_download', 'asset-1', 'running',
+		'req', 'now', 'now', ?)`, session.NodeID, expired)
+
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || task.TaskID != "task-expired-running" {
+		t.Fatalf("expired running task should redispatch, ok=%v task=%+v", ok, task)
 	}
 }
 
