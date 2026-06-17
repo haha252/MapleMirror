@@ -22,6 +22,8 @@ type Executor struct {
 	Logger                 *logging.Logger
 	Probe                  *SourceProbe
 	BandwidthLimitBPS      int64
+	PeerFallbackWorkers    int
+	PeerFallbackMinSize    int64
 	AllowPrivateSourceURLs bool
 }
 

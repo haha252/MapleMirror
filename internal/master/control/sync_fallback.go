@@ -12,6 +12,8 @@ import (
 
 const maxSyncFallbackSources = 3
 const maxReplicationTokenTTL = 2 * time.Minute
+const defaultPeerFallbackWorkers = 8
+const defaultPeerFallbackMinSizeBytes = 32 * 1024 * 1024
 
 func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string, task protocol.SyncTask) []protocol.SyncFallbackSource {
 	rows, err := r.DB.QueryContext(ctx, `SELECT n.id, n.public_name, n.public_download_base_url
@@ -39,10 +41,8 @@ func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string
 		if err := rows.Scan(&nodeID, &nodeName, &baseURL); err != nil {
 			return out
 		}
-		token, err := r.ReplicationSigner.SignReplication(downloadtoken.ReplicationClaims{
-			AssetID: task.Asset.AssetID, SourceNodeID: nodeID, TargetNodeID: targetNodeID,
-			ExpiresAt: expires, RequestID: task.TaskID, TaskID: task.TaskID,
-		})
+		source := protocol.SyncFallbackSource{NodeID: nodeID, NodeName: nodeName}
+		token, err := r.replicationToken(task, nodeID, targetNodeID, expires, 0, 0)
 		if err != nil {
 			continue
 		}
@@ -50,13 +50,48 @@ func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string
 		if err != nil {
 			continue
 		}
-		out = append(out, protocol.SyncFallbackSource{
-			NodeID: nodeID, NodeName: nodeName,
-			DownloadURL: downloadURL,
-			Token:       token,
-		})
+		source.DownloadURL = downloadURL
+		source.Token = token
+		source.Parts = r.replicationParts(task, nodeID, targetNodeID, expires)
+		out = append(out, source)
 	}
 	return out
+}
+
+func (r Repository) replicationToken(task protocol.SyncTask, sourceNodeID, targetNodeID, expires string,
+	start, end int64) (string, error) {
+	return r.ReplicationSigner.SignReplication(downloadtoken.ReplicationClaims{
+		AssetID: task.Asset.AssetID, SourceNodeID: sourceNodeID, TargetNodeID: targetNodeID,
+		ExpiresAt: expires, RequestID: task.TaskID, TaskID: task.TaskID,
+		RangeStart: start, RangeEnd: end,
+	})
+}
+
+func (r Repository) replicationParts(task protocol.SyncTask, sourceNodeID, targetNodeID, expires string) []protocol.SyncFallbackPart {
+	size := task.Asset.SizeBytes
+	if size < defaultPeerFallbackMinSizeBytes || size <= 0 {
+		return nil
+	}
+	workers := defaultPeerFallbackWorkers
+	if int64(workers) > size {
+		workers = int(size)
+	}
+	partSize := (size + int64(workers) - 1) / int64(workers)
+	parts := make([]protocol.SyncFallbackPart, 0, workers)
+	for start := int64(0); start < size; start += partSize {
+		end := start + partSize - 1
+		if end >= size {
+			end = size - 1
+		}
+		token, err := r.replicationToken(task, sourceNodeID, targetNodeID, expires, start, end)
+		if err != nil {
+			return nil
+		}
+		parts = append(parts, protocol.SyncFallbackPart{
+			RangeStart: start, RangeEnd: end, Token: token,
+		})
+	}
+	return parts
 }
 
 func (r Repository) replicationTokenTTL() time.Duration {

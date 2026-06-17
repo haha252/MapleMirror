@@ -25,7 +25,7 @@ func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmp
 			lastErr = err
 			continue
 		}
-		digest, size, err := e.fetchWithToken(ctx, source.DownloadURL, tmpPath, source.Token, task.Asset.SizeBytes)
+		digest, size, err := e.fetchPeerSource(ctx, task, source, tmpPath)
 		releasePeerFallback()
 		if err != nil {
 			lastErr = err
@@ -39,4 +39,19 @@ func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmp
 		lastErr = os.ErrNotExist
 	}
 	return lastDigest, lastSize, lastErr
+}
+
+func (e Executor) fetchPeerSource(ctx context.Context, task protocol.SyncTask,
+	source protocol.SyncFallbackSource, tmpPath string) (string, int64, error) {
+	if len(source.Parts) == 0 || task.Asset.SizeBytes < e.effectivePeerFallbackMinSize() {
+		return e.fetchWithToken(ctx, source.DownloadURL, tmpPath, source.Token, task.Asset.SizeBytes)
+	}
+	return e.fetchPeerParts(ctx, task, source, tmpPath)
+}
+
+func (e Executor) effectivePeerFallbackMinSize() int64 {
+	if e.PeerFallbackMinSize > 0 {
+		return e.PeerFallbackMinSize
+	}
+	return 32 * 1024 * 1024
 }

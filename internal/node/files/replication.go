@@ -2,10 +2,12 @@ package files
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -23,6 +25,10 @@ func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
 	claims, err := h.Signer.VerifyReplication(token)
 	if err != nil || claims.SourceNodeID != h.NodeID || claims.AssetID != assetID || claims.TargetNodeID == "" {
 		httpError(w, r, http.StatusUnauthorized, "复制令牌无效")
+		return
+	}
+	if err := validateReplicationRange(r, claims.RangeStart, claims.RangeEnd); err != nil {
+		httpError(w, r, http.StatusUnauthorized, "复制范围无效")
 		return
 	}
 	if !h.claimReplicationToken(token) {
@@ -52,6 +58,42 @@ func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Replication-Task-ID", claims.TaskID)
 	http.ServeContent(w, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
+}
+
+func validateReplicationRange(r *http.Request, start, end int64) error {
+	if start == 0 && end == 0 {
+		return nil
+	}
+	gotStart, gotEnd, err := parseSingleRange(r.Header.Get("Range"))
+	if err != nil {
+		return err
+	}
+	if gotStart != start || gotEnd != end {
+		return fmt.Errorf("复制范围与令牌不一致")
+	}
+	return nil
+}
+
+func parseSingleRange(value string) (int64, int64, error) {
+	if !strings.HasPrefix(value, "bytes=") || strings.Contains(value, ",") {
+		return 0, 0, errors.New("复制范围格式不合法")
+	}
+	parts := strings.Split(strings.TrimPrefix(value, "bytes="), "-")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return 0, 0, errors.New("复制范围格式不合法")
+	}
+	start, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+	end, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+	if start < 0 || end < start {
+		return 0, 0, errors.New("复制范围格式不合法")
+	}
+	return start, end, nil
 }
 
 func replicationBearer(r *http.Request) string {

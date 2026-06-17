@@ -198,3 +198,38 @@ func parseGiB(field, value string) (int64, error) {
 	}
 	return count * 1024 * 1024 * 1024, nil
 }
+
+func ParseBytes(field, value string, allowZero bool) (int64, error) {
+	value = strings.TrimSpace(value)
+	if allowZero && value == "0" {
+		return 0, nil
+	}
+	parts := strings.Fields(value)
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("配置字段 %s 必须使用 B、KiB、MiB 或 GiB 格式", field)
+	}
+	count, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || count <= 0 {
+		return 0, fmt.Errorf("配置字段 %s 必须为正容量", field)
+	}
+	factor, ok := byteUnitFactor(parts[1])
+	if !ok || count > (1<<63-1)/factor {
+		return 0, fmt.Errorf("配置字段 %s 必须使用 B、KiB、MiB 或 GiB 格式", field)
+	}
+	return count * factor, nil
+}
+
+func byteUnitFactor(unit string) (int64, bool) {
+	switch unit {
+	case "B":
+		return 1, true
+	case "KiB":
+		return 1024, true
+	case "MiB":
+		return 1024 * 1024, true
+	case "GiB":
+		return 1024 * 1024 * 1024, true
+	default:
+		return 0, false
+	}
+}

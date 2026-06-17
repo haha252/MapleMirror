@@ -123,10 +123,17 @@ type SyncAsset struct {
 }
 
 type SyncFallbackSource struct {
-	NodeID      string `json:"node_id"`
-	NodeName    string `json:"node_name,omitempty"`
-	DownloadURL string `json:"download_url"`
-	Token       string `json:"token"`
+	NodeID      string             `json:"node_id"`
+	NodeName    string             `json:"node_name,omitempty"`
+	DownloadURL string             `json:"download_url"`
+	Token       string             `json:"token"`
+	Parts       []SyncFallbackPart `json:"parts,omitempty"`
+}
+
+type SyncFallbackPart struct {
+	RangeStart int64  `json:"range_start"`
+	RangeEnd   int64  `json:"range_end"`
+	Token      string `json:"token"`
 }
 
 type SyncTask struct {

@@ -44,6 +44,47 @@ func TestNextSyncTaskAddsVerifiedPeerFallbackSource(t *testing.T) {
 	}
 }
 
+func TestNextSyncTaskAddsShardedPeerFallbackTokensForLargeAsset(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	repo = withReplicationSigner(t, repo)
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	size := int64(defaultPeerFallbackMinSizeBytes + 8)
+	mustExecControl(t, repo.DB, `UPDATE assets SET size_bytes = ? WHERE id = 'asset-1'`, size)
+	seedPeerNode(t, repo, "node-2", "源节点", "https://node-2.example.com")
+	seedVerifiedPeerAsset(t, repo, "node-2", "asset-1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", size)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || !ok {
+		t.Fatalf("expected sync task, ok=%v err=%v", ok, err)
+	}
+	source := task.FallbackSources[0]
+	if len(source.Parts) != defaultPeerFallbackWorkers {
+		t.Fatalf("expected %d parts, got %+v", defaultPeerFallbackWorkers, source.Parts)
+	}
+	var next int64
+	for _, part := range source.Parts {
+		if part.RangeStart != next || part.RangeEnd < part.RangeStart {
+			t.Fatalf("unexpected part range: %+v next=%d", part, next)
+		}
+		claims, err := repo.ReplicationSigner.VerifyReplication(part.Token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if claims.RangeStart != part.RangeStart || claims.RangeEnd != part.RangeEnd ||
+			claims.AssetID != "asset-1" || claims.SourceNodeID != "node-2" || claims.TargetNodeID != session.NodeID {
+			t.Fatalf("part token not bound correctly: part=%+v claims=%+v", part, claims)
+		}
+		next = part.RangeEnd + 1
+	}
+	if next != size {
+		t.Fatalf("parts should cover asset size, got %d want %d", next, size)
+	}
+}
+
 func TestNextSyncTaskSkipsInvalidPeerFallbackSources(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

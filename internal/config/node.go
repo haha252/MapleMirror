@@ -46,10 +46,13 @@ type Bandwidth struct {
 	TargetBPS int64  `yaml:"-"`
 }
 type Sync struct {
-	MaxWorkers        int    `yaml:"max_workers"`
-	MaxMirrorProjects int    `yaml:"max_mirror_projects"`
-	BandwidthLimit    string `yaml:"bandwidth_limit"`
-	BandwidthLimitBPS int64  `yaml:"-"`
+	MaxWorkers               int    `yaml:"max_workers"`
+	MaxMirrorProjects        int    `yaml:"max_mirror_projects"`
+	BandwidthLimit           string `yaml:"bandwidth_limit"`
+	BandwidthLimitBPS        int64  `yaml:"-"`
+	PeerFallbackWorkers      int    `yaml:"peer_fallback_workers"`
+	PeerFallbackMinSize      string `yaml:"peer_fallback_min_size"`
+	PeerFallbackMinSizeBytes int64  `yaml:"-"`
 }
 type NodeDownload struct {
 	VerifyPublicKeyFile string `yaml:"verify_public_key_file"`
@@ -109,6 +112,11 @@ func applyNodeDefaults(c *Node, warn WarnFunc) {
 		warnDefault(warn, "sync.max_workers", "2")
 	}
 	setString(&c.Sync.BandwidthLimit, "0", "sync.bandwidth_limit", warn)
+	if c.Sync.PeerFallbackWorkers == 0 {
+		c.Sync.PeerFallbackWorkers = 8
+		warnDefault(warn, "sync.peer_fallback_workers", "8")
+	}
+	setString(&c.Sync.PeerFallbackMinSize, "32 MiB", "sync.peer_fallback_min_size", warn)
 }
 
 func validateNode(c *Node) error {
@@ -162,11 +170,19 @@ func validateNode(c *Node) error {
 	if c.Sync.MaxMirrorProjects < 0 {
 		return errors.New("节点最大镜像项目数不得小于零")
 	}
+	if c.Sync.PeerFallbackWorkers <= 0 {
+		return errors.New("节点间复制分片并发数必须大于零")
+	}
 	limit, err := ParseBandwidthBPS("sync.bandwidth_limit", c.Sync.BandwidthLimit, true)
 	if err != nil {
 		return err
 	}
 	c.Sync.BandwidthLimitBPS = limit
+	minSize, err := ParseBytes("sync.peer_fallback_min_size", c.Sync.PeerFallbackMinSize, true)
+	if err != nil {
+		return err
+	}
+	c.Sync.PeerFallbackMinSizeBytes = minSize
 	return validateLogging(c.Logging)
 }
 

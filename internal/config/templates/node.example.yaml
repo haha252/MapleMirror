@@ -42,6 +42,10 @@ sync:
   max_mirror_projects: 0
   # 单个同步下载限速；支持 MiB/s、MB/s、Mbps，"0" 表示不限制。
   bandwidth_limit: "0"
+  # peer fallback 单文件分片下载并发数。
+  peer_fallback_workers: 8
+  # peer fallback 文件达到该大小才启用分片；支持 B、KiB、MiB、GiB，"0" 表示所有 peer 文件都分片。
+  peer_fallback_min_size: "32 MiB"
 
 # 下载令牌验证配置。
 download_token:

@@ -44,6 +44,8 @@ type ReplicationClaims struct {
 	ExpiresAt    string `json:"expires_at"`
 	RequestID    string `json:"request_id"`
 	TaskID       string `json:"task_id"`
+	RangeStart   int64  `json:"range_start,omitempty"`
+	RangeEnd     int64  `json:"range_end,omitempty"`
 }
 
 func NewSignerFromPrivateFile(path string) (Signer, error) {

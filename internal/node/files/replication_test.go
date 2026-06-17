@@ -79,6 +79,54 @@ func TestHandlerRejectsReplicationQueryTokenAndHead(t *testing.T) {
 	}
 }
 
+func TestHandlerServesReplicationRangeBoundToken(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	token := signReplicationToken(t, signer, downloadtoken.ReplicationClaims{
+		AssetID: "asset-1", SourceNodeID: "node-1", TargetNodeID: "node-2",
+		ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		RequestID: "req-1", TaskID: "task-1", RangeStart: 1, RangeEnd: 3,
+	})
+	req := httptest.NewRequest(http.MethodGet, "/internal/replication/asset-1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Range", "bytes=1-3")
+	rec := httptest.NewRecorder()
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent || rec.Body.String() != "bcd" {
+		t.Fatalf("replication range response mismatch code=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandlerRejectsReplicationRangeMismatch(t *testing.T) {
+	tests := []struct {
+		name        string
+		rangeHeader string
+	}{
+		{name: "missing", rangeHeader: ""},
+		{name: "different", rangeHeader: "bytes=2-4"},
+		{name: "open", rangeHeader: "bytes=1-"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, storageDir, signer := prepareNodeFile(t)
+			token := signReplicationToken(t, signer, downloadtoken.ReplicationClaims{
+				AssetID: "asset-1", SourceNodeID: "node-1", TargetNodeID: "node-2",
+				ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+				RequestID: "req-1", TaskID: "task-1", RangeStart: 1, RangeEnd: 3,
+			})
+			req := httptest.NewRequest(http.MethodGet, "/internal/replication/asset-1", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			if tt.rangeHeader != "" {
+				req.Header.Set("Range", tt.rangeHeader)
+			}
+			rec := httptest.NewRecorder()
+			(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}).ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("range mismatch should be rejected: %d", rec.Code)
+			}
+		})
+	}
+}
+
 func TestHandlerRejectsModifiedReplicationAsset(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	fresh := time.Now().Add(-10 * time.Second).UTC().Format(time.RFC3339Nano)
