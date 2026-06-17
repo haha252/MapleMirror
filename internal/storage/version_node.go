@@ -40,12 +40,16 @@ func ensureNodeV1IdentityMaterials(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	ok, err := hasColumn(ctx, tx, "inventory_report_cursor", "force_report_requested_at")
-	if err != nil || ok {
+	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx,
-		`ALTER TABLE inventory_report_cursor ADD COLUMN force_report_requested_at TEXT`)
-	return err
+	if !ok {
+		if _, err = tx.ExecContext(ctx,
+			`ALTER TABLE inventory_report_cursor ADD COLUMN force_report_requested_at TEXT`); err != nil {
+			return err
+		}
+	}
+	return ensureNodeV3PeerFallbackResults(ctx, tx)
 }
 
 func upgradeNode1To2(ctx context.Context, tx *sql.Tx) error {
@@ -55,6 +59,33 @@ func upgradeNode1To2(ctx context.Context, tx *sql.Tx) error {
 	}
 	_, err = tx.ExecContext(ctx,
 		`ALTER TABLE inventory_report_cursor ADD COLUMN force_report_requested_at TEXT`)
+	return err
+}
+
+func upgradeNode2To3(ctx context.Context, tx *sql.Tx) error {
+	return ensureNodeV3PeerFallbackResults(ctx, tx)
+}
+
+func ensureNodeV3PeerFallbackResults(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS pending_sync_task_results (
+		task_id TEXT PRIMARY KEY,
+		asset_id TEXT,
+		result TEXT NOT NULL,
+		local_digest_sha256 TEXT,
+		size_bytes INTEGER NOT NULL DEFAULT 0,
+		message TEXT,
+		peer_fallback_attempted INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL,
+		reported_at TEXT
+	)`); err != nil {
+		return err
+	}
+	ok, err := hasColumn(ctx, tx, "pending_sync_task_results", "peer_fallback_attempted")
+	if err != nil || ok {
+		return err
+	}
+	_, err = tx.ExecContext(ctx,
+		`ALTER TABLE pending_sync_task_results ADD COLUMN peer_fallback_attempted INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 

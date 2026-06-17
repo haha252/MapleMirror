@@ -61,12 +61,13 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertTable(t, db, "node_enrollment_state")
 	assertTable(t, db, "local_sync_tasks")
 	assertTable(t, db, "pending_sync_task_results")
+	assertColumn(t, db, "pending_sync_task_results", "peer_fallback_attempted")
 	assertColumn(t, db, "control_identity", "certificate_pem")
 	assertColumn(t, db, "control_identity", "ca_pem")
 	assertColumn(t, db, "control_identity", "private_key_pem")
 	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
 	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
-	assertDBVersion(t, db, "node", 2)
+	assertDBVersion(t, db, "node", 3)
 }
 
 func TestOpenNodeBackfillsInventoryForceColumnForExistingV1Database(t *testing.T) {
@@ -112,7 +113,8 @@ func TestOpenNodeBackfillsInventoryForceColumnForExistingV1Database(t *testing.T
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "inventory_report_cursor", "force_report_requested_at")
-	assertDBVersion(t, opened, "node", 2)
+	assertColumn(t, opened, "pending_sync_task_results", "peer_fallback_attempted")
+	assertDBVersion(t, opened, "node", 3)
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {

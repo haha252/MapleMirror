@@ -11,7 +11,7 @@ const (
 	databaseKindMaster = "master"
 	databaseKindNode   = "node"
 	masterDBVersion    = 1
-	nodeDBVersion      = 2
+	nodeDBVersion      = 3
 )
 
 type versionUpgrade struct {
@@ -27,6 +27,7 @@ func versionPlan(kind string) (int, string, []versionUpgrade, error) {
 	case databaseKindNode:
 		return nodeDBVersion, "migrations/node/*.sql", []versionUpgrade{
 			{From: 1, To: 2, Apply: upgradeNode1To2},
+			{From: 2, To: 3, Apply: upgradeNode2To3},
 		}, nil
 	default:
 		return 0, "", nil, fmt.Errorf("未知数据库类型 %s", kind)

@@ -37,7 +37,8 @@ func (c Client) loadPendingTaskResults(limit int) ([]protocol.SyncTaskResult, er
 		limit = 1
 	}
 	rows, err := c.DB.Query(`SELECT task_id, asset_id, result, COALESCE(local_digest_sha256, ''),
-		size_bytes, COALESCE(message, '') FROM pending_sync_task_results
+		size_bytes, COALESCE(message, ''), COALESCE(peer_fallback_attempted, 0)
+		FROM pending_sync_task_results
 		WHERE reported_at IS NULL ORDER BY created_at LIMIT ?`, limit)
 	if err != nil {
 		return nil, err

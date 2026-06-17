@@ -32,7 +32,7 @@ var expectedSchemaFiles = map[string]string{
 	"migrations/node/000001_state.sql":                      "3501b8a94e3fac8eb0807afd32183effd81874e2001ff7b69cb43b0a25b3a0c2",
 	"migrations/node/000002_identity.sql":                   "dab9fe79b6b455ce7109c7eac041e17732ad5d0c2eb7f9c89bf3f793dd30b88e",
 	"migrations/node/000003_sync_state.sql":                 "973fb3190ee2a212b883e3d6686db18afdcb3bb1fdd59d719353ec0cf99d77e7",
-	"migrations/node/000004_sync_results.sql":               "8959c04e686d3f9440b94b413c62e7ba62a24d17c8e55e21c24d6aa399d002ae",
+	"migrations/node/000004_sync_results.sql":               "4f323aaf9e08f016c8f35b1a139b44f3349e55a192503bd1bdb9a7a8145308ac",
 	"migrations/node/000004_traffic_events_m5.sql":          "255d1a5e45884f4c7ebd3efe6800b85295af95aa63a67e6a15e6368f234f8925",
 	"migrations/node/000005_identity_materials.sql":         "c083a2ead0e7c1046a952661597ce2612df66ca78407ce482ff1aaf6199dfdcb",
 	"migrations/node/000006_inventory_force_report.sql":     "78b0bab767831725fd5b90fdf781095b0edf42d0e1a9bf56f30ba09852c432a3",
