@@ -44,6 +44,7 @@ type Client struct {
 	DialTLSContext                 func(context.Context, string, string, *tls.Config) (net.Conn, error)
 	runningTaskAckLogged           map[string]time.Time
 	runningTaskAckSent             map[string]time.Time
+	controlWorkWake                chan struct{}
 	interruptedLocalTasksRecovered bool
 }
 

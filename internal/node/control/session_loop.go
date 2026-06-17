@@ -6,6 +6,7 @@ import (
 )
 
 const controlIdleRead = 200 * time.Millisecond
+const controlWakePoll = 10 * time.Millisecond
 
 type sessionLoopState struct {
 	sequence         uint64
@@ -19,6 +20,9 @@ func (c Client) sendSessionReports(conn net.Conn, reqID string,
 		interval = 5 * time.Second
 	}
 	c.HeartbeatInterval = interval
+	if c.controlWorkWake == nil {
+		c.controlWorkWake = make(chan struct{}, 1)
+	}
 	state := sessionLoopState{
 		sequence:      2,
 		nextHeartbeat: time.Now(),
@@ -44,7 +48,7 @@ func (c Client) sendSessionReports(conn net.Conn, reqID string,
 		if wait <= 0 {
 			continue
 		}
-		next, handled, err := c.readOptionalTaskWithTimeout(conn, reqID,
+		next, handled, err := c.waitForControlEventOrTask(conn, reqID,
 			state.sequence, wait)
 		state.sequence = next
 		if err != nil {
@@ -76,6 +80,43 @@ func (c Client) sendHeartbeatWindow(conn net.Conn, reqID string,
 	state.sequence = next
 	state.nextHeartbeat = time.Now().Add(interval)
 	return nil
+}
+
+func (c Client) waitForControlEventOrTask(conn net.Conn, reqID string,
+	sequence uint64, wait time.Duration) (uint64, bool, error) {
+	if c.controlWorkWake == nil {
+		return c.readOptionalTaskWithTimeout(conn, reqID, sequence, wait)
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		select {
+		case <-c.controlWorkWake:
+			return sequence, false, nil
+		default:
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return sequence, false, nil
+		}
+		timeout := controlWakePoll
+		if remaining < timeout {
+			timeout = remaining
+		}
+		next, handled, err := c.readOptionalTaskWithTimeout(conn, reqID, sequence, timeout)
+		if err != nil || handled {
+			return next, handled, err
+		}
+	}
+}
+
+func (c Client) wakeControlWork() {
+	if c.controlWorkWake == nil {
+		return
+	}
+	select {
+	case c.controlWorkWake <- struct{}{}:
+	default:
+	}
 }
 
 func (c Client) sendNextControlWork(conn net.Conn, reqID string,

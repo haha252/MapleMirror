@@ -135,13 +135,17 @@ func (c *Client) executeTaskAsync(task protocol.SyncTask) {
 				slog.String("result", result.Result),
 				slog.Int64("size_bytes", result.SizeBytes))
 		}
-		if err := c.storePendingTaskResultWithRetry(result); err != nil && c.Logger != nil {
-			c.Logger.Warn(context.Background(), "节点保存待上报同步结果失败",
-				slog.String("node_id", c.NodeID),
-				slog.String("task_id", result.TaskID),
-				slog.String("asset_id", result.AssetID),
-				slog.String("error", err.Error()))
+		if err := c.storePendingTaskResultWithRetry(result); err != nil {
+			if c.Logger != nil {
+				c.Logger.Warn(context.Background(), "节点保存待上报同步结果失败",
+					slog.String("node_id", c.NodeID),
+					slog.String("task_id", result.TaskID),
+					slog.String("asset_id", result.AssetID),
+					slog.String("error", err.Error()))
+			}
+			return
 		}
+		c.wakeControlWork()
 	}()
 }
 
