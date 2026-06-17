@@ -139,6 +139,9 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 }
 
 func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID string) (int, error) {
+	if err := s.Repo.refreshExpiredSyncTaskLeases(context.Background(), session.NodeID); err != nil {
+		return 0, err
+	}
 	limit, known := s.Repo.runtime().SyncTaskDispatchCapacity(session.NodeID)
 	if !known {
 		limit = defaultSyncTaskDispatchWindow

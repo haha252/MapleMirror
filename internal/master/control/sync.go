@@ -28,6 +28,17 @@ func (r Repository) NextSyncTask(ctx context.Context, nodeID string) (protocol.S
 	return task, true, nil
 }
 
+func (r Repository) refreshExpiredSyncTaskLeases(ctx context.Context, nodeID string) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := r.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+		error_message = NULL, lease_expires_at = NULL, updated_at = ?
+		WHERE node_id = ? AND state IN ('sent', 'running')
+		AND lease_expires_at IS NOT NULL AND lease_expires_at != ''
+		AND lease_expires_at <= ?`,
+		now, nodeID, now)
+	return err
+}
+
 func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID string) (protocol.SyncTask, bool, error) {
 	var task protocol.SyncTask
 	var attempts int
