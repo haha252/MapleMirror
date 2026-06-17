@@ -116,6 +116,34 @@ func TestReadOptionalTasksAcksBatchInSingleSession(t *testing.T) {
 	}
 }
 
+func TestReadOptionalTasksReturnsProtocolError(t *testing.T) {
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		body, _ := json.Marshal(protocol.ProtocolError{
+			Code:    "CONTROL_MESSAGE_ERROR",
+			Message: "bad task",
+		})
+		_ = protocol.WriteFrame(server, protocol.Envelope{
+			ProtocolVersion: protocol.Version,
+			MessageID:       "err",
+			MessageType:     protocol.TypeProtocolError,
+			SentAt:          time.Now().UTC(),
+			NodeID:          "node-1",
+			RequestID:       "req-1",
+			Payload:         body,
+		})
+	}()
+	ctl := Client{NodeID: "node-1"}
+	if _, err := ctl.readOptionalTasks(client, "req-1", 3, 1); err == nil {
+		t.Fatal("expected optional task protocol error to propagate")
+	}
+	<-done
+}
+
 func TestRunOnceReadsTaskDispatchedAfterPressureReport(t *testing.T) {
 	executed := make(chan string, 1)
 	dialer := newPipeDialer(t, func(conn net.Conn) {

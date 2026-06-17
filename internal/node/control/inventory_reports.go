@@ -67,17 +67,20 @@ func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
 	if err != nil {
 		return sequence, false, err
 	}
-	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
-	if err != nil {
-		return sequence, false, err
-	}
 	report.Index++
 	if report.Index >= len(report.Chunks) {
 		err = c.storeInventoryCursor(inventoryCursor{
 			NextRevision:      report.Revision + 1,
 			LastAckedRevision: report.Revision,
 		})
+		if err != nil {
+			return sequence, false, err
+		}
 		*pending = nil
+	}
+	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
+	if err != nil {
+		return sequence, false, err
 	}
 	return next, true, err
 }

@@ -18,7 +18,7 @@ func (c Client) readOptionalTasks(conn net.Conn, reqID string, sequence uint64,
 		next, handled, err := c.readOptionalTaskWithTimeout(conn, reqID,
 			sequence, 200*time.Millisecond)
 		if err != nil {
-			return sequence, nil
+			return sequence, err
 		}
 		if !handled {
 			return sequence, nil
