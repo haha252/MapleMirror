@@ -43,6 +43,7 @@ type Client struct {
 	}
 	DialTLSContext       func(context.Context, string, string, *tls.Config) (net.Conn, error)
 	runningTaskAckLogged map[string]time.Time
+	runningTaskAckSent   map[string]time.Time
 }
 
 func (c Client) syncTaskTimeout() time.Duration {
@@ -54,6 +55,7 @@ func (c Client) syncTaskTimeout() time.Duration {
 
 func (c Client) RunOnce() (time.Duration, error) {
 	c.runningTaskAckLogged = map[string]time.Time{}
+	c.runningTaskAckSent = map[string]time.Time{}
 	if err := c.resetInterruptedLocalTasks(); err != nil {
 		return 0, err
 	}
@@ -144,11 +146,12 @@ func (c Client) hello(conn net.Conn, reqID string) error {
 func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 	actualBandwidth int64) (uint64, error) {
 	active := c.activeDownloads()
+	slots := c.availableSyncTaskSlots()
 	body, _ := json.Marshal(protocol.Heartbeat{
 		Status: "syncing", ActiveDownloads: active, FreeBytes: 0,
 		PublicDownloadBaseURL:  c.PublicDownloadBaseURL,
 		MaxMirrorProjects:      c.MaxMirrorProjects,
-		SyncTaskSlotsAvailable: c.availableSyncTaskSlots(),
+		SyncTaskSlotsAvailable: &slots,
 		Pressure: protocol.PressureSample{
 			TargetBandwidthBPS: c.TargetBandwidthBPS,
 			ActualBandwidthBPS: actualBandwidth,

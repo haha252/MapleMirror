@@ -57,14 +57,19 @@ func (c Client) sendNextRunningTaskAck(conn net.Conn, reqID string,
 	if c.DB == nil {
 		return sequence, false, nil
 	}
-	items, err := c.loadRunningTaskAcks(1)
+	items, err := c.loadRunningTaskAcks(50)
 	if err != nil || len(items) == 0 {
 		return sequence, false, err
 	}
-	next, err := c.sendRunningTaskAck(conn, reqID, sequence, items[0])
+	ack, ok := c.nextRunningTaskAckDue(items, time.Now())
+	if !ok {
+		return sequence, false, nil
+	}
+	next, err := c.sendRunningTaskAck(conn, reqID, sequence, ack)
 	if err != nil {
 		return sequence, false, err
 	}
+	c.markRunningTaskAckSent(ack.TaskID, time.Now())
 	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 	return next, true, err
 }
@@ -90,4 +95,29 @@ func (c Client) loadRunningTaskAcks(limit int) ([]protocol.SyncTaskAck, error) {
 		items = append(items, ack)
 	}
 	return items, rows.Err()
+}
+
+func (c *Client) nextRunningTaskAckDue(items []protocol.SyncTaskAck,
+	now time.Time) (protocol.SyncTaskAck, bool) {
+	for _, ack := range items {
+		if c.runningTaskAckDue(ack.TaskID, now) {
+			return ack, true
+		}
+	}
+	return protocol.SyncTaskAck{}, false
+}
+
+func (c *Client) runningTaskAckDue(taskID string, now time.Time) bool {
+	if c.runningTaskAckSent == nil {
+		c.runningTaskAckSent = map[string]time.Time{}
+	}
+	last, ok := c.runningTaskAckSent[taskID]
+	return !ok || now.Sub(last) >= runningTaskAckLogInterval
+}
+
+func (c *Client) markRunningTaskAckSent(taskID string, now time.Time) {
+	if c.runningTaskAckSent == nil {
+		c.runningTaskAckSent = map[string]time.Time{}
+	}
+	c.runningTaskAckSent[taskID] = now
 }

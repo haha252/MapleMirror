@@ -168,3 +168,62 @@ func TestShouldLogRunningTaskAckRateLimitsPerTask(t *testing.T) {
 		t.Fatal("different task should have independent log window")
 	}
 }
+
+func TestSendNextRunningTaskAckRotatesAndRateLimits(t *testing.T) {
+	db := openNodeDB(t)
+	defer db.Close()
+	now := time.Now().UTC()
+	for idx, taskID := range []string{"task-1", "task-2"} {
+		_, err := db.Exec(`INSERT INTO local_sync_tasks
+			(task_id, asset_id, task_type, state, updated_at)
+			VALUES (?, ?, 'asset_download', 'running', ?)`,
+			taskID, "asset-"+taskID, now.Add(time.Duration(idx)*time.Second).Format(time.RFC3339Nano))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	server, clientConn := net.Pipe()
+	defer server.Close()
+	defer clientConn.Close()
+	seen := make(chan string, 2)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 2; i++ {
+			msg, ok := expectType(t, server, protocol.TypeSyncTaskAck)
+			if !ok {
+				return
+			}
+			var ack protocol.SyncTaskAck
+			if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+				t.Error(err)
+				return
+			}
+			seen <- ack.TaskID
+			sendAck(server, msg)
+		}
+	}()
+	ctl := Client{
+		NodeID:             "node-1",
+		DB:                 db,
+		runningTaskAckSent: map[string]time.Time{},
+	}
+	next, sent, err := ctl.sendNextRunningTaskAck(clientConn, "req-1", 7)
+	if err != nil || !sent || next != 8 {
+		t.Fatalf("first running ack next=%d sent=%v err=%v", next, sent, err)
+	}
+	next, sent, err = ctl.sendNextRunningTaskAck(clientConn, "req-1", next)
+	if err != nil || !sent || next != 9 {
+		t.Fatalf("second running ack next=%d sent=%v err=%v", next, sent, err)
+	}
+	next, sent, err = ctl.sendNextRunningTaskAck(clientConn, "req-1", next)
+	if err != nil || sent || next != 9 {
+		t.Fatalf("recent running acks should yield next=%d sent=%v err=%v", next, sent, err)
+	}
+	<-done
+	first := <-seen
+	second := <-seen
+	if first != "task-1" || second != "task-2" {
+		t.Fatalf("running ack order = %s, %s", first, second)
+	}
+}
