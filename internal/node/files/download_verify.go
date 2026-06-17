@@ -9,7 +9,7 @@ import (
 	"mirror-server/internal/node/localasset"
 )
 
-const downloadVerificationTTL = 3 * time.Minute
+const downloadVerificationTTL = 10 * time.Minute
 
 func (h *Handler) now() time.Time {
 	return time.Now().UTC()

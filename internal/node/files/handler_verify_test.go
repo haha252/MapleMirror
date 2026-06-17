@@ -16,7 +16,7 @@ const testDigestABCDEF = "sha256:bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1
 
 func TestHandlerRefreshesExpiredVerificationBeforeDownload(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
-	old := time.Now().Add(-4 * time.Minute).UTC().Format(time.RFC3339Nano)
+	old := time.Now().Add(-11 * time.Minute).UTC().Format(time.RFC3339Nano)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
 		WHERE asset_id = 'asset-1'`, testDigestABCDEF, old)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestHandlerMarksExpiredMismatchedFile(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
 		WHERE asset_id = 'asset-1'`, testDigestABCDEF,
-		time.Now().Add(-4*time.Minute).UTC().Format(time.RFC3339Nano))
+		time.Now().Add(-11*time.Minute).UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestHandlerMarksExpiredMissingFile(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	_, err := db.Exec(`UPDATE local_assets SET digest_sha256 = ?, verified_at = ?
 		WHERE asset_id = 'asset-1'`, testDigestABCDEF,
-		time.Now().Add(-4*time.Minute).UTC().Format(time.RFC3339Nano))
+		time.Now().Add(-11*time.Minute).UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		t.Fatal(err)
 	}
