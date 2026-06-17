@@ -7,6 +7,8 @@ import (
 	"mirror-server/internal/protocol"
 )
 
+const runningTaskAckCandidateBatch = 50
+
 func (c Client) sendNextPendingTaskResult(conn net.Conn, reqID string,
 	sequence uint64) (uint64, bool, error) {
 	if c.DB == nil {
@@ -57,7 +59,7 @@ func (c Client) sendNextRunningTaskAck(conn net.Conn, reqID string,
 	if c.DB == nil {
 		return sequence, false, nil
 	}
-	items, err := c.loadRunningTaskAcks(50)
+	items, err := c.loadRunningTaskAcks(c.runningTaskAckCandidateLimit())
 	if err != nil || len(items) == 0 {
 		return sequence, false, err
 	}
@@ -69,9 +71,19 @@ func (c Client) sendNextRunningTaskAck(conn net.Conn, reqID string,
 	if err != nil {
 		return sequence, false, err
 	}
-	c.markRunningTaskAckSent(ack.TaskID, time.Now())
+	now := time.Now()
+	if err := c.markRunningTaskAckSent(ack.TaskID, now); err != nil {
+		return sequence, false, err
+	}
 	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 	return next, true, err
+}
+
+func (c Client) runningTaskAckCandidateLimit() int {
+	if len(c.runningTaskAckSent) == 0 {
+		return runningTaskAckCandidateBatch
+	}
+	return len(c.runningTaskAckSent) + runningTaskAckCandidateBatch
 }
 
 func (c Client) loadRunningTaskAcks(limit int) ([]protocol.SyncTaskAck, error) {
@@ -115,9 +127,16 @@ func (c *Client) runningTaskAckDue(taskID string, now time.Time) bool {
 	return !ok || now.Sub(last) >= runningTaskAckLogInterval
 }
 
-func (c *Client) markRunningTaskAckSent(taskID string, now time.Time) {
+func (c *Client) markRunningTaskAckSent(taskID string, now time.Time) error {
 	if c.runningTaskAckSent == nil {
 		c.runningTaskAckSent = map[string]time.Time{}
 	}
 	c.runningTaskAckSent[taskID] = now
+	if c.DB == nil {
+		return nil
+	}
+	_, err := c.DB.Exec(`UPDATE local_sync_tasks SET updated_at = ?
+		WHERE task_id = ? AND state = 'running'`,
+		now.UTC().Format(time.RFC3339Nano), taskID)
+	return err
 }
