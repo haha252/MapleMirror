@@ -11,6 +11,8 @@ import (
 	"mirror-server/internal/protocol"
 )
 
+const controlAckTimeout = 3 * time.Second
+
 func (c Client) writeFrame(conn net.Conn, envelope protocol.Envelope) error {
 	_ = conn.SetWriteDeadline(time.Now().Add(controlIOTimeout))
 	err := protocol.WriteFrame(conn, envelope)
@@ -20,7 +22,7 @@ func (c Client) writeFrame(conn net.Conn, envelope protocol.Envelope) error {
 
 func (c Client) readExpectedResponse(conn net.Conn, reqID string,
 	sequence *uint64, expected ...string) (protocol.Envelope, error) {
-	deadline := time.Now().Add(controlIOTimeout)
+	deadline := time.Now().Add(controlAckTimeout)
 	for {
 		_ = conn.SetReadDeadline(deadline)
 		msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
