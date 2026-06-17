@@ -142,23 +142,9 @@ func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID stri
 	if err := s.Repo.refreshExpiredSyncTaskLeases(context.Background(), session.NodeID); err != nil {
 		return 0, err
 	}
-	limit, known := s.Repo.runtime().SyncTaskDispatchCapacity(session.NodeID)
-	if !known {
-		limit = defaultSyncTaskDispatchWindow
-	}
-	if limit <= 0 {
-		return 0, nil
-	}
-	outstanding, err := s.Repo.outstandingSentSyncTasks(context.Background(), session.NodeID)
+	limit, err := s.syncTaskDispatchAllowance(session.NodeID)
 	if err != nil {
 		return 0, err
-	}
-	limit -= outstanding
-	if limit < 0 {
-		limit = 0
-	}
-	if limit > maxSyncTaskDispatchWindow {
-		limit = maxSyncTaskDispatchWindow
 	}
 	dispatched := 0
 	for dispatched < limit {
@@ -171,6 +157,28 @@ func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID stri
 	return dispatched, nil
 }
 
+func (s ControlServer) syncTaskDispatchAllowance(nodeID string) (int, error) {
+	limit, known := s.Repo.runtime().SyncTaskDispatchCapacity(nodeID)
+	if !known {
+		limit = defaultSyncTaskDispatchWindow
+	}
+	if limit <= 0 {
+		return 0, nil
+	}
+	outstanding, err := s.Repo.outstandingSentSyncTasks(context.Background(), nodeID)
+	if err != nil {
+		return 0, err
+	}
+	limit -= outstanding
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > maxSyncTaskDispatchWindow {
+		limit = maxSyncTaskDispatchWindow
+	}
+	return limit, nil
+}
+
 func (s ControlServer) dispatchSyncTasksAfterMessage(conn net.Conn, session Session, reqID string, result controlMessageResult) (int, error) {
 	if !result.DispatchSyncTasks {
 		return 0, nil
@@ -179,19 +187,6 @@ func (s ControlServer) dispatchSyncTasksAfterMessage(conn net.Conn, session Sess
 		s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
 	}
 	return s.writeSyncTasks(conn, session, reqID)
-}
-
-func (s ControlServer) writeResponsesAfterMessage(conn net.Conn, session Session, reqID string,
-	msg protocol.Envelope, result controlMessageResult) (int, error) {
-	dispatched := 0
-	if result.DispatchSyncTasks && shouldDispatchNextTask(msg.MessageType) {
-		var err error
-		dispatched, err = s.dispatchSyncTasksAfterMessage(conn, session, reqID, result)
-		if err != nil {
-			return dispatched, err
-		}
-	}
-	return dispatched, s.writeMessageAck(conn, session, reqID, msg, result.HeartbeatResult)
 }
 
 func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {
