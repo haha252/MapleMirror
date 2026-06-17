@@ -108,6 +108,13 @@ func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint6
 			Result: "temporary_error", Message: "节点同步执行槽已满",
 		})
 	}
+	if err := c.recordAcceptedTask(task); err != nil {
+		c.releaseSyncTaskSlot()
+		return c.sendTaskResult(conn, reqID, sequence, protocol.SyncTaskResult{
+			TaskID: task.TaskID, AssetID: task.Asset.AssetID,
+			Result: "temporary_error", Message: "节点记录同步任务失败",
+		})
+	}
 	next, err := c.sendTaskAck(conn, reqID, sequence, task)
 	if err != nil {
 		c.releaseSyncTaskSlot()
@@ -115,6 +122,21 @@ func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint6
 	}
 	c.executeTaskAsync(task)
 	return next, nil
+}
+
+func (c Client) recordAcceptedTask(task protocol.SyncTask) error {
+	if c.DB == nil {
+		return nil
+	}
+	_, err := c.DB.Exec(`INSERT INTO local_sync_tasks
+		(task_id, asset_id, task_type, state, error_message, updated_at)
+		VALUES (?, ?, ?, 'running', NULL, ?)
+		ON CONFLICT(task_id) DO UPDATE SET asset_id = excluded.asset_id,
+		task_type = excluded.task_type, state = 'running',
+		error_message = NULL, updated_at = excluded.updated_at`,
+		task.TaskID, task.Asset.AssetID, task.TaskType,
+		time.Now().UTC().Format(time.RFC3339Nano))
+	return err
 }
 
 func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,
