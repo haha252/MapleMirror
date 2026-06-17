@@ -1,6 +1,10 @@
 package control
 
-import "time"
+import (
+	"context"
+	"database/sql"
+	"time"
+)
 
 type runtimeInventoryBatch struct {
 	Revision   uint64
@@ -36,4 +40,23 @@ func (s *RuntimeStore) FinishInventoryBatch(nodeID string, revision uint64) {
 	if batch, ok := s.inventoryBatches[nodeID]; ok && batch.Revision == revision {
 		delete(s.inventoryBatches, nodeID)
 	}
+}
+
+func inventoryReportTime(ctx context.Context, tx *sql.Tx, runtime *RuntimeStore,
+	nodeID string, revision uint64, now time.Time) (string, error) {
+	batchTime := runtime.InventoryBatchTime(nodeID, revision, now)
+	var persisted string
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(reported_at, '')
+		FROM node_inventory_reports WHERE node_id = ? AND revision = ?`,
+		nodeID, revision).Scan(&persisted)
+	if err == sql.ErrNoRows {
+		return batchTime, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if persisted != "" {
+		return persisted, nil
+	}
+	return batchTime, nil
 }

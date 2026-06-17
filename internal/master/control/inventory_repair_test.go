@@ -85,6 +85,48 @@ func TestChunkedInventoryReportKeepsEarlierChunkVerified(t *testing.T) {
 	}
 }
 
+func TestChunkedInventoryReportKeepsEarlierChunkAfterRuntimeRestart(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedSecondAssetTarget(t, repo, session.NodeID)
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+		ReportID: "r-restart-1", Revision: 1, GeneratedAt: time.Now(), Complete: false,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-1", SizeBytes: 10,
+			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			LocalState:   "verified",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.Runtime = NewRuntimeStore()
+	restarted, err := repo.StartSession(context.Background(), "sha256:aa", "req-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.AcceptInventoryReport(context.Background(), restarted, 1, protocol.InventoryReport{
+		ReportID: "r-restart-2", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-2", SizeBytes: 20,
+			DigestSHA256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			LocalState:   "verified",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var missing, tasks int
+	_ = repo.DB.QueryRow(`SELECT COUNT(*) FROM node_inventory
+		WHERE node_id = ? AND state != 'verified'`, session.NodeID).Scan(&missing)
+	_ = repo.DB.QueryRow(`SELECT COUNT(*) FROM node_tasks WHERE node_id = ?`, session.NodeID).Scan(&tasks)
+	if missing != 0 || tasks != 0 {
+		t.Fatalf("chunked inventory after runtime restart should keep both assets verified, missing=%d tasks=%d", missing, tasks)
+	}
+}
+
 func TestRepairTaskResetsFailedDownloadTask(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

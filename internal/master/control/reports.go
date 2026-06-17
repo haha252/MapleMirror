@@ -28,7 +28,10 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		ready := routingReady(ctx, tx, session.NodeID)
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
-	now := r.runtime().InventoryBatchTime(session.NodeID, report.Revision, time.Now().UTC())
+	now, err := inventoryReportTime(ctx, tx, r.runtime(), session.NodeID, report.Revision, time.Now().UTC())
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
 	stale, err := acceptInventoryRevision(ctx, tx, session, report, now)
 	if err != nil {
 		return HeartbeatResult{}, err

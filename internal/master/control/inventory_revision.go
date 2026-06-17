@@ -19,9 +19,6 @@ func acceptInventoryRevision(ctx context.Context, tx *sql.Tx, session Session,
 	if latest.Valid && uint64(latest.Int64) >= report.Revision {
 		return true, nil
 	}
-	if !report.Complete {
-		return false, nil
-	}
 	id := report.ReportID
 	if id == "" {
 		var err error
@@ -30,9 +27,24 @@ func acceptInventoryRevision(ctx context.Context, tx *sql.Tx, session Session,
 			return false, err
 		}
 	}
+	if !report.Complete {
+		_, err := tx.ExecContext(ctx, `INSERT INTO node_inventory_reports
+			(id, node_id, revision, complete, item_count, result, request_id, reported_at)
+			VALUES (?, ?, ?, 0, ?, 'partial', ?, ?)
+			ON CONFLICT(node_id, revision) DO UPDATE SET
+			item_count = node_inventory_reports.item_count + excluded.item_count,
+			result = 'partial'`,
+			id, session.NodeID, report.Revision, len(report.Items), session.RequestID, now)
+		return false, err
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO node_inventory_reports
 		(id, node_id, revision, complete, item_count, result, request_id, reported_at)
-		VALUES (?, ?, ?, 1, ?, 'accepted', ?, ?)`,
+		VALUES (?, ?, ?, 1, ?, 'accepted', ?, ?)
+		ON CONFLICT(node_id, revision) DO UPDATE SET
+		complete = 1,
+		item_count = node_inventory_reports.item_count + excluded.item_count,
+		result = 'accepted',
+		request_id = excluded.request_id`,
 		id, session.NodeID, report.Revision, len(report.Items), session.RequestID, now)
 	return false, err
 }
