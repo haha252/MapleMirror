@@ -181,6 +181,19 @@ func (s ControlServer) dispatchSyncTasksAfterMessage(conn net.Conn, session Sess
 	return s.writeSyncTasks(conn, session, reqID)
 }
 
+func (s ControlServer) writeResponsesAfterMessage(conn net.Conn, session Session, reqID string,
+	msg protocol.Envelope, result controlMessageResult) (int, error) {
+	dispatched := 0
+	if result.DispatchSyncTasks && shouldDispatchNextTask(msg.MessageType) {
+		var err error
+		dispatched, err = s.dispatchSyncTasksAfterMessage(conn, session, reqID, result)
+		if err != nil {
+			return dispatched, err
+		}
+	}
+	return dispatched, s.writeMessageAck(conn, session, reqID, msg, result.HeartbeatResult)
+}
+
 func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {
 	msg, err := readControlFrame(conn, s.HeartbeatTimeout)
 	if err != nil {

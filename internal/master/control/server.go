@@ -207,25 +207,11 @@ func (s ControlServer) Handle(conn net.Conn) {
 					slog.Uint64("accepted_sequence", result.AcceptedSequence))
 			}
 		}
-		if err := s.writeMessageAck(conn, session, reqID, msg, result.HeartbeatResult); err != nil {
+		dispatched, err := s.writeResponsesAfterMessage(conn, session, reqID, msg, result)
+		if err != nil {
 			closeReason = "控制响应发送失败: " + err.Error()
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "控制响应发送失败",
-					slog.String("request_id", reqID),
-					slog.String("session_id", session.ID),
-					slog.String("node_id", session.NodeID),
-					slog.String("error", err.Error()))
-			}
-			return
-		}
-		if !result.DispatchSyncTasks || !shouldDispatchNextTask(msg.MessageType) {
-			continue
-		}
-		dispatched, err := s.dispatchSyncTasksAfterMessage(conn, session, reqID, result)
-		if err != nil {
-			closeReason = "同步任务下发失败: " + err.Error()
-			if s.Logger != nil {
-				s.Logger.Debug(context.Background(), "同步任务下发失败",
 					slog.String("request_id", reqID),
 					slog.String("session_id", session.ID),
 					slog.String("node_id", session.NodeID),

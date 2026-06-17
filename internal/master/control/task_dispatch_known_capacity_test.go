@@ -97,3 +97,57 @@ func TestDispatchSyncTasksAfterAckWithoutSlotsUsesKnownCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDispatchSyncTasksBeforeAckWritesTaskBeforeControlAck(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, asset_id, state, request_id, created_at, updated_at)
+		VALUES ('task-1', ?, 'inventory_reconcile', NULL, 'pending', 'req', 'now', 'now')`,
+		session.NodeID)
+	control := ControlServer{Repo: repo}
+	slots := 1
+	result, err := control.handleMessage(session, envelopeWithPayload(t, session, protocol.TypeHeartbeat, 1, protocol.Heartbeat{
+		Status: "syncing", SyncTaskSlotsAvailable: &slots,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+	done := make(chan error, 1)
+	go func() {
+		dispatched, err := control.writeResponsesAfterMessage(serverConn, session, "req-1",
+			envelopeWithPayload(t, session, protocol.TypeHeartbeat, 1, protocol.Heartbeat{
+				Status: "syncing", SyncTaskSlotsAvailable: &slots,
+			}), result)
+		if err != nil {
+			done <- err
+			return
+		}
+		if dispatched != 1 {
+			done <- fmt.Errorf("dispatch=%d want 1", dispatched)
+			return
+		}
+		done <- nil
+	}()
+	msg, err := protocol.ReadFrame(clientConn, protocol.MaxFrameBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.MessageType != protocol.TypeSyncTask {
+		t.Fatalf("first frame=%s want %s", msg.MessageType, protocol.TypeSyncTask)
+	}
+	ack, err := protocol.ReadFrame(clientConn, protocol.MaxFrameBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ack.MessageType != protocol.TypeHeartbeatAck {
+		t.Fatalf("second frame=%s want %s", ack.MessageType, protocol.TypeHeartbeatAck)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
