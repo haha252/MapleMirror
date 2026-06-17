@@ -18,5 +18,6 @@ CREATE TABLE IF NOT EXISTS inventory_report_cursor (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     next_revision INTEGER NOT NULL,
     last_acked_revision INTEGER NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    force_report_requested_at TEXT
 );

@@ -201,6 +201,15 @@ func ensureNodeV1IdentityMaterials(ctx context.Context, tx *sql.Tx) error {
 		ca_pem TEXT,
 		updated_at TEXT NOT NULL
 	)`)
+	if err != nil {
+		return err
+	}
+	ok, err := hasColumn(ctx, tx, "inventory_report_cursor", "force_report_requested_at")
+	if err != nil || ok {
+		return err
+	}
+	_, err = tx.ExecContext(ctx,
+		`ALTER TABLE inventory_report_cursor ADD COLUMN force_report_requested_at TEXT`)
 	return err
 }
 

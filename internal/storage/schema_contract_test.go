@@ -30,7 +30,7 @@ var expectedSchemaFiles = map[string]string{
 	"migrations/master/000017_node_project_assignments.sql": "c68146df64987598b8378085f1aa0c51345ddb5a83cef2c2ce10ec4baf107eba",
 	"migrations/master/000018_public_probe.sql":             "700a6fa0ceb434b0f9608fbf2bf4e590c88c82718bf156349b3757f8033bbffd",
 	"migrations/node/000001_state.sql":                      "3501b8a94e3fac8eb0807afd32183effd81874e2001ff7b69cb43b0a25b3a0c2",
-	"migrations/node/000002_identity.sql":                   "dab9fe79b6b455ce7109c7eac041e17732ad5d0c2eb7f9c89bf3f793dd30b88e",
+	"migrations/node/000002_identity.sql":                   "babeaa85e31f52b58a4036da37130ed3b31b8fc1c8bb25ca7fd08db78f090b84",
 	"migrations/node/000003_sync_state.sql":                 "973fb3190ee2a212b883e3d6686db18afdcb3bb1fdd59d719353ec0cf99d77e7",
 	"migrations/node/000004_sync_results.sql":               "8959c04e686d3f9440b94b413c62e7ba62a24d17c8e55e21c24d6aa399d002ae",
 	"migrations/node/000004_traffic_events_m5.sql":          "255d1a5e45884f4c7ebd3efe6800b85295af95aa63a67e6a15e6368f234f8925",

@@ -62,6 +62,7 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertColumn(t, db, "control_identity", "ca_pem")
 	assertColumn(t, db, "control_identity", "private_key_pem")
 	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
+	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
 	assertDBVersion(t, db, "node", 1)
 }
 

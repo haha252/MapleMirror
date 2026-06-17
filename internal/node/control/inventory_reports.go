@@ -19,13 +19,15 @@ type inventoryCursor struct {
 	NextRevision      uint64
 	LastAckedRevision uint64
 	UpdatedAt         string
+	ForceRequestedAt  string
 }
 
 type pendingInventoryReport struct {
-	Revision    uint64
-	GeneratedAt time.Time
-	Chunks      [][]protocol.InventoryItem
-	Index       int
+	Revision         uint64
+	GeneratedAt      time.Time
+	Chunks           [][]protocol.InventoryItem
+	Index            int
+	ForceRequestedAt string
 }
 
 func (c Client) sendFullInventoryReport(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
@@ -55,14 +57,19 @@ func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
 	report := *pending
 	chunk := report.Chunks[report.Index]
 	reportID, _ := requestid.New()
-	slots := c.availableSyncTaskSlots()
+	complete := report.Index == len(report.Chunks)-1
+	var slots *int
+	if complete {
+		available := c.availableSyncTaskSlots()
+		slots = &available
+	}
 	next, err := c.sendInventoryReport(conn, reqID, sequence, protocol.InventoryReport{
 		ReportID:               reportID,
 		Revision:               report.Revision,
 		GeneratedAt:            report.GeneratedAt,
-		Complete:               report.Index == len(report.Chunks)-1,
+		Complete:               complete,
 		Items:                  chunk,
-		SyncTaskSlotsAvailable: &slots,
+		SyncTaskSlotsAvailable: slots,
 	})
 	if err != nil {
 		return sequence, false, err
@@ -72,11 +79,15 @@ func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
 		err = c.storeInventoryCursor(inventoryCursor{
 			NextRevision:      report.Revision + 1,
 			LastAckedRevision: report.Revision,
+			ForceRequestedAt:  report.ForceRequestedAt,
 		})
 		if err != nil {
 			return sequence, false, err
 		}
 		*pending = nil
+	}
+	if !complete {
+		return next, true, nil
 	}
 	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
 	if err != nil {
@@ -103,7 +114,8 @@ func (c Client) prepareInventoryReport() (*pendingInventoryReport, error) {
 	}
 	return &pendingInventoryReport{
 		Revision: revision, GeneratedAt: time.Now().UTC(),
-		Chunks: inventoryChunks(items),
+		Chunks:           inventoryChunks(items),
+		ForceRequestedAt: cursor.ForceRequestedAt,
 	}, nil
 }
 
@@ -168,22 +180,31 @@ func (c Client) loadInventoryCursor() (inventoryCursor, error) {
 		return inventoryCursor{}, err
 	}
 	var cursor inventoryCursor
-	err := c.DB.QueryRow(`SELECT next_revision, last_acked_revision, updated_at
+	err := c.DB.QueryRow(`SELECT next_revision, last_acked_revision, updated_at,
+		COALESCE(force_report_requested_at, '')
 		FROM inventory_report_cursor WHERE id = 1`).
-		Scan(&cursor.NextRevision, &cursor.LastAckedRevision, &cursor.UpdatedAt)
+		Scan(&cursor.NextRevision, &cursor.LastAckedRevision, &cursor.UpdatedAt,
+			&cursor.ForceRequestedAt)
 	return cursor, err
 }
 
 func (c Client) storeInventoryCursor(cursor inventoryCursor) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := c.DB.Exec(`UPDATE inventory_report_cursor
-		SET next_revision = ?, last_acked_revision = ?, updated_at = ?
+		SET next_revision = ?, last_acked_revision = ?, updated_at = ?,
+			force_report_requested_at = CASE
+				WHEN COALESCE(force_report_requested_at, '') = ? THEN NULL
+				ELSE force_report_requested_at
+			END
 		WHERE id = 1`,
-		cursor.NextRevision, cursor.LastAckedRevision,
-		time.Now().UTC().Format(time.RFC3339Nano))
+		cursor.NextRevision, cursor.LastAckedRevision, now, cursor.ForceRequestedAt)
 	return err
 }
 
 func shouldSendFullInventoryReport(cursor inventoryCursor, now time.Time) bool {
+	if cursor.ForceRequestedAt != "" {
+		return true
+	}
 	if cursor.LastAckedRevision == 0 || cursor.UpdatedAt == "" {
 		return true
 	}

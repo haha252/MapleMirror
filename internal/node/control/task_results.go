@@ -212,7 +212,43 @@ func recordLocalTaskResult(tx *sql.Tx, result protocol.SyncTaskResult) error {
 		error_message = ?, updated_at = ? WHERE task_id = ?`,
 		state, nullableString(result.Message), time.Now().UTC().Format(time.RFC3339Nano),
 		result.TaskID)
+	if err != nil {
+		return err
+	}
+	if result.Result != "succeeded" {
+		return nil
+	}
+	taskType, err := localTaskType(tx, result.TaskID)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if taskType != "inventory_reconcile" {
+		return nil
+	}
+	return forceInventoryReportDue(tx)
+}
+
+func forceInventoryReportDue(tx *sql.Tx) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO inventory_report_cursor
+		(id, next_revision, last_acked_revision, updated_at)
+		VALUES (1, 1, 0, ?)`, now); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`UPDATE inventory_report_cursor
+		SET force_report_requested_at = ?
+		WHERE id = 1`, now)
 	return err
+}
+
+func localTaskType(tx *sql.Tx, taskID string) (string, error) {
+	var taskType string
+	err := tx.QueryRow(`SELECT task_type FROM local_sync_tasks WHERE task_id = ?`, taskID).
+		Scan(&taskType)
+	return taskType, err
 }
 
 func nullableString(value string) any {
