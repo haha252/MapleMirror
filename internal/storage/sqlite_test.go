@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"mirror-server/internal/config"
+
+	_ "modernc.org/sqlite"
 )
 
 func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
@@ -63,7 +66,53 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertColumn(t, db, "control_identity", "private_key_pem")
 	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
 	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
-	assertDBVersion(t, db, "node", 1)
+	assertDBVersion(t, db, "node", 2)
+}
+
+func TestOpenNodeBackfillsInventoryForceColumnForExistingV1Database(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "node.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	statements := []string{
+		`CREATE TABLE database_version (kind TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
+		`INSERT INTO database_version(kind, version, updated_at) VALUES ('node', 1, '` + now + `')`,
+		`CREATE TABLE control_identity (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			node_id TEXT NOT NULL,
+			certificate_fingerprint TEXT NOT NULL,
+			certificate_not_after TEXT NOT NULL,
+			enrolled_at TEXT NOT NULL,
+			certificate_pem TEXT,
+			ca_pem TEXT,
+			private_key_pem TEXT,
+			download_token_public_key_pem TEXT
+		)`,
+		`CREATE TABLE inventory_report_cursor (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			next_revision INTEGER NOT NULL,
+			last_acked_revision INTEGER NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	opened, err := OpenNode(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	assertColumn(t, opened, "inventory_report_cursor", "force_report_requested_at")
+	assertDBVersion(t, opened, "node", 2)
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {

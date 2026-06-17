@@ -18,7 +18,7 @@ const (
 	databaseKindMaster = "master"
 	databaseKindNode   = "node"
 	masterDBVersion    = 1
-	nodeDBVersion      = 1
+	nodeDBVersion      = 2
 )
 
 type versionUpgrade struct {
@@ -65,6 +65,11 @@ func applyDatabaseVersion(db *sql.DB, kind string) error {
 			return err
 		}
 	}
+	if kind == databaseKindNode && version == 1 {
+		if err := ensureNodeV1IdentityMaterials(ctx(), tx); err != nil {
+			return err
+		}
+	}
 	for version < target {
 		upgrade := nextUpgrade(upgrades, version)
 		if upgrade == nil {
@@ -93,7 +98,9 @@ func versionPlan(kind string) (int, string, []versionUpgrade, error) {
 	case databaseKindMaster:
 		return masterDBVersion, "migrations/master/*.sql", nil, nil
 	case databaseKindNode:
-		return nodeDBVersion, "migrations/node/*.sql", nil, nil
+		return nodeDBVersion, "migrations/node/*.sql", []versionUpgrade{
+			{From: 1, To: 2, Apply: upgradeNode1To2},
+		}, nil
 	default:
 		return 0, "", nil, fmt.Errorf("未知数据库类型 %s", kind)
 	}
@@ -204,6 +211,16 @@ func ensureNodeV1IdentityMaterials(ctx context.Context, tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
+	ok, err := hasColumn(ctx, tx, "inventory_report_cursor", "force_report_requested_at")
+	if err != nil || ok {
+		return err
+	}
+	_, err = tx.ExecContext(ctx,
+		`ALTER TABLE inventory_report_cursor ADD COLUMN force_report_requested_at TEXT`)
+	return err
+}
+
+func upgradeNode1To2(ctx context.Context, tx *sql.Tx) error {
 	ok, err := hasColumn(ctx, tx, "inventory_report_cursor", "force_report_requested_at")
 	if err != nil || ok {
 		return err

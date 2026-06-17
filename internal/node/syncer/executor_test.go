@@ -66,10 +66,11 @@ func TestInventoryReconcileForcesNextFullInventoryReport(t *testing.T) {
 	}
 
 	var nextRevision, lastAcked uint64
-	var updatedAt string
-	err = db.QueryRow(`SELECT next_revision, last_acked_revision, updated_at
+	var updatedAt, forceRequestedAt string
+	err = db.QueryRow(`SELECT next_revision, last_acked_revision, updated_at,
+			COALESCE(force_report_requested_at, '')
 		FROM inventory_report_cursor WHERE id = 1`).
-		Scan(&nextRevision, &lastAcked, &updatedAt)
+		Scan(&nextRevision, &lastAcked, &updatedAt, &forceRequestedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +78,11 @@ func TestInventoryReconcileForcesNextFullInventoryReport(t *testing.T) {
 		t.Fatalf("inventory revision cursor changed next=%d acked=%d",
 			nextRevision, lastAcked)
 	}
-	if updatedAt != "" {
-		t.Fatalf("inventory reconcile should clear throttle timestamp, got %q", updatedAt)
+	if updatedAt != recent {
+		t.Fatalf("inventory reconcile should keep throttle timestamp, got %q", updatedAt)
+	}
+	if forceRequestedAt == "" {
+		t.Fatal("inventory reconcile should set forced inventory marker")
 	}
 }
 

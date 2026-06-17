@@ -1,0 +1,1 @@
+ALTER TABLE inventory_report_cursor ADD COLUMN force_report_requested_at TEXT;

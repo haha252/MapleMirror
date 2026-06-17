@@ -12,7 +12,8 @@ func (e Executor) forceNextInventoryReport() error {
 		VALUES (1, 1, 0, ?)`, now); err != nil {
 		return err
 	}
-	_, err := e.DB.Exec(`UPDATE inventory_report_cursor SET updated_at = ''
-		WHERE id = 1`)
+	_, err := e.DB.Exec(`UPDATE inventory_report_cursor
+		SET force_report_requested_at = COALESCE(NULLIF(force_report_requested_at, ''), ?)
+		WHERE id = 1`, now)
 	return err
 }
