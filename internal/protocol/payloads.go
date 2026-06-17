@@ -87,11 +87,12 @@ type PressureSample struct {
 }
 
 type InventoryReport struct {
-	ReportID    string          `json:"report_id"`
-	Revision    uint64          `json:"revision"`
-	GeneratedAt time.Time       `json:"generated_at"`
-	Complete    bool            `json:"complete"`
-	Items       []InventoryItem `json:"items"`
+	ReportID               string          `json:"report_id"`
+	Revision               uint64          `json:"revision"`
+	GeneratedAt            time.Time       `json:"generated_at"`
+	Complete               bool            `json:"complete"`
+	Items                  []InventoryItem `json:"items"`
+	SyncTaskSlotsAvailable *int            `json:"sync_task_slots_available,omitempty"`
 }
 
 type InventoryItem struct {
@@ -147,18 +148,20 @@ type SyncTask struct {
 }
 
 type SyncTaskAck struct {
-	TaskID  string `json:"task_id"`
-	State   string `json:"state"`
-	Message string `json:"message,omitempty"`
+	TaskID                 string `json:"task_id"`
+	State                  string `json:"state"`
+	Message                string `json:"message,omitempty"`
+	SyncTaskSlotsAvailable *int   `json:"sync_task_slots_available,omitempty"`
 }
 
 type SyncTaskResult struct {
-	TaskID            string `json:"task_id"`
-	AssetID           string `json:"asset_id"`
-	Result            string `json:"result"`
-	LocalDigestSHA256 string `json:"local_digest_sha256,omitempty"`
-	SizeBytes         int64  `json:"size_bytes,omitempty"`
-	Message           string `json:"message,omitempty"`
+	TaskID                 string `json:"task_id"`
+	AssetID                string `json:"asset_id"`
+	Result                 string `json:"result"`
+	LocalDigestSHA256      string `json:"local_digest_sha256,omitempty"`
+	SizeBytes              int64  `json:"size_bytes,omitempty"`
+	Message                string `json:"message,omitempty"`
+	SyncTaskSlotsAvailable *int   `json:"sync_task_slots_available,omitempty"`
 }
 
 type TrafficEvent struct {

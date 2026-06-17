@@ -14,6 +14,7 @@ import (
 type controlMessageResult struct {
 	HeartbeatResult
 	SyncTaskSlotsAvailable int
+	SyncTaskSlotsKnown     bool
 }
 
 func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (controlMessageResult, error) {
@@ -24,35 +25,58 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
-		return controlMessageResult{HeartbeatResult: result, SyncTaskSlotsAvailable: hb.SyncTaskSlotsAvailable}, err
+		return controlMessageResult{
+			HeartbeatResult:        result,
+			SyncTaskSlotsAvailable: hb.SyncTaskSlotsAvailable,
+			SyncTaskSlotsKnown:     true,
+		}, err
 	case protocol.TypeInventoryReport:
 		var report protocol.InventoryReport
 		if err := json.Unmarshal(msg.Payload, &report); err != nil {
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptInventoryReport(context.Background(), session, msg.Sequence, report)
-		return controlMessageResult{HeartbeatResult: result}, err
+		out := controlMessageResult{HeartbeatResult: result}
+		if report.SyncTaskSlotsAvailable != nil {
+			out.SyncTaskSlotsAvailable = *report.SyncTaskSlotsAvailable
+			out.SyncTaskSlotsKnown = true
+		}
+		return out, err
 	case protocol.TypePressureReport:
 		var report protocol.PressureReport
 		if err := json.Unmarshal(msg.Payload, &report); err != nil {
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
-		return controlMessageResult{HeartbeatResult: result, SyncTaskSlotsAvailable: report.SyncTaskSlotsAvailable}, err
+		return controlMessageResult{
+			HeartbeatResult:        result,
+			SyncTaskSlotsAvailable: report.SyncTaskSlotsAvailable,
+			SyncTaskSlotsKnown:     true,
+		}, err
 	case protocol.TypeSyncTaskAck:
 		var ack protocol.SyncTaskAck
 		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptSyncTaskAck(context.Background(), session, msg.Sequence, ack)
-		return controlMessageResult{HeartbeatResult: result}, err
+		out := controlMessageResult{HeartbeatResult: result}
+		if ack.SyncTaskSlotsAvailable != nil {
+			out.SyncTaskSlotsAvailable = *ack.SyncTaskSlotsAvailable
+			out.SyncTaskSlotsKnown = true
+		}
+		return out, err
 	case protocol.TypeSyncTaskResult:
 		var result protocol.SyncTaskResult
 		if err := json.Unmarshal(msg.Payload, &result); err != nil {
 			return controlMessageResult{}, err
 		}
 		hbResult, err := s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
-		return controlMessageResult{HeartbeatResult: hbResult}, err
+		out := controlMessageResult{HeartbeatResult: hbResult}
+		if result.SyncTaskSlotsAvailable != nil {
+			out.SyncTaskSlotsAvailable = *result.SyncTaskSlotsAvailable
+			out.SyncTaskSlotsKnown = true
+		}
+		return out, err
 	case protocol.TypeTrafficEvent:
 		var event protocol.TrafficEvent
 		if err := json.Unmarshal(msg.Payload, &event); err != nil {
@@ -99,9 +123,17 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 }
 
 func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID string) (int, error) {
-	limit := s.Repo.runtime().SyncTaskSlotsAvailable(session.NodeID)
-	if limit <= 0 {
+	limit, known := s.Repo.runtime().SyncTaskDispatchCapacity(session.NodeID)
+	if !known {
 		limit = defaultSyncTaskDispatchWindow
+	}
+	outstanding, err := s.Repo.outstandingSentSyncTasks(context.Background(), session.NodeID)
+	if err != nil {
+		return 0, err
+	}
+	limit -= outstanding
+	if limit < 0 {
+		limit = 0
 	}
 	if limit > maxSyncTaskDispatchWindow {
 		limit = maxSyncTaskDispatchWindow

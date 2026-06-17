@@ -25,6 +25,7 @@ type runtimeNode struct {
 	Inventory              runtimeInventoryReport
 	Pressure               runtimePressureReport
 	SyncTaskSlotsAvailable int
+	SyncTaskSlotsKnown     bool
 }
 
 type runtimeHeartbeat struct {
@@ -181,6 +182,7 @@ func (s *RuntimeStore) SetSyncTaskSlotsAvailable(nodeID string, slots int) {
 	defer s.mu.Unlock()
 	node := s.latest[nodeID]
 	node.SyncTaskSlotsAvailable = slots
+	node.SyncTaskSlotsKnown = true
 	s.latest[nodeID] = node
 }
 
@@ -191,6 +193,25 @@ func (s *RuntimeStore) SyncTaskSlotsAvailable(nodeID string) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.latest[nodeID].SyncTaskSlotsAvailable
+}
+
+func (s *RuntimeStore) SyncTaskSlotsAvailableKnown(nodeID string) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.latest[nodeID].SyncTaskSlotsKnown
+}
+
+func (s *RuntimeStore) SyncTaskDispatchCapacity(nodeID string) (int, bool) {
+	if s == nil {
+		return 0, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	node := s.latest[nodeID]
+	return node.SyncTaskSlotsAvailable, node.SyncTaskSlotsKnown
 }
 
 func (s *RuntimeStore) MarkInventory(nodeID string, report runtimeInventoryReport) {

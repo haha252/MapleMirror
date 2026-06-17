@@ -61,6 +61,8 @@ func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64
 }
 
 func (c Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64, ack protocol.SyncTaskAck) (uint64, error) {
+	slots := c.availableSyncTaskSlots()
+	ack.SyncTaskSlotsAvailable = &slots
 	body, _ := json.Marshal(ack)
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点续报运行中的同步任务",

@@ -114,7 +114,7 @@ func TestRepairTaskResetsFailedDownloadTask(t *testing.T) {
 	}
 }
 
-func TestCompleteInventoryReportResetsLeasedMissingDownloadTask(t *testing.T) {
+func TestCompleteInventoryReportPreservesLeasedMissingDownloadTask(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
@@ -138,13 +138,13 @@ func TestCompleteInventoryReportResetsLeasedMissingDownloadTask(t *testing.T) {
 	var state, leaseAfter string
 	err = repo.DB.QueryRow(`SELECT state, COALESCE(lease_expires_at, '')
 		FROM node_tasks WHERE id = 'task-running'`).Scan(&state, &leaseAfter)
-	if err != nil || state != "pending" || leaseAfter != "" {
-		t.Fatalf("missing complete inventory should reset running task, state=%s lease=%q err=%v",
+	if err != nil || state != "running" || leaseAfter != lease {
+		t.Fatalf("missing complete inventory should preserve leased running task, state=%s lease=%q err=%v",
 			state, leaseAfter, err)
 	}
-	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
-	if err != nil || !ok || task.TaskID != "task-running" {
-		t.Fatalf("reset task should redispatch immediately, ok=%v task=%+v err=%v", ok, task, err)
+	_, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || ok {
+		t.Fatalf("leased task should not redispatch immediately, ok=%v err=%v", ok, err)
 	}
 }
 

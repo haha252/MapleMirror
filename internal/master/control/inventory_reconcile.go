@@ -22,7 +22,7 @@ func completeInventoryReconcileTasks(ctx context.Context, tx *sql.Tx, nodeID, no
 		error_message = NULL, completed_at = ?, retry_after = NULL,
 		lease_expires_at = NULL, updated_at = ?
 		WHERE node_id = ? AND task_type = 'inventory_reconcile'
-		AND state IN ('pending', 'sent', 'running', 'retry_wait')`,
+		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`,
 		now, now, nodeID)
 	if err != nil {
 		return 0, err

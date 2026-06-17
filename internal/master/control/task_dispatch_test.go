@@ -2,6 +2,8 @@ package control
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"strings"
 	"testing"
 
@@ -31,17 +33,58 @@ func TestShouldDispatchNextTaskAfterReportsResultsOrTaskAck(t *testing.T) {
 
 func TestRuntimeStoreSyncTaskSlotsAvailable(t *testing.T) {
 	store := NewRuntimeStore()
-	if got := store.SyncTaskSlotsAvailable("node-1"); got != 0 {
-		t.Fatalf("default slots=%d", got)
+	if got, known := store.SyncTaskDispatchCapacity("node-1"); got != 0 || known {
+		t.Fatalf("default slots=%d known=%v", got, known)
 	}
 	store.SetSyncTaskSlotsAvailable("node-1", 5)
-	if got := store.SyncTaskSlotsAvailable("node-1"); got != 5 {
-		t.Fatalf("stored slots=%d", got)
+	if got, known := store.SyncTaskDispatchCapacity("node-1"); got != 5 || !known {
+		t.Fatalf("stored slots=%d known=%v", got, known)
 	}
 	store.SetSyncTaskSlotsAvailable("node-1", -1)
-	if got := store.SyncTaskSlotsAvailable("node-1"); got != 0 {
-		t.Fatalf("negative slots should clamp to zero, got=%d", got)
+	if got, known := store.SyncTaskDispatchCapacity("node-1"); got != 0 || !known {
+		t.Fatalf("negative slots should clamp to zero, got=%d known=%v", got, known)
 	}
+}
+
+func TestWriteSyncTasksDoesNotConsumeReportedCapacity(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+		(id, node_id, task_type, state, request_id, created_at, updated_at)
+		VALUES ('task-sent', ?, 'inventory_reconcile', 'sent', 'req', 'now', 'now')`,
+		session.NodeID)
+	for i := 1; i <= 3; i++ {
+		taskID := fmt.Sprintf("task-%d", i)
+		mustExecControl(t, repo.DB, `INSERT INTO node_tasks
+			(id, node_id, task_type, state, request_id, created_at, updated_at)
+			VALUES (?, ?, 'inventory_reconcile', 'pending', 'req', 'now', 'now')`,
+			taskID, session.NodeID)
+	}
+	repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, 2)
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := protocol.ReadFrame(client, protocol.MaxFrameBytes); err != nil {
+			t.Error(err)
+			return
+		}
+	}()
+	control := ControlServer{Repo: repo}
+	dispatched, err := control.writeSyncTasks(server, session, "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dispatched != 1 {
+		t.Fatalf("dispatched=%d want 1", dispatched)
+	}
+	if got, known := repo.runtime().SyncTaskDispatchCapacity(session.NodeID); got != 2 || !known {
+		t.Fatalf("reported capacity should not be consumed, got=%d known=%v", got, known)
+	}
+	<-done
 }
 
 func TestAcceptSyncTaskAckMarksTaskRunning(t *testing.T) {

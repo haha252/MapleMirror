@@ -75,13 +75,14 @@ func createRepairTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int
 
 func clearSatisfiedDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'cancelled',
-		error_message = '库存已验证，无需重新下载', updated_at = ?
+		error_message = '库存已验证，无需重新下载', completed_at = ?,
+		retry_after = NULL, lease_expires_at = NULL, updated_at = ?
 		WHERE node_id = ? AND task_type = 'asset_download'
-		AND state IN ('pending', 'retry_wait', 'failed')
+		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
 		AND asset_id IN (
 			SELECT asset_id FROM node_inventory
 			WHERE node_id = ? AND state = 'verified'
-		)`, now, nodeID, nodeID)
+		)`, now, now, nodeID, nodeID)
 	if err != nil {
 		return 0, err
 	}
@@ -93,13 +94,18 @@ func resetMissingDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now stri
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
 		error_message = NULL, retry_after = NULL, lease_expires_at = NULL,
 		updated_at = ? WHERE node_id = ? AND task_type = 'asset_download'
-		AND state IN ('sent', 'running', 'retry_wait')
+		AND (
+			state = 'retry_wait'
+			OR (state IN ('sent', 'running') AND (
+				lease_expires_at IS NULL OR lease_expires_at = '' OR lease_expires_at <= ?
+			))
+		)
 		AND asset_id IN (
 			SELECT ti.asset_id FROM target_inventory ti
 			LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
 			WHERE ti.node_id = ? AND ti.desired_state = 'required'
 			AND (ni.asset_id IS NULL OR ni.state != 'verified')
-		)`, now, nodeID, nodeID)
+		)`, now, nodeID, now, nodeID)
 	if err != nil {
 		return 0, err
 	}

@@ -55,12 +55,14 @@ func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
 	report := *pending
 	chunk := report.Chunks[report.Index]
 	reportID, _ := requestid.New()
+	slots := c.availableSyncTaskSlots()
 	next, err := c.sendInventoryReport(conn, reqID, sequence, protocol.InventoryReport{
-		ReportID:    reportID,
-		Revision:    report.Revision,
-		GeneratedAt: report.GeneratedAt,
-		Complete:    report.Index == len(report.Chunks)-1,
-		Items:       chunk,
+		ReportID:               reportID,
+		Revision:               report.Revision,
+		GeneratedAt:            report.GeneratedAt,
+		Complete:               report.Index == len(report.Chunks)-1,
+		Items:                  chunk,
+		SyncTaskSlotsAvailable: &slots,
 	})
 	if err != nil {
 		return sequence, false, err

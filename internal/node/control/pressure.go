@@ -13,6 +13,7 @@ import (
 func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 	actualBandwidth int64) (uint64, error) {
 	active := c.activeDownloads()
+	slots := c.availableSyncTaskSlots()
 	body, _ := json.Marshal(protocol.PressureReport{
 		ReportID:               reqID + "-pressure",
 		SampledAt:              time.Now().UTC(),
@@ -23,7 +24,7 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 		ActiveDownloads:        active,
 		FreeBytes:              0,
 		MaxMirrorProjects:      c.MaxMirrorProjects,
-		SyncTaskSlotsAvailable: c.availableSyncTaskSlots(),
+		SyncTaskSlotsAvailable: slots,
 	})
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点发送压力报告",

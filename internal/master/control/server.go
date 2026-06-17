@@ -221,6 +221,9 @@ func (s ControlServer) Handle(conn net.Conn) {
 		if !shouldDispatchNextTask(msg.MessageType) {
 			continue
 		}
+		if !result.SyncTaskSlotsKnown {
+			continue
+		}
 		s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
 		dispatched, err := s.writeSyncTasks(conn, session, reqID)
 		if err != nil {

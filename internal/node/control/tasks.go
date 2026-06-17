@@ -119,8 +119,10 @@ func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint6
 
 func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,
 	task protocol.SyncTask) (uint64, error) {
+	slots := c.availableSyncTaskSlots()
 	body, _ := json.Marshal(protocol.SyncTaskAck{
 		TaskID: task.TaskID, State: "running",
+		SyncTaskSlotsAvailable: &slots,
 	})
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "node sync task ack sent",
@@ -143,6 +145,8 @@ func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,
 
 func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64,
 	result protocol.SyncTaskResult) (uint64, error) {
+	slots := c.availableSyncTaskSlots()
+	result.SyncTaskSlotsAvailable = &slots
 	body, _ := json.Marshal(result)
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "node sync task result sent",
