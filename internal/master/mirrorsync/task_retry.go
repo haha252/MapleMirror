@@ -28,5 +28,8 @@ func (s Store) RetryTask(ctx context.Context, nodeID, taskID string) error {
 	if n, _ := result.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
 	}
+	if s.Runtime != nil {
+		s.Runtime.NotifySyncTasks(nodeID)
+	}
 	return nil
 }

@@ -10,6 +10,7 @@ type RuntimeStore struct {
 	sessions         map[string]runtimeSession
 	latest           map[string]runtimeNode
 	inventoryBatches map[string]runtimeInventoryBatch
+	syncTaskWake     map[string]int
 }
 
 type runtimeSession struct {
@@ -65,6 +66,7 @@ func NewRuntimeStore() *RuntimeStore {
 		sessions:         map[string]runtimeSession{},
 		latest:           map[string]runtimeNode{},
 		inventoryBatches: map[string]runtimeInventoryBatch{},
+		syncTaskWake:     map[string]int{},
 	}
 }
 

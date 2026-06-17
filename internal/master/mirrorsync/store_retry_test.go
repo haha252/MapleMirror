@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"mirror-server/internal/config"
+	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/storage"
 )
 
@@ -87,6 +88,24 @@ func TestRetryTaskRejectsInactiveTargets(t *testing.T) {
 			}
 			assertRetryTaskState(t, db, "task-1", "retry_wait")
 		})
+	}
+}
+
+func TestRetryTaskNotifiesRuntimeOnSuccess(t *testing.T) {
+	db, store := retryStore(t)
+	runtime := mastercontrol.NewRuntimeStore()
+	store.Runtime = runtime
+	runtime.StartSession(mastercontrol.Session{ID: "sess-1", NodeID: "node-1"})
+	seedRetryTask(t, db, "task-1", "retry_wait", "asset-1")
+
+	if err := store.RetryTask(context.Background(), "node-1", "task-1"); err != nil {
+		t.Fatal(err)
+	}
+	if !runtime.ConsumeSyncTaskWake("node-1") {
+		t.Fatal("successful retry should notify sync task wake")
+	}
+	if runtime.ConsumeSyncTaskWake("node-1") {
+		t.Fatal("wake notification should be consumed once")
 	}
 }
 

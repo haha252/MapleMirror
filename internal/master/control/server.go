@@ -105,7 +105,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 			slog.Int("heartbeat_timeout_seconds", int(s.HeartbeatTimeout.Seconds())))
 	}
 	for {
-		msg, err := readControlFrame(conn, s.sessionReadTimeout())
+		msg, wakeDispatched, err := s.readControlFrameOrDispatchWake(conn, session, reqID)
 		if err != nil {
 			closeReason = controlReadCloseReason(err)
 			if s.Logger != nil {
@@ -116,6 +116,16 @@ func (s ControlServer) Handle(conn net.Conn) {
 					slog.String("error", err.Error()))
 			}
 			return
+		}
+		if wakeDispatched > 0 {
+			if s.Logger != nil {
+				s.Logger.Debug(context.Background(), "同步任务唤醒已派发",
+					slog.String("request_id", reqID),
+					slog.String("session_id", session.ID),
+					slog.String("node_id", session.NodeID),
+					slog.Int("dispatched_tasks", wakeDispatched))
+			}
+			continue
 		}
 		if msg.NodeID != session.NodeID {
 			closeReason = "节点标识不匹配"
