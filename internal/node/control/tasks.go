@@ -117,6 +117,7 @@ func (c Client) handleDispatchedTask(conn net.Conn, reqID string, sequence uint6
 	}
 	next, err := c.sendTaskAck(conn, reqID, sequence, task)
 	if err != nil {
+		_ = c.revertAcceptedTask(task.TaskID)
 		c.releaseSyncTaskSlot()
 		return sequence, err
 	}
@@ -136,6 +137,14 @@ func (c Client) recordAcceptedTask(task protocol.SyncTask) error {
 		error_message = NULL, updated_at = excluded.updated_at`,
 		task.TaskID, task.Asset.AssetID, task.TaskType,
 		time.Now().UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+func (c Client) revertAcceptedTask(taskID string) error {
+	if c.DB == nil {
+		return nil
+	}
+	_, err := c.DB.Exec(`DELETE FROM local_sync_tasks WHERE task_id = ? AND state = 'running'`, taskID)
 	return err
 }
 
