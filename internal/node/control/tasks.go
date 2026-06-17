@@ -162,7 +162,7 @@ func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,
 			slog.String("task_id", task.TaskID),
 			slog.String("asset_id", task.Asset.AssetID))
 	}
-	messageID := reqID + "-task-ack"
+	messageID := reqID + "-" + task.TaskID + "-task-ack"
 	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: messageID,
 		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
