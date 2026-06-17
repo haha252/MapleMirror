@@ -138,6 +138,7 @@ func (r Repository) hasVerifiedPeer(ctx context.Context, tx *sql.Tx, nodeID, ass
 		AND n.public_download_base_url != '' AND ni.state = 'verified'
 		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
 		AND a.service_state IN ('candidate', 'pending') AND r.selected = 1 AND p.enabled = 1
-	)`, assetID, nodeID).Scan(&exists)
+		AND `+r.syncPeerPublicProbeSQL()+`
+	)`, r.syncPeerArgs(assetID, nodeID)...).Scan(&exists)
 	return err == nil && exists == 1
 }

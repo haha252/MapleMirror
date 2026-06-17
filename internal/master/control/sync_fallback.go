@@ -28,8 +28,9 @@ func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string
 		AND n.last_heartbeat_at != '' AND n.public_download_base_url != '' AND ni.state = 'verified'
 		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
 		AND a.service_state IN ('candidate', 'pending') AND r.selected = 1 AND p.enabled = 1
+		AND `+r.syncPeerPublicProbeSQL()+`
 		ORDER BY n.public_name, n.id LIMIT ?`,
-		task.Asset.AssetID, targetNodeID, maxSyncFallbackSources)
+		r.syncPeerArgs(task.Asset.AssetID, targetNodeID, maxSyncFallbackSources)...)
 	if err != nil {
 		return nil
 	}
@@ -55,6 +56,24 @@ func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string
 		source.Parts = r.replicationParts(task, nodeID, targetNodeID, expires)
 		out = append(out, source)
 	}
+	return out
+}
+
+func (r Repository) syncPeerPublicProbeSQL() string {
+	if r.PublicProbeNetworkFailures <= 0 {
+		return "1 = 1"
+	}
+	return "n.public_probe_network_failures < ?"
+}
+
+func (r Repository) syncPeerArgs(args ...any) []any {
+	if r.PublicProbeNetworkFailures <= 0 {
+		return args
+	}
+	out := make([]any, 0, len(args)+1)
+	out = append(out, args[:2]...)
+	out = append(out, r.PublicProbeNetworkFailures)
+	out = append(out, args[2:]...)
 	return out
 }
 

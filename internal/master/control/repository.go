@@ -16,11 +16,12 @@ import (
 )
 
 type Repository struct {
-	DB                  *sql.DB
-	Logger              *logging.Logger
-	Runtime             *RuntimeStore
-	ReplicationSigner   downloadtoken.Signer
-	ReplicationTokenTTL time.Duration
+	DB                         *sql.DB
+	Logger                     *logging.Logger
+	Runtime                    *RuntimeStore
+	ReplicationSigner          downloadtoken.Signer
+	ReplicationTokenTTL        time.Duration
+	PublicProbeNetworkFailures int
 }
 
 var defaultRuntime = NewRuntimeStore()

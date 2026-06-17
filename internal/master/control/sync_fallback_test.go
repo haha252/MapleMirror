@@ -120,6 +120,50 @@ func TestNextSyncTaskSkipsInvalidPeerFallbackSources(t *testing.T) {
 	}
 }
 
+func TestNextSyncTaskSkipsPublicProbeBlockedPeerFallbackSource(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	repo = withReplicationSigner(t, repo)
+	repo.PublicProbeNetworkFailures = 5
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedPeerNode(t, repo, "node-2", "公网不可达", "https://node-2.example.com")
+	seedVerifiedPeerAsset(t, repo, "node-2", "asset-1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+	markPeerPublicProbeFailures(t, repo, "node-2", 5)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || !ok {
+		t.Fatalf("expected sync task, ok=%v err=%v", ok, err)
+	}
+	if len(task.FallbackSources) != 0 {
+		t.Fatalf("public-probe blocked peer should not be sent, got %+v", task.FallbackSources)
+	}
+}
+
+func TestNextSyncTaskKeepsPeerFallbackSourceBelowPublicProbeThreshold(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	repo = withReplicationSigner(t, repo)
+	repo.PublicProbeNetworkFailures = 5
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedPeerNode(t, repo, "node-2", "偶发失败", "https://node-2.example.com")
+	seedVerifiedPeerAsset(t, repo, "node-2", "asset-1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+	markPeerPublicProbeFailures(t, repo, "node-2", 4)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || !ok {
+		t.Fatalf("expected sync task, ok=%v err=%v", ok, err)
+	}
+	if len(task.FallbackSources) != 1 || task.FallbackSources[0].NodeID != "node-2" {
+		t.Fatalf("peer below public-probe threshold should be sent, got %+v", task.FallbackSources)
+	}
+}
+
 func TestReplicationTokenTTLIsCapped(t *testing.T) {
 	repo := Repository{}
 	if got := repo.replicationTokenTTL(); got != maxReplicationTokenTTL {
@@ -149,6 +193,13 @@ func withReplicationSigner(t *testing.T, repo Repository) Repository {
 	repo.ReplicationSigner = signer
 	repo.ReplicationTokenTTL = time.Minute
 	return repo
+}
+
+func markPeerPublicProbeFailures(t *testing.T, repo Repository, nodeID string, failures int) {
+	t.Helper()
+	mustExecControl(t, repo.DB, `UPDATE nodes SET public_probe_network_failures = ?,
+		last_public_probe_result = 'network_error',
+		last_public_probe_error = 'i/o timeout' WHERE id = ?`, failures, nodeID)
 }
 
 func seedPeerNode(t *testing.T, repo Repository, nodeID, name, baseURL string) {

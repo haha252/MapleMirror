@@ -101,6 +101,7 @@ func main() {
 	repo := mastercontrol.Repository{
 		DB: database, Logger: logger, Runtime: runtime,
 		ReplicationSigner: tokenSigner, ReplicationTokenTTL: tokenTTL,
+		PublicProbeNetworkFailures: cfg.Node.PublicProbeNetworkFailures,
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
