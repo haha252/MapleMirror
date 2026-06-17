@@ -221,11 +221,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 		if !shouldDispatchNextTask(msg.MessageType) {
 			continue
 		}
-		if !result.SyncTaskSlotsKnown {
-			continue
-		}
-		s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
-		dispatched, err := s.writeSyncTasks(conn, session, reqID)
+		dispatched, err := s.dispatchSyncTasksAfterMessage(conn, session, reqID, result)
 		if err != nil {
 			closeReason = "同步任务下发失败: " + err.Error()
 			if s.Logger != nil {

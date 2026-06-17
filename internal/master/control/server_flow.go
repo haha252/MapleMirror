@@ -159,6 +159,13 @@ func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID stri
 	return dispatched, nil
 }
 
+func (s ControlServer) dispatchSyncTasksAfterMessage(conn net.Conn, session Session, reqID string, result controlMessageResult) (int, error) {
+	if result.SyncTaskSlotsKnown {
+		s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
+	}
+	return s.writeSyncTasks(conn, session, reqID)
+}
+
 func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {
 	msg, err := readControlFrame(conn, s.HeartbeatTimeout)
 	if err != nil {
