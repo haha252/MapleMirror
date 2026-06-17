@@ -74,7 +74,7 @@ type Heartbeat struct {
 	FreeBytes               int64          `json:"free_bytes"`
 	PublicDownloadBaseURL   string         `json:"public_download_base_url"`
 	MaxMirrorProjects       int            `json:"max_mirror_projects"`
-	SyncTaskSlotsAvailable  int            `json:"sync_task_slots_available,omitempty"`
+	SyncTaskSlotsAvailable  *int           `json:"sync_task_slots_available,omitempty"`
 	Pressure                PressureSample `json:"pressure"`
 	InventoryDigest         string         `json:"inventory_digest"`
 	InventoryReportRevision uint64         `json:"inventory_report_revision"`
@@ -112,7 +112,7 @@ type PressureReport struct {
 	ActiveDownloads        int64     `json:"active_downloads"`
 	FreeBytes              int64     `json:"free_bytes"`
 	MaxMirrorProjects      int       `json:"max_mirror_projects"`
-	SyncTaskSlotsAvailable int       `json:"sync_task_slots_available,omitempty"`
+	SyncTaskSlotsAvailable *int      `json:"sync_task_slots_available,omitempty"`
 }
 
 type SyncAsset struct {

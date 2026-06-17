@@ -59,6 +59,86 @@ func TestHandleMessageLearnsSlotsFromTaskResultAckAndInventory(t *testing.T) {
 	}
 }
 
+func TestHandleMessageDoesNotLearnMissingHeartbeatOrPressureSlots(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	control := ControlServer{Repo: repo}
+
+	heartbeatBody := []byte(`{
+		"status": "syncing",
+		"uptime_seconds": 10,
+		"active_downloads": 0,
+		"free_bytes": 0,
+		"pressure": {
+			"target_bandwidth_bps": 0,
+			"actual_bandwidth_bps": 0,
+			"ratio": 0
+		}
+	}`)
+	result, err := control.handleMessage(session, envelopeWithRawPayload(session, protocol.TypeHeartbeat, 1, heartbeatBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SyncTaskSlotsKnown {
+		t.Fatalf("old heartbeat without slots must not mark capacity known: %+v", result)
+	}
+	if _, known := repo.runtime().SyncTaskDispatchCapacity(session.NodeID); known {
+		t.Fatal("old heartbeat should not overwrite runtime slot knowledge")
+	}
+
+	reportBody := []byte(`{
+		"report_id": "pressure-old",
+		"sampled_at": "2026-05-28T02:02:00Z",
+		"sample_window_seconds": 10,
+		"target_bandwidth_bps": 0,
+		"actual_bandwidth_bps": 0,
+		"pressure_ratio": 0,
+		"active_downloads": 0,
+		"free_bytes": 0,
+		"max_mirror_projects": 0
+	}`)
+	result, err = control.handleMessage(session, envelopeWithRawPayload(session, protocol.TypePressureReport, 2, reportBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SyncTaskSlotsKnown {
+		t.Fatalf("old pressure report without slots must not mark capacity known: %+v", result)
+	}
+	if _, known := repo.runtime().SyncTaskDispatchCapacity(session.NodeID); known {
+		t.Fatal("old pressure report should not overwrite runtime slot knowledge")
+	}
+}
+
+func TestHandleMessageLearnsExplicitZeroHeartbeatOrPressureSlots(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	control := ControlServer{Repo: repo}
+	zero := 0
+
+	result, err := control.handleMessage(session, envelopeWithPayload(t, session, protocol.TypeHeartbeat, 1, protocol.Heartbeat{
+		Status: "syncing", SyncTaskSlotsAvailable: &zero,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.SyncTaskSlotsKnown || result.SyncTaskSlotsAvailable != 0 {
+		t.Fatalf("explicit heartbeat zero slots not learned: %+v", result)
+	}
+
+	result, err = control.handleMessage(session, envelopeWithPayload(t, session, protocol.TypePressureReport, 2, protocol.PressureReport{
+		ReportID: "pressure-zero", SampledAt: time.Now().UTC(), SampleWindowSeconds: 10,
+		SyncTaskSlotsAvailable: &zero,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.SyncTaskSlotsKnown || result.SyncTaskSlotsAvailable != 0 {
+		t.Fatalf("explicit pressure zero slots not learned: %+v", result)
+	}
+}
+
 func envelopeWithPayload(t *testing.T, session Session, messageType string, sequence uint64, payload any) protocol.Envelope {
 	t.Helper()
 	body, err := json.Marshal(payload)
@@ -74,5 +154,18 @@ func envelopeWithPayload(t *testing.T, session Session, messageType string, sequ
 		RequestID:       session.RequestID,
 		Sequence:        sequence,
 		Payload:         body,
+	}
+}
+
+func envelopeWithRawPayload(session Session, messageType string, sequence uint64, payload []byte) protocol.Envelope {
+	return protocol.Envelope{
+		ProtocolVersion: protocol.Version,
+		MessageID:       "msg",
+		MessageType:     messageType,
+		SentAt:          time.Now().UTC(),
+		NodeID:          session.NodeID,
+		RequestID:       session.RequestID,
+		Sequence:        sequence,
+		Payload:         payload,
 	}
 }

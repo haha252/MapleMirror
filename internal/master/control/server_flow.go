@@ -25,11 +25,12 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
-		return controlMessageResult{
-			HeartbeatResult:        result,
-			SyncTaskSlotsAvailable: hb.SyncTaskSlotsAvailable,
-			SyncTaskSlotsKnown:     true,
-		}, err
+		out := controlMessageResult{HeartbeatResult: result}
+		if hb.SyncTaskSlotsAvailable != nil {
+			out.SyncTaskSlotsAvailable = *hb.SyncTaskSlotsAvailable
+			out.SyncTaskSlotsKnown = true
+		}
+		return out, err
 	case protocol.TypeInventoryReport:
 		var report protocol.InventoryReport
 		if err := json.Unmarshal(msg.Payload, &report); err != nil {
@@ -48,11 +49,12 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
-		return controlMessageResult{
-			HeartbeatResult:        result,
-			SyncTaskSlotsAvailable: report.SyncTaskSlotsAvailable,
-			SyncTaskSlotsKnown:     true,
-		}, err
+		out := controlMessageResult{HeartbeatResult: result}
+		if report.SyncTaskSlotsAvailable != nil {
+			out.SyncTaskSlotsAvailable = *report.SyncTaskSlotsAvailable
+			out.SyncTaskSlotsKnown = true
+		}
+		return out, err
 	case protocol.TypeSyncTaskAck:
 		var ack protocol.SyncTaskAck
 		if err := json.Unmarshal(msg.Payload, &ack); err != nil {

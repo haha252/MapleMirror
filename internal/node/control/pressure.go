@@ -24,7 +24,7 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 		ActiveDownloads:        active,
 		FreeBytes:              0,
 		MaxMirrorProjects:      c.MaxMirrorProjects,
-		SyncTaskSlotsAvailable: slots,
+		SyncTaskSlotsAvailable: &slots,
 	})
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点发送压力报告",
