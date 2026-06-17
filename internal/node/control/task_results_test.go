@@ -127,6 +127,43 @@ func TestStorePendingTaskResultStopsRunningAck(t *testing.T) {
 	}
 }
 
+func TestInventoryReconcileResultKeepsExistingForceRequest(t *testing.T) {
+	db := openNodeDB(t)
+	defer db.Close()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := db.Exec(`INSERT INTO local_sync_tasks
+		(task_id, asset_id, task_type, state, updated_at)
+		VALUES ('task-reconcile', NULL, 'inventory_reconcile', 'running', ?)`, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO inventory_report_cursor
+		(id, next_revision, last_acked_revision, updated_at, force_report_requested_at)
+		VALUES (1, 7, 6, ?, 'force-existing')`, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client := Client{NodeID: "node-1", DB: db}
+	err = client.storePendingTaskResult(protocol.SyncTaskResult{
+		TaskID: "task-reconcile",
+		Result: "succeeded",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var forceRequestedAt string
+	err = db.QueryRow(`SELECT COALESCE(force_report_requested_at, '')
+		FROM inventory_report_cursor WHERE id = 1`).Scan(&forceRequestedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if forceRequestedAt != "force-existing" {
+		t.Fatalf("inventory reconcile result refreshed existing force marker: %q", forceRequestedAt)
+	}
+}
+
 func TestStorePendingTaskResultRetriesLockedDatabase(t *testing.T) {
 	db := openNodeDB(t)
 	defer db.Close()

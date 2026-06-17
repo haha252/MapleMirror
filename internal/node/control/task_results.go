@@ -239,7 +239,7 @@ func forceInventoryReportDue(tx *sql.Tx) error {
 		return err
 	}
 	_, err := tx.Exec(`UPDATE inventory_report_cursor
-		SET force_report_requested_at = ?
+		SET force_report_requested_at = COALESCE(NULLIF(force_report_requested_at, ''), ?)
 		WHERE id = 1`, now)
 	return err
 }

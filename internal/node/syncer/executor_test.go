@@ -86,6 +86,37 @@ func TestInventoryReconcileForcesNextFullInventoryReport(t *testing.T) {
 	}
 }
 
+func TestInventoryReconcileKeepsExistingForceRequest(t *testing.T) {
+	db := openSyncerNodeDB(t)
+	defer db.Close()
+	recent := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := db.Exec(`INSERT INTO inventory_report_cursor
+		(id, next_revision, last_acked_revision, updated_at, force_report_requested_at)
+		VALUES (1, 7, 6, ?, 'force-existing')`, recent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := Executor{DB: db}
+	result := exec.Execute(context.Background(), protocol.SyncTask{
+		TaskID:   "task-reconcile",
+		TaskType: "inventory_reconcile",
+	})
+	if result.Result != "succeeded" {
+		t.Fatalf("inventory reconcile result = %+v", result)
+	}
+
+	var forceRequestedAt string
+	err = db.QueryRow(`SELECT COALESCE(force_report_requested_at, '')
+		FROM inventory_report_cursor WHERE id = 1`).Scan(&forceRequestedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if forceRequestedAt != "force-existing" {
+		t.Fatalf("inventory reconcile refreshed existing force marker: %q", forceRequestedAt)
+	}
+}
+
 func openSyncerNodeDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := storage.OpenNode(filepath.Join(t.TempDir(), "node.db"))
