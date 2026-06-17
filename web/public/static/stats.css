@@ -101,6 +101,8 @@
   position: fixed;
   z-index: 30;
   min-width: 160px;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -108,6 +110,7 @@
   box-shadow: var(--shadow);
   pointer-events: none;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 .node-table {
   display: block;

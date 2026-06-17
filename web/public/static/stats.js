@@ -59,9 +59,11 @@
     const rect = chart.getBoundingClientRect();
     const leftHalf = event.clientX < rect.left + rect.width / 2;
     const tipW = tooltip.offsetWidth || 160;
+    const tipH = tooltip.offsetHeight || 0;
     const x = leftHalf ? event.clientX - tipW - 14 : event.clientX + 14;
+    const y = event.clientY - tipH - 14;
     tooltip.style.left = Math.max(8, Math.min(x, window.innerWidth - tipW - 8)) + "px";
-    tooltip.style.top = Math.max(8, event.clientY - tooltip.offsetHeight - 14) + "px";
+    tooltip.style.top = Math.max(8, Math.min(y, window.innerHeight - tipH - 8)) + "px";
   }
 
   function smoothPath(points) {

@@ -16,8 +16,8 @@
     justify-content: flex-start;
     gap: 8px;
     padding: 8px;
-    background: var(--bg);
-    pointer-events: auto;
+    background: transparent;
+    pointer-events: none;
   }
   .site-header__left {
     flex: 0 1 auto;
