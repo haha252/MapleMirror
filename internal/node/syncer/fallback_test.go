@@ -181,6 +181,9 @@ func TestDownloadRejectsPeerDigestMismatch(t *testing.T) {
 	if result.Result != "digest_mismatch" {
 		t.Fatalf("peer digest mismatch should fail: %+v", result)
 	}
+	if !result.PeerFallbackAttempted {
+		t.Fatalf("peer digest mismatch should report fallback attempt: %+v", result)
+	}
 	if _, err := os.Stat(filepath.Join(storageDir, "p1", "v1", "a.zip")); !os.IsNotExist(err) {
 		t.Fatalf("mismatched peer asset should not be stored: %v", err)
 	}

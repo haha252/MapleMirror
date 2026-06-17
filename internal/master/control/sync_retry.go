@@ -56,8 +56,8 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 		return "succeeded", attempts, "", err
 	case "temporary_error", "digest_mismatch", "size_mismatch":
 		nextAttempts := attempts + 1
-		if result.Result == "temporary_error" && r.hasVerifiedPeer(ctx, tx, nodeID, result.AssetID) &&
-			attempts == 0 {
+		if result.Result == "temporary_error" && !result.PeerFallbackAttempted &&
+			r.hasVerifiedPeer(ctx, tx, nodeID, result.AssetID) {
 			_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
 				attempts = ?, error_message = ?, retry_after = NULL,
 				lease_expires_at = NULL, updated_at = ?

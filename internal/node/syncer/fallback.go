@@ -8,10 +8,11 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmpPath string) (string, int64, error) {
+func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmpPath string) (string, int64, bool, error) {
 	var lastDigest string
 	var lastSize int64
 	var lastErr error
+	attempted := false
 	for _, source := range task.FallbackSources {
 		_ = os.Remove(tmpPath)
 		if e.Logger != nil {
@@ -25,6 +26,12 @@ func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmp
 			lastErr = err
 			continue
 		}
+		if err := validateSourceURL(source.DownloadURL, e.AllowPrivateSourceURLs); err != nil {
+			releasePeerFallback()
+			lastErr = err
+			continue
+		}
+		attempted = true
 		digest, size, err := e.fetchPeerSource(ctx, task, source, tmpPath)
 		releasePeerFallback()
 		if err != nil {
@@ -33,12 +40,12 @@ func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmp
 			lastSize = size
 			continue
 		}
-		return digest, size, nil
+		return digest, size, attempted, nil
 	}
 	if lastErr == nil {
 		lastErr = os.ErrNotExist
 	}
-	return lastDigest, lastSize, lastErr
+	return lastDigest, lastSize, attempted, lastErr
 }
 
 func (e Executor) fetchPeerSource(ctx context.Context, task protocol.SyncTask,

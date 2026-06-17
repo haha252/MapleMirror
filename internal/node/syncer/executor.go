@@ -108,6 +108,7 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 		return taskResult(task, "temporary_error", "", 0, "创建临时文件路径失败")
 	}
 	defer os.Remove(tmpPath)
+	peerFallbackAttempted := false
 	digest, size, err := e.fetchPrimary(ctx, task, tmpPath)
 	if err != nil {
 		if e.Logger != nil {
@@ -133,13 +134,13 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 			}
 			return taskResult(task, "temporary_error", digest, size, "下载资产失败")
 		}
-		digest, size, err = e.fetchFallback(ctx, task, tmpPath)
+		digest, size, peerFallbackAttempted, err = e.fetchFallback(ctx, task, tmpPath)
 		if err != nil {
 			_ = os.Remove(tmpPath)
 			if errors.Is(err, errAssetTooLarge) {
-				return taskResult(task, "size_mismatch", digest, size, "资产大小超过期望")
+				return taskResultWithPeerFallback(task, "size_mismatch", digest, size, "资产大小超过期望", peerFallbackAttempted)
 			}
-			return taskResult(task, "temporary_error", digest, size, "下载资产失败")
+			return taskResultWithPeerFallback(task, "temporary_error", digest, size, "下载资产失败", peerFallbackAttempted)
 		}
 	}
 	if digest != task.Asset.DigestSHA256 {
@@ -151,7 +152,7 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 				slog.String("expected_digest", task.Asset.DigestSHA256),
 				slog.String("actual_digest", digest))
 		}
-		return taskResult(task, "digest_mismatch", digest, size, "资产摘要不匹配")
+		return taskResultWithPeerFallback(task, "digest_mismatch", digest, size, "资产摘要不匹配", peerFallbackAttempted)
 	}
 	if size != task.Asset.SizeBytes {
 		_ = os.Remove(tmpPath)
@@ -162,7 +163,7 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 				slog.Int64("expected_size_bytes", task.Asset.SizeBytes),
 				slog.Int64("actual_size_bytes", size))
 		}
-		return taskResult(task, "size_mismatch", digest, size, "资产大小不匹配")
+		return taskResultWithPeerFallback(task, "size_mismatch", digest, size, "资产大小不匹配", peerFallbackAttempted)
 	}
 	rel := relativeAssetPath(task.Asset)
 	finalPath := filepath.Join(e.Storage, rel)
@@ -180,4 +181,10 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 			slog.Int64("size_bytes", size))
 	}
 	return result
+}
+
+func taskResultWithPeerFallback(task protocol.SyncTask, result, digest string, size int64, message string, peerFallbackAttempted bool) protocol.SyncTaskResult {
+	out := taskResult(task, result, digest, size, message)
+	out.PeerFallbackAttempted = peerFallbackAttempted
+	return out
 }

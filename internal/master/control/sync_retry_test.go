@@ -151,15 +151,48 @@ func TestRepeatedTemporaryErrorWithVerifiedPeerUsesBackoff(t *testing.T) {
 	markTaskRunning(t, repo, "task-1")
 	start := time.Now().UTC()
 	_, err = repo.AcceptSyncTaskResult(context.Background(), session, 2, protocol.SyncTaskResult{
-		TaskID:  "task-1",
-		AssetID: "asset-1",
-		Result:  "temporary_error",
-		Message: "peer 不可用",
+		TaskID:                "task-1",
+		AssetID:               "asset-1",
+		Result:                "temporary_error",
+		Message:               "peer 不可用",
+		PeerFallbackAttempted: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertTaskRetryState(t, repo, "task-1", "retry_wait", 2, start, 9*time.Second, 11*time.Second)
+}
+
+func TestTemporaryErrorRetriesImmediatelyWhenPeerAppearsAfterBackoff(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 1, "")
+	markTaskRunning(t, repo, "task-1")
+	seedPeerNode(t, repo, "node-2", "源节点", "https://node-2.example.com")
+	seedVerifiedPeerAsset(t, repo, "node-2", "asset-1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 10)
+
+	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
+		TaskID:  "task-1",
+		AssetID: "asset-1",
+		Result:  "temporary_error",
+		Message: "源站仍不可用",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	var attempts int
+	var retryAfter sql.NullString
+	err = repo.DB.QueryRow(`SELECT state, attempts, retry_after FROM node_tasks WHERE id = 'task-1'`).
+		Scan(&state, &attempts, &retryAfter)
+	if err != nil || state != "pending" || attempts != 2 || (retryAfter.Valid && retryAfter.String != "") {
+		t.Fatalf("newly available peer should bypass backoff, state=%s attempts=%d retry=%q err=%v",
+			state, attempts, retryAfter.String, err)
+	}
 }
 
 func TestNextSyncTaskDispatchesRetryWaitAfterDeadline(t *testing.T) {

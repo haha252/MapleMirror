@@ -161,6 +161,7 @@ type SyncTaskResult struct {
 	LocalDigestSHA256      string `json:"local_digest_sha256,omitempty"`
 	SizeBytes              int64  `json:"size_bytes,omitempty"`
 	Message                string `json:"message,omitempty"`
+	PeerFallbackAttempted  bool   `json:"peer_fallback_attempted,omitempty"`
 	SyncTaskSlotsAvailable *int   `json:"sync_task_slots_available,omitempty"`
 }
 

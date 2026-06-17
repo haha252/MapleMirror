@@ -92,9 +92,12 @@ func TestSourceProbeRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
 func TestFetchFallbackRejectsUnsafePeerURL(t *testing.T) {
 	task := fallbackTask("https://example.com/asset.zip", "http://127.0.0.1:8080/asset.zip", digest("abcdef"), 6)
 	tmp := filepath.Join(t.TempDir(), "asset.tmp")
-	_, _, err := (Executor{}).fetchFallback(context.Background(), task, tmp)
+	_, _, attempted, err := (Executor{}).fetchFallback(context.Background(), task, tmp)
 	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected unsafe fallback rejection, got %v", err)
+	}
+	if attempted {
+		t.Fatal("unsafe fallback URL should be rejected before peer attempt")
 	}
 	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
 		t.Fatalf("unsafe fallback should not leave temp file, err=%v", err)
@@ -107,9 +110,12 @@ func TestFetchFallbackRejectsDNSPrivatePeerURL(t *testing.T) {
 	task := fallbackTask("https://example.com/asset.zip",
 		"http://public.example.test:8080/internal/replication/asset-1", digest("abcdef"), 6)
 	tmp := filepath.Join(t.TempDir(), "asset.tmp")
-	_, _, err := (Executor{Client: &http.Client{Transport: &http.Transport{}}}).fetchFallback(context.Background(), task, tmp)
+	_, _, attempted, err := (Executor{Client: &http.Client{Transport: &http.Transport{}}}).fetchFallback(context.Background(), task, tmp)
 	if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
 		t.Fatalf("expected DNS private fallback rejection, got %v", err)
+	}
+	if !attempted {
+		t.Fatal("DNS fallback rejection should count as a peer attempt")
 	}
 	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
 		t.Fatalf("unsafe fallback should not leave temp file, err=%v", err)
