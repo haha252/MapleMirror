@@ -53,6 +53,7 @@ func deleteNodeData(ctx context.Context, tx *sql.Tx, nodeID string) error {
 		`DELETE FROM node_tasks WHERE node_id = ?`,
 		`DELETE FROM node_inventory WHERE node_id = ?`,
 		`DELETE FROM target_inventory WHERE node_id = ?`,
+		`DELETE FROM node_project_assignments WHERE node_id = ?`,
 		`DELETE FROM node_certificates WHERE node_id = ?`,
 		`DELETE FROM nodes WHERE id = ?`,
 	}
