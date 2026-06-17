@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestRunOnceKeepsFreshLocalRunningTask(t *testing.T) {
+func TestRunOnceInterruptsFreshLocalRunningTask(t *testing.T) {
 	db := openNodeDB(t)
 	defer db.Close()
 	_, err := db.Exec(`INSERT INTO local_sync_tasks
@@ -24,7 +24,13 @@ func TestRunOnceKeepsFreshLocalRunningTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state != "running" {
-		t.Fatalf("fresh running task should keep running, got=%s", state)
+	if state != "interrupted" {
+		t.Fatalf("fresh running task should be interrupted, got=%s", state)
+	}
+	var result string
+	err = db.QueryRow(`SELECT result FROM pending_sync_task_results
+		WHERE task_id = 'task-1'`).Scan(&result)
+	if err != nil || result != "temporary_error" {
+		t.Fatalf("interrupted task result=%q err=%v", result, err)
 	}
 }

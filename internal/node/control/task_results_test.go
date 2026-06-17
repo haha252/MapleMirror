@@ -195,6 +195,12 @@ func TestRunOnceClearsInterruptedLocalRunningTasks(t *testing.T) {
 	if state != "interrupted" {
 		t.Fatalf("控制连接重新建立前应清理本地 running 状态，got=%s", state)
 	}
+	var result string
+	err = db.QueryRow(`SELECT result FROM pending_sync_task_results
+		WHERE task_id = 'task-1'`).Scan(&result)
+	if err != nil || result != "temporary_error" {
+		t.Fatalf("interrupted task should enqueue temporary_error, result=%q err=%v", result, err)
+	}
 }
 
 func TestShouldLogRunningTaskAckRateLimitsPerTask(t *testing.T) {
