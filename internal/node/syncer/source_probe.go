@@ -14,6 +14,8 @@ import (
 
 const sourceProbeTTL = time.Minute
 
+var errPrimarySourceDisabled = errors.New("节点配置为仅从其他节点复制")
+
 type SourceProbe struct {
 	client       *http.Client
 	allowPrivate bool
@@ -42,6 +44,9 @@ func NewUnsafeSourceProbe(client *http.Client) *SourceProbe {
 }
 
 func (e Executor) fetchPrimary(ctx context.Context, task protocol.SyncTask, tmpPath string) (string, int64, error) {
+	if e.ForcePeerDownload {
+		return "", 0, errPrimarySourceDisabled
+	}
 	if e.Probe == nil {
 		return e.fetch(ctx, task.Asset.DownloadURL, tmpPath, task.Asset.SizeBytes)
 	}

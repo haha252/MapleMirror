@@ -40,6 +40,8 @@ sync:
   max_workers: 2
   # 本节点最多自动承接的镜像项目数；0 表示不限制，保持全量镜像。
   max_mirror_projects: 0
+  # 是否强制只从其他下载节点复制资产；启用后不会尝试 GitHub 源站，缺少可用节点副本时等待主节点重试。
+  force_peer_download: false
   # 单个同步下载限速；支持 MiB/s、MB/s、Mbps，"0" 表示不限制。
   bandwidth_limit: "0"
   # peer fallback 单文件分片下载并发数。

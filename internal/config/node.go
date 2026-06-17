@@ -48,6 +48,7 @@ type Bandwidth struct {
 type Sync struct {
 	MaxWorkers               int    `yaml:"max_workers"`
 	MaxMirrorProjects        int    `yaml:"max_mirror_projects"`
+	ForcePeerDownload        bool   `yaml:"force_peer_download"`
 	BandwidthLimit           string `yaml:"bandwidth_limit"`
 	BandwidthLimitBPS        int64  `yaml:"-"`
 	PeerFallbackWorkers      int    `yaml:"peer_fallback_workers"`
