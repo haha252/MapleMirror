@@ -76,7 +76,7 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		Title:        "枫源镜像",
 		BrowserTitle: "枫源镜像",
 		Subtitle:     mirrorDescription,
-		Notice:       "等待腾讯云接入备案，以进行后续工作",
+		Notice:       "备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！",
 		Description:  mirrorDescription,
 		BodyClass:    "page-download",
 		Body:         body,

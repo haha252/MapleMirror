@@ -27,7 +27,7 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `<meta name="description" content="枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供高速且稳定的下载服务，获取到软件的最新版本。">`) {
 		t.Fatalf("expected mirror description meta in page: %s", body)
 	}
-	if !strings.Contains(body, `<div class="page-notice" role="status" aria-live="polite">等待腾讯云接入备案，以进行后续工作</div>`) {
+	if !strings.Contains(body, `<div class="page-notice" role="status" aria-live="polite">备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！</div>`) {
 		t.Fatalf("expected test notice in page: %s", body)
 	}
 	if !strings.Contains(body, `class="project-card panel-card"`) {
