@@ -126,6 +126,53 @@ func TestStorePendingTaskResultStopsRunningAck(t *testing.T) {
 	}
 }
 
+func TestStorePendingTaskResultRetriesLockedDatabase(t *testing.T) {
+	db := openNodeDB(t)
+	defer db.Close()
+	_, err := db.Exec(`INSERT INTO local_sync_tasks
+		(task_id, asset_id, task_type, state, updated_at)
+		VALUES ('task-1', 'asset-1', 'asset_download', 'running', ?)`,
+		time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockTx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lockTx.Exec(`INSERT INTO pending_sync_task_results
+		(task_id, asset_id, result, created_at)
+		VALUES ('lock-holder', 'asset-lock', 'temporary_error', ?)`,
+		time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_ = lockTx.Rollback()
+		close(released)
+	}()
+	client := Client{NodeID: "node-1", DB: db}
+	err = client.storePendingTaskResultWithRetry(protocol.SyncTaskResult{
+		TaskID:  "task-1",
+		AssetID: "asset-1",
+		Result:  "succeeded",
+		Message: "ok",
+	})
+	<-released
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result string
+	if err := db.QueryRow(`SELECT result FROM pending_sync_task_results
+		WHERE task_id = 'task-1'`).Scan(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result != "succeeded" {
+		t.Fatalf("stored result=%s", result)
+	}
+}
+
 func TestRunOnceClearsInterruptedLocalRunningTasks(t *testing.T) {
 	db := openNodeDB(t)
 	defer db.Close()

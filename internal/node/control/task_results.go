@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
 	"mirror-server/internal/protocol"
 )
+
+const pendingTaskResultStoreAttempts = 5
 
 func (c *Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
 	if c.DB == nil {
@@ -132,7 +135,7 @@ func (c *Client) executeTaskAsync(task protocol.SyncTask) {
 				slog.String("result", result.Result),
 				slog.Int64("size_bytes", result.SizeBytes))
 		}
-		if err := c.storePendingTaskResult(result); err != nil && c.Logger != nil {
+		if err := c.storePendingTaskResultWithRetry(result); err != nil && c.Logger != nil {
 			c.Logger.Warn(context.Background(), "节点保存待上报同步结果失败",
 				slog.String("node_id", c.NodeID),
 				slog.String("task_id", result.TaskID),
@@ -140,6 +143,30 @@ func (c *Client) executeTaskAsync(task protocol.SyncTask) {
 				slog.String("error", err.Error()))
 		}
 	}()
+}
+
+func (c *Client) storePendingTaskResultWithRetry(result protocol.SyncTaskResult) error {
+	var err error
+	for attempt := 1; attempt <= pendingTaskResultStoreAttempts; attempt++ {
+		err = c.storePendingTaskResult(result)
+		if err == nil {
+			return nil
+		}
+		if !retryableSQLiteError(err) {
+			return err
+		}
+		time.Sleep(time.Duration(attempt*25) * time.Millisecond)
+	}
+	return err
+}
+
+func retryableSQLiteError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "busy") ||
+		strings.Contains(message, "locked")
 }
 
 func (c *Client) storePendingTaskResult(result protocol.SyncTaskResult) error {
