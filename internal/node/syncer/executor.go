@@ -175,6 +175,9 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 	rel := relativeAssetPath(task.Asset)
 	finalPath := filepath.Join(e.Storage, rel)
 	result := e.commitAsset(task, tmpPath, finalPath, rel, digest, size)
+	if peerFallbackAttempted {
+		result.PeerFallbackAttempted = true
+	}
 	if result.Result != "succeeded" {
 		return result
 	}

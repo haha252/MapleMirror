@@ -51,11 +51,13 @@ func (e Executor) fetchPeerParts(ctx context.Context, task protocol.SyncTask,
 			}
 		}()
 	}
+	sentAll := true
 sendLoop:
 	for _, part := range source.Parts {
 		select {
 		case jobs <- part:
 		case <-ctx.Done():
+			sentAll = false
 			break sendLoop
 		}
 	}
@@ -68,6 +70,9 @@ sendLoop:
 	case err := <-errs:
 		return "", 0, err
 	default:
+	}
+	if !sentAll {
+		return "", 0, ctx.Err()
 	}
 	return fileDigest(tmpPath)
 }

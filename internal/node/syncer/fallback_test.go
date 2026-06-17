@@ -61,8 +61,39 @@ func TestDownloadFallsBackToPeerWhenPrimaryFails(t *testing.T) {
 	if result.Result != "succeeded" || result.LocalDigestSHA256 != digest("abcdef") {
 		t.Fatalf("fallback download should succeed: %+v", result)
 	}
+	if !result.PeerFallbackAttempted {
+		t.Fatalf("successful fallback should report peer attempt: %+v", result)
+	}
 	if _, err := os.Stat(filepath.Join(storageDir, "p1", "v1", "a.zip")); err != nil {
 		t.Fatalf("fallback asset should be stored: %v", err)
+	}
+}
+
+func TestDownloadReportsPeerAttemptWhenFallbackCommitFails(t *testing.T) {
+	db, storageDir, tempDir := prepareSyncer(t)
+	if err := os.MkdirAll(storageDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storageDir, "p1"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "github unavailable", http.StatusBadGateway)
+	}))
+	defer primary.Close()
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("abcdef"))
+	}))
+	defer fallback.Close()
+
+	task := fallbackTask(primary.URL, fallback.URL, digest("abcdef"), 6)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
+	if result.Result != "temporary_error" {
+		t.Fatalf("commit failure should be temporary_error: %+v", result)
+	}
+	if !result.PeerFallbackAttempted {
+		t.Fatalf("commit failure after fallback should report peer attempt: %+v", result)
 	}
 }
 

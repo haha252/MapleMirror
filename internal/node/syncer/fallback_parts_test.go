@@ -94,6 +94,35 @@ func TestDownloadPeerPartFailureCleansTemp(t *testing.T) {
 	assertTempDirEmpty(t, tempDir)
 }
 
+func TestDownloadPeerPartsCanceledBeforeAllJobsDoesNotHashSparseTempFile(t *testing.T) {
+	db, storageDir, tempDir := prepareSyncer(t)
+	data := []byte("abcdefghijklmnopqrstuvwxyz012345")
+	started := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	fallback := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-started:
+		default:
+			close(started)
+			cancel()
+		}
+		http.Error(w, "late peer", http.StatusBadGateway)
+	}))
+	defer fallback.Close()
+	task := fallbackTask("http://primary.test:8080/asset.zip", fallback.URL, digest(string(data)), int64(len(data)))
+	task.FallbackSources[0].Parts = testParts(int64(len(data)), 8)
+
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: fallback.Client(),
+		AllowPrivateSourceURLs: true, PeerFallbackWorkers: 1, PeerFallbackMinSize: 1}).download(ctx, task)
+	if result.Result != "temporary_error" {
+		t.Fatalf("canceled peer parts should be temporary_error, got %+v", result)
+	}
+	if !result.PeerFallbackAttempted {
+		t.Fatalf("canceled peer parts should report fallback attempt: %+v", result)
+	}
+	assertTempDirEmpty(t, tempDir)
+}
+
 func testParts(size int64, count int) []protocol.SyncFallbackPart {
 	partSize := (size + int64(count) - 1) / int64(count)
 	parts := make([]protocol.SyncFallbackPart, 0, count)
