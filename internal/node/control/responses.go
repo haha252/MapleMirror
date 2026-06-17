@@ -53,6 +53,10 @@ func (c Client) readExpectedResponse(conn net.Conn, reqID string,
 
 func (c Client) readExpectedAck(conn net.Conn, reqID string, sequence *uint64,
 	expectedType, expectedReplyTo string) (protocol.Envelope, error) {
+	sentSequence := uint64(0)
+	if sequence != nil && *sequence > 0 {
+		sentSequence = *sequence - 1
+	}
 	msg, err := c.readExpectedResponse(conn, reqID, sequence, expectedType)
 	if err != nil {
 		return protocol.Envelope{}, err
@@ -60,7 +64,35 @@ func (c Client) readExpectedAck(conn net.Conn, reqID string, sequence *uint64,
 	if expectedReplyTo != "" && msg.ReplyTo != expectedReplyTo {
 		return protocol.Envelope{}, errors.New("主节点返回了错误的控制响应关联")
 	}
+	if err := validateAckSequence(msg, sentSequence); err != nil {
+		return protocol.Envelope{}, err
+	}
 	return msg, nil
+}
+
+func validateAckSequence(msg protocol.Envelope, sentSequence uint64) error {
+	if sentSequence == 0 {
+		return nil
+	}
+	switch msg.MessageType {
+	case protocol.TypeHeartbeatAck:
+		var ack protocol.HeartbeatAckPayload
+		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+			return err
+		}
+		if ack.AcceptedSequence < sentSequence {
+			return errors.New("主节点 ACK 序号未覆盖当前控制消息")
+		}
+	case protocol.TypeTrafficEventAck:
+		var ack protocol.TrafficEventAck
+		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+			return err
+		}
+		if ack.AcceptedSequence < sentSequence {
+			return errors.New("主节点流量 ACK 序号未覆盖当前控制消息")
+		}
+	}
+	return nil
 }
 
 func (c Client) decodeSyncTask(msg protocol.Envelope, reqID string) (protocol.SyncTask, error) {
