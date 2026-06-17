@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	mastercontrol "mirror-server/internal/master/control"
 )
 
 func TestNodeDeleteAPIUsesHighRiskAndRemovesNode(t *testing.T) {
@@ -60,6 +62,26 @@ func TestNodeProjectsAPIRejectsManualOverLimit(t *testing.T) {
 	server.nodeActionAPI(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNodeProjectsAPINotifiesRuntimeAfterSave(t *testing.T) {
+	server, db := newTestServer(t)
+	seedNodeProjectAdminData(t, db, 2)
+	runtime := mastercontrol.NewRuntimeStore()
+	runtime.StartSession(mastercontrol.Session{ID: "sess-1", NodeID: "node-1"})
+	server.syncStore.Runtime = runtime
+
+	req := httptest.NewRequest(http.MethodPut, "/admin/api/nodes/node-1/projects",
+		strings.NewReader(`{"assignment_mode":"manual","projects":["p1"]}`))
+	req = withAdminUser(req)
+	rec := httptest.NewRecorder()
+	server.nodeActionAPI(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !runtime.ConsumeSyncTaskWake("node-1") {
+		t.Fatal("saving node projects should notify active node")
 	}
 }
 

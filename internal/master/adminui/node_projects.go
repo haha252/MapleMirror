@@ -61,6 +61,9 @@ func (s *Server) saveNodeProjects(w http.ResponseWriter, r *http.Request, nodeID
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "节点项目分配保存失败"})
 		return
 	}
+	if s.syncStore.Runtime != nil {
+		s.syncStore.Runtime.NotifySyncTasks(nodeID)
+	}
 	_ = s.repo.Audit(r.Context(), "node.projects.update", "node", nodeID,
 		"success", requestID(r), "节点项目分配已更新", admin)
 	writeJSON(w, http.StatusOK, map[string]any{"message": "节点项目分配已保存", "node_id": nodeID})
