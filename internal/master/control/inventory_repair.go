@@ -113,7 +113,9 @@ func resetMissingDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now stri
 		error_message = NULL, retry_after = NULL, lease_expires_at = NULL,
 		updated_at = ? WHERE node_id = ? AND task_type = 'asset_download'
 		AND (
-			state = 'retry_wait'
+			(state = 'retry_wait' AND (
+				retry_after IS NULL OR retry_after = '' OR retry_after <= ?
+			))
 			OR (state IN ('sent', 'running') AND (
 				lease_expires_at IS NULL OR lease_expires_at = '' OR lease_expires_at <= ?
 			))
@@ -123,7 +125,7 @@ func resetMissingDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now stri
 			LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
 			WHERE ti.node_id = ? AND ti.desired_state = 'required'
 			AND (ni.asset_id IS NULL OR ni.state != 'verified')
-		)`, now, nodeID, now, nodeID)
+		)`, now, nodeID, now, now, nodeID)
 	if err != nil {
 		return 0, err
 	}
