@@ -11,7 +11,7 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
+func (c *Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
 	if c.DB == nil {
 		return sequence, nil
 	}
@@ -38,7 +38,7 @@ func (c Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence uin
 	return sequence, nil
 }
 
-func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
+func (c *Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64) (uint64, error) {
 	if c.DB == nil {
 		return sequence, nil
 	}
@@ -60,11 +60,11 @@ func (c Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint64
 	return sequence, nil
 }
 
-func (c Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64, ack protocol.SyncTaskAck) (uint64, error) {
+func (c *Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64, ack protocol.SyncTaskAck) (uint64, error) {
 	slots := c.availableSyncTaskSlots()
 	ack.SyncTaskSlotsAvailable = &slots
 	body, _ := json.Marshal(ack)
-	if c.Logger != nil {
+	if c.shouldLogRunningTaskAck(ack.TaskID) && c.Logger != nil {
 		c.Logger.Debug(context.Background(), "节点续报运行中的同步任务",
 			slog.String("node_id", c.NodeID),
 			slog.String("request_id", reqID),
@@ -82,6 +82,19 @@ func (c Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64,
 	return next, err
 }
 
+func (c *Client) shouldLogRunningTaskAck(taskID string) bool {
+	if c.runningTaskAckLogged == nil {
+		c.runningTaskAckLogged = map[string]time.Time{}
+	}
+	now := time.Now()
+	last, ok := c.runningTaskAckLogged[taskID]
+	if ok && now.Sub(last) < runningTaskAckLogInterval {
+		return false
+	}
+	c.runningTaskAckLogged[taskID] = now
+	return true
+}
+
 func scanPendingTaskResult(rows *sql.Rows) (protocol.SyncTaskResult, error) {
 	var result protocol.SyncTaskResult
 	err := rows.Scan(&result.TaskID, &result.AssetID, &result.Result,
@@ -89,7 +102,7 @@ func scanPendingTaskResult(rows *sql.Rows) (protocol.SyncTaskResult, error) {
 	return result, err
 }
 
-func (c Client) executeTaskAsync(task protocol.SyncTask) {
+func (c *Client) executeTaskAsync(task protocol.SyncTask) {
 	go func() {
 		defer c.releaseSyncTaskSlot()
 		ctx, cancel := context.WithTimeout(context.Background(), c.syncTaskTimeout())
@@ -128,7 +141,7 @@ func (c Client) executeTaskAsync(task protocol.SyncTask) {
 	}()
 }
 
-func (c Client) storePendingTaskResult(result protocol.SyncTaskResult) error {
+func (c *Client) storePendingTaskResult(result protocol.SyncTaskResult) error {
 	if c.DB == nil {
 		return nil
 	}

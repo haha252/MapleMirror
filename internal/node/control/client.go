@@ -19,6 +19,8 @@ const controlIOTimeout = 10 * time.Second
 
 const defaultSyncTaskTimeout = 30 * time.Minute
 
+const runningTaskAckLogInterval = time.Minute
+
 type Client struct {
 	NodeID                string
 	Address               string
@@ -39,7 +41,8 @@ type Client struct {
 	ProbeStore  interface {
 		Accept(protocol.PublicProbeChallenge) error
 	}
-	DialTLSContext func(context.Context, string, string, *tls.Config) (net.Conn, error)
+	DialTLSContext       func(context.Context, string, string, *tls.Config) (net.Conn, error)
+	runningTaskAckLogged map[string]time.Time
 }
 
 func (c Client) syncTaskTimeout() time.Duration {
@@ -50,6 +53,7 @@ func (c Client) syncTaskTimeout() time.Duration {
 }
 
 func (c Client) RunOnce() (time.Duration, error) {
+	c.runningTaskAckLogged = map[string]time.Time{}
 	if err := c.resetInterruptedLocalTasks(); err != nil {
 		return 0, err
 	}

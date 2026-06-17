@@ -149,3 +149,22 @@ func TestRunOnceClearsInterruptedLocalRunningTasks(t *testing.T) {
 		t.Fatalf("控制连接重新建立前应清理本地 running 状态，got=%s", state)
 	}
 }
+
+func TestShouldLogRunningTaskAckRateLimitsPerTask(t *testing.T) {
+	client := Client{
+		runningTaskAckLogged: map[string]time.Time{},
+	}
+	if !client.shouldLogRunningTaskAck("task-1") {
+		t.Fatal("first running ack should be logged")
+	}
+	if client.shouldLogRunningTaskAck("task-1") {
+		t.Fatal("duplicate running ack within window should not be logged")
+	}
+	client.runningTaskAckLogged["task-1"] = time.Now().Add(-runningTaskAckLogInterval - time.Second)
+	if !client.shouldLogRunningTaskAck("task-1") {
+		t.Fatal("running ack should be logged again after window expires")
+	}
+	if !client.shouldLogRunningTaskAck("task-2") {
+		t.Fatal("different task should have independent log window")
+	}
+}
