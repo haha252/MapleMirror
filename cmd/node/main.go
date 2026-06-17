@@ -93,12 +93,20 @@ func main() {
 
 func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger,
 	probes *nodeprobe.Store) http.Handler {
-	signer, err := downloadtoken.NewVerifierFromPublicFile(cfg.Download.VerifyPublicKeyFile)
+	identity := nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
+		KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile}
+	signer, err := identity.DownloadTokenVerifier()
 	if err != nil {
-		logger.Error(context.Background(), "下载令牌验证公钥加载失败，文件服务未启动", slog.String("error", err.Error()))
-		return nil
+		signer, err = downloadtoken.NewVerifierFromPublicFile(cfg.Download.VerifyPublicKeyFile)
+		if err != nil {
+			logger.Error(context.Background(), "下载令牌验证公钥加载失败，文件服务未启动", slog.String("error", err.Error()))
+			return nil
+		}
+		if data, readErr := os.ReadFile(cfg.Download.VerifyPublicKeyFile); readErr == nil {
+			_ = identity.SaveDownloadTokenPublicKey(data)
+		}
 	}
-	nodeID, err := (nodecontrol.IdentityStore{DB: db}).NodeID()
+	nodeID, err := identity.NodeID()
 	if err != nil {
 		logger.Warn(context.Background(), "节点身份尚未登记，文件服务未启动")
 		return nil
@@ -109,11 +117,17 @@ func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger,
 }
 
 func publicProbeStore(cfg config.Node, db *sql.DB, logger *logging.Logger) *nodeprobe.Store {
-	nodeID, err := (nodecontrol.IdentityStore{DB: db}).NodeID()
+	identity := nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
+		KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile}
+	nodeID, err := identity.NodeID()
 	if err != nil {
 		return nil
 	}
-	store, err := nodeprobe.NewStore(nodeID, cfg.TLS.KeyFile)
+	keyPEM, err := identity.PrivateKeyPEM()
+	if err != nil {
+		return nil
+	}
+	store, err := nodeprobe.NewStoreFromPEM(nodeID, keyPEM)
 	if err != nil {
 		logger.Warn(context.Background(), "节点公网探测签名材料加载失败",
 			slog.String("error", err.Error()))
@@ -126,7 +140,9 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 	if cfg.Master.EnrollmentAddress == "" || cfg.Pairing.CodeFile == "" {
 		return
 	}
-	if _, err := os.Stat(cfg.TLS.CertFile); err == nil {
+	identity := nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
+		KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile}
+	if _, err := identity.NodeID(); err == nil {
 		return
 	}
 	address, err := url.Parse(cfg.Master.EnrollmentAddress)
@@ -143,8 +159,7 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 		NodeName: cfg.Node.Name, Address: address.Host, TLSConfig: tlsCfg,
 		CodeFile: cfg.Pairing.CodeFile, CredentialFile: cfg.Pairing.CredentialFile,
 		TokenPublicKeyFile: cfg.Download.VerifyPublicKeyFile,
-		Identity: nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
-			KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile},
+		Identity:           identity,
 	}
 	go func() {
 		if err := enroller.RunOnce(); err != nil {
@@ -154,7 +169,9 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 }
 
 func interactiveEnrollIfNeeded(path string, cfg *config.Node, db *sql.DB) error {
-	if _, err := (nodecontrol.IdentityStore{DB: db}).NodeID(); err == nil {
+	identity := nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
+		KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile}
+	if _, err := identity.NodeID(); err == nil {
 		return nil
 	}
 	answers, err := bootstrap.NodeFirstRun(*cfg)
@@ -168,7 +185,10 @@ func interactiveEnrollIfNeeded(path string, cfg *config.Node, db *sql.DB) error 
 	if err := config.SaveNodeFirstRun(path, *cfg); err != nil {
 		return err
 	}
-	if err := bootstrap.WritePairingCode(cfg.Pairing.CodeFile, answers.PairingCode); err != nil {
+	if err := resetNodeLocalData(*cfg, db, nil); err != nil {
+		return err
+	}
+	if err := identity.SavePairingCode(answers.PairingCode); err != nil {
 		return err
 	}
 	address, err := url.Parse(cfg.Master.EnrollmentAddress)
@@ -179,18 +199,13 @@ func interactiveEnrollIfNeeded(path string, cfg *config.Node, db *sql.DB) error 
 		NodeName: cfg.Node.Name, Address: address.Host, TLSConfig: answers.TLSConfig,
 		CodeFile: cfg.Pairing.CodeFile, CredentialFile: cfg.Pairing.CredentialFile,
 		TokenPublicKeyFile: cfg.Download.VerifyPublicKeyFile,
-		Identity: nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
-			KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile},
+		Identity:           identity,
 	}
 	return enroller.RunUntilComplete(15 * time.Minute)
 }
 
 func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger,
 	probes *nodeprobe.Store) {
-	if cfg.TLS.CAFile == "" || cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
-		logger.Warn(context.Background(), "节点控制证书材料未配置，控制连接未启动")
-		return
-	}
 	address, err := url.Parse(cfg.Master.ControlAddress)
 	if err != nil {
 		logger.Error(context.Background(), "主节点控制地址无效", slog.String("error", err.Error()))

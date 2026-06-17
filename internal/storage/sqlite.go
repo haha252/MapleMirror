@@ -18,14 +18,14 @@ func OpenMaster(cfg config.Database) (*sql.DB, error) {
 		return nil, fmt.Errorf("数据库等待时间无效：%w", err)
 	}
 	wal := cfg.WAL != nil && *cfg.WAL
-	return open(cfg.Path, timeout, wal, "migrations/master/*.sql")
+	return open(cfg.Path, timeout, wal, databaseKindMaster)
 }
 
 func OpenNode(path string) (*sql.DB, error) {
-	return open(path, 5*time.Second, true, "migrations/node/*.sql")
+	return open(path, 5*time.Second, true, databaseKindNode)
 }
 
-func open(path string, timeout time.Duration, wal bool, pattern string) (*sql.DB, error) {
+func open(path string, timeout time.Duration, wal bool, kind string) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("创建数据库目录失败：%w", err)
 	}
@@ -38,7 +38,7 @@ func open(path string, timeout time.Duration, wal bool, pattern string) (*sql.DB
 		_ = db.Close()
 		return nil, err
 	}
-	if err := applyMigrations(db, pattern); err != nil {
+	if err := applyDatabaseVersion(db, kind); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

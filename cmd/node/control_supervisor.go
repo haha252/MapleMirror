@@ -6,12 +6,10 @@ import (
 	"errors"
 	"log/slog"
 	"net/url"
-	"os"
 	"time"
 
 	"mirror-server/internal/bootstrap"
 	"mirror-server/internal/config"
-	"mirror-server/internal/controltls"
 	"mirror-server/internal/logging"
 	nodecontrol "mirror-server/internal/node/control"
 	nodeprobe "mirror-server/internal/node/probe"
@@ -84,11 +82,12 @@ func nextDelay(interval, elapsed time.Duration) time.Duration {
 }
 
 func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Client, error) {
-	tlsCfg, err := controltls.NodeClient(s.cfg.TLS.CAFile, s.cfg.TLS.CertFile, s.cfg.TLS.KeyFile, s.cfg.TLS.ServerName)
+	store := nodecontrol.IdentityStore{DB: s.db, CertFile: s.cfg.TLS.CertFile,
+		KeyFile: s.cfg.TLS.KeyFile, CAFile: s.cfg.TLS.CAFile}
+	tlsCfg, err := store.TLSConfig(s.cfg.TLS.ServerName, true)
 	if err != nil {
 		return nil, err
 	}
-	store := nodecontrol.IdentityStore{DB: s.db}
 	nodeID, err := store.NodeID()
 	if err != nil {
 		return nil, err
@@ -148,19 +147,26 @@ func (s controlSupervisor) reEnroll(client *nodecontrol.Client, rejection nodeco
 	if code == "" {
 		return errors.New("未输入新的配对码")
 	}
-	if err := bootstrap.WritePairingCode(s.cfg.Pairing.CodeFile, code); err != nil {
+	identity := nodecontrol.IdentityStore{DB: s.db, CertFile: s.cfg.TLS.CertFile,
+		KeyFile: s.cfg.TLS.KeyFile, CAFile: s.cfg.TLS.CAFile}
+	tlsCfg, err := identity.TLSConfig(s.cfg.TLS.ServerName, false)
+	if err != nil {
 		return err
 	}
-	_ = os.Remove(s.cfg.Pairing.CredentialFile)
+	if err := resetNodeLocalData(s.cfg, s.db, s.logger); err != nil {
+		return err
+	}
+	if err := identity.SavePairingCode(code); err != nil {
+		return err
+	}
 	enroller := nodecontrol.Enroller{
 		NodeName:           s.cfg.Node.Name,
 		Address:            "",
-		TLSConfig:          nil,
+		TLSConfig:          tlsCfg,
 		CodeFile:           s.cfg.Pairing.CodeFile,
 		CredentialFile:     s.cfg.Pairing.CredentialFile,
 		TokenPublicKeyFile: s.cfg.Download.VerifyPublicKeyFile,
-		Identity: nodecontrol.IdentityStore{DB: s.db, CertFile: s.cfg.TLS.CertFile,
-			KeyFile: s.cfg.TLS.KeyFile, CAFile: s.cfg.TLS.CAFile},
+		Identity:           identity,
 	}
 	if s.cfg.Master.EnrollmentAddress == "" {
 		return errors.New("主节点登记地址为空，无法重新登记")
@@ -170,11 +176,6 @@ func (s controlSupervisor) reEnroll(client *nodecontrol.Client, rejection nodeco
 		return err
 	}
 	enroller.Address = parsed.Host
-	tlsCfg, err := controltls.NodeClient(s.cfg.TLS.CAFile, "", "", s.cfg.TLS.ServerName)
-	if err != nil {
-		return err
-	}
-	enroller.TLSConfig = tlsCfg
 	if s.logger != nil {
 		s.logger.Info(context.Background(), "节点开始重新登记",
 			slog.String("node_id", client.NodeID),

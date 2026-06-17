@@ -36,9 +36,13 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 18 {
-		t.Fatalf("主节点迁移重复执行不符合预期：count=%d err=%v", count, err)
+	assertDBVersion(t, db, "master", 1)
+	var legacyCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
+		t.Fatal(err)
+	}
+	if legacyCount != 0 {
+		t.Fatal("新数据库不应创建旧 schema_migrations 表")
 	}
 }
 
@@ -51,8 +55,14 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertTable(t, db, "local_assets")
 	assertTable(t, db, "pending_traffic_events")
 	assertTable(t, db, "control_identity")
+	assertTable(t, db, "node_enrollment_state")
 	assertTable(t, db, "local_sync_tasks")
 	assertTable(t, db, "pending_sync_task_results")
+	assertColumn(t, db, "control_identity", "certificate_pem")
+	assertColumn(t, db, "control_identity", "ca_pem")
+	assertColumn(t, db, "control_identity", "private_key_pem")
+	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
+	assertDBVersion(t, db, "node", 1)
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {
@@ -84,4 +94,15 @@ func assertColumn(t *testing.T, db *sql.DB, table, column string) {
 		}
 	}
 	t.Fatalf("缺少数据列 %s.%s", table, column)
+}
+
+func assertDBVersion(t *testing.T, db *sql.DB, kind string, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow(`SELECT version FROM database_version WHERE kind = ?`, kind).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("%s database version=%d want=%d", kind, got, want)
+	}
 }

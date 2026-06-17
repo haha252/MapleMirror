@@ -96,7 +96,7 @@ master:
 	assertFileContains(t, quotaPath, "auto_ban_duration")
 	assertFileContains(t, quotaPath, "请求次数额度桶配置")
 	assertFileContains(t, projectPath, "资产入选规则；空列表保持默认允许所有资产")
-	assertFileContains(t, nodePath, "下载节点只保存主节点下载令牌 Ed25519 公钥")
+	assertFileContains(t, nodePath, "旧版本下载令牌 Ed25519 公钥文件")
 	projectContent := readTestFile(t, projectPath)
 	if strings.Contains(projectContent, "project-icons/example.svg") ||
 		strings.Contains(projectContent, "\\\\.zip$") {

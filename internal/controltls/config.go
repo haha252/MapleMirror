@@ -55,6 +55,27 @@ func NodeClient(caFile, certFile, keyFile, serverName string) (*tls.Config, erro
 	return cfg, nil
 }
 
+func NodeClientFromPEM(caPEM, certPEM, keyPEM []byte, serverName string) (*tls.Config, error) {
+	if serverName == "" {
+		return nil, fmt.Errorf("节点 TLS 服务端名称不得为空")
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("CA 证书内容无效")
+	}
+	cfg := tls13()
+	cfg.RootCAs = pool
+	cfg.ServerName = serverName
+	if len(certPEM) > 0 || len(keyPEM) > 0 {
+		cert, err := tls.X509KeyPair(certPEM, keyPEM)
+		if err != nil {
+			return nil, fmt.Errorf("加载节点客户端证书失败：%w", err)
+		}
+		cfg.Certificates = []tls.Certificate{cert}
+	}
+	return cfg, nil
+}
+
 func serverConfig(cert tls.Certificate, clientCAFile string, auth tls.ClientAuthType) (*tls.Config, error) {
 	cfg := tls13()
 	cfg.Certificates = []tls.Certificate{cert}

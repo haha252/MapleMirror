@@ -26,8 +26,20 @@ func NewStore(nodeID, keyFile string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	return NewStoreFromKey(nodeID, key), nil
+}
+
+func NewStoreFromPEM(nodeID string, keyPEM []byte) (*Store, error) {
+	key, err := parsePrivateKey(keyPEM)
+	if err != nil {
+		return nil, err
+	}
+	return NewStoreFromKey(nodeID, key), nil
+}
+
+func NewStoreFromKey(nodeID string, key *ecdsa.PrivateKey) *Store {
 	return &Store{nodeID: nodeID, key: key,
-		items: map[string]protocol.PublicProbeResponse{}}, nil
+		items: map[string]protocol.PublicProbeResponse{}}
 }
 
 func (s *Store) Accept(challenge protocol.PublicProbeChallenge) error {
@@ -82,6 +94,10 @@ func readPrivateKey(path string) (*ecdsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parsePrivateKey(data)
+}
+
+func parsePrivateKey(data []byte) (*ecdsa.PrivateKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {
 		return nil, fmt.Errorf("node public probe private key PEM is invalid")

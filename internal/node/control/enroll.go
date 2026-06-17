@@ -38,27 +38,27 @@ type Credential struct {
 var errEnrollmentPending = errors.New("节点登记仍待审批")
 
 func (e Enroller) RunOnce() error {
-	if cred, err := e.readCredential(); err == nil && cred.EnrollmentID != "" {
-		return e.collect(cred.EnrollmentID)
+	if enrollmentID, err := e.Identity.EnrollmentID(e.CredentialFile); err == nil && enrollmentID != "" {
+		return e.collect(enrollmentID)
 	}
-	code, err := os.ReadFile(e.CodeFile)
+	code, err := e.Identity.PairingCode(e.CodeFile)
 	if err != nil {
-		return fmt.Errorf("读取配对码文件失败：%w", err)
+		return err
 	}
 	keyPEM, csrPEM, fp, err := createCSR(e.NodeName)
 	if err != nil {
 		return err
 	}
-	if err := writePrivate(e.Identity.KeyFile, keyPEM, 0o600); err != nil {
+	if err := e.Identity.SavePendingKey(keyPEM); err != nil {
 		return err
 	}
-	return e.submit(string(code), string(csrPEM), fp)
+	return e.submit(code, string(csrPEM), fp)
 }
 
 func (e Enroller) RunUntilComplete(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		if _, err := os.Stat(e.Identity.CertFile); err == nil {
+		if _, err := e.Identity.NodeID(); err == nil {
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -90,7 +90,7 @@ func (e Enroller) submit(code, csrPEM, fp string) error {
 		if err := json.Unmarshal(reply.Payload, &pending); err != nil {
 			return err
 		}
-		return e.writeCredential(Credential{EnrollmentID: pending.EnrollmentID})
+		return e.Identity.SaveEnrollmentID(pending.EnrollmentID)
 	case protocol.TypeEnrollCertificate:
 		return e.saveCertificate(reply)
 	default:
@@ -145,31 +145,17 @@ func (e Enroller) saveCertificate(reply protocol.Envelope) error {
 	if err := json.Unmarshal(reply.Payload, &cert); err != nil {
 		return err
 	}
-	if err := e.Identity.Save(cert.NodeID, []byte(cert.CertificatePEM), []byte(cert.CAChainPEM)); err != nil {
+	if err := e.Identity.SaveWithToken(cert.NodeID, []byte(cert.CertificatePEM),
+		[]byte(cert.CAChainPEM), []byte(cert.DownloadTokenPublicKeyPEM)); err != nil {
 		return err
-	}
-	if cert.DownloadTokenPublicKeyPEM != "" {
-		if err := writePrivate(e.TokenPublicKeyFile, []byte(cert.DownloadTokenPublicKeyPEM), 0o644); err != nil {
-			return err
-		}
 	}
 	_ = os.Remove(e.CodeFile)
 	_ = os.Remove(e.CredentialFile)
+	_ = os.Remove(e.TokenPublicKeyFile)
+	_ = os.Remove(e.Identity.CertFile)
+	_ = os.Remove(e.Identity.KeyFile)
+	_ = os.Remove(e.Identity.CAFile)
 	return nil
-}
-
-func (e Enroller) readCredential() (Credential, error) {
-	data, err := os.ReadFile(e.CredentialFile)
-	if err != nil {
-		return Credential{}, err
-	}
-	var c Credential
-	return c, json.Unmarshal(data, &c)
-}
-
-func (e Enroller) writeCredential(c Credential) error {
-	data, _ := json.Marshal(c)
-	return writePrivate(e.CredentialFile, data, 0o600)
 }
 
 type protocolError struct {
