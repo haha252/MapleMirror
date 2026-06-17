@@ -218,7 +218,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 			}
 			return
 		}
-		if !shouldDispatchNextTask(msg.MessageType) {
+		if !result.DispatchSyncTasks || !shouldDispatchNextTask(msg.MessageType) {
 			continue
 		}
 		dispatched, err := s.dispatchSyncTasksAfterMessage(conn, session, reqID, result)
