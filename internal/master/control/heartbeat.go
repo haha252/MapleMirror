@@ -17,6 +17,7 @@ type HeartbeatResult struct {
 	ManagedState     string
 	RoutingReady     bool
 	PublicProbe      *protocol.PublicProbeChallenge
+	SyncTasksChanged bool
 }
 
 func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq uint64, hb protocol.Heartbeat) (HeartbeatResult, error) {
@@ -51,13 +52,16 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
+	generatedTasks := 0
 	if previousMax != nonNegative(hb.MaxMirrorProjects) {
 		if err := assignment.ReconcileNode(ctx, tx, session.NodeID, now); err != nil {
 			return HeartbeatResult{}, err
 		}
-		if _, err := assignment.GenerateNodeTasks(ctx, tx, session.NodeID, now); err != nil {
+		generated, err := assignment.GenerateNodeTasks(ctx, tx, session.NodeID, now)
+		if err != nil {
 			return HeartbeatResult{}, err
 		}
+		generatedTasks = generated
 	} else if _, err := createKnownMissingRepairTasks(ctx, tx, session.NodeID, now); err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -75,7 +79,7 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		ActualBandwidth: hb.Pressure.ActualBandwidthBPS,
 		ReportedAt:      now, Valid: true,
 	})
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
+	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready, SyncTasksChanged: generatedTasks > 0}, nil
 }
 
 type OfflineSweepResult struct {

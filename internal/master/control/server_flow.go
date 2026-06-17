@@ -31,7 +31,7 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
-		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch}
+		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch || result.SyncTasksChanged}
 		if shouldDispatch && hb.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *hb.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
@@ -43,7 +43,7 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptInventoryReport(context.Background(), session, msg.Sequence, report)
-		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch}
+		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch || result.SyncTasksChanged}
 		if shouldDispatch && report.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *report.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
@@ -55,7 +55,7 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
-		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch}
+		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch || result.SyncTasksChanged}
 		if shouldDispatch && report.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *report.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
