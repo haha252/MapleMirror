@@ -100,3 +100,32 @@ func TestWriteSyncTasksDispatchesAvailableWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWriteNextTaskRollsBackClaimWhenFrameWriteFails(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedDownloadTask(t, repo, session.NodeID, "task-1", "asset-1", 0, "")
+	serverConn, clientConn := net.Pipe()
+	clientConn.Close()
+	defer serverConn.Close()
+
+	ok, err := (ControlServer{Repo: repo}).writeNextTask(serverConn, session, "req-1")
+	if err == nil || ok {
+		t.Fatalf("write should fail after claim, ok=%v err=%v", ok, err)
+	}
+	var state, lease string
+	if err := repo.DB.QueryRow(`SELECT state, COALESCE(lease_expires_at, '')
+		FROM node_tasks WHERE id = 'task-1'`).Scan(&state, &lease); err != nil {
+		t.Fatal(err)
+	}
+	if state != "pending" || lease != "" {
+		t.Fatalf("failed dispatch should be immediately reclaimable, state=%s lease=%q", state, lease)
+	}
+	task, ok, err := repo.NextSyncTask(context.Background(), session.NodeID)
+	if err != nil || !ok || task.TaskID != "task-1" {
+		t.Fatalf("rolled back task should redispatch immediately, ok=%v task=%+v err=%v", ok, task, err)
+	}
+}

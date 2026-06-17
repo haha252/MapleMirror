@@ -119,6 +119,14 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 		MessageType: protocol.TypeSyncTask, SentAt: time.Now().UTC(),
 		NodeID: session.NodeID, RequestID: reqID, Payload: body,
 	}); err != nil {
+		if rollbackErr := s.Repo.rollbackSentSyncTask(context.Background(), session.NodeID,
+			task.TaskID, "同步任务下发失败，等待重新派发: "+err.Error()); rollbackErr != nil && s.Logger != nil {
+			s.Logger.Debug(context.Background(), "回收下发失败的同步任务失败",
+				slog.String("request_id", reqID),
+				slog.String("task_id", task.TaskID),
+				slog.String("node_id", session.NodeID),
+				slog.String("error", rollbackErr.Error()))
+		}
 		return false, err
 	}
 	return true, nil

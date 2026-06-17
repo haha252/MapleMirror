@@ -88,6 +88,15 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 	return task, true, nil
 }
 
+func (r Repository) rollbackSentSyncTask(ctx context.Context, nodeID, taskID, message string) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := r.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+		error_message = ?, lease_expires_at = NULL, updated_at = ?
+		WHERE id = ? AND node_id = ? AND state = 'sent'`,
+		nullable(message), now, taskID, nodeID)
+	return err
+}
+
 func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, seq uint64, result protocol.SyncTaskResult) (HeartbeatResult, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
