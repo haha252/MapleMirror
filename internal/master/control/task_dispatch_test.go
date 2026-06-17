@@ -89,6 +89,22 @@ func TestWriteSyncTasksDoesNotConsumeReportedCapacity(t *testing.T) {
 	<-done
 }
 
+func TestWriteSyncTasksReturnsImmediatelyWhenCapacityZero(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, 0)
+	control := ControlServer{Repo: repo}
+
+	dispatched, err := control.writeSyncTasks(nil, session, "req-zero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dispatched != 0 {
+		t.Fatalf("dispatched=%d want 0", dispatched)
+	}
+}
+
 func TestOutstandingSentSyncTasksIgnoresExpiredLeases(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

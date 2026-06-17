@@ -137,6 +137,9 @@ func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID stri
 	if !known {
 		limit = defaultSyncTaskDispatchWindow
 	}
+	if limit <= 0 {
+		return 0, nil
+	}
 	outstanding, err := s.Repo.outstandingSentSyncTasks(context.Background(), session.NodeID)
 	if err != nil {
 		return 0, err
