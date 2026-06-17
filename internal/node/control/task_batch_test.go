@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net"
 	"testing"
@@ -67,6 +68,57 @@ func TestReadOptionalTasksAcksBatchInSingleSession(t *testing.T) {
 	}
 }
 
+func TestRunOnceReadsTaskDispatchedAfterPressureReport(t *testing.T) {
+	executed := make(chan string, 1)
+	dialer := newPipeDialer(t, func(conn net.Conn) {
+		defer conn.Close()
+		hello, ok := expectType(t, conn, protocol.TypeHello)
+		if !ok {
+			return
+		}
+		sendWelcome(conn, hello)
+		hb, ok := expectType(t, conn, protocol.TypeHeartbeat)
+		if !ok {
+			return
+		}
+		sendAck(conn, hb)
+		pressure, ok := expectType(t, conn, protocol.TypePressureReport)
+		if !ok {
+			return
+		}
+		sendAck(conn, pressure)
+		writeSyncTaskFor(t, conn, pressure, "task-after-pressure")
+		ack, ok := expectType(t, conn, protocol.TypeSyncTaskAck)
+		if !ok {
+			return
+		}
+		if ack.Sequence != 4 {
+			t.Errorf("sync task ack sequence = %d, want 4", ack.Sequence)
+			return
+		}
+		sendAck(conn, ack)
+	})
+	client := &Client{
+		NodeID:         "node-1",
+		Address:        "master.test:9443",
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},
+		DialTLSContext: dialer,
+		Executor:       recordingExecutor{tasks: executed},
+		TaskLimiter:    NewTaskLimiter(1),
+	}
+	if _, err := client.RunOnce(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case id := <-executed:
+		if id != "task-after-pressure" {
+			t.Fatalf("executed task = %s", id)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("task dispatched after pressure report was not executed")
+	}
+}
+
 func TestPendingTaskResultNotMarkedReportedWithoutAck(t *testing.T) {
 	db := openNodeDB(t)
 	defer db.Close()
@@ -102,6 +154,14 @@ func TestPendingTaskResultNotMarkedReportedWithoutAck(t *testing.T) {
 
 func writeSyncTask(t *testing.T, conn net.Conn, taskID string) {
 	t.Helper()
+	writeSyncTaskFor(t, conn, protocol.Envelope{
+		NodeID:    "node-1",
+		RequestID: "req-1",
+	}, taskID)
+}
+
+func writeSyncTaskFor(t *testing.T, conn net.Conn, msg protocol.Envelope, taskID string) {
+	t.Helper()
 	body, _ := json.Marshal(protocol.SyncTask{
 		TaskID: taskID, TaskType: "asset_delete",
 		Asset: protocol.SyncAsset{AssetID: "asset-" + taskID},
@@ -111,8 +171,8 @@ func writeSyncTask(t *testing.T, conn net.Conn, taskID string) {
 		MessageID:       taskID,
 		MessageType:     protocol.TypeSyncTask,
 		SentAt:          time.Now().UTC(),
-		NodeID:          "node-1",
-		RequestID:       "req-1",
+		NodeID:          msg.NodeID,
+		RequestID:       msg.RequestID,
 		Payload:         body,
 	}); err != nil {
 		t.Error(err)

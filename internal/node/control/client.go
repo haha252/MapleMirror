@@ -115,6 +115,7 @@ func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
 func (c Client) sendSessionReports(conn net.Conn, reqID string) error {
 	actualBandwidth := c.sampleBandwidth()
 	sequence := uint64(2)
+	taskBudget := maxSyncTasksPerSession
 	if err := c.heartbeat(conn, reqID, sequence, actualBandwidth); err != nil {
 		return err
 	}
@@ -123,8 +124,12 @@ func (c Client) sendSessionReports(conn net.Conn, reqID string) error {
 		return err
 	}
 	sequence++
-	taskBudget := maxSyncTasksPerSession
-	nextSeq, err := c.sendPendingTraffic(conn, reqID, sequence)
+	nextSeq, err := c.readOptionalTasksWithBudget(conn, reqID, sequence, &taskBudget)
+	if err != nil {
+		return err
+	}
+	sequence = nextSeq
+	nextSeq, err = c.sendPendingTraffic(conn, reqID, sequence)
 	if err != nil {
 		return err
 	}

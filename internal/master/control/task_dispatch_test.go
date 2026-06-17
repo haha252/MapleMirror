@@ -12,13 +12,13 @@ func TestShouldDispatchNextTaskAfterReportsResultsOrTaskAck(t *testing.T) {
 	for _, messageType := range []string{
 		protocol.TypeHeartbeat,
 		protocol.TypeTrafficEvent,
-		protocol.TypePressureReport,
 	} {
 		if shouldDispatchNextTask(messageType) {
 			t.Fatalf("%s should not trigger sync task dispatch", messageType)
 		}
 	}
 	for _, messageType := range []string{
+		protocol.TypePressureReport,
 		protocol.TypeInventoryReport,
 		protocol.TypeSyncTaskAck,
 		protocol.TypeSyncTaskResult,
