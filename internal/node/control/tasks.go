@@ -131,15 +131,16 @@ func (c Client) sendTaskAck(conn net.Conn, reqID string, sequence uint64,
 			slog.String("task_id", task.TaskID),
 			slog.String("asset_id", task.Asset.AssetID))
 	}
+	messageID := reqID + "-task-ack"
 	if err := c.writeFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-ack",
+		ProtocolVersion: protocol.Version, MessageID: messageID,
 		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return sequence, err
 	}
 	next := sequence + 1
-	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	_, err := c.readExpectedAck(conn, reqID, &next, protocol.TypeHeartbeatAck, messageID)
 	return next, err
 }
 
@@ -156,14 +157,15 @@ func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64,
 			slog.String("asset_id", result.AssetID),
 			slog.String("result", result.Result))
 	}
+	messageID := reqID + "-task-result"
 	if err := c.writeFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID + "-task-result",
+		ProtocolVersion: protocol.Version, MessageID: messageID,
 		MessageType: protocol.TypeSyncTaskResult, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return sequence, err
 	}
 	next := sequence + 1
-	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	_, err := c.readExpectedAck(conn, reqID, &next, protocol.TypeHeartbeatAck, messageID)
 	return next, err
 }

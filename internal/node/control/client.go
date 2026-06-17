@@ -160,15 +160,16 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 	})
 	c.logDebug("node heartbeat sent", slog.String("node_id", c.NodeID),
 		slog.String("request_id", reqID), slog.Uint64("sequence", sequence))
+	messageID := reqID
 	if err := c.writeFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID,
+		ProtocolVersion: protocol.Version, MessageID: messageID,
 		MessageType: protocol.TypeHeartbeat, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return sequence, err
 	}
 	next := sequence + 1
-	msg, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	msg, err := c.readExpectedAck(conn, reqID, &next, protocol.TypeHeartbeatAck, messageID)
 	if err != nil {
 		return sequence, err
 	}

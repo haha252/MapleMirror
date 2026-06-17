@@ -51,6 +51,18 @@ func (c Client) readExpectedResponse(conn net.Conn, reqID string,
 	}
 }
 
+func (c Client) readExpectedAck(conn net.Conn, reqID string, sequence *uint64,
+	expectedType, expectedReplyTo string) (protocol.Envelope, error) {
+	msg, err := c.readExpectedResponse(conn, reqID, sequence, expectedType)
+	if err != nil {
+		return protocol.Envelope{}, err
+	}
+	if expectedReplyTo != "" && msg.ReplyTo != expectedReplyTo {
+		return protocol.Envelope{}, errors.New("主节点返回了错误的控制响应关联")
+	}
+	return msg, nil
+}
+
 func (c Client) decodeSyncTask(msg protocol.Envelope, reqID string) (protocol.SyncTask, error) {
 	var task protocol.SyncTask
 	if err := json.Unmarshal(msg.Payload, &task); err != nil {

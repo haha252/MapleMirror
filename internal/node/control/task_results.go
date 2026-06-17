@@ -70,15 +70,16 @@ func (c *Client) sendRunningTaskAck(conn net.Conn, reqID string, sequence uint64
 			slog.String("request_id", reqID),
 			slog.String("task_id", ack.TaskID))
 	}
+	messageID := reqID + "-" + ack.TaskID + "-running"
 	if err := c.writeFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID + "-" + ack.TaskID + "-running",
+		ProtocolVersion: protocol.Version, MessageID: messageID,
 		MessageType: protocol.TypeSyncTaskAck, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return sequence, err
 	}
 	next := sequence + 1
-	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	_, err := c.readExpectedAck(conn, reqID, &next, protocol.TypeHeartbeatAck, messageID)
 	return next, err
 }
 

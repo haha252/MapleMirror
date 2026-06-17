@@ -35,15 +35,16 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 			slog.Int64("actual_bandwidth_bps", actualBandwidth),
 			slog.Int64("active_downloads", active))
 	}
+	messageID := reqID + "-pressure"
 	if err := c.writeFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID + "-pressure",
+		ProtocolVersion: protocol.Version, MessageID: messageID,
 		MessageType: protocol.TypePressureReport, SentAt: time.Now().UTC(),
 		NodeID: c.NodeID, RequestID: reqID, Sequence: sequence, Payload: body,
 	}); err != nil {
 		return sequence, err
 	}
 	next := sequence + 1
-	_, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	_, err := c.readExpectedAck(conn, reqID, &next, protocol.TypeHeartbeatAck, messageID)
 	if err != nil {
 		return sequence, err
 	}

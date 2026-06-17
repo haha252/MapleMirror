@@ -116,9 +116,10 @@ func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64
 			slog.Int("item_count", len(report.Items)),
 			slog.Bool("complete", report.Complete))
 	}
+	messageID := report.ReportID
 	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version,
-		MessageID:       report.ReportID,
+		MessageID:       messageID,
 		MessageType:     protocol.TypeInventoryReport,
 		SentAt:          time.Now().UTC(),
 		NodeID:          c.NodeID,
@@ -129,7 +130,7 @@ func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64
 		return sequence, err
 	}
 	next := sequence + 1
-	msg, err := c.readExpectedResponse(conn, reqID, &next, protocol.TypeHeartbeatAck)
+	msg, err := c.readExpectedAck(conn, reqID, &next, protocol.TypeHeartbeatAck, messageID)
 	if err != nil {
 		return sequence, err
 	}
