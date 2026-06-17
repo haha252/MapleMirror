@@ -58,6 +58,8 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		if _, err := assignment.GenerateNodeTasks(ctx, tx, session.NodeID, now); err != nil {
 			return HeartbeatResult{}, err
 		}
+	} else if _, err := createKnownMissingRepairTasks(ctx, tx, session.NodeID, now); err != nil {
+		return HeartbeatResult{}, err
 	}
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err

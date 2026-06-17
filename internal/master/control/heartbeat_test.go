@@ -63,6 +63,30 @@ func TestHeartbeatUpdatesMaxMirrorProjects(t *testing.T) {
 	}
 }
 
+func TestHeartbeatGeneratesMissingDownloadTask(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	mustExecControl(t, repo.DB, `INSERT INTO node_inventory
+		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
+		VALUES (?, 'asset-1', '', 0, 'old', 'missing')`, session.NodeID)
+
+	_, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{
+		Status: "syncing",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tasks int
+	err = repo.DB.QueryRow(`SELECT COUNT(*) FROM node_tasks
+		WHERE node_id = ? AND asset_id = 'asset-1' AND task_type = 'asset_download'
+		AND state = 'pending'`, session.NodeID).Scan(&tasks)
+	if err != nil || tasks != 1 {
+		t.Fatalf("heartbeat should refill missing download task, tasks=%d err=%v", tasks, err)
+	}
+}
+
 func TestHeartbeatWithInvalidPublicDownloadURLKeepsControlAlive(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

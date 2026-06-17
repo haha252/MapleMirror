@@ -73,6 +73,24 @@ func createRepairTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int
 	return generated, nil
 }
 
+func createKnownMissingRepairTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
+	targets, err := loadKnownMissingRepairTargets(ctx, tx, nodeID)
+	if err != nil {
+		return 0, err
+	}
+	var generated int
+	for _, target := range targets {
+		inserted, err := insertRepairTask(ctx, tx, target, now)
+		if err != nil {
+			return generated, err
+		}
+		if inserted {
+			generated++
+		}
+	}
+	return generated, nil
+}
+
 func clearSatisfiedDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'cancelled',
 		error_message = '库存已验证，无需重新下载', completed_at = ?,
@@ -121,6 +139,28 @@ func loadRepairTargets(ctx context.Context, tx *sql.Tx, nodeID string) ([]repair
 		WHERE ti.node_id = ? AND ti.desired_state = 'required'
 		AND (ni.asset_id IS NULL OR ni.state != 'verified'
 			OR ni.local_digest_sha256 != a.digest_sha256)`, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var targets []repairTarget
+	for rows.Next() {
+		var target repairTarget
+		if err := rows.Scan(&target.NodeID, &target.AssetID); err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	return targets, rows.Err()
+}
+
+func loadKnownMissingRepairTargets(ctx context.Context, tx *sql.Tx, nodeID string) ([]repairTarget, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT ti.node_id, ti.asset_id
+		FROM target_inventory ti
+		JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
+		LEFT JOIN assets a ON a.id = ti.asset_id
+		WHERE ti.node_id = ? AND ti.desired_state = 'required'
+		AND (ni.state != 'verified' OR ni.local_digest_sha256 != a.digest_sha256)`, nodeID)
 	if err != nil {
 		return nil, err
 	}
