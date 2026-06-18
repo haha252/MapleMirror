@@ -11,6 +11,7 @@ func TestCompleteInventoryRepairTasksTriggerDispatch(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
+	repo.runtime().StartSession(session)
 	seedAssetTarget(t, repo, session.NodeID)
 	mustExecControl(t, repo.DB, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
@@ -28,5 +29,8 @@ func TestCompleteInventoryRepairTasksTriggerDispatch(t *testing.T) {
 	}
 	if !result.SyncTasksChanged || !result.DispatchSyncTasks {
 		t.Fatalf("complete inventory repair should trigger dispatch: %+v", result)
+	}
+	if !repo.runtime().ConsumeSyncTaskWake(session.NodeID) {
+		t.Fatal("complete inventory repair should notify active control session")
 	}
 }

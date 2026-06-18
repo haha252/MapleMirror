@@ -105,6 +105,9 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	if err := tx.Commit(); err != nil {
 		return HeartbeatResult{}, err
 	}
+	if syncTasksChanged {
+		r.runtime().NotifySyncTasks(session.NodeID)
+	}
 	if report.Complete || quarantined {
 		r.runtime().FinishInventoryBatch(session.NodeID, report.Revision)
 	}
