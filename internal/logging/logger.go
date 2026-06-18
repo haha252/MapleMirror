@@ -28,25 +28,14 @@ func New(component string, cfg config.Logging, location *time.Location, console 
 	}
 	return &Logger{
 		component: component,
-		console:   slog.New(slog.NewJSONHandler(console, handlerOptions(cfg.ConsoleLevel))).With("component", component),
+		console:   slog.New(newConsoleHandler(console, selectedLevel(cfg.ConsoleLevel), location)).With("component", component),
 		file:      slog.New(slog.NewJSONHandler(writer, handlerOptions(cfg.FileLevel))).With("component", component),
 		writer:    writer,
 	}, nil
 }
 
 func handlerOptions(level string) *slog.HandlerOptions {
-	var selected slog.Level
-	switch level {
-	case "debug":
-		selected = slog.LevelDebug
-	case "warn":
-		selected = slog.LevelWarn
-	case "error":
-		selected = slog.LevelError
-	default:
-		selected = slog.LevelInfo
-	}
-	return &slog.HandlerOptions{Level: selected}
+	return &slog.HandlerOptions{Level: selectedLevel(level)}
 }
 
 func (l *Logger) Close() error {
