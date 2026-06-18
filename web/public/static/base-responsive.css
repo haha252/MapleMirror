@@ -81,13 +81,13 @@
   .site-footer__sep { display: none; }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 450px) {
   .site-brand__secondary {
     display: none;
   }
 }
 
-@media (max-width: 390px) {
+@media (max-width: 345px) {
   .site-header {
     gap: 6px;
     padding: 7px 6px;
