@@ -8,7 +8,7 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func TestDuplicateMessageDoesNotRefreshSlotsOrDispatch(t *testing.T) {
+func TestDuplicateMessageRefreshesSlotsWithoutDispatch(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
@@ -30,11 +30,11 @@ func TestDuplicateMessageDoesNotRefreshSlotsOrDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.DispatchSyncTasks || result.SyncTaskSlotsKnown {
-		t.Fatalf("duplicate message should not refresh slots or dispatch: %+v", result)
+	if result.DispatchSyncTasks || !result.SyncTaskSlotsKnown || result.SyncTaskSlotsAvailable != 5 {
+		t.Fatalf("duplicate message should refresh slots without dispatch: %+v", result)
 	}
-	if got, known := repo.runtime().SyncTaskDispatchCapacity(session.NodeID); got != 0 || !known {
-		t.Fatalf("duplicate slots changed runtime capacity got=%d known=%v", got, known)
+	if got, known := repo.runtime().SyncTaskDispatchCapacity(session.NodeID); got != 5 || !known {
+		t.Fatalf("duplicate slots not learned got=%d known=%v", got, known)
 	}
 
 	serverConn, clientConn := net.Pipe()

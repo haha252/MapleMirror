@@ -13,9 +13,6 @@ func (s ControlServer) dispatchSyncTasksInteractively(conn net.Conn, session Ses
 	if !result.DispatchSyncTasks {
 		return 0, result, nil
 	}
-	if result.SyncTaskSlotsKnown {
-		s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
-	}
 	if err := s.Repo.refreshExpiredSyncTaskLeases(context.Background(), session.NodeID); err != nil {
 		return 0, result, err
 	}
@@ -38,9 +35,6 @@ func (s ControlServer) dispatchSyncTasksInteractively(conn net.Conn, session Ses
 			return dispatched, result, err
 		}
 		result = ackResult
-		if result.SyncTaskSlotsKnown {
-			s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
-		}
 	}
 }
 

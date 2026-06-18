@@ -18,6 +18,13 @@ type controlMessageResult struct {
 	DispatchSyncTasks      bool
 }
 
+func learnSyncTaskSlots(result *controlMessageResult, nodeID string, runtime *RuntimeStore) {
+	if result == nil || !result.SyncTaskSlotsKnown || runtime == nil {
+		return
+	}
+	runtime.SetSyncTaskSlotsAvailable(nodeID, result.SyncTaskSlotsAvailable)
+}
+
 func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (controlMessageResult, error) {
 	last, err := s.Repo.currentSequence(session)
 	if err != nil {
@@ -32,10 +39,11 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 		}
 		result, err := s.Repo.AcceptHeartbeat(context.Background(), session, msg.Sequence, hb)
 		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch || result.SyncTasksChanged}
-		if shouldDispatch && hb.SyncTaskSlotsAvailable != nil {
+		if hb.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *hb.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
 		}
+		learnSyncTaskSlots(&out, session.NodeID, s.Repo.runtime())
 		return out, err
 	case protocol.TypeInventoryReport:
 		var report protocol.InventoryReport
@@ -44,10 +52,11 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 		}
 		result, err := s.Repo.AcceptInventoryReport(context.Background(), session, msg.Sequence, report)
 		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch || result.SyncTasksChanged}
-		if shouldDispatch && report.SyncTaskSlotsAvailable != nil {
+		if report.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *report.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
 		}
+		learnSyncTaskSlots(&out, session.NodeID, s.Repo.runtime())
 		return out, err
 	case protocol.TypePressureReport:
 		var report protocol.PressureReport
@@ -56,10 +65,11 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 		}
 		result, err := s.Repo.AcceptPressureReport(context.Background(), session, msg.Sequence, report)
 		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch || result.SyncTasksChanged}
-		if shouldDispatch && report.SyncTaskSlotsAvailable != nil {
+		if report.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *report.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
 		}
+		learnSyncTaskSlots(&out, session.NodeID, s.Repo.runtime())
 		return out, err
 	case protocol.TypeSyncTaskAck:
 		var ack protocol.SyncTaskAck
@@ -68,10 +78,11 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 		}
 		result, err := s.Repo.AcceptSyncTaskAck(context.Background(), session, msg.Sequence, ack)
 		out := controlMessageResult{HeartbeatResult: result, DispatchSyncTasks: shouldDispatch}
-		if shouldDispatch && ack.SyncTaskSlotsAvailable != nil {
+		if ack.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *ack.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
 		}
+		learnSyncTaskSlots(&out, session.NodeID, s.Repo.runtime())
 		return out, err
 	case protocol.TypeSyncTaskResult:
 		var result protocol.SyncTaskResult
@@ -80,10 +91,11 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 		}
 		hbResult, err := s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
 		out := controlMessageResult{HeartbeatResult: hbResult, DispatchSyncTasks: shouldDispatch}
-		if shouldDispatch && result.SyncTaskSlotsAvailable != nil {
+		if result.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *result.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true
 		}
+		learnSyncTaskSlots(&out, session.NodeID, s.Repo.runtime())
 		return out, err
 	case protocol.TypeTrafficEvent:
 		var event protocol.TrafficEvent
@@ -182,9 +194,6 @@ func (s ControlServer) syncTaskDispatchAllowance(nodeID string) (int, error) {
 func (s ControlServer) dispatchSyncTasksAfterMessage(conn net.Conn, session Session, reqID string, result controlMessageResult) (int, error) {
 	if !result.DispatchSyncTasks {
 		return 0, nil
-	}
-	if result.SyncTaskSlotsKnown {
-		s.Repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, result.SyncTaskSlotsAvailable)
 	}
 	return s.writeSyncTasks(conn, session, reqID)
 }
