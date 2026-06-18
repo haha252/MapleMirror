@@ -31,6 +31,7 @@ func main() {
 	path := flag.String("config", "config.yaml", "主节点配置文件路径")
 	projectsPath := flag.String("projects", "projects.yaml", "项目清单配置文件路径")
 	quotaPath := flag.String("quota", "quota.yaml", "额度配置文件路径")
+	noticesPath := flag.String("notices", "notices.yaml", "公告配置文件路径")
 	flag.Parse()
 
 	var warnings [][2]string
@@ -49,6 +50,10 @@ func main() {
 	if handleLoad(err, "额度配置", &created) {
 		os.Exit(1)
 	}
+	notices, err := config.LoadNotices(*noticesPath, warn)
+	if handleLoad(err, "公告配置", &created) {
+		os.Exit(1)
+	}
 
 	if created {
 		cfg, err = config.LoadMaster(*path, warn)
@@ -60,7 +65,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "主节点首次初始化未完成：%v\n", err)
 			os.Exit(1)
 		}
-		fmt.Fprintln(os.Stderr, "已生成主节点所需示例配置和安全材料，请确认项目配置后重新启动。")
+		fmt.Fprintln(os.Stderr, "已生成主节点所需示例配置和安全材料，请确认项目、额度和公告配置后重新启动。")
 		return
 	}
 	if bootstrap.MasterNeedsMaterials(cfg) {
@@ -109,7 +114,7 @@ func main() {
 	startAdminService(cfg, repo, syncService, projectLoader, logger)
 	startConsolePairing(cfg, repo, logger)
 
-	publicHandler, err := publicHandler(cfg, quota, projects, *projectsPath, location, database, runtime, logger, tokenSigner)
+	publicHandler, err := publicHandler(cfg, quota, notices, projects, *projectsPath, *noticesPath, location, database, runtime, logger, tokenSigner)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -157,14 +162,14 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *
 	return service
 }
 
-func publicHandler(cfg config.Master, quota config.Quota, projects config.Projects, projectsPath string, loc *time.Location, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger, signer downloadtoken.Signer) (http.Handler, error) {
+func publicHandler(cfg config.Master, quota config.Quota, notices config.Notices, projects config.Projects, projectsPath, noticesPath string, loc *time.Location, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger, signer downloadtoken.Signer) (http.Handler, error) {
 	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
 		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
-		cfg.Proxy.TrustedCIDRs, projects, projectsPath, runtime, logger,
+		cfg.Proxy.TrustedCIDRs, projects, projectsPath, noticesPath, notices.Notices, runtime, logger,
 		cfg.Node.PublicProbeNetworkFailures)
 	if err != nil {
 		return nil, err

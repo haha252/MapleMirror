@@ -5,12 +5,17 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"mirror-server/internal/config"
 )
 
 func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
-	srv := Server{Store: Store{DB: db}}
+	srv := Server{Store: Store{DB: db}, Notices: []config.PublicNotice{
+		{Level: "info", Message: "第一条公告"},
+		{Level: "warn", Message: "备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！"},
+	}}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -27,7 +32,10 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `<meta name="description" content="枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供高速且稳定的下载服务，获取到软件的最新版本。">`) {
 		t.Fatalf("expected mirror description meta in page: %s", body)
 	}
-	if !strings.Contains(body, `<div class="page-notice" role="status" aria-live="polite">备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！</div>`) {
+	first := strings.Index(body, `page-notice page-notice--info`)
+	second := strings.Index(body, `page-notice page-notice--warn`)
+	if first < 0 || second < 0 || first >= second || !strings.Contains(body, `第一条公告`) ||
+		!strings.Contains(body, `备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！`) {
 		t.Fatalf("expected test notice in page: %s", body)
 	}
 	if !strings.Contains(body, `class="project-card panel-card"`) {

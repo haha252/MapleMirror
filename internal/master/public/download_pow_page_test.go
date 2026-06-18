@@ -5,12 +5,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"mirror-server/internal/config"
 )
 
 func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
-	srv := Server{Store: Store{DB: db}}
+	srv := Server{Store: Store{DB: db}, Notices: []config.PublicNotice{
+		{Level: "critical", Message: "下载验证页公告"},
+	}}
 
 	req := httptest.NewRequest(http.MethodGet, "/download/asset-1", nil)
 	rec := httptest.NewRecorder()
@@ -33,10 +37,19 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`/static/public/alipay.png`,
 		`返回枫源镜像`,
 		`下载站费用高昂，如有能力，欢迎捐赠！`,
+		`page-notices page-notices--after`,
+		`page-notice page-notice--critical`,
+		`下载验证页公告`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected download verification page to include %q: %s", want, body)
 		}
+	}
+	card := strings.Index(body, `download-pow panel-card`)
+	notice := strings.Index(body, `下载验证页公告`)
+	footer := strings.Index(body, `<footer class="site-footer">`)
+	if card < 0 || notice < 0 || footer < 0 || !(card < notice && notice < footer) {
+		t.Fatalf("download verification notice should be between content card and footer: %s", body)
 	}
 	for _, unwanted := range []string{
 		`<header class="site-header">`,

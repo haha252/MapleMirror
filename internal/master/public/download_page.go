@@ -73,15 +73,15 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderPage(w, pageData{
-		Title:        "枫源镜像",
-		BrowserTitle: "枫源镜像",
-		Subtitle:     mirrorDescription,
-		Notice:       "备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！",
-		Description:  mirrorDescription,
-		BodyClass:    "page-download",
-		Body:         body,
-		Styles:       []string{"/static/public/download.css"},
-		Scripts:      []string{"/static/public/download-selectors.js", "/static/public/download.js"},
+		Title:         "枫源镜像",
+		BrowserTitle:  "枫源镜像",
+		Subtitle:      mirrorDescription,
+		BeforeNotices: s.currentNotices(),
+		Description:   mirrorDescription,
+		BodyClass:     "page-download",
+		Body:          body,
+		Styles:        []string{"/static/public/download.css"},
+		Scripts:       []string{"/static/public/download-selectors.js", "/static/public/download.js"},
 	})
 }
 
@@ -112,6 +112,7 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 		Description:  "枫源镜像下载验证页",
 		BodyClass:    "page-download-pow",
 		HideHeader:   true,
+		AfterNotices: s.currentNotices(),
 		Body:         body,
 		Styles:       []string{"/static/public/download.css"},
 		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
@@ -144,6 +145,7 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 		Description:  "枫源镜像下载验证页",
 		BodyClass:    "page-download-pow",
 		HideHeader:   true,
+		AfterNotices: s.currentNotices(),
 		Body:         body,
 		Styles:       []string{"/static/public/download.css"},
 		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},

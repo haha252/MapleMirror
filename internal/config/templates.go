@@ -20,6 +20,9 @@ var QuotaExample []byte
 //go:embed templates/quota.repair.yaml
 var QuotaRepairExample []byte
 
+//go:embed templates/notices.example.yaml
+var NoticesExample []byte
+
 //go:embed templates/node.example.yaml
 var NodeExample []byte
 
@@ -28,6 +31,7 @@ func WriteExamples(directory string) error {
 		"config.example.yaml":   MasterExample,
 		"projects.example.yaml": ProjectsExample,
 		"quota.example.yaml":    QuotaExample,
+		"notices.example.yaml":  NoticesExample,
 		"node.example.yaml":     NodeExample,
 	} {
 		if err := writeExample(filepath.Join(directory, name), data); err != nil {

@@ -75,8 +75,13 @@
     <h1>{{.Title}}</h1>
     {{if .Subtitle}}<p class="page-subtitle">{{.Subtitle}}</p>{{end}}
   </div>
-  {{if .Notice}}<div class="page-notice" role="status" aria-live="polite">{{.Notice}}</div>{{end}}
+  {{if .BeforeNotices}}<div class="page-notices">
+    {{range .BeforeNotices}}<div class="page-notice page-notice--{{.Level}}" role="status" aria-live="polite">{{.Message}}</div>{{end}}
+  </div>{{end}}
   {{.Body}}
+  {{if .AfterNotices}}<div class="page-notices page-notices--after">
+    {{range .AfterNotices}}<div class="page-notice page-notice--{{.Level}}" role="status" aria-live="polite">{{.Message}}</div>{{end}}
+  </div>{{end}}
 </main>
 <footer class="site-footer">
   <div class="site-footer__meta">

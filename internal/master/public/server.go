@@ -1,10 +1,13 @@
 package public
 
 import (
+	"context"
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"mirror-server/internal/config"
@@ -26,13 +29,17 @@ type Server struct {
 	WebAssets        *webAssets
 	ProjectAssets    map[string]projectAssetConfig
 	ProjectsPath     string
+	NoticesPath      string
+	Notices          []config.PublicNotice
+	NoticeStore      *noticeStore
 	PageViews        *pageViewTracker
 	Blocklist        *blocklistPolicy
 }
 
 func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration,
 	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
-	projects config.Projects, projectsPath string, runtime *mastercontrol.RuntimeStore,
+	projects config.Projects, projectsPath, noticesPath string, notices []config.PublicNotice,
+	runtime *mastercontrol.RuntimeStore,
 	logger *logging.Logger, publicProbeNetworkFailures int) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
@@ -58,9 +65,78 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 		WebAssets:        assets,
 		ProjectAssets:    projectAssetMap(projects),
 		ProjectsPath:     projectsPath,
+		NoticesPath:      noticesPath,
+		Notices:          clonePublicNotices(notices),
+		NoticeStore:      newNoticeStore(notices),
 		PageViews:        newPageViewTracker(),
 		Blocklist:        blocklist,
 	}, nil
+}
+
+type noticeView struct {
+	Level   string
+	Message string
+}
+
+type noticeStore struct {
+	mu      sync.RWMutex
+	notices []config.PublicNotice
+}
+
+func newNoticeStore(notices []config.PublicNotice) *noticeStore {
+	return &noticeStore{notices: clonePublicNotices(notices)}
+}
+
+func (s *noticeStore) get() []config.PublicNotice {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return clonePublicNotices(s.notices)
+}
+
+func (s *noticeStore) set(notices []config.PublicNotice) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.notices = clonePublicNotices(notices)
+}
+
+func (s Server) currentNotices() []noticeView {
+	notices := clonePublicNotices(s.Notices)
+	if s.NoticeStore != nil {
+		notices = s.NoticeStore.get()
+	}
+	if strings.TrimSpace(s.NoticesPath) != "" {
+		loaded, err := config.LoadNoticesOnly(s.NoticesPath)
+		if err != nil {
+			if s.Logger != nil {
+				s.Logger.Warn(context.Background(), "公告配置热重载失败，沿用上一次有效配置",
+					slog.String("error", err.Error()))
+			}
+		} else {
+			notices = loaded
+			if s.NoticeStore != nil {
+				s.NoticeStore.set(loaded)
+			}
+		}
+	}
+	views := make([]noticeView, 0, len(notices))
+	for _, notice := range notices {
+		level := strings.TrimSpace(notice.Level)
+		message := strings.TrimSpace(notice.Message)
+		if level == "" || message == "" {
+			continue
+		}
+		views = append(views, noticeView{Level: level, Message: message})
+	}
+	return views
+}
+
+func clonePublicNotices(notices []config.PublicNotice) []config.PublicNotice {
+	if len(notices) == 0 {
+		return nil
+	}
+	out := make([]config.PublicNotice, len(notices))
+	copy(out, notices)
+	return out
 }
 
 func projectAssetMap(projects config.Projects) map[string]projectAssetConfig {
