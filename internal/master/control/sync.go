@@ -48,10 +48,9 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 	nowValue := time.Now().UTC()
 	now := nowValue.Format(time.RFC3339Nano)
 	leaseExpires := nowValue.Add(syncTaskLeaseDuration).Format(time.RFC3339Nano)
-	err := tx.QueryRowContext(ctx, `SELECT t.id, t.task_type, a.id, r.project_id,
-		r.tag_name, a.file_name, a.size_bytes, a.source_url, a.digest_sha256, COALESCE(t.attempts, 0),
-		COALESCE(t.retry_after, '')
-		FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id
+	err := tx.QueryRowContext(ctx, `WITH candidate AS (
+		SELECT t.id FROM node_tasks t
+		LEFT JOIN assets a ON a.id = t.asset_id
 		LEFT JOIN releases r ON r.id = a.release_id
 		WHERE t.node_id = ?
 		AND (
@@ -61,14 +60,27 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 				t.lease_expires_at IS NULL OR t.lease_expires_at = '' OR t.lease_expires_at <= ?
 			))
 		)`+eligibleSyncTaskSQL("t")+`
-	ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1`, nodeID, now, now).
-		Scan(&task.TaskID, &task.TaskType, &assetID,
-			&projectID, &version, &fileName, &size,
-			&downloadURL, &digest,
-			&attempts, &retryAfter)
+		ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1
+	)
+	UPDATE node_tasks SET state = 'sent', lease_expires_at = ?, updated_at = ?
+	WHERE id = (SELECT id FROM candidate) AND node_id = ?
+	RETURNING id, task_type, asset_id, COALESCE(attempts, 0),
+		COALESCE(retry_after, '')`, nodeID, now, now, leaseExpires, now, nodeID).
+		Scan(&task.TaskID, &task.TaskType, &assetID, &attempts, &retryAfter)
 	if err == sql.ErrNoRows {
 		return protocol.SyncTask{}, false, nil
 	}
+	if err != nil {
+		return protocol.SyncTask{}, false, err
+	}
+	err = tx.QueryRowContext(ctx, `SELECT a.id, r.project_id,
+		r.tag_name, a.file_name, a.size_bytes, a.source_url, a.digest_sha256
+		FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id
+		LEFT JOIN releases r ON r.id = a.release_id
+		WHERE t.id = ? AND t.node_id = ?`,
+		task.TaskID, nodeID).
+		Scan(&assetID, &projectID, &version, &fileName, &size,
+			&downloadURL, &digest)
 	if err != nil {
 		return protocol.SyncTask{}, false, err
 	}
@@ -76,21 +88,6 @@ func (r Repository) claimNextSyncTask(ctx context.Context, tx *sql.Tx, nodeID st
 		AssetID: assetID.String, ProjectID: projectID.String, Version: version.String,
 		FileName: fileName.String, SizeBytes: size.Int64,
 		DownloadURL: downloadURL.String, DigestSHA256: digest.String,
-	}
-	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'sent',
-		lease_expires_at = ?, updated_at = ? WHERE id = ? AND node_id = ? AND (
-		state = 'pending'
-			OR (state = 'retry_wait' AND (retry_after IS NULL OR retry_after = '' OR retry_after <= ?))
-			OR (state IN ('sent', 'running') AND (
-				lease_expires_at IS NULL OR lease_expires_at = '' OR lease_expires_at <= ?
-			))
-		)`+eligibleSyncTaskSQL("node_tasks")+``, leaseExpires, now, task.TaskID, nodeID, now, now)
-	if err != nil {
-		return protocol.SyncTask{}, false, err
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return protocol.SyncTask{}, false, nil
 	}
 	if err == nil && r.Logger != nil {
 		r.Logger.Debug(ctx, "同步任务可派发",
