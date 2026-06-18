@@ -1,5 +1,7 @@
 package control
 
+import "time"
+
 func (s *RuntimeStore) NotifySyncTasks(nodeIDs ...string) {
 	if s == nil {
 		return
@@ -39,4 +41,28 @@ func (s *RuntimeStore) nodeSessionActiveLocked(nodeID string) bool {
 		}
 	}
 	return false
+}
+
+func (r Repository) scheduleSyncTaskRetryWake(nodeID, retryAfter string) {
+	if nodeID == "" || retryAfter == "" {
+		return
+	}
+	wakeAt, err := time.Parse(time.RFC3339Nano, retryAfter)
+	if err != nil {
+		return
+	}
+	r.scheduleSyncTaskRetryWakeAt(nodeID, wakeAt)
+}
+
+func (r Repository) scheduleSyncTaskRetryWakeAt(nodeID string, wakeAt time.Time) {
+	if nodeID == "" {
+		return
+	}
+	delay := time.Until(wakeAt)
+	if delay < 0 {
+		delay = 0
+	}
+	time.AfterFunc(delay, func() {
+		r.runtime().NotifySyncTasks(nodeID)
+	})
 }
