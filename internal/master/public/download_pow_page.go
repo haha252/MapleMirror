@@ -1,0 +1,125 @@
+package public
+
+import (
+	"encoding/json"
+	"html/template"
+	"net/http"
+	"net/url"
+	"strings"
+
+	"mirror-server/internal/assetpath"
+)
+
+type downloadPowAssetUI struct {
+	AssetID           string `json:"asset_id"`
+	ProjectName       string `json:"project_name"`
+	Version           string `json:"version"`
+	Architecture      string `json:"architecture"`
+	System            string `json:"system"`
+	SizeBytes         int64  `json:"size_bytes"`
+	Available         bool   `json:"available"`
+	UnavailableReason string `json:"unavailable_reason"`
+}
+
+func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	assetID := strings.TrimPrefix(r.URL.Path, "/download/")
+	if assetID == "" || strings.Contains(assetID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := s.Store.DownloadAsset(r.Context(), assetID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.renderDownloadPowPage(w, r, asset)
+}
+
+func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	if _, err := assetpath.ParsePublicPath(r.URL.EscapedPath()); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := s.Store.DownloadAssetByPath(r.Context(), r.URL.EscapedPath())
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.renderDownloadPowPage(w, r, asset)
+}
+
+func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, asset DownloadAssetSummary) {
+	s.trackPageView(w, r)
+	body, err := s.renderDownloadPowBody(asset, downloadPowFromHome(r))
+	if err != nil {
+		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
+		return
+	}
+	s.renderPage(w, pageData{
+		Title:        "下载验证",
+		BrowserTitle: "下载验证 - 枫源镜像",
+		Description:  "枫源镜像下载验证页",
+		BodyClass:    "page-download-pow",
+		HideHeader:   true,
+		AfterNotices: s.currentNotices(),
+		Body:         body,
+		Styles:       []string{"/static/public/download-pow.css"},
+		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
+	})
+}
+
+func (s Server) renderDownloadPowBody(asset DownloadAssetSummary, fromHome bool) (template.HTML, error) {
+	body := struct {
+		AssetJSON template.JS
+		FromHome  bool
+	}{AssetJSON: template.JS("{}"), FromHome: fromHome}
+	data, err := json.Marshal(downloadPowAssetUI{
+		AssetID:           asset.AssetID,
+		ProjectName:       asset.ProjectName,
+		Version:           asset.Version,
+		Architecture:      asset.Architecture,
+		System:            asset.System,
+		SizeBytes:         asset.SizeBytes,
+		Available:         asset.Available,
+		UnavailableReason: asset.UnavailableReason,
+	})
+	if err != nil {
+		return "", err
+	}
+	body.AssetJSON = template.JS(string(data))
+	return s.renderTemplateBody("download_pow", body)
+}
+
+func downloadPowFromHome(r *http.Request) bool {
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("from")), "home") {
+		return true
+	}
+	return refererIsSiteHome(r)
+}
+
+func refererIsSiteHome(r *http.Request) bool {
+	raw := strings.TrimSpace(r.Referer())
+	if raw == "" {
+		return false
+	}
+	ref, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if ref.IsAbs() {
+		if r.Host == "" || !strings.EqualFold(ref.Host, r.Host) {
+			return false
+		}
+	} else if ref.Host != "" {
+		return false
+	}
+	return ref.EscapedPath() == "/" || ref.EscapedPath() == ""
+}
