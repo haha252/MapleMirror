@@ -136,14 +136,6 @@
     hit.addEventListener("mouseleave", function () { tooltip.hidden = true; });
   }
 
-  function renderMetricPlaceholders() {
-    if (!metrics) return;
-    metrics.innerHTML = metricNames.map((meta) => {
-      return '<article class="metric-card panel-card"><div class="metric-card__top"><h3>' + meta[0] +
-        '</h3><span class="muted">加载中</span></div><strong>--</strong><p class="muted">正在读取数据</p></article>';
-    }).join("");
-  }
-
   function renderMetrics(items) {
     if (!metrics || !Array.isArray(items)) return;
     metrics.innerHTML = items.map((row, i) => {
@@ -237,7 +229,6 @@
     } catch (_) {}
   }
 
-  renderMetricPlaceholders();
   render();
   if ("ResizeObserver" in window) {
     new ResizeObserver(scheduleRender).observe(chart);
@@ -250,15 +241,7 @@
   }
 
   refreshAll();
-  window.setInterval(function () {
-    if (!document.hidden) refreshFast();
-  }, 10000);
-  window.setInterval(function () {
-    if (!document.hidden) refreshDetails();
-  }, 60000);
-  document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) {
-      refreshAll();
-    }
-  });
+  window.setInterval(function () { if (!document.hidden) refreshFast(); }, 10000);
+  window.setInterval(function () { if (!document.hidden) refreshDetails(); }, 60000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshAll(); });
 })();

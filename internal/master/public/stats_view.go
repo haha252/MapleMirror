@@ -9,11 +9,17 @@ import (
 )
 
 func statsShellBody() template.HTML {
-	body := `<section class="stats-section"><h2>总计信息</h2><div id="stats-metrics" class="metric-grid"></div>`
+	body := `<section class="stats-section"><h2>总计信息</h2><div id="stats-metrics" class="metric-grid">` +
+		metricPlaceholder("总访问量") + metricPlaceholder("总下载量") + metricPlaceholder("总流量") + `</div>`
 	body += `<div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目版本</p><div id="stats-ranks" class="rank-list"><p class="muted empty">正在加载统计数据...</p></div></section>` +
 		`<section class="panel-card chart-card"><div class="chart-card__head"><h3>下载趋势</h3><p class="muted">最近 30 天访问量与下载量变化</p></div><div id="stats-chart" class="stats-chart" data-trends="[]"></div><div id="stats-tooltip" class="stats-tooltip" hidden></div></section></div></section>`
 	body += `<section class="stats-section"><h2>节点信息</h2><div id="stats-nodes"><p class="muted empty">正在加载节点状态...</p></div></section>`
 	return template.HTML(body)
+}
+
+func metricPlaceholder(title string) string {
+	return `<article class="metric-card panel-card"><div class="metric-card__top"><h3>` +
+		esc(title) + `</h3><span class="muted">加载中</span></div><strong>--</strong><p class="muted">正在读取数据</p></article>`
 }
 
 func statsBody(stats StatsDashboard, nodes []NodeSummary) template.HTML {
