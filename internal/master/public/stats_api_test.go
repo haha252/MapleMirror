@@ -74,22 +74,21 @@ func TestStatsAPIGzipCompression(t *testing.T) {
 	}
 }
 
-func TestStatsPageUsesCommaFormattedNumbersOnInitialRender(t *testing.T) {
+func TestStatsPageRendersShellWithoutInitialSnapshot(t *testing.T) {
 	db := openMaster(t)
-	seedRoutableAsset(t, db)
-	day := statDay(timeNow(), time.Local)
-	mustExec(t, db, `INSERT INTO daily_site_stats
-		(stat_day, page_views, updated_at) VALUES ('`+day+`', 4653, 'now')`)
-	mustExec(t, db, `INSERT INTO daily_project_stats
-		(stat_day, project_id, authorization_count, transfer_started_count, sent_bytes)
-		VALUES ('`+day+`', 'p1', 4653, 1, 1)`)
 	srv := Server{Store: Store{DB: db}}
 
 	rec := httptest.NewRecorder()
 	srv.statsPage(rec, httptest.NewRequest(http.MethodGet, "/stats", nil))
 	body := rec.Body.String()
-	if !strings.Contains(body, "4,653") || !strings.Contains(body, "近 30 日 4,653") {
-		t.Fatalf("expected comma-formatted initial stats HTML: %s", body)
+	if !strings.Contains(body, `id="stats-metrics"`) ||
+		!strings.Contains(body, `id="stats-chart"`) ||
+		!strings.Contains(body, `data-trends="[]"`) ||
+		!strings.Contains(body, `/static/public/stats.js?v=`) {
+		t.Fatalf("expected JS-first stats shell: %s", body)
+	}
+	if strings.Contains(body, "4,653") || strings.Contains(body, "近 30 日") {
+		t.Fatalf("stats shell should not inline live snapshot: %s", body)
 	}
 }
 

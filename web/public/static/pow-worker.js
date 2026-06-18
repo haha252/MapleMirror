@@ -2,7 +2,7 @@ let wasmPromise;
 
 function loadWASM() {
   if (!wasmPromise) {
-    wasmPromise = fetch("/static/public/pow.wasm")
+    wasmPromise = fetch(self.wasmURL || "/static/public/pow.wasm")
       .then((resp) => {
         if (!resp.ok) throw new Error("wasm not found");
         return resp.arrayBuffer();

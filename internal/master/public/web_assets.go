@@ -1,11 +1,16 @@
 package public
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 
 	"mirror-server/web"
@@ -19,6 +24,8 @@ type webAssets struct {
 	downloadTmpl    *template.Template
 	downloadPowTmpl *template.Template
 	placeholder     []byte
+	staticManifest  map[string]string
+	staticJSON      template.JS
 }
 
 var (
@@ -39,15 +46,20 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
-	pageTemplate, err := template.ParseFS(web.Assets, "public/templates/page.html")
+	manifest, staticJSON, err := buildStaticManifest(staticFS)
 	if err != nil {
 		return nil, err
 	}
-	downloadTmpl, err := template.ParseFS(web.Assets, "public/templates/download.html")
+	funcs := template.FuncMap{"staticURL": staticURLFunc(manifest)}
+	pageTemplate, err := template.New("page.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/page.html")
 	if err != nil {
 		return nil, err
 	}
-	downloadPowTmpl, err := template.ParseFS(web.Assets, "public/templates/download_pow.html")
+	downloadTmpl, err := template.New("download.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/download.html")
+	if err != nil {
+		return nil, err
+	}
+	downloadPowTmpl, err := template.New("download_pow.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/download_pow.html")
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +73,8 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 		downloadTmpl:    downloadTmpl,
 		downloadPowTmpl: downloadPowTmpl,
 		placeholder:     placeholder,
+		staticManifest:  manifest,
+		staticJSON:      staticJSON,
 	}, nil
 }
 
@@ -75,15 +89,21 @@ func loadDefaultWebAssetsFromDisk() (*webAssets, error) {
 func loadWebAssets(root string) (*webAssets, error) {
 	templateDir := filepath.Join(root, "templates")
 	staticDir := filepath.Join(root, "static")
-	pageTemplate, err := template.ParseFiles(filepath.Join(templateDir, "page.html"))
+	staticFS := os.DirFS(staticDir)
+	manifest, staticJSON, err := buildStaticManifest(staticFS)
 	if err != nil {
 		return nil, err
 	}
-	downloadTmpl, err := template.ParseFiles(filepath.Join(templateDir, "download.html"))
+	funcs := template.FuncMap{"staticURL": staticURLFunc(manifest)}
+	pageTemplate, err := template.New("page.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "page.html"))
 	if err != nil {
 		return nil, err
 	}
-	downloadPowTmpl, err := template.ParseFiles(filepath.Join(templateDir, "download_pow.html"))
+	downloadTmpl, err := template.New("download.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "download.html"))
+	if err != nil {
+		return nil, err
+	}
+	downloadPowTmpl, err := template.New("download_pow.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "download_pow.html"))
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +118,62 @@ func loadWebAssets(root string) (*webAssets, error) {
 		downloadTmpl:    downloadTmpl,
 		downloadPowTmpl: downloadPowTmpl,
 		placeholder:     placeholder,
+		staticManifest:  manifest,
+		staticJSON:      staticJSON,
 	}, nil
+}
+
+func buildStaticManifest(staticFS fs.FS) (map[string]string, template.JS, error) {
+	entries, err := fs.ReadDir(staticFS, ".")
+	if err != nil {
+		return nil, "", err
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			continue
+		}
+		names = append(names, entry.Name())
+	}
+	sort.Strings(names)
+	manifest := make(map[string]string, len(names))
+	for _, name := range names {
+		data, err := fs.ReadFile(staticFS, name)
+		if err != nil {
+			return nil, "", err
+		}
+		sum := sha256.Sum256(data)
+		manifest[name] = "/static/public/" + name + "?v=" + hex.EncodeToString(sum[:])[:12]
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		return nil, "", err
+	}
+	return manifest, template.JS(data), nil
+}
+
+func staticURLFunc(manifest map[string]string) func(string) string {
+	return func(raw string) string {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			return ""
+		}
+		name = strings.TrimPrefix(name, "/static/public/")
+		fragment := ""
+		if before, after, ok := strings.Cut(name, "#"); ok {
+			name = before
+			fragment = "#" + after
+		}
+		query := ""
+		if before, after, ok := strings.Cut(name, "?"); ok {
+			name = before
+			query = "?" + after
+		}
+		if versioned, ok := manifest[name]; ok {
+			return versioned + fragment
+		}
+		return "/static/public/" + name + query + fragment
+	}
 }
 
 func findRepoResource(parts ...string) (string, error) {

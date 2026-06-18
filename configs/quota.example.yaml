@@ -27,6 +27,33 @@ request_buckets:
     # 从空桶恢复到满桶所需时间；恢复是按时间线性补充。
     full_refill: "48h"
 
+# 主节点公共资源请求限流；HTML、静态文件、图片、公开 API 和 404/405 都算一次。
+public_resource_buckets:
+  # 单个 IPv4 地址每小时公共资源请求上限。
+  ipv4_32:
+    # 桶容量，单位为 HTTP 请求次数。
+    capacity: 3600
+    # 从空桶恢复到满桶所需时间；默认 1 小时。
+    full_refill: "1h"
+  # IPv4 /24 网段每小时公共资源请求上限。
+  ipv4_24:
+    # 桶容量，单位为 HTTP 请求次数。
+    capacity: 10800
+    # 从空桶恢复到满桶所需时间；默认 1 小时。
+    full_refill: "1h"
+  # 单个 IPv6 地址每小时公共资源请求上限。
+  ipv6_128:
+    # 桶容量，单位为 HTTP 请求次数。
+    capacity: 3600
+    # 从空桶恢复到满桶所需时间；默认 1 小时。
+    full_refill: "1h"
+  # IPv6 /64 网段每小时公共资源请求上限。
+  ipv6_64:
+    # 桶容量，单位为 HTTP 请求次数。
+    capacity: 10800
+    # 从空桶恢复到满桶所需时间；默认 1 小时。
+    full_refill: "1h"
+
 # 每日真实发送流量限额；按 stats.timezone 对应自然日统计。
 daily_traffic:
   # 单个 IPv4 地址每日真实发送字节上限，必须使用 GiB 单位。

@@ -53,6 +53,7 @@
 | `409` | `CHALLENGE_IN_PROGRESS` | 同一挑战正在签发授权，请稍后重试 |
 | `409` | `NO_ROUTABLE_NODE` | 当前没有可用下载节点 |
 | `416` | `RANGE_NOT_SATISFIABLE` | Range 不合法或超出文件范围 |
+| `429` | `PUBLIC_RESOURCE_RATE_LIMITED` | 主节点公共资源请求过于频繁 |
 | `429` | `REQUEST_QUOTA_EXHAUSTED` | 地址级或网段级请求额度不足 |
 | `429` | `TRAFFIC_LIMIT_EXCEEDED` | 地址级或网段级每日流量预算不足 |
 | `500` | `PUBLIC_INTERNAL_ERROR` | 服务端处理失败，使用请求 ID 排查 |
@@ -114,6 +115,30 @@
 ```
 
 `architecture` 为空字符串表示该项目未启用架构区分；启用后返回提取值，未命中时返回 `None`。`system` 为空字符串表示该项目未启用系统区分；启用后只返回规范化值 `win`、`linux`、`darwin` 或未命中占位 `None`。
+
+### 3.3 首页聚合目录
+
+`GET /api/public/v1/catalog`
+
+返回主站首页渲染所需的项目与资产聚合数据。该接口用于浏览器页面首屏加载，避免首页 HTML 内嵌完整资产 JSON，也避免按项目拆分请求造成请求数放大。响应支持 `ETag`；客户端带 `If-None-Match` 命中时返回 `304 Not Modified`。
+
+```json
+{
+  "projects": [
+    {
+      "project_id": "example",
+      "display_name": "示例项目",
+      "repository": "owner/repo",
+      "available": true,
+      "icon_url": "/static/project-icons/example",
+      "architecture_match_enabled": false,
+      "system_match_enabled": false,
+      "default_version": "v1.2.3",
+      "assets": []
+    }
+  ]
+}
+```
 
 ## 4. 下载接入方式
 

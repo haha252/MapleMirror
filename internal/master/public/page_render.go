@@ -18,6 +18,7 @@ type pageData struct {
 	Body          template.HTML
 	Styles        []string
 	Scripts       []string
+	StaticJSON    template.JS
 }
 
 func (s Server) assets() (*webAssets, error) {
@@ -35,6 +36,7 @@ func (s Server) renderPage(w http.ResponseWriter, data pageData) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Referrer-Policy", "no-referrer")
+	data.StaticJSON = assets.staticJSON
 	_ = assets.pageTemplate.Execute(w, data)
 }
 

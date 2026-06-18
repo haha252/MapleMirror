@@ -1,10 +1,8 @@
 (function () {
   const statusBox = document.getElementById("download-status");
   const container = document.getElementById("project-cards");
-  const source = document.getElementById("download-projects");
   const cardTemplate = document.getElementById("project-card-template");
-  if (!statusBox || !container || !source || !cardTemplate) return;
-  const projects = JSON.parse(source.textContent || "[]");
+  if (!statusBox || !container || !cardTemplate) return;
   const selectors = window.DownloadSelectors || {
     preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
     preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
@@ -15,6 +13,14 @@
     statusBox.textContent = message;
     statusBox.className = "status " + (level || "muted");
     statusBox.hidden = !message;
+  }
+
+  function retryButton() {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "重试";
+    button.addEventListener("click", loadCatalog);
+    return button;
   }
 
   function bytesText(value) {
@@ -168,5 +174,26 @@
     return target.pathname + target.search + target.hash;
   }
 
-  projects.forEach((project) => container.appendChild(buildCard(project)));
+  async function loadCatalog() {
+    setStatus("正在加载项目列表...", "muted");
+    container.innerHTML = "";
+    try {
+      const resp = await fetch("/api/public/v1/catalog", {cache: "default"});
+      if (!resp.ok) throw new Error("项目列表加载失败");
+      const catalog = await resp.json();
+      const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
+      if (!projects.length) {
+        setStatus("暂无可展示项目。", "muted");
+        return;
+      }
+      projects.forEach((project) => container.appendChild(buildCard(project)));
+      setStatus("", "muted");
+    } catch (err) {
+      setStatus("项目列表加载失败，请稍后重试。", "warn");
+      statusBox.appendChild(document.createTextNode(" "));
+      statusBox.appendChild(retryButton());
+    }
+  }
+
+  loadCatalog();
 })();

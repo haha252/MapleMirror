@@ -1,6 +1,7 @@
 package public
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -44,32 +45,34 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `class="version-select"`) || !strings.Contains(body, `class="architecture-select"`) {
 		t.Fatalf("expected selectors in page: %s", body)
 	}
-	if !strings.Contains(body, `/static/project-icons/p1`) {
-		t.Fatalf("expected project icon route in page: %s", body)
-	}
-	if !strings.Contains(body, `/static/public/download.js`) || !strings.Contains(body, `id="palette-toggle"`) {
+	if !strings.Contains(body, `/static/public/download.js?v=`) || !strings.Contains(body, `id="palette-toggle"`) {
 		t.Fatalf("expected themed assets in page: %s", body)
 	}
-	if !strings.Contains(body, `/static/public/download-selectors.js`) {
+	if !strings.Contains(body, `/static/public/download-selectors.js?v=`) {
 		t.Fatalf("expected selector helper in page: %s", body)
 	}
-	if strings.Contains(body, `/static/public/pow-loader.js`) || strings.Contains(body, `challenge-overlay`) {
+	if strings.Contains(body, `<script src="/static/public/pow-loader.js`) || strings.Contains(body, `challenge-overlay`) {
 		t.Fatalf("home page should link to standalone download verification page: %s", body)
-	}
-	if !strings.Contains(body, `"system_match_enabled":false`) {
-		t.Fatalf("expected disabled system matching in payload: %s", body)
-	}
-	if !strings.Contains(body, `"architecture_match_enabled":false`) {
-		t.Fatalf("expected disabled architecture matching in payload: %s", body)
 	}
 	if strings.Contains(body, "architecture_default_enabled") {
 		t.Fatalf("download payload must not expose deprecated architecture default field: %s", body)
 	}
-	if !strings.Contains(body, `"default_version":"v1"`) {
-		t.Fatalf("expected default version in payload: %s", body)
+	if strings.Contains(body, `"asset_id":"asset-1"`) || strings.Contains(body, `"default_version":"v1"`) {
+		t.Fatalf("home page should not inline catalog payload: %s", body)
 	}
-	if !strings.Contains(body, `"asset_id":"asset-1"`) {
-		t.Fatalf("expected download data payload in page: %s", body)
+
+	catalog := catalogBody(t, srv)
+	catalogText := string(catalog)
+	for _, want := range []string{
+		`/static/project-icons/p1`,
+		`"system_match_enabled":false`,
+		`"architecture_match_enabled":false`,
+		`"default_version":"v1"`,
+		`"asset_id":"asset-1"`,
+	} {
+		if !strings.Contains(catalogText, want) {
+			t.Fatalf("expected catalog to include %q: %s", want, catalogText)
+		}
 	}
 }
 
@@ -97,11 +100,7 @@ func TestDownloadPageDefaultsToLatestVersion(t *testing.T) {
 		'https://example.test/new.zip', 'sha256:new', 'candidate', '2026-02-01T00:00:00Z')`)
 	srv := Server{Store: Store{DB: db}}
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	srv.downloadPage(rec, req)
-
-	body := rec.Body.String()
+	body := string(catalogBody(t, srv))
 	if !strings.Contains(body, `"default_version":"v2.0.0"`) {
 		t.Fatalf("expected latest version to be selected by default: %s", body)
 	}
@@ -115,13 +114,8 @@ func TestDownloadPageIncludesSystemSelectorWhenEnabled(t *testing.T) {
 		"p1": {SystemMatchEnabled: true},
 	}}
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	srv.downloadPage(rec, req)
-
-	body := rec.Body.String()
-	if !strings.Contains(body, `class="system-select"`) ||
-		!strings.Contains(body, `"system_match_enabled":true`) ||
+	body := string(catalogBody(t, srv))
+	if !strings.Contains(body, `"system_match_enabled":true`) ||
 		!strings.Contains(body, `"system":"win"`) {
 		t.Fatalf("expected system selector and system payload: %s", body)
 	}
@@ -134,15 +128,27 @@ func TestDownloadPageIncludesArchitectureMatchFlagWhenEnabled(t *testing.T) {
 		"p1": {ArchitectureMatchEnabled: true},
 	}}
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	srv.downloadPage(rec, req)
-
-	body := rec.Body.String()
-	if !strings.Contains(body, `"architecture_match_enabled":true`) ||
-		!strings.Contains(body, `class="field architecture-field" hidden`) {
-		t.Fatalf("expected architecture match flag and hidden field template: %s", body)
+	body := string(catalogBody(t, srv))
+	if !strings.Contains(body, `"architecture_match_enabled":true`) {
+		t.Fatalf("expected architecture match flag: %s", body)
 	}
+}
+
+func catalogBody(t *testing.T, srv Server) []byte {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	srv.catalog(rec, httptest.NewRequest(http.MethodGet, "/api/public/v1/catalog", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("catalog status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("catalog should be JSON: %v body=%s", err, rec.Body.String())
+	}
+	if _, ok := body["projects"]; !ok {
+		t.Fatalf("catalog should contain projects: %s", rec.Body.String())
+	}
+	return rec.Body.Bytes()
 }
 
 func TestProjectAssetsAPIIncludesSystemField(t *testing.T) {

@@ -32,7 +32,8 @@
 
   function loadWASMBytes() {
     if (!wasmBytesPromise) {
-      wasmBytesPromise = fetch("/static/public/pow.wasm")
+      const wasmURL = window.MirrorStatic && window.MirrorStatic["pow.wasm"] || "/static/public/pow.wasm";
+      wasmBytesPromise = fetch(wasmURL)
         .then((resp) => {
           if (!resp.ok) throw new Error("wasm not found");
           return resp.arrayBuffer();

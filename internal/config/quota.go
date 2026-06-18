@@ -12,6 +12,7 @@ import (
 
 type Quota struct {
 	RequestBuckets                  RequestBuckets `yaml:"request_buckets"`
+	PublicResourceBuckets           RequestBuckets `yaml:"public_resource_buckets"`
 	DailyTraffic                    DailyTraffic   `yaml:"daily_traffic"`
 	AuthorizationMaxBytesMultiplier int            `yaml:"authorization_max_bytes_multiplier"`
 	RangeConcurrencyLimit           int            `yaml:"range_concurrency_limit"`
@@ -70,10 +71,14 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 		c.Blocklist.Static = append(c.Blacklist, c.Blocklist.Static...)
 		c.Blacklist = nil
 	}
-	defaultBucket(&c.RequestBuckets.IPv432, 120, "request_buckets.ipv4_32", warn)
-	defaultBucket(&c.RequestBuckets.IPv424, 600, "request_buckets.ipv4_24", warn)
-	defaultBucket(&c.RequestBuckets.IPv6128, 120, "request_buckets.ipv6_128", warn)
-	defaultBucket(&c.RequestBuckets.IPv664, 600, "request_buckets.ipv6_64", warn)
+	defaultBucket(&c.RequestBuckets.IPv432, 120, "48h", "request_buckets.ipv4_32", warn)
+	defaultBucket(&c.RequestBuckets.IPv424, 600, "48h", "request_buckets.ipv4_24", warn)
+	defaultBucket(&c.RequestBuckets.IPv6128, 120, "48h", "request_buckets.ipv6_128", warn)
+	defaultBucket(&c.RequestBuckets.IPv664, 600, "48h", "request_buckets.ipv6_64", warn)
+	defaultBucket(&c.PublicResourceBuckets.IPv432, 3600, "1h", "public_resource_buckets.ipv4_32", warn)
+	defaultBucket(&c.PublicResourceBuckets.IPv424, 10800, "1h", "public_resource_buckets.ipv4_24", warn)
+	defaultBucket(&c.PublicResourceBuckets.IPv6128, 3600, "1h", "public_resource_buckets.ipv6_128", warn)
+	defaultBucket(&c.PublicResourceBuckets.IPv664, 10800, "1h", "public_resource_buckets.ipv6_64", warn)
 	setString(&c.DailyTraffic.IPv432, "3 GiB", "daily_traffic.ipv4_32", warn)
 	setString(&c.DailyTraffic.IPv424, "20 GiB", "daily_traffic.ipv4_24", warn)
 	setString(&c.DailyTraffic.IPv6128, "3 GiB", "daily_traffic.ipv6_128", warn)
@@ -93,19 +98,16 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 	return c, writeRepairedYAML(path, data, repaired)
 }
 
-func defaultBucket(bucket *Bucket, capacity int, field string, warn WarnFunc) {
+func defaultBucket(bucket *Bucket, capacity int, refill, field string, warn WarnFunc) {
 	if bucket.Capacity == 0 {
 		bucket.Capacity = capacity
 		warnDefault(warn, field+".capacity", stringValue(capacity))
 	}
-	setString(&bucket.FullRefill, "48h", field+".full_refill", warn)
+	setString(&bucket.FullRefill, refill, field+".full_refill", warn)
 }
 
 func stringValue(value int) string {
-	if value == 120 {
-		return "120"
-	}
-	return "600"
+	return fmt.Sprintf("%d", value)
 }
 
 func validateQuota(c Quota) error {
@@ -114,6 +116,14 @@ func validateQuota(c Quota) error {
 			return errors.New("请求额度桶容量必须大于零")
 		}
 		if err := validDuration("request_buckets."+field+".full_refill", bucket.FullRefill); err != nil {
+			return err
+		}
+	}
+	for field, bucket := range map[string]Bucket{"ipv4_32": c.PublicResourceBuckets.IPv432, "ipv4_24": c.PublicResourceBuckets.IPv424, "ipv6_128": c.PublicResourceBuckets.IPv6128, "ipv6_64": c.PublicResourceBuckets.IPv664} {
+		if bucket.Capacity <= 0 {
+			return errors.New("公共资源请求额度桶容量必须大于零")
+		}
+		if err := validDuration("public_resource_buckets."+field+".full_refill", bucket.FullRefill); err != nil {
 			return err
 		}
 	}

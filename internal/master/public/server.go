@@ -34,6 +34,7 @@ type Server struct {
 	NoticeStore      *noticeStore
 	PageViews        *pageViewTracker
 	Blocklist        *blocklistPolicy
+	ResourceLimiter  *publicResourceLimiter
 }
 
 func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration,
@@ -70,6 +71,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 		NoticeStore:      newNoticeStore(notices),
 		PageViews:        newPageViewTracker(),
 		Blocklist:        blocklist,
+		ResourceLimiter:  newPublicResourceLimiter(quota),
 	}, nil
 }
 
@@ -170,11 +172,11 @@ func minDuration(values ...time.Duration) time.Duration {
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	if s.WebAssets != nil && s.WebAssets.staticFS != nil {
-		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(s.WebAssets.staticFS)))))
+		mux.Handle("/static/public/", immutableCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(s.WebAssets.staticFS)))))
 	} else if s.WebAssets != nil {
-		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.Dir(s.WebAssets.staticDir)))))
+		mux.Handle("/static/public/", immutableCache(http.StripPrefix("/static/public/", http.FileServer(http.Dir(s.WebAssets.staticDir)))))
 	} else if assets, err := loadDefaultWebAssets(); err == nil {
-		mux.Handle("/static/public/", noCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(assets.staticFS)))))
+		mux.Handle("/static/public/", immutableCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(assets.staticFS)))))
 	}
 	mux.HandleFunc("/static/project-icons/", s.projectIcon)
 	mux.HandleFunc("/downloads/", s.downloadMisrouted)
@@ -183,6 +185,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
+	mux.HandleFunc("/api/public/v1/catalog", s.catalog)
 	mux.Handle("/api/public/v1/stats", statsJSONCompression(http.HandlerFunc(s.statsAPI)))
 	mux.Handle("/api/public/v1/stats/details", statsJSONCompression(http.HandlerFunc(s.statsDetailsAPI)))
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
@@ -193,14 +196,25 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/public/v1/api/authorizations", s.apiAuthorize)
 	mux.HandleFunc("/api/public/v1/authorizations/", s.authorization)
 	mux.HandleFunc("/", s.downloadPage)
+	if s.ResourceLimiter != nil {
+		return s.ResourceLimiter.middleware(mux, s.TrustedCIDRs)
+	}
 	return mux
 }
 
-func noCache(next http.Handler) http.Handler {
+func immutableCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s Server) staticURL(name string) string {
+	assets, err := s.assets()
+	if err != nil {
+		return staticURLFunc(nil)(name)
+	}
+	return staticURLFunc(assets.staticManifest)(name)
 }
 
 func noContent(w http.ResponseWriter, _ *http.Request) {

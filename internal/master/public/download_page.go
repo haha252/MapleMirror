@@ -1,7 +1,9 @@
 package public
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -39,22 +41,7 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.trackPageView(w, r)
-	projects, err := s.Store.Projects(r.Context())
-	if err != nil {
-		http.Error(w, "项目列表读取失败", http.StatusInternalServerError)
-		return
-	}
-	views := make([]downloadProjectView, 0, len(projects))
-	projectAssets := s.currentProjectAssets()
-	for _, project := range projects {
-		assets, err := s.Store.Assets(r.Context(), project.ProjectID)
-		if err != nil {
-			http.Error(w, "资产列表读取失败", http.StatusInternalServerError)
-			return
-		}
-		views = append(views, buildDownloadProjectView(project, assets, projectAssets[project.ProjectID]))
-	}
-	body, err := s.renderDownloadBody(views)
+	body, err := s.renderDownloadBody()
 	if err != nil {
 		http.Error(w, "下载页面渲染失败", http.StatusInternalServerError)
 		return
@@ -70,6 +57,51 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		Styles:        []string{"/static/public/download.css"},
 		Scripts:       []string{"/static/public/download-selectors.js", "/static/public/download.js"},
 	})
+}
+
+func (s Server) catalog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	views, err := s.downloadCatalog(r)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "项目列表读取失败")
+		return
+	}
+	body, err := json.Marshal(map[string]any{"projects": views})
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "项目列表编码失败")
+		return
+	}
+	sum := sha256.Sum256(body)
+	etag := fmt.Sprintf(`"catalog-%x"`, sum[:12])
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "public, max-age=30, must-revalidate")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
+}
+
+func (s Server) downloadCatalog(r *http.Request) ([]downloadProjectView, error) {
+	projects, err := s.Store.Projects(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	views := make([]downloadProjectView, 0, len(projects))
+	projectAssets := s.currentProjectAssets()
+	for _, project := range projects {
+		assets, err := s.Store.Assets(r.Context(), project.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, buildDownloadProjectView(project, assets, projectAssets[project.ProjectID]))
+	}
+	return views, nil
 }
 
 func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, config projectAssetConfig) downloadProjectView {
@@ -104,16 +136,8 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 	return view
 }
 
-func (s Server) renderDownloadBody(projects []downloadProjectView) (template.HTML, error) {
-	body := struct {
-		ProjectsJSON template.JS
-	}{ProjectsJSON: template.JS("[]")}
-	data, err := json.Marshal(projects)
-	if err != nil {
-		return "", err
-	}
-	body.ProjectsJSON = template.JS(string(data))
-	return s.renderTemplateBody("download", body)
+func (s Server) renderDownloadBody() (template.HTML, error) {
+	return s.renderTemplateBody("download", nil)
 }
 
 func displayDate(value string) string {

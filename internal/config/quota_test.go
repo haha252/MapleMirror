@@ -33,6 +33,33 @@ blocklist:
 	}
 }
 
+func TestQuotaDefaultsPublicResourceBuckets(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "quota.yaml")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	quota, err := LoadQuota(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if quota.PublicResourceBuckets.IPv432.Capacity != 3600 ||
+		quota.PublicResourceBuckets.IPv424.Capacity != 10800 ||
+		quota.PublicResourceBuckets.IPv6128.Capacity != 3600 ||
+		quota.PublicResourceBuckets.IPv664.Capacity != 10800 {
+		t.Fatalf("公共资源限流默认值错误：%+v", quota.PublicResourceBuckets)
+	}
+	for _, value := range []string{
+		quota.PublicResourceBuckets.IPv432.FullRefill,
+		quota.PublicResourceBuckets.IPv424.FullRefill,
+		quota.PublicResourceBuckets.IPv6128.FullRefill,
+		quota.PublicResourceBuckets.IPv664.FullRefill,
+	} {
+		if value != "1h" {
+			t.Fatalf("公共资源限流补充周期=%q，期望 1h", value)
+		}
+	}
+}
+
 func TestQuotaRejectsInvalidBlocklistFeed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "quota.yaml")
 	body := []byte("blocklist:\n  feeds:\n    - url: \"file:///tmp/list.txt\"\n")
