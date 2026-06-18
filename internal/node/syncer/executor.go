@@ -15,17 +15,18 @@ import (
 )
 
 type Executor struct {
-	DB                     *sql.DB
-	Storage                string
-	TempDir                string
-	Client                 *http.Client
-	Logger                 *logging.Logger
-	Probe                  *SourceProbe
-	BandwidthLimitBPS      int64
-	ForcePeerDownload      bool
-	PeerFallbackWorkers    int
-	PeerFallbackMinSize    int64
-	AllowPrivateSourceURLs bool
+	DB                        *sql.DB
+	Storage                   string
+	TempDir                   string
+	Client                    *http.Client
+	Logger                    *logging.Logger
+	Probe                     *SourceProbe
+	BandwidthLimitBPS         int64
+	ForcePeerDownload         bool
+	PeerFallbackWorkers       int
+	PeerFallbackMinSize       int64
+	PeerFallbackMaxConcurrent int
+	AllowPrivateSourceURLs    bool
 }
 
 const DefaultHTTPClientTimeout = 30 * time.Minute

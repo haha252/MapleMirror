@@ -44,6 +44,8 @@ sync:
   force_peer_download: false
   # 单个同步下载限速；支持 MiB/s、MB/s、Mbps，"0" 表示不限制。
   bandwidth_limit: "0"
+  # peer fallback 全局任务并发数；源站故障时可调高以加快从其他节点复制。
+  peer_fallback_max_concurrent: 3
   # peer fallback 单文件分片下载并发数。
   peer_fallback_workers: 8
   # peer fallback 文件达到该大小才启用分片；支持 B、KiB、MiB、GiB，"0" 表示所有 peer 文件都分片。

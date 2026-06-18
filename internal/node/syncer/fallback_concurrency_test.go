@@ -86,7 +86,22 @@ func TestConcurrentDuplicateFallbackDownloadReusesVerifiedAsset(t *testing.T) {
 	}
 }
 
-func TestPeerFallbackConcurrencyIsLimitedToThree(t *testing.T) {
+func TestPeerFallbackConcurrencyUsesDefaultLimit(t *testing.T) {
+	maxActive := runPeerFallbackConcurrency(t, 0)
+	if maxActive > defaultMaxConcurrentPeerFallbacks {
+		t.Fatalf("peer fallback concurrency=%d, want <= %d", maxActive, defaultMaxConcurrentPeerFallbacks)
+	}
+}
+
+func TestPeerFallbackConcurrencyCanBeRaised(t *testing.T) {
+	maxActive := runPeerFallbackConcurrency(t, 5)
+	if maxActive < 4 || maxActive > 5 {
+		t.Fatalf("configured peer fallback concurrency=%d, want 4..5", maxActive)
+	}
+}
+
+func runPeerFallbackConcurrency(t *testing.T, limit int) int {
+	t.Helper()
 	db, storageDir, tempDir := prepareSyncer(t)
 	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "github unavailable", http.StatusBadGateway)
@@ -110,7 +125,7 @@ func TestPeerFallbackConcurrencyIsLimitedToThree(t *testing.T) {
 	}))
 	defer fallback.Close()
 	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
-		AllowPrivateSourceURLs: true}
+		AllowPrivateSourceURLs: true, PeerFallbackMaxConcurrent: limit}
 	var wg sync.WaitGroup
 	results := make(chan protocol.SyncTaskResult, 6)
 	for i := 0; i < 6; i++ {
@@ -131,7 +146,5 @@ func TestPeerFallbackConcurrencyIsLimitedToThree(t *testing.T) {
 			t.Fatalf("fallback download should succeed: %+v", result)
 		}
 	}
-	if maxActive > maxConcurrentPeerFallbacks {
-		t.Fatalf("peer fallback concurrency=%d, want <= %d", maxActive, maxConcurrentPeerFallbacks)
-	}
+	return maxActive
 }

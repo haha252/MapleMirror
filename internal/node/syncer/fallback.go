@@ -22,18 +22,19 @@ func (e Executor) fetchFallback(ctx context.Context, task protocol.SyncTask, tmp
 				slog.String("source_node_id", source.NodeID),
 				slog.String("source_node_name", source.NodeName))
 		}
-		if err := acquirePeerFallback(ctx); err != nil {
+		release, err := e.acquirePeerFallback(ctx)
+		if err != nil {
 			lastErr = err
 			continue
 		}
 		if err := validateSourceURL(source.DownloadURL, e.AllowPrivateSourceURLs); err != nil {
-			releasePeerFallback()
+			release()
 			lastErr = err
 			continue
 		}
 		attempted = true
 		digest, size, err := e.fetchPeerSource(ctx, task, source, tmpPath)
-		releasePeerFallback()
+		release()
 		if err != nil {
 			lastErr = err
 			lastDigest = digest
