@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -21,6 +22,11 @@ func (s ControlServer) readControlFrameOrDispatchWake(conn net.Conn,
 			}
 			if dispatched > 0 {
 				return protocol.Envelope{}, dispatched, nil
+			}
+			if ready, err := s.Repo.hasDispatchableSyncTask(context.Background(), session.NodeID); err != nil {
+				return protocol.Envelope{}, dispatched, err
+			} else if ready {
+				s.Repo.runtime().NotifySyncTasks(session.NodeID)
 			}
 		}
 		timeout := time.Until(deadline)
