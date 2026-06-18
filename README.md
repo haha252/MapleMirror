@@ -20,6 +20,7 @@
 - `cmd/master`：主节点入口
 - `cmd/node`：下载节点入口
 - `configs/`：示例配置文件
+- `sponsor.json`：公开关于页的赞助者列表，部署时放在主节点可执行文件同级目录
 - `docs/`：设计、部署、API 与管理面板文档
 - `internal/`：核心业务实现
 - `web/`：嵌入式前端资源
@@ -84,7 +85,7 @@
 1. 运行测试
 2. 尝试重新编译网页 PoW 的 WASM 文件
 3. 构建主节点和下载节点二进制
-4. 将 `configs/` 一并复制到 `dist/` 目录
+4. 将 `configs/` 和 `sponsor.json` 一并复制到 `dist/` 目录
 
 例如：
 

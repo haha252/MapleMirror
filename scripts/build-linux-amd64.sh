@@ -34,6 +34,7 @@ go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-master" .
 go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-node" ./cmd/node
 rm -rf "$OUT/configs"
 cp -R "$ROOT/configs" "$OUT/configs"
+cp "$ROOT/sponsor.json" "$OUT/sponsor.json"
 rm -rf "$OUT/web"
 
 printf '%s\n' "Linux amd64 构建完成：$OUT"

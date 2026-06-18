@@ -2,11 +2,17 @@ package public
 
 import (
 	"encoding/json"
+	"errors"
 	"html/template"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+)
+
+const (
+	sponsorFileName       = "sponsor.json"
+	legacySponsorFileName = "sponsors.json"
 )
 
 type Sponsor struct {
@@ -18,14 +24,24 @@ type Sponsor struct {
 }
 
 func loadSponsors() []Sponsor {
-	dir, err := findRepoResource("configs")
-	if err != nil {
-		return nil
+	return loadSponsorsFromFiles(sponsorFileCandidates())
+}
+
+func loadSponsorsFromFiles(paths []string) []Sponsor {
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil
+		}
+		return parseSponsors(data)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "sponsors.json"))
-	if err != nil {
-		return nil
-	}
+	return nil
+}
+
+func parseSponsors(data []byte) []Sponsor {
 	var sponsors []Sponsor
 	if err := json.Unmarshal(data, &sponsors); err != nil {
 		return nil
@@ -37,6 +53,34 @@ func loadSponsors() []Sponsor {
 		return sponsors[i].Date > sponsors[j].Date
 	})
 	return sponsors
+}
+
+func sponsorFileCandidates() []string {
+	paths := make([]string, 0, 6)
+	seen := make(map[string]bool)
+	add := func(path string) {
+		if path == "" || seen[path] {
+			return
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+	addDir := func(dir string) {
+		add(filepath.Join(dir, sponsorFileName))
+		add(filepath.Join(dir, legacySponsorFileName))
+		add(filepath.Join(dir, ".config", sponsorFileName))
+	}
+	if exe, err := os.Executable(); err == nil {
+		addDir(filepath.Dir(exe))
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		addDir(cwd)
+	}
+	if dir, err := findRepoResource("configs"); err == nil {
+		add(filepath.Join(dir, legacySponsorFileName))
+		add(filepath.Join(dir, sponsorFileName))
+	}
+	return paths
 }
 
 const mirrorDescription = "枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供高速且稳定的下载服务，获取到软件的最新版本。"

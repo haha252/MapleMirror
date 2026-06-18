@@ -37,6 +37,7 @@ go build -trimpath -ldflags "-X main.version=$VERSION" -o "$OUT/mirror-node.exe"
 
 rm -rf "$OUT/configs"
 cp -R "$ROOT/configs" "$OUT/configs"
+cp "$ROOT/sponsor.json" "$OUT/sponsor.json"
 rm -rf "$OUT/web"
 
 printf '%s\n' "Windows amd64 构建完成：$OUT"

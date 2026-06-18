@@ -8,12 +8,12 @@ usage() {
 
 说明:
   默认统计 Git 跟踪的源码和常见文本资源文件，排除图片、SVG、docs/ 里的文档，
-  以及 go.mod / go.sum / .gitignore / .gitattributes / configs/sponsors.json 这类元数据。
+  以及 go.mod / go.sum / .gitignore / .gitattributes / sponsor.json 这类元数据。
 
 选项:
   --root PATH        指定仓库根目录，默认自动从当前脚本位置向上查找 Git 根目录
   --include-docs     把 docs/ 下的 Markdown 文档也算进去
-  --include-meta     把 go.mod、go.sum、.gitignore、.gitattributes 和 sponsors.json 也算进去
+  --include-meta     把 go.mod、go.sum、.gitignore、.gitattributes 和 sponsor.json 也算进去
   --top N            额外显示行数最多的前 N 个文件
   --max-per-file N   如果某个文件行数超过 N，则退出失败
   --quiet            只在失败时输出超限文件，不打印汇总
@@ -100,7 +100,7 @@ should_include() {
         *) return 1 ;;
       esac
       ;;
-    go.mod|go.sum|configs/sponsors.json)
+    go.mod|go.sum|sponsor.json|configs/sponsors.json)
       [ "$INCLUDE_META" -eq 1 ] || return 1
       return 0
       ;;
