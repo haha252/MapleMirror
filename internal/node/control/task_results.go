@@ -106,7 +106,6 @@ func scanPendingTaskResult(rows *sql.Rows) (protocol.SyncTaskResult, error) {
 
 func (c *Client) executeTaskAsync(task protocol.SyncTask) {
 	go func() {
-		defer c.releaseSyncTaskSlot()
 		ctx, cancel := context.WithTimeout(context.Background(), c.syncTaskTimeout())
 		defer cancel()
 		var result protocol.SyncTaskResult
@@ -133,6 +132,7 @@ func (c *Client) executeTaskAsync(task protocol.SyncTask) {
 				slog.String("result", result.Result),
 				slog.Int64("size_bytes", result.SizeBytes))
 		}
+		c.releaseSyncTaskSlot()
 		if err := c.storePendingTaskResultWithRetry(result); err != nil {
 			if c.Logger != nil {
 				c.Logger.Warn(context.Background(), "节点保存待上报同步结果失败",
