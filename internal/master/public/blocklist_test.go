@@ -79,6 +79,36 @@ func TestAutoBlockPersistsAndExpires(t *testing.T) {
 	}
 }
 
+func TestManualIPv4SegmentBlockMatchesClientHost(t *testing.T) {
+	db := openMaster(t)
+	store := Store{DB: db}
+	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
+	if _, err := db.Exec(`INSERT INTO client_blocks
+		(client_prefix_key, reason, source, blocked_at, expires_at,
+		attempts_after_block, last_attempt_at, updated_at)
+		VALUES (?, ?, 'manual', ?, ?, 0, ?, ?)`,
+		"192.0.2.0/24", "人工预封禁", now.Format(time.RFC3339Nano),
+		now.Add(time.Hour).Format(time.RFC3339Nano), now.Format(time.RFC3339Nano),
+		now.Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+
+	decision, err := store.ActiveAutoBlock(context.Background(), "192.0.2.9/32", now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !decision.Blocked || decision.Attempts != 1 || decision.Source != "manual" {
+		t.Fatalf("manual /24 block should match host prefix: %+v", decision)
+	}
+	var attempts int
+	if err := db.QueryRow(`SELECT attempts_after_block FROM client_blocks WHERE client_prefix_key = '192.0.2.0/24'`).Scan(&attempts); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 {
+		t.Fatalf("manual /24 attempts = %d, want 1", attempts)
+	}
+}
+
 func TestQuotaErrorWritesAutoBlock(t *testing.T) {
 	db := openMaster(t)
 	server := Server{

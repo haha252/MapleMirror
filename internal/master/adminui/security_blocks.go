@@ -121,10 +121,13 @@ func normalizeClientBlockPrefix(value string) (string, error) {
 			return "", errors.New("公开下载客户端封禁必须是合法 IP 或主机前缀")
 		}
 		ones, bits := network.Mask.Size()
-		if ones != bits || !network.IP.Equal(ip) {
-			return "", errors.New("公开下载客户端封禁只支持单 IP 或 /32、/128 主机前缀")
+		if bits == 32 && (ones == 24 || ones == 32) {
+			return network.String(), nil
 		}
-		return network.String(), nil
+		if bits == 128 && ones == 128 && network.IP.Equal(ip) {
+			return network.String(), nil
+		}
+		return "", errors.New("公开下载客户端封禁只支持单 IP、IPv4 /24 网段或 /32、/128 主机前缀")
 	}
 	ip := net.ParseIP(value)
 	if ip == nil {

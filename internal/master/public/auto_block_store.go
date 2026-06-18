@@ -3,37 +3,63 @@ package public
 import (
 	"context"
 	"database/sql"
+	"net/netip"
 	"time"
 )
 
 func (s Store) ActiveAutoBlock(ctx context.Context, clientPrefix string, now time.Time) (blockDecision, error) {
 	var reason, source string
 	var attempts int64
+	var blockKey string
 	nowText := now.Format(time.RFC3339Nano)
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return blockDecision{}, err
 	}
 	defer tx.Rollback()
-	err = tx.QueryRowContext(ctx, `SELECT reason, source, attempts_after_block
-		FROM client_blocks WHERE client_prefix_key = ? AND expires_at > ?`,
-		clientPrefix, nowText).Scan(&reason, &source, &attempts)
-	if err == sql.ErrNoRows {
-		return blockDecision{}, nil
+	for _, key := range clientBlockLookupKeys(clientPrefix) {
+		err = tx.QueryRowContext(ctx, `SELECT reason, source, attempts_after_block
+			FROM client_blocks WHERE client_prefix_key = ? AND expires_at > ?`,
+			key, nowText).Scan(&reason, &source, &attempts)
+		if err == sql.ErrNoRows {
+			continue
+		}
+		if err != nil {
+			return blockDecision{}, err
+		}
+		blockKey = key
+		break
 	}
-	if err != nil {
-		return blockDecision{}, err
+	if blockKey == "" {
+		return blockDecision{}, nil
 	}
 	attempts++
 	_, err = tx.ExecContext(ctx, `UPDATE client_blocks SET attempts_after_block = ?,
 		last_attempt_at = ?, updated_at = ? WHERE client_prefix_key = ?`,
-		attempts, nowText, nowText, clientPrefix)
+		attempts, nowText, nowText, blockKey)
 	if err != nil {
 		return blockDecision{}, err
 	}
 	return blockDecision{
 		Blocked: true, Reason: reason, Source: source, Attempts: attempts,
 	}, tx.Commit()
+}
+
+func clientBlockLookupKeys(clientPrefix string) []string {
+	keys := []string{clientPrefix}
+	prefix, err := netip.ParsePrefix(clientPrefix)
+	if err != nil {
+		return keys
+	}
+	addr := prefix.Addr()
+	if !addr.Is4() {
+		return keys
+	}
+	parent := netip.PrefixFrom(addr, 24).Masked().String()
+	if parent != clientPrefix {
+		keys = append(keys, parent)
+	}
+	return keys
 }
 
 func (s Store) AutoBlockClient(ctx context.Context, clientPrefix, reason, source string,

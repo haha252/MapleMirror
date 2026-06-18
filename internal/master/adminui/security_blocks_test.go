@@ -71,11 +71,27 @@ func TestManualClientBlockNormalizesSingleIP(t *testing.T) {
 	}
 }
 
+func TestManualClientBlockAcceptsIPv4Segment(t *testing.T) {
+	server, db := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/security/blocks", nil)
+	if err := server.createBlock(req, "client", "192.0.2.9/24", "人工预封禁", "168h"); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM client_blocks WHERE client_prefix_key = '192.0.2.0/24'`).Scan(&count)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("ipv4 segment client block count = %d, want 1", count)
+	}
+}
+
 func TestManualClientBlockRejectsBroadCIDR(t *testing.T) {
 	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/security/blocks", nil)
-	err := server.createBlock(req, "client", "192.0.2.0/24", "人工预封禁", "168h")
-	if err == nil || !strings.Contains(err.Error(), "只支持单 IP") {
+	err := server.createBlock(req, "client", "192.0.0.0/16", "人工预封禁", "168h")
+	if err == nil || !strings.Contains(err.Error(), "IPv4 /24") {
 		t.Fatalf("expected broad cidr rejection, got %v", err)
 	}
 }
