@@ -20,7 +20,7 @@
 - `cmd/master`：主节点入口
 - `cmd/node`：下载节点入口
 - `configs/`：示例配置文件
-- `sponsor.json`：公开关于页的赞助者列表，部署时放在主节点可执行文件同级目录
+- `configs/sponsor.example.json`：公开关于页赞助者列表示例；部署时实际文件仍放在主节点可执行文件同级目录并命名为 `sponsor.json`
 - `docs/`：设计、部署、API 与管理面板文档
 - `internal/`：核心业务实现
 - `web/`：嵌入式前端资源
@@ -42,6 +42,7 @@
 - `configs/projects.example.yaml`
 - `configs/quota.example.yaml`
 - `configs/node.example.yaml`
+- `configs/sponsor.example.json`
 
 建议先把这些示例复制到自己的运行目录，再按实际环境修改。主节点与下载节点的密钥、证书和数据库路径也建议放到独立的 `secrets/` 和 `data/` 目录中。
 
@@ -85,7 +86,7 @@
 1. 运行测试
 2. 尝试重新编译网页 PoW 的 WASM 文件
 3. 构建主节点和下载节点二进制
-4. 将 `configs/` 和 `sponsor.json` 一并复制到 `dist/` 目录
+4. 将 `configs/` 复制到 `dist/` 目录，并把 `configs/sponsor.example.json` 复制为发布目录根部的 `sponsor.json`
 
 例如：
 

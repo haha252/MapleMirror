@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	sponsorFileName       = "sponsor.json"
-	legacySponsorFileName = "sponsors.json"
+	sponsorFileName        = "sponsor.json"
+	sponsorExampleFileName = "sponsor.example.json"
+	legacySponsorFileName  = "sponsors.json"
 )
 
 type Sponsor struct {
@@ -79,6 +80,7 @@ func sponsorFileCandidates() []string {
 	if dir, err := findRepoResource("configs"); err == nil {
 		add(filepath.Join(dir, legacySponsorFileName))
 		add(filepath.Join(dir, sponsorFileName))
+		add(filepath.Join(dir, sponsorExampleFileName))
 	}
 	return paths
 }
