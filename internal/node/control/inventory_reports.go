@@ -86,7 +86,7 @@ func (c Client) sendNextInventoryReportChunk(conn net.Conn, reqID string,
 		}
 		*pending = nil
 	}
-	next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
+	next, err = c.readReadyOptionalTasksToCapacity(conn, reqID, next)
 	if err != nil {
 		return sequence, false, err
 	}
