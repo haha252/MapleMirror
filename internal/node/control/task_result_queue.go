@@ -28,8 +28,7 @@ func (c Client) sendNextPendingTaskResult(conn net.Conn, reqID string,
 		result.TaskID); err != nil {
 		return sequence, false, err
 	}
-	next, err = c.readReadyOptionalTasksToCapacity(conn, reqID, next)
-	return next, true, err
+	return next, true, nil
 }
 
 func (c Client) loadPendingTaskResults(limit int) ([]protocol.SyncTaskResult, error) {
@@ -76,8 +75,7 @@ func (c Client) sendNextRunningTaskAck(conn net.Conn, reqID string,
 	if err := c.markRunningTaskAckSent(ack.TaskID, now); err != nil {
 		return sequence, false, err
 	}
-	next, err = c.readReadyOptionalTasksToCapacity(conn, reqID, next)
-	return next, true, err
+	return next, true, nil
 }
 
 func (c Client) runningTaskAckCandidateLimit() int {
