@@ -27,18 +27,27 @@ func (s ControlServer) dispatchSyncTasksInteractively(conn net.Conn, session Ses
 			return dispatched, result, err
 		}
 		dispatched++
-		ack, ackResult, err := s.readDispatchedTaskResponse(conn, session, reqID)
-		if err != nil {
-			return dispatched, result, err
+		for {
+			ack, ackResult, err := s.readInterleavedControlMessage(conn, session, reqID)
+			if err != nil {
+				return dispatched, result, err
+			}
+			if err := s.writeMessageAck(conn, session, reqID, ack, ackResult.HeartbeatResult); err != nil {
+				return dispatched, result, err
+			}
+			result = ackResult
+			if isSyncTaskResponse(ack.MessageType) {
+				break
+			}
 		}
-		if err := s.writeMessageAck(conn, session, reqID, ack, ackResult.HeartbeatResult); err != nil {
-			return dispatched, result, err
-		}
-		result = ackResult
 	}
 }
 
-func (s ControlServer) readDispatchedTaskResponse(conn net.Conn, session Session,
+func isSyncTaskResponse(messageType string) bool {
+	return messageType == protocol.TypeSyncTaskAck || messageType == protocol.TypeSyncTaskResult
+}
+
+func (s ControlServer) readInterleavedControlMessage(conn net.Conn, session Session,
 	reqID string) (protocol.Envelope, controlMessageResult, error) {
 	msg, err := readControlFrame(conn, s.sessionReadTimeout())
 	if err != nil {
@@ -49,9 +58,6 @@ func (s ControlServer) readDispatchedTaskResponse(conn net.Conn, session Session
 	}
 	if err := msg.Validate(protocol.Control); err != nil {
 		return msg, controlMessageResult{}, err
-	}
-	if msg.MessageType != protocol.TypeSyncTaskAck && msg.MessageType != protocol.TypeSyncTaskResult {
-		return msg, controlMessageResult{}, fmt.Errorf("期望同步任务响应，实际为 %s", msg.MessageType)
 	}
 	result, err := s.handleMessage(session, msg)
 	return msg, result, err
