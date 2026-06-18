@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"mirror-server/internal/assetpath"
@@ -101,7 +102,7 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.trackPageView(w, r)
-	body, err := s.renderDownloadPowBody(asset)
+	body, err := s.renderDownloadPowBody(asset, downloadPowFromHome(r))
 	if err != nil {
 		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
 		return
@@ -134,7 +135,7 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.trackPageView(w, r)
-	body, err := s.renderDownloadPowBody(asset)
+	body, err := s.renderDownloadPowBody(asset, downloadPowFromHome(r))
 	if err != nil {
 		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
 		return
@@ -196,10 +197,11 @@ func (s Server) renderDownloadBody(projects []downloadProjectView) (template.HTM
 	return s.renderTemplateBody("download", body)
 }
 
-func (s Server) renderDownloadPowBody(asset DownloadAssetSummary) (template.HTML, error) {
+func (s Server) renderDownloadPowBody(asset DownloadAssetSummary, fromHome bool) (template.HTML, error) {
 	body := struct {
 		AssetJSON template.JS
-	}{AssetJSON: template.JS("{}")}
+		FromHome  bool
+	}{AssetJSON: template.JS("{}"), FromHome: fromHome}
 	data, err := json.Marshal(downloadPowAssetUI{
 		AssetID:           asset.AssetID,
 		ProjectName:       asset.ProjectName,
@@ -215,6 +217,32 @@ func (s Server) renderDownloadPowBody(asset DownloadAssetSummary) (template.HTML
 	}
 	body.AssetJSON = template.JS(string(data))
 	return s.renderTemplateBody("download_pow", body)
+}
+
+func downloadPowFromHome(r *http.Request) bool {
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("from")), "home") {
+		return true
+	}
+	return refererIsSiteHome(r)
+}
+
+func refererIsSiteHome(r *http.Request) bool {
+	raw := strings.TrimSpace(r.Referer())
+	if raw == "" {
+		return false
+	}
+	ref, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if ref.IsAbs() {
+		if r.Host == "" || !strings.EqualFold(ref.Host, r.Host) {
+			return false
+		}
+	} else if ref.Host != "" {
+		return false
+	}
+	return ref.EscapedPath() == "/" || ref.EscapedPath() == ""
 }
 
 func displayDate(value string) string {

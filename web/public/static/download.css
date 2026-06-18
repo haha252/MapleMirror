@@ -149,6 +149,29 @@
   color: var(--text);
   text-decoration: none;
   background: var(--panel-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.button-link:hover {
+  color: var(--text);
+}
+
+.button-link--primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #140f08;
+}
+
+.button-link--primary:hover {
+  background: var(--accent-hover);
+  color: #140f08;
+}
+
+.download-pow__back {
+  margin-left: auto;
 }
 
 .download-pow__support {
@@ -161,6 +184,7 @@
 .download-pow__support-copy {
   display: grid;
   gap: 10px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -216,6 +240,9 @@
   }
   .download-pow__actions {
     gap: 10px;
+  }
+  .download-pow__back {
+    margin-left: 0;
   }
   .download-pow__actions button,
   .button-link {

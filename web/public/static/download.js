@@ -159,7 +159,13 @@
       setStatus("下载资产缺失，请刷新后重试。", "warn");
       return;
     }
-    window.location.href = downloadPath;
+    window.location.href = homeDownloadHref(downloadPath);
+  }
+
+  function homeDownloadHref(downloadPath) {
+    const target = new URL(downloadPath, window.location.href);
+    target.searchParams.set("from", "home");
+    return target.pathname + target.search + target.hash;
   }
 
   projects.forEach((project) => container.appendChild(buildCard(project)));

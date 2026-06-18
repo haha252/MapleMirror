@@ -16,7 +16,7 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		{Level: "critical", Message: "下载验证页公告"},
 	}}
 
-	req := httptest.NewRequest(http.MethodGet, "/download/asset-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/download/asset-1?from=home", nil)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -35,6 +35,7 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`/static/public/download-pow.js`,
 		`/static/public/wechat.png`,
 		`/static/public/alipay.png`,
+		`button-link button-link--primary`,
 		`返回枫源镜像`,
 		`下载站费用高昂，如有能力，欢迎捐赠！`,
 		`page-notices page-notices--after`,
@@ -62,6 +63,34 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		if strings.Contains(body, unwanted) {
 			t.Fatalf("download verification page should not include %q: %s", unwanted, body)
 		}
+	}
+}
+
+func TestDownloadPowPageFromOtherPageIncludesForwardAndBackActions(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/download/asset-1", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
+	}
+	for _, want := range []string{
+		`前往枫源镜像`,
+		`返回上一页`,
+		`download-pow__back`,
+		`button-link button-link--primary download-pow__back`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected download verification page to include %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, `返回枫源镜像`) {
+		t.Fatalf("other-page download verification page should not include home-return action: %s", body)
 	}
 }
 
