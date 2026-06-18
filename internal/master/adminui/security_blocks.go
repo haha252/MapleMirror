@@ -20,14 +20,15 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 		return nil, 0, err
 	}
 	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT kind, block_key,
-		masked_ip, reason, source, blocked_at, expires_at, attempts_after_block,
+		display_ip, reason, source, blocked_at, expires_at, attempts_after_block,
 		last_attempt_at FROM (
-		SELECT 'admin' AS kind, ip_key AS block_key, masked_ip, reason,
+		SELECT 'admin' AS kind, ip_key AS block_key,
+		COALESCE(NULLIF(display_ip, ''), masked_ip) AS display_ip, reason,
 		'管理登录' AS source, blocked_at, expires_at, attempts_after_block,
 		last_attempt_at FROM admin_ip_blocks WHERE expires_at > ?
 		UNION ALL
 		SELECT 'client' AS kind, client_prefix_key AS block_key,
-		client_prefix_key AS masked_ip, reason, source, blocked_at, expires_at,
+		client_prefix_key AS display_ip, reason, source, blocked_at, expires_at,
 		attempts_after_block, last_attempt_at FROM client_blocks WHERE expires_at > ?
 		) ORDER BY blocked_at DESC LIMIT ? OFFSET ?`,
 		now, now, page.PageSize, page.offset())
@@ -37,14 +38,14 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var kind, key, masked, reason, source, blocked, expires, last string
+		var kind, key, display, reason, source, blocked, expires, last string
 		var attempts int
-		if err := rows.Scan(&kind, &key, &masked, &reason, &source, &blocked,
+		if err := rows.Scan(&kind, &key, &display, &reason, &source, &blocked,
 			&expires, &attempts, &last); err != nil {
 			return nil, 0, err
 		}
 		items = append(items, map[string]any{"kind": kind, "key": key,
-			"masked_ip": key, "reason": reason, "source": source,
+			"display_ip": display, "masked_ip": display, "reason": reason, "source": source,
 			"blocked_at": s.displayTime(blocked), "expires_at": s.displayTime(expires),
 			"attempts_after_block": attempts, "last_attempt_at": s.displayTime(last)})
 	}
@@ -74,12 +75,13 @@ func (s *Server) createBlock(r *http.Request, kind, key, reason, duration string
 		}
 		key = s.store.ipKey(ip)
 		_, err = s.repo.DB.ExecContext(r.Context(), `INSERT INTO admin_ip_blocks
-			(ip_key, masked_ip, reason, blocked_at, expires_at,
+			(ip_key, masked_ip, display_ip, reason, blocked_at, expires_at,
 			attempts_after_block, last_attempt_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
 			ON CONFLICT(ip_key) DO UPDATE SET reason = excluded.reason,
+			masked_ip = excluded.masked_ip, display_ip = excluded.display_ip,
 			expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
-			key, maskIP(ip), reason, now, expires, now, now)
+			key, maskIP(ip), ip, reason, now, expires, now, now)
 	case "client":
 		key, err = normalizeClientBlockPrefix(key)
 		if err != nil {

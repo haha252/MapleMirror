@@ -15,13 +15,17 @@ func TestManualAdminBlockUsesLoginIPKey(t *testing.T) {
 	}
 
 	var masked string
-	err := db.QueryRow(`SELECT masked_ip FROM admin_ip_blocks WHERE ip_key = ?`,
-		server.store.ipKey("192.0.2.10")).Scan(&masked)
+	var display string
+	err := db.QueryRow(`SELECT masked_ip, display_ip FROM admin_ip_blocks WHERE ip_key = ?`,
+		server.store.ipKey("192.0.2.10")).Scan(&masked, &display)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if masked != "192.0.2.*" {
 		t.Fatalf("masked ip = %s", masked)
+	}
+	if display != "192.0.2.10" {
+		t.Fatalf("display ip = %s", display)
 	}
 
 	blockedLogin := loginRequest("admin", "correct-password")
@@ -92,7 +96,7 @@ func TestManualClientBlockAcceptsHostPrefix(t *testing.T) {
 	}
 }
 
-func TestListBlocksDisplaysFullKeys(t *testing.T) {
+func TestListBlocksDisplaysFullSources(t *testing.T) {
 	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/security/blocks", nil)
 	if err := server.createBlock(req, "admin", "192.0.2.10", "管理封禁", "168h"); err != nil {
@@ -111,19 +115,46 @@ func TestListBlocksDisplaysFullKeys(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		server.store.ipKey("192.0.2.10"): false,
-		"2001:db8::1/128":                false,
+		"192.0.2.10":      false,
+		"2001:db8::1/128": false,
 	}
 	for _, item := range items {
-		key, _ := item["key"].(string)
-		display, _ := item["masked_ip"].(string)
-		if _, ok := want[key]; ok {
-			want[key] = display == key
+		display, _ := item["display_ip"].(string)
+		if _, ok := want[display]; ok {
+			want[display] = true
 		}
 	}
-	for key, ok := range want {
+	for display, ok := range want {
 		if !ok {
-			t.Fatalf("block key %s was not displayed fully: %#v", key, items)
+			t.Fatalf("block source %s was not displayed fully: %#v", display, items)
 		}
+	}
+}
+
+func TestListBlocksDisplaysAutoAdminBlockIP(t *testing.T) {
+	server, _ := newTestServer(t)
+	for i := 0; i < 3; i++ {
+		req := loginRequest("admin", "wrong-password")
+		req.RemoteAddr = "198.51.100.23:55000"
+		rec := httptest.NewRecorder()
+		server.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("failure status = %d", rec.Code)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/security/blocks", nil)
+	items, total, err := server.listBlocks(req, pagination{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(items) != 1 {
+		t.Fatalf("blocks total=%d len=%d", total, len(items))
+	}
+	if got := items[0]["display_ip"]; got != "198.51.100.23" {
+		t.Fatalf("auto admin block display_ip = %v, item=%#v", got, items[0])
+	}
+	if got := items[0]["key"]; got == "198.51.100.23" {
+		t.Fatalf("admin block key should stay hashed, item=%#v", items[0])
 	}
 }

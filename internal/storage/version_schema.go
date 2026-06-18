@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+
+	nodeupgrades "mirror-server/internal/storage/upgrades/node"
 )
 
 func applicationSchemaEmpty(tx *sql.Tx) (bool, error) {
@@ -45,7 +47,7 @@ func adoptLegacyV1(ctx context.Context, tx *sql.Tx, kind string) error {
 	case databaseKindMaster:
 		err = nil
 	case databaseKindNode:
-		err = ensureNodeV1IdentityMaterials(ctx, tx)
+		err = nodeupgrades.EnsureV1IdentityMaterials(ctx, tx)
 	default:
 		return fmt.Errorf("未知数据库类型 %s", kind)
 	}

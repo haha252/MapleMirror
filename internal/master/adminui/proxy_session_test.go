@@ -72,12 +72,15 @@ func TestTrustedProxyIPDrivesLoginBlockAndSession(t *testing.T) {
 			t.Fatalf("failure status = %d", rec.Code)
 		}
 	}
-	var masked string
-	if err := db.QueryRow(`SELECT masked_ip FROM admin_ip_blocks`).Scan(&masked); err != nil {
+	var masked, display string
+	if err := db.QueryRow(`SELECT masked_ip, display_ip FROM admin_ip_blocks`).Scan(&masked, &display); err != nil {
 		t.Fatal(err)
 	}
 	if masked != "203.0.113.*" {
 		t.Fatalf("masked ip = %s", masked)
+	}
+	if display != "203.0.113.46" {
+		t.Fatalf("display ip = %s", display)
 	}
 }
 
@@ -93,12 +96,15 @@ func TestUntrustedProxyHeaderDoesNotChangeLoginIP(t *testing.T) {
 			t.Fatalf("failure status = %d", rec.Code)
 		}
 	}
-	var masked string
-	if err := db.QueryRow(`SELECT masked_ip FROM admin_ip_blocks`).Scan(&masked); err != nil {
+	var masked, display string
+	if err := db.QueryRow(`SELECT masked_ip, display_ip FROM admin_ip_blocks`).Scan(&masked, &display); err != nil {
 		t.Fatal(err)
 	}
 	if masked != "127.0.0.*" {
 		t.Fatalf("masked ip = %s", masked)
+	}
+	if display != "127.0.0.1" {
+		t.Fatalf("display ip = %s", display)
 	}
 }
 

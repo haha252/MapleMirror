@@ -5,14 +5,24 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	masterupgrades "mirror-server/internal/storage/upgrades/master"
+	nodeupgrades "mirror-server/internal/storage/upgrades/node"
 )
 
 const (
 	databaseKindMaster = "master"
 	databaseKindNode   = "node"
-	masterDBVersion    = 1
+	masterDBVersion    = 2
 	nodeDBVersion      = 3
 )
+
+type databaseVersionPlan struct {
+	Kind           string
+	CurrentVersion int
+	SchemaPattern  string
+	Upgrades       []versionUpgrade
+}
 
 type versionUpgrade struct {
 	From  int
@@ -20,17 +30,29 @@ type versionUpgrade struct {
 	Apply func(context.Context, *sql.Tx) error
 }
 
-func versionPlan(kind string) (int, string, []versionUpgrade, error) {
+func versionPlan(kind string) (databaseVersionPlan, error) {
 	switch kind {
 	case databaseKindMaster:
-		return masterDBVersion, "migrations/master/*.sql", nil, nil
+		return databaseVersionPlan{
+			Kind:           databaseKindMaster,
+			CurrentVersion: masterDBVersion,
+			SchemaPattern:  "migrations/master/*.sql",
+			Upgrades: []versionUpgrade{
+				{From: 1, To: 2, Apply: masterupgrades.V1ToV2},
+			},
+		}, nil
 	case databaseKindNode:
-		return nodeDBVersion, "migrations/node/*.sql", []versionUpgrade{
-			{From: 1, To: 2, Apply: upgradeNode1To2},
-			{From: 2, To: 3, Apply: upgradeNode2To3},
+		return databaseVersionPlan{
+			Kind:           databaseKindNode,
+			CurrentVersion: nodeDBVersion,
+			SchemaPattern:  "migrations/node/*.sql",
+			Upgrades: []versionUpgrade{
+				{From: 1, To: 2, Apply: nodeupgrades.V1ToV2},
+				{From: 2, To: 3, Apply: nodeupgrades.V2ToV3},
+			},
 		}, nil
 	default:
-		return 0, "", nil, fmt.Errorf("未知数据库类型 %s", kind)
+		return databaseVersionPlan{}, fmt.Errorf("未知数据库类型 %s", kind)
 	}
 }
 

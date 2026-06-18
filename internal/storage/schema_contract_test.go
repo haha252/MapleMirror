@@ -29,6 +29,7 @@ var expectedSchemaFiles = map[string]string{
 	"migrations/master/000016_sync_task_lease.sql":          "6e2f9c4b2ecdfc6e9d410e5d15eaafd23b3a13d6c1249f6052266c15caed9705",
 	"migrations/master/000017_node_project_assignments.sql": "c68146df64987598b8378085f1aa0c51345ddb5a83cef2c2ce10ec4baf107eba",
 	"migrations/master/000018_public_probe.sql":             "700a6fa0ceb434b0f9608fbf2bf4e590c88c82718bf156349b3757f8033bbffd",
+	"migrations/master/000019_admin_block_display_ip.sql":   "fa7885e78b7aec3572d71b39f988304b46f5ea3f5bbee9aa0fcb40a663f17936",
 	"migrations/node/000001_state.sql":                      "3501b8a94e3fac8eb0807afd32183effd81874e2001ff7b69cb43b0a25b3a0c2",
 	"migrations/node/000002_identity.sql":                   "dab9fe79b6b455ce7109c7eac041e17732ad5d0c2eb7f9c89bf3f793dd30b88e",
 	"migrations/node/000003_sync_state.sql":                 "973fb3190ee2a212b883e3d6686db18afdcb3bb1fdd59d719353ec0cf99d77e7",
@@ -68,18 +69,18 @@ func TestSchemaFilesRequireVersionedUpgrade(t *testing.T) {
 
 func TestDatabaseVersionsHaveDocs(t *testing.T) {
 	for version := 1; version <= masterDBVersion; version++ {
-		assertVersionDoc(t, version)
+		assertVersionDoc(t, "master", version)
 	}
 	for version := 1; version <= nodeDBVersion; version++ {
-		assertVersionDoc(t, version)
+		assertVersionDoc(t, "node", version)
 	}
 }
 
-func assertVersionDoc(t *testing.T, version int) {
+func assertVersionDoc(t *testing.T, kind string, version int) {
 	t.Helper()
-	path := filepath.Join("..", "..", "docs", "数据库版本", "v"+itoa(version)+".md")
+	path := filepath.Join("..", "..", "docs", kind, "v"+itoa(version)+".md")
 	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("缺少数据库版本文档 %s；每升一级数据库版本都必须新增对应文档", path)
+		t.Fatalf("缺少数据库版本文档 %s；每升一级数据库版本都必须新增对应端文档", path)
 	}
 }
 

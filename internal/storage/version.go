@@ -5,13 +5,15 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+
+	nodeupgrades "mirror-server/internal/storage/upgrades/node"
 )
 
 //go:embed migrations/master/*.sql migrations/node/*.sql
 var schemaFiles embed.FS
 
 func applyDatabaseVersion(db *sql.DB, kind string) error {
-	target, pattern, upgrades, err := versionPlan(kind)
+	plan, err := versionPlan(kind)
 	if err != nil {
 		return err
 	}
@@ -37,7 +39,7 @@ func applyDatabaseVersion(db *sql.DB, kind string) error {
 			return err
 		}
 		if empty {
-			if err := applyV1Schema(ctx(), tx, pattern); err != nil {
+			if err := applyV1Schema(ctx(), tx, plan.SchemaPattern); err != nil {
 				return err
 			}
 		} else if err := adoptLegacyV1(ctx(), tx, kind); err != nil {
@@ -48,27 +50,13 @@ func applyDatabaseVersion(db *sql.DB, kind string) error {
 			return err
 		}
 	}
-	if kind == databaseKindNode && version == 1 {
-		if err := ensureNodeV1IdentityMaterials(ctx(), tx); err != nil {
+	if plan.Kind == databaseKindNode && version == 1 {
+		if err := nodeupgrades.EnsureV1IdentityMaterials(ctx(), tx); err != nil {
 			return err
 		}
 	}
-	for version < target {
-		upgrade := nextUpgrade(upgrades, version)
-		if upgrade == nil {
-			return fmt.Errorf("%s 数据库缺少 %d 到 %d 的升级器", kind, version, version+1)
-		}
-		if err := upgrade.Apply(ctx(), tx); err != nil {
-			return fmt.Errorf("执行 %s 数据库 %d 到 %d 升级失败：%w",
-				kind, upgrade.From, upgrade.To, err)
-		}
-		version = upgrade.To
-		if err := setVersion(tx, kind, version); err != nil {
-			return err
-		}
-	}
-	if version > target {
-		return fmt.Errorf("%s 数据库版本 %d 高于当前程序支持的版本 %d", kind, version, target)
+	if _, err := applyVersionPlan(ctx(), tx, plan, version); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交数据库版本事务失败：%w", err)

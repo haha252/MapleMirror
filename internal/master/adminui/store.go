@@ -87,12 +87,13 @@ func (s loginStore) recordFailure(ctx context.Context, ip string) error {
 	}
 	expires := now.Add(s.banDuration).Format(time.RFC3339Nano)
 	_, err = s.db.ExecContext(ctx, `INSERT INTO admin_ip_blocks
-		(ip_key, masked_ip, reason, blocked_at, expires_at, last_attempt_at, updated_at)
-		VALUES (?, ?, 'admin_login_failed', ?, ?, ?, ?)
+		(ip_key, masked_ip, display_ip, reason, blocked_at, expires_at, last_attempt_at, updated_at)
+		VALUES (?, ?, ?, 'admin_login_failed', ?, ?, ?, ?)
 		ON CONFLICT(ip_key) DO UPDATE SET reason = excluded.reason,
+		masked_ip = excluded.masked_ip, display_ip = excluded.display_ip,
 		blocked_at = excluded.blocked_at, expires_at = excluded.expires_at,
 		last_attempt_at = excluded.last_attempt_at, updated_at = excluded.updated_at`,
-		key, masked, nowText, expires, nowText, nowText)
+		key, masked, ip, nowText, expires, nowText, nowText)
 	return err
 }
 

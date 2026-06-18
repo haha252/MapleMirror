@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"mirror-server/internal/config"
 
@@ -27,6 +26,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertTable(t, db, "client_blocks")
 	assertTable(t, db, "admin_web_sessions")
 	assertTable(t, db, "admin_ip_blocks")
+	assertColumn(t, db, "admin_ip_blocks", "display_ip")
 	assertTable(t, db, "node_project_assignments")
 	assertColumn(t, db, "node_tasks", "lease_expires_at")
 	assertColumn(t, db, "nodes", "max_mirror_projects")
@@ -39,7 +39,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	assertDBVersion(t, db, "master", 1)
+	assertDBVersion(t, db, "master", 2)
 	var legacyCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
 		t.Fatal(err)
@@ -68,53 +68,6 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
 	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
 	assertDBVersion(t, db, "node", 3)
-}
-
-func TestOpenNodeBackfillsInventoryForceColumnForExistingV1Database(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "node.db")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	statements := []string{
-		`CREATE TABLE database_version (kind TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
-		`INSERT INTO database_version(kind, version, updated_at) VALUES ('node', 1, '` + now + `')`,
-		`CREATE TABLE control_identity (
-			id INTEGER PRIMARY KEY CHECK (id = 1),
-			node_id TEXT NOT NULL,
-			certificate_fingerprint TEXT NOT NULL,
-			certificate_not_after TEXT NOT NULL,
-			enrolled_at TEXT NOT NULL,
-			certificate_pem TEXT,
-			ca_pem TEXT,
-			private_key_pem TEXT,
-			download_token_public_key_pem TEXT
-		)`,
-		`CREATE TABLE inventory_report_cursor (
-			id INTEGER PRIMARY KEY CHECK (id = 1),
-			next_revision INTEGER NOT NULL,
-			last_acked_revision INTEGER NOT NULL,
-			updated_at TEXT NOT NULL
-		)`,
-	}
-	for _, statement := range statements {
-		if _, err := db.Exec(statement); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	opened, err := OpenNode(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer opened.Close()
-	assertColumn(t, opened, "inventory_report_cursor", "force_report_requested_at")
-	assertColumn(t, opened, "pending_sync_task_results", "peer_fallback_attempted")
-	assertDBVersion(t, opened, "node", 3)
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {

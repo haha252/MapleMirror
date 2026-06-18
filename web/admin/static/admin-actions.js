@@ -58,7 +58,7 @@
       (data.client_blocks || []).forEach(function (item) { rows.push(["client", item]); });
       body.innerHTML = rows.map(function (row) {
         var kind = row[0], item = row[1];
-        return "<tr><td>" + esc(item.key || item.masked_ip) + "</td><td>" +
+        return "<tr><td>" + esc(item.display_ip || item.masked_ip || item.key) + "</td><td>" +
           esc(item.reason || "") + "</td><td>" + esc(item.expires_at || "") +
           '</td><td><button class="admin-secondary" data-block-kind="' + kind +
           '" data-block-key="' + esc(item.key) + '">解除</button></td></tr>';
