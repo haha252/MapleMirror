@@ -29,7 +29,7 @@ func (c *Client) sendPendingTaskResults(conn net.Conn, reqID string, sequence ui
 		if err != nil {
 			return sequence, err
 		}
-		next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
+		next, err = c.readReadyOptionalTasksToCapacity(conn, reqID, next)
 		if err != nil {
 			return sequence, err
 		}
@@ -51,7 +51,7 @@ func (c *Client) sendRunningTaskAcks(conn net.Conn, reqID string, sequence uint6
 		if err != nil {
 			return sequence, err
 		}
-		next, err = c.readOptionalTasksToCapacity(conn, reqID, next)
+		next, err = c.readReadyOptionalTasksToCapacity(conn, reqID, next)
 		if err != nil {
 			return sequence, err
 		}

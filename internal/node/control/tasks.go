@@ -11,12 +11,24 @@ import (
 )
 
 const maxSyncTasksPerSession = 10
+const optionalTaskWaitTimeout = 200 * time.Millisecond
+const optionalTaskReadyTimeout = 10 * time.Millisecond
 
 func (c Client) readOptionalTasks(conn net.Conn, reqID string, sequence uint64,
 	remaining int) (uint64, error) {
+	return c.readOptionalTasksWithTimeout(conn, reqID, sequence, remaining, optionalTaskWaitTimeout)
+}
+
+func (c Client) readReadyOptionalTasks(conn net.Conn, reqID string,
+	sequence uint64, remaining int) (uint64, error) {
+	return c.readOptionalTasksWithTimeout(conn, reqID, sequence, remaining, optionalTaskReadyTimeout)
+}
+
+func (c Client) readOptionalTasksWithTimeout(conn net.Conn, reqID string, sequence uint64,
+	remaining int, timeout time.Duration) (uint64, error) {
 	for remaining > 0 {
 		next, handled, err := c.readOptionalTaskWithTimeout(conn, reqID,
-			sequence, 200*time.Millisecond)
+			sequence, timeout)
 		if err != nil {
 			return sequence, err
 		}
@@ -36,6 +48,15 @@ func (c Client) readOptionalTasksToCapacity(conn net.Conn, reqID string,
 		return sequence, nil
 	}
 	return c.readOptionalTasks(conn, reqID, sequence, available)
+}
+
+func (c Client) readReadyOptionalTasksToCapacity(conn net.Conn, reqID string,
+	sequence uint64) (uint64, error) {
+	available := c.availableSyncTaskSlots()
+	if available <= 0 {
+		return sequence, nil
+	}
+	return c.readReadyOptionalTasks(conn, reqID, sequence, available)
 }
 
 func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
