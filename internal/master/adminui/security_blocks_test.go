@@ -91,3 +91,39 @@ func TestManualClientBlockAcceptsHostPrefix(t *testing.T) {
 		t.Fatalf("host prefix client block count = %d, want 1", count)
 	}
 }
+
+func TestListBlocksDisplaysFullKeys(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/security/blocks", nil)
+	if err := server.createBlock(req, "admin", "192.0.2.10", "管理封禁", "168h"); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.createBlock(req, "client", "2001:db8::1", "下载封禁", "168h"); err != nil {
+		t.Fatal(err)
+	}
+
+	items, total, err := server.listBlocks(req, pagination{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(items) != 2 {
+		t.Fatalf("blocks total=%d len=%d", total, len(items))
+	}
+
+	want := map[string]bool{
+		server.store.ipKey("192.0.2.10"): false,
+		"2001:db8::1/128":                false,
+	}
+	for _, item := range items {
+		key, _ := item["key"].(string)
+		display, _ := item["masked_ip"].(string)
+		if _, ok := want[key]; ok {
+			want[key] = display == key
+		}
+	}
+	for key, ok := range want {
+		if !ok {
+			t.Fatalf("block key %s was not displayed fully: %#v", key, items)
+		}
+	}
+}

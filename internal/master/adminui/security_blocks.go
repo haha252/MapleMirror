@@ -44,7 +44,7 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 			return nil, 0, err
 		}
 		items = append(items, map[string]any{"kind": kind, "key": key,
-			"masked_ip": maskBlockKey(masked), "reason": reason, "source": source,
+			"masked_ip": key, "reason": reason, "source": source,
 			"blocked_at": s.displayTime(blocked), "expires_at": s.displayTime(expires),
 			"attempts_after_block": attempts, "last_attempt_at": s.displayTime(last)})
 	}
@@ -153,11 +153,4 @@ func (s *Server) deleteBlock(r *http.Request, kind, key string) error {
 		return sql.ErrNoRows
 	}
 	return nil
-}
-
-func maskBlockKey(value string) string {
-	if len(value) <= 10 {
-		return value
-	}
-	return strings.TrimSpace(value[:10]) + "*"
 }

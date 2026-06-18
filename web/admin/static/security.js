@@ -25,7 +25,7 @@
         body.innerHTML = rows.map(function (item) {
           return '<tr><td><input type="checkbox" data-block-select data-kind="' + a.esc(item.kind) + '" data-key="' + a.esc(item.key) + '"></td><td>' +
             a.esc(item.kind === "admin" ? "管理登录" : "公开下载") + "</td><td>" +
-            a.esc(item.masked_ip || item.key) + "</td><td>" + a.esc(item.reason || item.source || "") +
+            a.esc(item.key || item.masked_ip) + "</td><td>" + a.esc(item.reason || item.source || "") +
             "</td><td>" + a.esc(item.expires_at || "") +
             '</td><td><button class="admin-secondary" data-block-kind="' + a.esc(item.kind) +
             '" data-block-key="' + a.esc(item.key) + '">解除</button></td></tr>';
