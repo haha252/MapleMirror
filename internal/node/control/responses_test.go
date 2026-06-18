@@ -102,13 +102,15 @@ func TestSendNextControlWorkPrioritizesTaskResultsOverTraffic(t *testing.T) {
 	db := openNodeDB(t)
 	defer db.Close()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := db.Exec(`INSERT INTO pending_sync_task_results
+	for _, taskID := range []string{"task-1", "task-2"} {
+		_, err := db.Exec(`INSERT INTO pending_sync_task_results
 		(task_id, asset_id, result, local_digest_sha256, size_bytes, message, created_at)
-		VALUES ('task-1', 'asset-1', 'succeeded', 'sha256:abc', 12, 'ok', ?)`, now)
-	if err != nil {
-		t.Fatal(err)
+		VALUES (?, 'asset-1', 'succeeded', 'sha256:abc', 12, 'ok', ?)`, taskID, now)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
-	_, err = db.Exec(`INSERT INTO pending_traffic_events
+	_, err := db.Exec(`INSERT INTO pending_traffic_events
 		(event_sequence, authorization_id, node_request_id, master_request_id,
 		sent_bytes, created_at, asset_id, status)
 		VALUES (1, 'auth-1', 'node-req-1', 'master-req-1', 12, ?, 'asset-1', 'completed')`, now)
@@ -121,11 +123,13 @@ func TestSendNextControlWorkPrioritizesTaskResultsOverTraffic(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		msg, ok := expectType(t, serverConn, protocol.TypeSyncTaskResult)
-		if !ok {
-			return
+		for i := 0; i < 2; i++ {
+			msg, ok := expectType(t, serverConn, protocol.TypeSyncTaskResult)
+			if !ok {
+				return
+			}
+			sendAck(serverConn, msg)
 		}
-		sendAck(serverConn, msg)
 	}()
 	client := Client{NodeID: "node-1", DB: db}
 	state := sessionLoopState{sequence: 3}
@@ -133,21 +137,22 @@ func TestSendNextControlWorkPrioritizesTaskResultsOverTraffic(t *testing.T) {
 	if err != nil || !sent {
 		t.Fatalf("expected task result to be sent first, sent=%v err=%v", sent, err)
 	}
-	if state.sequence != 4 {
-		t.Fatalf("sequence=%d want 4", state.sequence)
+	if state.sequence != 5 {
+		t.Fatalf("sequence=%d want 5", state.sequence)
 	}
 	<-done
-	var reportedAt, confirmedAt string
-	if err := db.QueryRow(`SELECT COALESCE(reported_at, '') FROM pending_sync_task_results
-		WHERE task_id = 'task-1'`).Scan(&reportedAt); err != nil {
+	var reported int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pending_sync_task_results
+		WHERE reported_at IS NOT NULL`).Scan(&reported); err != nil {
 		t.Fatal(err)
 	}
+	var confirmedAt string
 	if err := db.QueryRow(`SELECT COALESCE(confirmed_at, '') FROM pending_traffic_events
 		WHERE event_sequence = 1`).Scan(&confirmedAt); err != nil {
 		t.Fatal(err)
 	}
-	if reportedAt == "" || confirmedAt != "" {
-		t.Fatalf("task result should win priority, reported_at=%q confirmed_at=%q", reportedAt, confirmedAt)
+	if reported != 2 || confirmedAt != "" {
+		t.Fatalf("task results should win priority, reported=%d confirmed_at=%q", reported, confirmedAt)
 	}
 }
 

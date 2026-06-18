@@ -121,7 +121,8 @@ func (c Client) wakeControlWork() {
 
 func (c Client) sendNextControlWork(conn net.Conn, reqID string,
 	state *sessionLoopState) (bool, error) {
-	next, sent, err := c.sendNextPendingTaskResult(conn, reqID, state.sequence)
+	next, err := c.sendPendingTaskResults(conn, reqID, state.sequence)
+	sent := next != state.sequence
 	if err != nil || sent {
 		state.sequence = next
 		return sent, err
