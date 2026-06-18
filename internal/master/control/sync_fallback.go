@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"net/url"
 	"time"
 
@@ -11,29 +12,39 @@ import (
 )
 
 const maxSyncFallbackSources = 3
+const maxSyncFallbackCandidates = maxSyncFallbackSources * 3
 const maxReplicationTokenTTL = 2 * time.Minute
 const defaultPeerFallbackWorkers = 8
 const defaultPeerFallbackMinSizeBytes = 32 * 1024 * 1024
 
 func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string, task protocol.SyncTask) []protocol.SyncFallbackSource {
-	rows, err := r.DB.QueryContext(ctx, `SELECT n.id, n.public_name, n.public_download_base_url
-		FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
-		JOIN assets a ON a.id = ni.asset_id
-		JOIN releases r ON r.id = a.release_id
-		JOIN projects p ON p.id = r.project_id
-		JOIN target_inventory ti ON ti.node_id = ni.node_id
-			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
-		WHERE ni.asset_id = ? AND ni.node_id != ? AND n.state != 'disabled'
-		AND n.state != 'offline' AND n.last_heartbeat_at IS NOT NULL
-		AND n.last_heartbeat_at != '' AND n.public_download_base_url != '' AND ni.state = 'verified'
-		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
-		AND a.service_state IN ('candidate', 'pending', 'active') AND r.selected = 1 AND p.enabled = 1
-		AND `+r.syncPeerPublicProbeSQL()+`
-		ORDER BY n.public_name, n.id LIMIT ?`,
-		r.syncPeerArgs(task.Asset.AssetID, targetNodeID, maxSyncFallbackSources)...)
+	rows, err := r.DB.QueryContext(ctx, r.syncFallbackSelectSQL(), r.syncFallbackArgs(task.Asset.AssetID, targetNodeID, maxSyncFallbackCandidates)...)
 	if err != nil {
 		return nil
 	}
+	return r.readSyncFallbackSources(ctx, rows, targetNodeID, task)
+}
+
+func (r Repository) hasUsablePeerFallback(ctx context.Context, tx *sql.Tx, targetNodeID string, task protocol.SyncTask) bool {
+	rows, err := tx.QueryContext(ctx, r.syncFallbackExistsSQL(), r.syncFallbackArgs(task.Asset.AssetID, targetNodeID, 1)...)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var baseURL string
+		if err := rows.Scan(&baseURL); err != nil {
+			return false
+		}
+		if _, err := joinReplicationURL(baseURL, task.Asset.AssetID); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (r Repository) readSyncFallbackSources(ctx context.Context, rows *sql.Rows, targetNodeID string,
+	task protocol.SyncTask) []protocol.SyncFallbackSource {
 	defer rows.Close()
 	expires := time.Now().UTC().Add(r.replicationTokenTTL()).Format(time.RFC3339Nano)
 	out := make([]protocol.SyncFallbackSource, 0, maxSyncFallbackSources)
@@ -55,26 +66,63 @@ func (r Repository) syncFallbackSources(ctx context.Context, targetNodeID string
 		source.Token = token
 		source.Parts = r.replicationParts(task, nodeID, targetNodeID, expires)
 		out = append(out, source)
+		if len(out) >= maxSyncFallbackSources {
+			break
+		}
 	}
 	return out
 }
 
-func (r Repository) syncPeerPublicProbeSQL() string {
-	if r.PublicProbeNetworkFailures <= 0 {
-		return "1 = 1"
-	}
-	return "n.public_probe_network_failures < ?"
+func (r Repository) syncFallbackSelectSQL() string {
+	return `SELECT n.id, n.public_name, n.public_download_base_url
+		FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
+		JOIN assets a ON a.id = ni.asset_id
+		JOIN releases r ON r.id = a.release_id
+		JOIN projects p ON p.id = r.project_id
+		JOIN target_inventory ti ON ti.node_id = ni.node_id
+			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
+		WHERE ni.asset_id = ? AND ni.node_id != ? AND n.state != 'disabled'
+		AND n.state != 'offline' AND n.last_heartbeat_at IS NOT NULL
+		AND n.last_heartbeat_at != '' AND n.public_download_base_url != '' AND ni.state = 'verified'
+		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
+		AND a.service_state IN ('candidate', 'pending', 'active') AND r.selected = 1 AND p.enabled = 1
+		ORDER BY
+			CASE WHEN ? > 0 AND n.public_probe_network_failures >= ? THEN 1 ELSE 0 END,
+			n.public_probe_network_failures,
+			CASE WHEN n.last_public_probe_result = 'success' THEN 0 ELSE 1 END,
+			COALESCE(n.last_public_probe_at, '') DESC,
+			COALESCE(n.last_heartbeat_at, '') DESC,
+			n.target_bandwidth_bps DESC,
+			n.public_name, n.id
+		LIMIT ?`
 }
 
-func (r Repository) syncPeerArgs(args ...any) []any {
-	if r.PublicProbeNetworkFailures <= 0 {
-		return args
-	}
-	out := make([]any, 0, len(args)+1)
-	out = append(out, args[:2]...)
-	out = append(out, r.PublicProbeNetworkFailures)
-	out = append(out, args[2:]...)
-	return out
+func (r Repository) syncFallbackExistsSQL() string {
+	return `SELECT n.public_download_base_url
+		FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
+		JOIN assets a ON a.id = ni.asset_id
+		JOIN releases r ON r.id = a.release_id
+		JOIN projects p ON p.id = r.project_id
+		JOIN target_inventory ti ON ti.node_id = ni.node_id
+			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
+		WHERE ni.asset_id = ? AND ni.node_id != ? AND n.state != 'disabled'
+		AND n.state != 'offline' AND n.last_heartbeat_at IS NOT NULL
+		AND n.last_heartbeat_at != '' AND n.public_download_base_url != '' AND ni.state = 'verified'
+		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
+		AND a.service_state IN ('candidate', 'pending', 'active') AND r.selected = 1 AND p.enabled = 1
+		ORDER BY
+			CASE WHEN ? > 0 AND n.public_probe_network_failures >= ? THEN 1 ELSE 0 END,
+			n.public_probe_network_failures,
+			CASE WHEN n.last_public_probe_result = 'success' THEN 0 ELSE 1 END,
+			COALESCE(n.last_public_probe_at, '') DESC,
+			COALESCE(n.last_heartbeat_at, '') DESC,
+			n.target_bandwidth_bps DESC,
+			n.public_name, n.id
+		LIMIT ?`
+}
+
+func (r Repository) syncFallbackArgs(assetID, targetNodeID string, limit int) []any {
+	return []any{assetID, targetNodeID, r.PublicProbeNetworkFailures, r.PublicProbeNetworkFailures, limit}
 }
 
 func (r Repository) replicationToken(task protocol.SyncTask, sourceNodeID, targetNodeID, expires string,

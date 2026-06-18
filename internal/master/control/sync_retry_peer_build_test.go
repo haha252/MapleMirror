@@ -8,7 +8,7 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func TestTemporaryErrorUsesPublicProbeBlockedPeerForSyncFallback(t *testing.T) {
+func TestTemporaryErrorRetriesImmediatelyOnlyWhenPeerFallbackCanBeBuilt(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	repo.PublicProbeNetworkFailures = 5
@@ -36,7 +36,7 @@ func TestTemporaryErrorUsesPublicProbeBlockedPeerForSyncFallback(t *testing.T) {
 	err = repo.DB.QueryRow(`SELECT state, retry_after FROM node_tasks WHERE id = 'task-1'`).
 		Scan(&state, &retryAfter)
 	if err != nil || state != "pending" || (retryAfter.Valid && retryAfter.String != "") {
-		t.Fatalf("public-probe blocked peer should still force sync retry, state=%s retry=%q err=%v",
+		t.Fatalf("blocked peer should still be eligible for sync fallback, state=%s retry=%q err=%v",
 			state, retryAfter.String, err)
 	}
 }

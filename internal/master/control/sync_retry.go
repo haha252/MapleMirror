@@ -57,7 +57,11 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 	case "temporary_error", "digest_mismatch", "size_mismatch":
 		nextAttempts := attempts + 1
 		if result.Result == "temporary_error" && !result.PeerFallbackAttempted &&
-			r.hasVerifiedPeer(ctx, tx, nodeID, result.AssetID) {
+			r.hasUsablePeerFallback(ctx, tx, nodeID, protocol.SyncTask{
+				TaskID:   result.TaskID,
+				TaskType: taskType,
+				Asset:    protocol.SyncAsset{AssetID: result.AssetID},
+			}) {
 			_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
 				attempts = ?, error_message = ?, retry_after = NULL,
 				lease_expires_at = NULL, updated_at = ?
@@ -120,26 +124,4 @@ func syncTaskCurrent(ctx context.Context, tx *sql.Tx, nodeID, taskID, taskType, 
 		WHERE t.id = ? AND t.node_id = ? AND t.asset_id = ?
 	)`, taskID, nodeID, assetID).Scan(&ok)
 	return ok == 1, err
-}
-
-func (r Repository) hasVerifiedPeer(ctx context.Context, tx *sql.Tx, nodeID, assetID string) bool {
-	if assetID == "" {
-		return false
-	}
-	var exists int
-	err := tx.QueryRowContext(ctx, `SELECT EXISTS(
-		SELECT 1 FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
-		JOIN assets a ON a.id = ni.asset_id
-		JOIN releases r ON r.id = a.release_id
-		JOIN projects p ON p.id = r.project_id
-		JOIN target_inventory ti ON ti.node_id = ni.node_id
-			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
-		WHERE ni.asset_id = ? AND ni.node_id != ? AND n.state NOT IN ('disabled', 'offline')
-		AND n.last_heartbeat_at IS NOT NULL AND n.last_heartbeat_at != ''
-		AND n.public_download_base_url != '' AND ni.state = 'verified'
-		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
-		AND a.service_state IN ('candidate', 'pending', 'active') AND r.selected = 1 AND p.enabled = 1
-		AND `+r.syncPeerPublicProbeSQL()+`
-	)`, r.syncPeerArgs(assetID, nodeID)...).Scan(&exists)
-	return err == nil && exists == 1
 }

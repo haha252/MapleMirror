@@ -120,7 +120,7 @@ func TestNextSyncTaskSkipsInvalidPeerFallbackSources(t *testing.T) {
 	}
 }
 
-func TestNextSyncTaskSkipsPublicProbeBlockedPeerFallbackSource(t *testing.T) {
+func TestNextSyncTaskDemotesPublicProbeBlockedPeerFallbackSource(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	repo = withReplicationSigner(t, repo)
@@ -137,8 +137,8 @@ func TestNextSyncTaskSkipsPublicProbeBlockedPeerFallbackSource(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("expected sync task, ok=%v err=%v", ok, err)
 	}
-	if len(task.FallbackSources) != 0 {
-		t.Fatalf("public-probe blocked peer should not be sent, got %+v", task.FallbackSources)
+	if len(task.FallbackSources) != 1 || task.FallbackSources[0].NodeID != "node-2" {
+		t.Fatalf("public-probe blocked peer should still be usable for sync, got %+v", task.FallbackSources)
 	}
 }
 
