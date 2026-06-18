@@ -16,17 +16,21 @@ func (s ControlServer) dispatchSyncTasksInteractively(conn net.Conn, session Ses
 	if err := s.Repo.refreshExpiredSyncTaskLeases(context.Background(), session.NodeID); err != nil {
 		return 0, result, err
 	}
+	outstanding, err := s.Repo.outstandingSentSyncTasks(context.Background(), session.NodeID)
+	if err != nil {
+		return 0, result, err
+	}
 	dispatched := 0
 	for {
-		limit, err := s.syncTaskDispatchAllowance(session.NodeID)
-		if err != nil || limit <= 0 {
-			return dispatched, result, err
+		if s.syncTaskDispatchAllowance(session.NodeID, outstanding) <= 0 {
+			return dispatched, result, nil
 		}
 		ok, err := s.writeNextTask(conn, session, reqID)
 		if err != nil || !ok {
 			return dispatched, result, err
 		}
 		dispatched++
+		outstanding++
 		for {
 			ack, ackResult, err := s.readInterleavedControlMessage(conn, session, reqID)
 			if err != nil {
@@ -37,6 +41,9 @@ func (s ControlServer) dispatchSyncTasksInteractively(conn net.Conn, session Ses
 			}
 			result = ackResult
 			if isSyncTaskResponse(ack.MessageType) {
+				if outstanding > 0 {
+					outstanding--
+				}
 				break
 			}
 		}

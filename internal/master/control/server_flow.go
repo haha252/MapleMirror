@@ -154,7 +154,11 @@ func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID stri
 	if err := s.Repo.refreshExpiredSyncTaskLeases(context.Background(), session.NodeID); err != nil {
 		return 0, err
 	}
-	limit, err := s.syncTaskDispatchAllowance(session.NodeID)
+	outstanding, err := s.Repo.outstandingSentSyncTasks(context.Background(), session.NodeID)
+	if err != nil {
+		return 0, err
+	}
+	limit := s.syncTaskDispatchAllowance(session.NodeID, outstanding)
 	if err != nil {
 		return 0, err
 	}
@@ -169,17 +173,13 @@ func (s ControlServer) writeSyncTasks(conn net.Conn, session Session, reqID stri
 	return dispatched, nil
 }
 
-func (s ControlServer) syncTaskDispatchAllowance(nodeID string) (int, error) {
+func (s ControlServer) syncTaskDispatchAllowance(nodeID string, outstanding int) int {
 	limit, known := s.Repo.runtime().SyncTaskDispatchCapacity(nodeID)
 	if !known {
 		limit = defaultSyncTaskDispatchWindow
 	}
 	if limit <= 0 {
-		return 0, nil
-	}
-	outstanding, err := s.Repo.outstandingSentSyncTasks(context.Background(), nodeID)
-	if err != nil {
-		return 0, err
+		return 0
 	}
 	limit -= outstanding
 	if limit < 0 {
@@ -188,7 +188,7 @@ func (s ControlServer) syncTaskDispatchAllowance(nodeID string) (int, error) {
 	if limit > maxSyncTaskDispatchWindow {
 		limit = maxSyncTaskDispatchWindow
 	}
-	return limit, nil
+	return limit
 }
 
 func (s ControlServer) dispatchSyncTasksAfterMessage(conn net.Conn, session Session, reqID string, result controlMessageResult) (int, error) {
