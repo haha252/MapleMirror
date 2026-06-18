@@ -97,17 +97,12 @@ func TestDownloadReportsPeerAttemptWhenFallbackCommitFails(t *testing.T) {
 	}
 }
 
-func TestDownloadPreflightsPrimaryAndSkipsFileGetWhenSourceUnavailable(t *testing.T) {
+func TestDownloadFallsBackAfterPrimaryGetFailure(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
-	var headHits, getHits int
+	var getHits int
 	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodHead {
-			headHits++
-			http.Error(w, "github unavailable", http.StatusBadGateway)
-			return
-		}
 		getHits++
-		_, _ = w.Write([]byte("should-not-fetch"))
+		http.Error(w, "github unavailable", http.StatusBadGateway)
 	}))
 	defer primary.Close()
 	var fallbackHits int
@@ -118,24 +113,13 @@ func TestDownloadPreflightsPrimaryAndSkipsFileGetWhenSourceUnavailable(t *testin
 	defer fallback.Close()
 
 	task := fallbackTask(primary.URL+"/asset.zip", fallback.URL, digest("abcdef"), 6)
-	executor := Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
-		Probe: NewSourceProbe(primary.Client()), AllowPrivateSourceURLs: true}
-	result := executor.download(context.Background(), task)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
+		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
-		t.Fatalf("fallback download should succeed after failed preflight: %+v", result)
+		t.Fatalf("fallback download should succeed after primary failure: %+v", result)
 	}
-	if headHits != 1 || getHits != 0 || fallbackHits != 1 {
-		t.Fatalf("unexpected hits head=%d get=%d fallback=%d", headHits, getHits, fallbackHits)
-	}
-
-	second := fallbackTask(primary.URL+"/asset2.zip", fallback.URL, digest("abcdef"), 6)
-	second.TaskID = "task-2"
-	result = executor.download(context.Background(), second)
-	if result.Result != "succeeded" {
-		t.Fatalf("cached failed preflight should still use fallback: %+v", result)
-	}
-	if headHits != 1 || getHits != 0 || fallbackHits != 1 {
-		t.Fatalf("preflight should be cached head=%d get=%d fallback=%d", headHits, getHits, fallbackHits)
+	if getHits != 1 || fallbackHits != 1 {
+		t.Fatalf("unexpected hits get=%d fallback=%d", getHits, fallbackHits)
 	}
 }
 
@@ -172,26 +156,22 @@ func TestDownloadReturnsTemporaryErrorWhenSourceUnavailableAndNoPeer(t *testing.
 	db, storageDir, tempDir := prepareSyncer(t)
 	var getHits int
 	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodHead {
-			http.Error(w, "github unavailable", http.StatusBadGateway)
-			return
-		}
 		getHits++
-		_, _ = w.Write([]byte("should-not-fetch"))
+		http.Error(w, "github unavailable", http.StatusBadGateway)
 	}))
 	defer primary.Close()
 
 	task := fallbackTask(primary.URL+"/asset.zip", "", digest("abcdef"), 6)
 	task.FallbackSources = nil
 	result := (Executor{
-		DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(), Probe: NewSourceProbe(primary.Client()),
+		DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true,
 	}).download(context.Background(), task)
 	if result.Result != "temporary_error" {
 		t.Fatalf("unavailable source with no peer should be temporary_error: %+v", result)
 	}
-	if getHits != 0 {
-		t.Fatalf("primary file should not be fetched after failed preflight, getHits=%d", getHits)
+	if getHits != 1 {
+		t.Fatalf("primary file should be fetched once after direct failure, getHits=%d", getHits)
 	}
 }
 

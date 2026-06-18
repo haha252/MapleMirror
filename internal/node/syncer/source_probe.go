@@ -47,12 +47,6 @@ func (e Executor) fetchPrimary(ctx context.Context, task protocol.SyncTask, tmpP
 	if e.ForcePeerDownload {
 		return "", 0, errPrimarySourceDisabled
 	}
-	if e.Probe == nil {
-		return e.fetch(ctx, task.Asset.DownloadURL, tmpPath, task.Asset.SizeBytes)
-	}
-	if err := e.Probe.check(ctx, task.Asset.DownloadURL, e.AllowPrivateSourceURLs); err != nil {
-		return "", 0, err
-	}
 	return e.fetch(ctx, task.Asset.DownloadURL, tmpPath, task.Asset.SizeBytes)
 }
 
