@@ -46,6 +46,42 @@ func TestCompleteInventoryReportCreatesRepairTaskForMissingTarget(t *testing.T) 
 	}
 }
 
+func TestCompleteInventoryReportRepairsRemovedTarget(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+		ReportID: "r-removed", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-1", SizeBytes: 10,
+			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			LocalState:   "removed",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var state, digest string
+	var size int64
+	err = repo.DB.QueryRow(`SELECT state, local_digest_sha256, size_bytes
+		FROM node_inventory WHERE node_id = ? AND asset_id = 'asset-1'`,
+		session.NodeID).Scan(&state, &digest, &size)
+	if err != nil || state != "removed" || digest != "" || size != 0 {
+		t.Fatalf("removed inventory got state=%s digest=%q size=%d err=%v",
+			state, digest, size, err)
+	}
+	var tasks int
+	err = repo.DB.QueryRow(`SELECT COUNT(*) FROM node_tasks
+		WHERE node_id = ? AND asset_id = 'asset-1' AND task_type = 'asset_download'
+		AND state = 'pending'`, session.NodeID).Scan(&tasks)
+	if err != nil || tasks != 1 {
+		t.Fatalf("removed target should create repair task count=%d err=%v", tasks, err)
+	}
+}
+
 func TestChunkedInventoryReportKeepsEarlierChunkVerified(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

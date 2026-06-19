@@ -47,6 +47,10 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 		}
 	case "mismatch":
 		state = "mismatch"
+	case "removed":
+		state = "removed"
+		localDigest = ""
+		localSize = 0
 	default:
 		if previousState == "stale" && localDigest == previousDigest && localSize == previousSize {
 			state = "stale"

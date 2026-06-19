@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,6 +42,35 @@ func TestRelativeAssetPathFallsBackForLegacyTask(t *testing.T) {
 	}
 	if strings.ContainsAny(got, `<>:"|?*`) {
 		t.Fatalf("relative path contains Windows-invalid characters: %q", got)
+	}
+}
+
+func TestDownloadReusesExistingTargetFileMarkedRemoved(t *testing.T) {
+	db, storageDir, tempDir := prepareSyncer(t)
+	rel := filepath.Join("p1", "v1", "a.zip")
+	path := filepath.Join(storageDir, rel)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("abcdef"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := db.Exec(`INSERT INTO local_assets
+		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
+		VALUES ('asset-1', ?, ?, 6, 'old', 'removed')`, rel, digest("abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	task := fallbackTask("http://primary.test/asset.zip", "", digest("abcdef"), 6)
+	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir}).download(context.Background(), task)
+	if result.Result != "succeeded" || result.LocalDigestSHA256 != digest("abcdef") {
+		t.Fatalf("existing target file should be reused: %+v", result)
+	}
+	var state string
+	err = db.QueryRow(`SELECT state FROM local_assets WHERE asset_id = 'asset-1'`).Scan(&state)
+	if err != nil || state != "verified" {
+		t.Fatalf("local asset state=%q err=%v", state, err)
 	}
 }
 

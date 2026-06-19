@@ -12,6 +12,13 @@ import (
 )
 
 func (e Executor) reuseVerifiedAsset(task protocol.SyncTask) (protocol.SyncTaskResult, bool) {
+	if result, ok := e.reuseVerifiedAssetRecord(task); ok {
+		return result, true
+	}
+	return e.reuseExistingAssetFile(task)
+}
+
+func (e Executor) reuseVerifiedAssetRecord(task protocol.SyncTask) (protocol.SyncTaskResult, bool) {
 	var rel, digest string
 	var size int64
 	err := e.DB.QueryRow(`SELECT relative_path, digest_sha256, size_bytes FROM local_assets
@@ -27,6 +34,24 @@ func (e Executor) reuseVerifiedAsset(task protocol.SyncTask) (protocol.SyncTaskR
 		return protocol.SyncTaskResult{}, false
 	}
 	return taskResult(task, "succeeded", digest, size, "资产已由并发任务落盘"), true
+}
+
+func (e Executor) reuseExistingAssetFile(task protocol.SyncTask) (protocol.SyncTaskResult, bool) {
+	rel := relativeAssetPath(task.Asset)
+	digest, size, err := fileDigest(filepath.Join(e.Storage, rel))
+	if err != nil || digest != task.Asset.DigestSHA256 || size != task.Asset.SizeBytes {
+		return protocol.SyncTaskResult{}, false
+	}
+	if err := e.upsertAsset(task.Asset.AssetID, rel, digest, size); err != nil {
+		if e.Logger != nil {
+			e.Logger.Warn(context.Background(), "节点恢复本地资产库存失败",
+				slog.String("task_id", task.TaskID),
+				slog.String("asset_id", task.Asset.AssetID),
+				slog.String("error", err.Error()))
+		}
+		return taskResult(task, "temporary_error", digest, size, "恢复本地资产库存失败"), true
+	}
+	return taskResult(task, "succeeded", digest, size, "本地资产文件已存在并通过校验"), true
 }
 
 func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {

@@ -81,7 +81,7 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 	}
 	defer finish()
 	if result, ok := e.reuseVerifiedAsset(task); ok {
-		_ = e.recordTask(task, "succeeded", result.Message)
+		_ = e.recordTask(task, result.Result, result.Message)
 		return result
 	}
 	if e.Logger != nil {
