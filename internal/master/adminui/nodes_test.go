@@ -28,6 +28,65 @@ func TestNodeDeleteAPIUsesHighRiskAndRemovesNode(t *testing.T) {
 	assertCountAdminUI(t, db, "nodes", 0)
 }
 
+func TestNodePriorityAPIUpdatesPriority(t *testing.T) {
+	server, db := newTestServer(t)
+	mustExecAdminUI(t, db, `INSERT INTO nodes
+		(id, public_name, state, target_bandwidth_bps, routing_ready, created_at, updated_at)
+		VALUES ('node-priority', '优先级节点', 'online', 0, 0, 'now', 'before')`)
+
+	for _, priority := range []int{0, 50, 100} {
+		body := strings.NewReader(`{"download_priority":` + itoaAdmin(priority) + `}`)
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/nodes/node-priority/priority", body)
+		req = withAdminUser(req)
+		rec := httptest.NewRecorder()
+		server.nodeActionAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("priority=%d status=%d body=%s", priority, rec.Code, rec.Body.String())
+		}
+		var got int
+		var updated string
+		err := db.QueryRow(`SELECT download_priority, updated_at FROM nodes
+			WHERE id = 'node-priority'`).Scan(&got, &updated)
+		if err != nil || got != priority || updated == "before" {
+			t.Fatalf("priority=%d got=%d updated=%q err=%v", priority, got, updated, err)
+		}
+	}
+}
+
+func TestNodePriorityAPIRejectsInvalidPriority(t *testing.T) {
+	server, db := newTestServer(t)
+	mustExecAdminUI(t, db, `INSERT INTO nodes
+		(id, public_name, state, target_bandwidth_bps, routing_ready, created_at, updated_at)
+		VALUES ('node-priority', '优先级节点', 'online', 0, 0, 'now', 'now')`)
+
+	for _, body := range []string{
+		`{"download_priority":-1}`,
+		`{"download_priority":101}`,
+		`{"download_priority":"high"}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/nodes/node-priority/priority",
+			strings.NewReader(body))
+		req = withAdminUser(req)
+		rec := httptest.NewRecorder()
+		server.nodeActionAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d response=%s", body, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestNodePriorityAPIReturnsNotFound(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/nodes/missing/priority",
+		strings.NewReader(`{"download_priority":80}`))
+	req = withAdminUser(req)
+	rec := httptest.NewRecorder()
+	server.nodeActionAPI(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestNodeProjectsAPIReadsAssignments(t *testing.T) {
 	server, db := newTestServer(t)
 	seedNodeProjectAdminData(t, db, 1)
@@ -50,6 +109,20 @@ func TestNodeProjectsAPIReadsAssignments(t *testing.T) {
 	if len(body.Projects) != 2 {
 		t.Fatalf("projects=%+v", body.Projects)
 	}
+}
+
+func itoaAdmin(value int) string {
+	if value == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for value > 0 {
+		i--
+		buf[i] = byte('0' + value%10)
+		value /= 10
+	}
+	return string(buf[i:])
 }
 
 func TestNodeProjectsAPIRejectsManualOverLimit(t *testing.T) {

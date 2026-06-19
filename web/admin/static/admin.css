@@ -35,19 +35,6 @@
   color: var(--muted);
   font-size: 13px;
 }
-.admin-field input,
-.inline-form input,
-.rule-row input,
-.rule-row select,
-.admin-select {
-  min-height: 42px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-muted);
-  color: var(--text);
-  font: inherit;
-}
 .admin-primary {
   display: inline-flex;
   align-items: center;

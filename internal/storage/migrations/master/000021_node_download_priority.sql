@@ -1,0 +1,1 @@
+ALTER TABLE nodes ADD COLUMN download_priority INTEGER NOT NULL DEFAULT 50;

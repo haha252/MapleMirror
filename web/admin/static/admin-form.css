@@ -1,0 +1,23 @@
+.admin-field input:not([type="checkbox"]):not([type="radio"]),
+.inline-form input:not([type="checkbox"]):not([type="radio"]),
+.rule-row input:not([type="checkbox"]):not([type="radio"]),
+.rule-row select,
+.admin-select {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  color: var(--text);
+  font: inherit;
+}
+
+.inline-form input[type="checkbox"],
+.admin-check input[type="checkbox"],
+.admin-table-wrap input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+}

@@ -21,6 +21,7 @@
 <link rel="stylesheet" href="/static/public/base.css">
 <link rel="stylesheet" href="/static/public/base-responsive.css">
 <link rel="stylesheet" href="/static/admin/admin.css">
+<link rel="stylesheet" href="/static/admin/admin-form.css">
 <link rel="stylesheet" href="/static/admin/admin-inline-detail.css">
 <link rel="stylesheet" href="/static/admin/admin-overview.css">
 <link rel="stylesheet" href="/static/admin/admin-projects.css">
@@ -60,7 +61,7 @@
   {{if eq .Page.ID "sync"}}{{template "sync" .}}{{end}}
   {{if eq .Page.ID "projects"}}{{template "projects" .}}{{end}}
   {{if eq .Page.ID "project-edit"}}{{template "project-edit" .}}{{end}}
-  {{if eq .Page.ID "node-projects"}}{{template "node-projects" .}}{{end}}
+  {{if eq .Page.ID "node-management"}}{{template "node-management" .}}{{end}}
   {{if eq .Page.ID "security"}}{{template "security" .}}{{end}}
 </main>
 <div id="admin-modal" class="admin-modal" hidden>
@@ -104,7 +105,7 @@
 <section class="admin-grid">
   <article class="panel-card admin-panel">
     <div class="admin-panel__head"><h2>节点列表</h2><span id="node-summary" class="muted">加载中</span></div>
-    <div class="admin-table-wrap"><table><thead><tr><th>节点</th><th>状态</th><th>路由</th><th>最近心跳</th><th>操作</th></tr></thead><tbody id="nodes-body"></tbody></table></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>节点</th><th>状态</th><th>路由</th><th>优先级</th><th>最近心跳</th><th>操作</th></tr></thead><tbody id="nodes-body"></tbody></table></div>
   </article>
 </section>
 <section class="admin-grid admin-extra">
@@ -116,16 +117,23 @@
 </section>
 {{end}}
 
-{{define "node-projects"}}
+{{define "node-management"}}
 <section class="admin-toolbar">
   <a class="admin-secondary" href="/admin/nodes">返回节点列表</a>
-  <button id="node-project-save" class="admin-primary" type="button">保存分配</button>
   <span id="node-project-summary" class="muted">加载中</span>
 </section>
-<section class="panel-card admin-panel admin-extra">
-  <div class="admin-panel__head"><h2>分配策略</h2></div>
+<section class="panel-card admin-panel">
+  <div class="admin-panel__head"><h2>下载调度</h2></div>
   <div class="inline-form">
-    <label class="admin-field"><span>自动分配</span><input id="node-project-auto" type="checkbox"></label>
+    <label class="admin-field admin-number-field"><span>下载优先级</span><input id="node-download-priority" type="number" min="0" max="100" step="1"></label>
+    <button id="node-priority-save" class="admin-primary" type="button">保存优先级</button>
+    <span class="muted">0-100，数值越大越优先；保存后立即影响新下载授权。</span>
+  </div>
+</section>
+<section class="panel-card admin-panel admin-extra">
+  <div class="admin-panel__head"><h2>项目分配</h2><button id="node-project-save" class="admin-primary" type="button">保存分配</button></div>
+  <div class="inline-form">
+    <label class="admin-check"><input id="node-project-auto" type="checkbox"> 自动分配</label>
     <span id="node-project-limit" class="muted"></span>
   </div>
   <div class="admin-table-wrap"><table><thead><tr><th>分配</th><th>项目</th><th>30 天下载量</th><th>最近变化</th></tr></thead><tbody id="node-project-body"></tbody></table></div>

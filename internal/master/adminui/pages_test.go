@@ -16,9 +16,9 @@ func TestAdminPageForPathMapsTopNavigationPages(t *testing.T) {
 			t.Fatalf("page %s = %+v ok=%v, want %s", path, page, ok, want)
 		}
 	}
-	page, ok := adminPageForPath("/admin/nodes/node-1/projects")
-	if !ok || page.ID != "node-projects" {
-		t.Fatalf("node project page = %+v ok=%v", page, ok)
+	page, ok := adminPageForPath("/admin/nodes/node-1/management")
+	if !ok || page.ID != "node-management" {
+		t.Fatalf("node management page = %+v ok=%v", page, ok)
 	}
 	if _, ok := adminPageForPath("/admin/missing"); ok {
 		t.Fatal("unknown admin page should not resolve")

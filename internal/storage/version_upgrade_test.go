@@ -48,7 +48,57 @@ func TestOpenMasterBackfillsAdminBlockDisplayIPForExistingV1Database(t *testing.
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "admin_ip_blocks", "display_ip")
-	assertDBVersion(t, opened, "master", 3)
+	assertDBVersion(t, opened, "master", 4)
+}
+
+func TestOpenMasterBackfillsDownloadPriorityForExistingV3Database(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "master.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	statements := []string{
+		`CREATE TABLE database_version (kind TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
+		`INSERT INTO database_version(kind, version, updated_at) VALUES ('master', 3, '` + now + `')`,
+		`CREATE TABLE nodes (
+			id TEXT PRIMARY KEY,
+			public_name TEXT NOT NULL,
+			certificate_fingerprint TEXT,
+			state TEXT NOT NULL,
+			target_bandwidth_bps INTEGER NOT NULL,
+			last_heartbeat_at TEXT,
+			routing_ready INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`INSERT INTO nodes
+			(id, public_name, state, target_bandwidth_bps, routing_ready, created_at, updated_at)
+			VALUES ('node-1', '节点一', 'online', 0, 0, '` + now + `', '` + now + `')`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	opened, err := OpenMaster(config.Database{Path: path, BusyTimeout: "5s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	assertColumn(t, opened, "nodes", "download_priority")
+	assertDBVersion(t, opened, "master", 4)
+	var priority int
+	if err := opened.QueryRow(`SELECT download_priority FROM nodes WHERE id = 'node-1'`).Scan(&priority); err != nil {
+		t.Fatal(err)
+	}
+	if priority != 50 {
+		t.Fatalf("download_priority=%d want 50", priority)
+	}
 }
 
 func TestOpenNodeBackfillsInventoryForceColumnForExistingV1Database(t *testing.T) {

@@ -171,50 +171,55 @@ func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatu
 }
 
 type routableAssetInfo struct {
-	NodeID       string
-	NodeName     string
-	ProjectID    string
-	Version      string
-	FileName     string
-	DownloadURL  string
-	System       string
-	Architecture string
-	Multiplier   int64
-	SizeBytes    int64
+	NodeID        string
+	NodeName      string
+	Priority      int
+	LastHeartbeat string
+	ProjectID     string
+	Version       string
+	FileName      string
+	DownloadURL   string
+	System        string
+	Architecture  string
+	Multiplier    int64
+	SizeBytes     int64
 }
 
 func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string) (routableAssetInfo, error) {
 	var out routableAssetInfo
 	args := append(s.routableAssetReplicaArgs(), assetID)
-	rows, err := tx.QueryContext(ctx, `SELECT n.id, n.public_name, r.project_id,
+	rows, err := tx.QueryContext(ctx, `SELECT n.id, n.public_name, n.download_priority,
+		COALESCE(n.last_heartbeat_at, ''), r.project_id,
 		r.tag_name, a.file_name, n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1),
 		a.size_bytes, a.architecture, a.system FROM assets a
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`
 		WHERE a.id = ? AND a.service_state = 'candidate'
 		AND r.selected = 1 AND p.enabled = 1
-		ORDER BY COALESCE(n.last_heartbeat_at, '') DESC, n.id`, args...)
+		ORDER BY n.download_priority DESC, COALESCE(n.last_heartbeat_at, '') DESC, n.id`, args...)
 	if err != nil {
 		return out, err
 	}
 	defer rows.Close()
+	candidates := make([]routableAssetInfo, 0, 4)
 	for rows.Next() {
 		var item routableAssetInfo
 		var downloadBaseURL string
-		if err := rows.Scan(&item.NodeID, &item.NodeName, &item.ProjectID,
+		if err := rows.Scan(&item.NodeID, &item.NodeName, &item.Priority,
+			&item.LastHeartbeat, &item.ProjectID,
 			&item.Version, &item.FileName, &downloadBaseURL, &item.Multiplier,
 			&item.SizeBytes, &item.Architecture, &item.System); err != nil {
 			return out, err
 		}
 		item.DownloadURL, err = joinDownloadURL(downloadBaseURL, item.ProjectID, item.Version, item.FileName)
 		if err == nil {
-			return item, nil
+			candidates = append(candidates, item)
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return out, err
 	}
-	return out, sql.ErrNoRows
+	return s.selectRoutableAsset(candidates)
 }
 
 func (s Store) rangeConcurrencyLimit() int {

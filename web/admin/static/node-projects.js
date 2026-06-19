@@ -1,19 +1,54 @@
 (function () {
   var a = window.admin;
-  if (!a || a.page() !== "node-projects") return;
+  if (!a || a.page() !== "node-management") return;
   var nodeID = decodeURIComponent(location.pathname.split("/")[3] || "");
   var projects = [];
 
   function load() {
-    a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/projects")
+    Promise.all([
+      a.api("/admin/api/nodes"),
+      a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/projects")
+    ])
+      .then(function (items) {
+        var node = findNode(items[0].nodes || []);
+        var data = items[1];
+        document.getElementById("node-download-priority").value =
+          node && node.download_priority != null ? node.download_priority : 50;
+        renderProjects(data);
+      }).catch(function (err) { a.setStatus(err.message); });
+  }
+
+  function findNode(nodes) {
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].node_id === nodeID) return nodes[i];
+    }
+    return null;
+  }
+
+  function renderProjects(data) {
+    projects = data.projects || [];
+    document.getElementById("node-project-auto").checked = data.assignment_mode !== "manual";
+    a.text("node-project-summary", nodeID);
+    a.text("node-project-limit", data.max_mirror_projects > 0
+      ? "最大镜像项目数：" + data.max_mirror_projects
+      : "最大镜像项目数：不限制");
+    render();
+  }
+
+  function savePriority() {
+    var input = document.getElementById("node-download-priority");
+    var priority = Number(input.value);
+    if (!Number.isInteger(priority) || priority < 0 || priority > 100) {
+      a.setStatus("下载优先级必须是 0-100 的整数");
+      return;
+    }
+    a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/priority", {
+      method: "POST",
+      body: JSON.stringify({ download_priority: priority })
+    })
       .then(function (data) {
-        projects = data.projects || [];
-        document.getElementById("node-project-auto").checked = data.assignment_mode !== "manual";
-        a.text("node-project-summary", nodeID);
-        a.text("node-project-limit", data.max_mirror_projects > 0
-          ? "最大镜像项目数：" + data.max_mirror_projects
-          : "最大镜像项目数：不限制");
-        render();
+        a.setStatus(data.message || "节点下载优先级已更新");
+        input.value = data.download_priority;
       }).catch(function (err) { a.setStatus(err.message); });
   }
 
@@ -44,6 +79,7 @@
   }
 
   document.getElementById("node-project-auto").addEventListener("change", render);
+  document.getElementById("node-priority-save").addEventListener("click", savePriority);
   document.getElementById("node-project-save").addEventListener("click", function () {
     var auto = document.getElementById("node-project-auto").checked;
     var payload = {

@@ -33,6 +33,8 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertColumn(t, db, "nodes", "project_assignment_mode")
 	assertColumn(t, db, "nodes", "last_public_probe_at")
 	assertColumn(t, db, "nodes", "public_probe_network_failures")
+	assertColumn(t, db, "nodes", "download_priority")
+	assertColumnDefault(t, db, "nodes", "download_priority", "50")
 	assertColumn(t, db, "assets", "variant")
 	assertColumn(t, db, "assets", "classification_reason")
 	_ = db.Close()
@@ -41,7 +43,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	assertDBVersion(t, db, "master", 3)
+	assertDBVersion(t, db, "master", 4)
 	var legacyCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
 		t.Fatal(err)
@@ -97,6 +99,31 @@ func assertColumn(t *testing.T, db *sql.DB, table, column string) {
 			t.Fatal(err)
 		}
 		if name == column {
+			return
+		}
+	}
+	t.Fatalf("缺少数据列 %s.%s", table, column)
+}
+
+func assertColumnDefault(t *testing.T, db *sql.DB, table, column, want string) {
+	t.Helper()
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull, pk int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatal(err)
+		}
+		if name == column {
+			if defaultValue != want {
+				t.Fatalf("%s.%s default=%v want %s", table, column, defaultValue, want)
+			}
 			return
 		}
 	}

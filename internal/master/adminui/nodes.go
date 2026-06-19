@@ -3,8 +3,11 @@ package adminui
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
+
+	mastercontrol "mirror-server/internal/master/control"
 )
 
 func (s *Server) nodesAPI(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +42,8 @@ func (s *Server) nodeActionAPI(w http.ResponseWriter, r *http.Request) {
 		s.disableNode(w, r, nodeID)
 	case r.Method == http.MethodPost && action == "enable":
 		s.enableNode(w, r, nodeID)
+	case r.Method == http.MethodPost && action == "priority":
+		s.updateNodePriority(w, r, nodeID)
 	case r.Method == http.MethodPost && action == "sync-reset":
 		s.syncReset(w, r, nodeID)
 	case r.Method == http.MethodDelete && action == "":
@@ -115,6 +120,42 @@ func (s *Server) enableNode(w http.ResponseWriter, r *http.Request, nodeID strin
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"message": "节点已启用", "node_id": nodeID})
+}
+
+func (s *Server) updateNodePriority(w http.ResponseWriter, r *http.Request, nodeID string) {
+	admin, ok := s.requireHighRisk(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		DownloadPriority *int `json:"download_priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "请求体无效"})
+		return
+	}
+	if body.DownloadPriority == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "下载优先级必须在 0-100 之间"})
+		return
+	}
+	priority := *body.DownloadPriority
+	if err := s.repo.UpdateNodeDownloadPriority(r.Context(), nodeID, priority); err != nil {
+		switch {
+		case errors.Is(err, mastercontrol.ErrInvalidDownloadPriority):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "下载优先级必须在 0-100 之间"})
+		case err == sql.ErrNoRows:
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "节点不存在"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "更新节点下载优先级失败"})
+		}
+		return
+	}
+	_ = s.repo.Audit(r.Context(), "node.download_priority", "node", nodeID, "success",
+		requestID(r), "节点下载优先级已更新", admin)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": "节点下载优先级已更新", "node_id": nodeID,
+		"download_priority": priority,
+	})
 }
 
 func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request, nodeID string) {
