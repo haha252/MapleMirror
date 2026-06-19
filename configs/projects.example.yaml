@@ -1,79 +1,10 @@
-# 主节点项目清单示例
+# 主节点项目清单入口示例
 # 仅支持公开 GitHub 仓库，扫描时会校验可访问性及资产摘要。
-# 项目列表；每个项目对应一个公开 GitHub owner/repository 仓库。
-projects:
-  # 单个项目配置示例；复制新增项目时必须修改 id、name 和 repository。
-  -
-    # 项目唯一 ID；用于 URL、数据库主键和公开路径，不得重复。
-    id: "example"
-    # 下载页和管理面板展示的项目中文名称。
-    name: "示例项目"
-    # GitHub 仓库，必须使用 owner/repository 格式，不允许 URL。
-    repository: "owner/repository"
-    # 项目图标相对当前 projects.yaml 所在目录，例如 project-icons/example.svg。
-    icon_path: "project-icons/example.svg"
-    # 是否启用该项目；禁用后不会参与扫描和公共展示。
-    enabled: false
-    # 每个下载节点应保留的版本数量，默认值为 3。
-    retain_versions: 3
-    # 是否允许 GitHub prerelease 版本进入候选版本。
-    include_prerelease: false
-    # 倍率仅扣减请求额度，不放大实际流量统计或每日流量限额。
-    download_multiplier: 1
-    # 资产入选规则，只有通过 asset_include 且未命中 asset_exclude 的资产才会进入镜像。
-    # 每条规则可以写成旧格式字符串，例如 "*.zip"；旧格式等同于 type: glob、required: false。
-    # 推荐写成对象，字段说明：
-    # - pattern：匹配文件名的字符串，不能为空。
-    # - type：glob 或 regex；glob 支持 "*.zip"，regex 支持 Go 正则和 (?i) 大小写选项。
-    # - required：true 表示必选规则；false 表示可选规则。
-    # include 语义：所有 required=true 必须命中；如果存在 required=false，则还要至少命中一条可选规则。
-    # 没有 include 规则时，默认允许所有资产进入下一步。
-    asset_include:
-      -
-        # pattern 匹配资产文件名；type=regex 时使用 Go 正则。
-        pattern: "\\.zip$"
-        # type 可选 glob 或 regex；旧字符串写法按 glob 处理。
-        type: regex
-        # required=false 表示可选入选规则；required=true 表示必须命中。
-        required: false
-    # 排除规则优先于包含规则。
-    # exclude 语义：任意 required=false 命中就排除；required=true 用于组合排除，只有所有必选排除规则都命中才排除。
-    asset_exclude:
-      -
-        # pattern 匹配需要排除的资产文件名。
-        pattern: "(?i)(debug|source|unsigned)"
-        # type 可选 glob 或 regex；regex 支持 (?i) 大小写不敏感。
-        type: regex
-        # required=false 命中即排除；required=true 参与组合排除。
-        required: false
-    # 默认不区分架构；启用后 architecture_regex 只负责从已入选资产文件名提取展示架构。
-    # 未启用 architecture_match_enabled 时，architecture 保持空字符串，下载页不显示架构选择器。
-    # 启用后未命中时，数据库和下载页使用 None。
-    architecture_match_enabled: false
-    # 架构提取正则；仅在 architecture_match_enabled=true 时编译和使用。
-    architecture_regex: "(?i)(amd64|arm64|x86_64)"
-    # 默认不区分系统；启用后 system_regex 只负责从文件名提取系统并规范化为 win/linux/darwin。
-    # 未命中或无法规范化时，system 填充为 None；未启用 system_match_enabled 时 system 保持空字符串。
-    system_match_enabled: false
-    # 系统提取正则；仅在 system_match_enabled=true 时编译和使用。
-    system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
-    # 可选：分类/指派规则。过滤仍由 asset_include 和 asset_exclude 决定；
-    # 这里用于为文件补充 system、architecture、variant 等展示和选择信息。
-    asset_pipeline:
-      # classify 定义资产分类规则；未配置规则时只使用旧的正则提取。
-      classify:
-        # rules 按顺序应用；后命中的赋值可以覆盖前面规则的赋值。
-        rules:
-          -
-            # match 定义要匹配的资产文件名，exact、glob、regex 三选一。
-            match:
-              # regex 使用 Go 正则匹配资产文件名。
-              regex: "^7z\\d+\\.exe$"
-            # assign 定义命中后写入资产展示和选择字段的值。
-            assign:
-              # system 可写 win、linux、darwin 或 None。
-              system: "win"
-              # architecture 可写 amd64、arm64、arm、x86、all 或 None。
-              architecture: "amd64"
-              # variant 用于区分 binary、src、extra 等资产变体。
-              variant: "binary"
+# 推荐把每个项目放到独立 YAML 文件，避免项目增多后单个配置文件过长。
+project_files:
+  # 路径相对当前 projects.yaml 所在目录，支持 *.yaml 和 *.yml glob。
+  - "projects/*.yaml"
+
+# 兼容旧单文件写法；已有 projects: 列表仍可继续使用。
+# 同时配置 projects 和 project_files 时，内联 projects 会先加载，项目文件按路径排序后加载。
+projects: []

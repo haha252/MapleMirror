@@ -12,7 +12,8 @@ import (
 )
 
 type Projects struct {
-	Projects []Project `yaml:"projects"`
+	ProjectFiles []string  `yaml:"project_files,omitempty"`
+	Projects     []Project `yaml:"projects,omitempty"`
 }
 
 type Project struct {
@@ -141,24 +142,25 @@ func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 	known := map[string]bool{}
 	for i := range c.Projects {
 		p := &c.Projects[i]
-		if p.RetainVersions == 0 {
-			p.RetainVersions = 3
-			warnDefault(warn, "projects[].retain_versions", "3")
-		}
-		if p.DownloadMultiplier == 0 {
-			p.DownloadMultiplier = 1
-			warnDefault(warn, "projects[].download_multiplier", "1")
-		}
-		resolved, err := resolveProjectIconPath(baseDir, p.IconPath)
-		if err != nil {
-			return c, err
-		}
-		p.ResolvedIconPath = resolved
-		p.ResolvedClassifyScriptPath = resolveOptionalProjectPath(baseDir, p.AssetPipeline.Classify.Script.Path)
-		if err := validateProject(*p, known); err != nil {
+		if err := prepareProject(p, baseDir, known, warn); err != nil {
 			return c, err
 		}
 		known[p.ID] = true
+	}
+	refs, err := ResolveProjectFileReferences(path, c.ProjectFiles)
+	if err != nil {
+		return c, err
+	}
+	for _, ref := range refs {
+		project, err := LoadProjectFile(ref.Path, warn)
+		if err != nil {
+			return c, err
+		}
+		if err := prepareProject(&project, filepath.Dir(ref.Path), known, warn); err != nil {
+			return c, err
+		}
+		known[project.ID] = true
+		c.Projects = append(c.Projects, project)
 	}
 	return c, writeRepairedYAML(path, data, repaired)
 }

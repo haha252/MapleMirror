@@ -2,6 +2,7 @@ package adminui
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,6 +57,17 @@ func (s *Server) saveProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeProjectsFile(path string, projects config.Projects) error {
+	existing, err := readProjectsEntry(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if len(existing.ProjectFiles) > 0 {
+		return writeSplitProjectsFile(path, existing.ProjectFiles, projects)
+	}
+	return writeSingleProjectsFile(path, projects)
+}
+
+func writeSingleProjectsFile(path string, projects config.Projects) error {
 	data, err := yaml.Marshal(projects)
 	if err != nil {
 		return err
@@ -74,6 +86,18 @@ func writeProjectsFile(path string, projects config.Projects) error {
 		return err
 	}
 	return nil
+}
+
+func readProjectsEntry(path string) (config.Projects, error) {
+	var projects config.Projects
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return projects, err
+	}
+	if err := yaml.Unmarshal(data, &projects); err != nil {
+		return projects, err
+	}
+	return projects, nil
 }
 
 func writeProjectsTemp(dir string, data []byte) (string, error) {

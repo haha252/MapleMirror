@@ -11,6 +11,9 @@ var MasterExample []byte
 //go:embed templates/projects.example.yaml
 var ProjectsExample []byte
 
+//go:embed templates/projects/example.yaml
+var ProjectExample []byte
+
 //go:embed templates/projects.repair.yaml
 var ProjectsRepairExample []byte
 
@@ -30,6 +33,7 @@ func WriteExamples(directory string) error {
 	for name, data := range map[string][]byte{
 		"config.example.yaml":   MasterExample,
 		"projects.example.yaml": ProjectsExample,
+		"projects/example.yaml": ProjectExample,
 		"quota.example.yaml":    QuotaExample,
 		"notices.example.yaml":  NoticesExample,
 		"node.example.yaml":     NodeExample,

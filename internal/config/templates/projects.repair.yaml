@@ -1,5 +1,8 @@
 # 主节点项目清单补齐模板
 # 仅支持公开 GitHub 仓库，扫描时会校验可访问性及资产摘要。
+# 拆分项目配置入口；留空表示只使用下方兼容的 projects 列表。
+project_files: []
+
 # 项目列表；每个项目对应一个公开 GitHub owner/repository 仓库。
 projects:
   # 单个项目补齐模板；空值不会替代已有项目身份。
