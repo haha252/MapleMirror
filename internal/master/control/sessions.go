@@ -65,8 +65,11 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 		return Session{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
-		routing_ready = 0, updated_at = ? WHERE id = ?`, now, session.NodeID)
+		updated_at = ? WHERE id = ?`, now, session.NodeID)
 	if err != nil {
+		return Session{}, err
+	}
+	if _, err := r.reconcileNodeReady(ctx, tx, session.NodeID, now); err != nil {
 		return Session{}, err
 	}
 	if err := tx.Commit(); err != nil {

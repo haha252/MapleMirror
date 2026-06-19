@@ -50,20 +50,15 @@ func (h *Handler) scheduleDownloadAssetVerification(asset localAsset) {
 }
 
 func (h *Handler) verifyDownloadAssetNow(asset localAsset) error {
-	state := localasset.Verify(h.Storage, localasset.Record{
-		RelativePath: asset.RelativePath,
-		DigestSHA256: asset.DigestSHA256,
-		SizeBytes:    asset.SizeBytes,
-	})
+	state := h.verifyAssetState(asset)
 	return h.updateLocalAssetState(asset.AssetID, state)
 }
 
 func (h *Handler) ensureReplicationAssetVerified(asset localAsset) error {
-	state := localasset.Verify(h.Storage, localasset.Record{
-		RelativePath: asset.RelativePath,
-		DigestSHA256: asset.DigestSHA256,
-		SizeBytes:    asset.SizeBytes,
-	})
+	if h.downloadVerificationFresh(asset) {
+		return nil
+	}
+	state := h.verifyAssetState(asset)
 	if err := h.updateLocalAssetState(asset.AssetID, state); err != nil {
 		return err
 	}
@@ -71,6 +66,14 @@ func (h *Handler) ensureReplicationAssetVerified(asset localAsset) error {
 		return errors.New("本地资产状态不一致")
 	}
 	return nil
+}
+
+func (h *Handler) verifyAssetState(asset localAsset) string {
+	return localasset.Verify(h.Storage, localasset.Record{
+		RelativePath: asset.RelativePath,
+		DigestSHA256: asset.DigestSHA256,
+		SizeBytes:    asset.SizeBytes,
+	})
 }
 
 func (h *Handler) downloadVerificationFresh(asset localAsset) bool {

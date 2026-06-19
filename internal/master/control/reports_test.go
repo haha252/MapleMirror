@@ -59,7 +59,7 @@ func TestCompleteInventoryWithoutHeartbeatDoesNotMarkReady(t *testing.T) {
 	}
 }
 
-func TestReconnectResetsReadyUntilCompleteInventoryReportArrives(t *testing.T) {
+func TestReconnectPreservesReadyWhenInventoryAlreadyMatches(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
@@ -88,8 +88,8 @@ func TestReconnectResetsReadyUntilCompleteInventoryReportArrives(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = repo.DB.QueryRow("SELECT routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&ready)
-	if ready != 0 {
-		t.Fatalf("expected ready reset on reconnect, got %d", ready)
+	if ready != 1 {
+		t.Fatalf("expected ready preserved on reconnect, got %d", ready)
 	}
 	if _, err := repo.AcceptHeartbeat(context.Background(), restarted, 1, protocol.Heartbeat{Status: "syncing"}); err != nil {
 		t.Fatal(err)
