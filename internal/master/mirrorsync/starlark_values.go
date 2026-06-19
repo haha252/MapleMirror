@@ -53,16 +53,7 @@ func starlarkNormalizeArch(_ *starlark.Thread, _ *starlark.Builtin, args starlar
 
 func classificationFromStarlarkDict(dict *starlark.Dict) (config.AssetClassification, error) {
 	var out config.AssetClassification
-	if accept, ok, err := dictBool(dict, "accept"); err != nil || ok {
-		if err != nil {
-			return out, err
-		}
-		out.Accept = &accept
-	}
 	var err error
-	if out.RejectReason, err = dictString(dict, "reject_reason"); err != nil {
-		return out, err
-	}
 	if out.System, err = dictString(dict, "system"); err != nil {
 		return out, err
 	}
@@ -93,15 +84,6 @@ func classificationFromStarlarkDict(dict *starlark.Dict) (config.AssetClassifica
 }
 
 func mergeScriptClassification(out *assetClassification, assign config.AssetClassification) {
-	if assign.Accept != nil && !*assign.Accept {
-		out.Accepted = false
-		out.RejectReason = strings.TrimSpace(assign.RejectReason)
-		if out.RejectReason == "" {
-			out.RejectReason = "asset starlark reject"
-		}
-		appendClassificationReason(out, "starlark")
-		return
-	}
 	applyClassificationAssign(out, assign)
 	appendClassificationReason(out, "starlark")
 }
@@ -137,18 +119,6 @@ func dictString(dict *starlark.Dict, key string) (string, error) {
 		return text, nil
 	}
 	return "", fmt.Errorf("Starlark 字段 %s 必须是 string", key)
-}
-
-func dictBool(dict *starlark.Dict, key string) (bool, bool, error) {
-	value, ok, err := dict.Get(starlark.String(key))
-	if err != nil || !ok || value == starlark.None {
-		return false, false, err
-	}
-	b, ok := value.(starlark.Bool)
-	if !ok {
-		return false, false, fmt.Errorf("Starlark 字段 %s 必须是 bool", key)
-	}
-	return bool(b), true, nil
 }
 
 func dictInt(dict *starlark.Dict, key string) (int, bool, error) {

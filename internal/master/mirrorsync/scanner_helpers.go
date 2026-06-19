@@ -57,17 +57,6 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 		if err != nil {
 			return accepted, rejected, err
 		}
-		if !classification.Accepted {
-			if logger != nil {
-				logger.Debug(ctx, "资产未进入镜像流程",
-					slog.String("project_id", project.ID),
-					slog.String("release_id", releaseID),
-					slog.String("asset_name", asset.FileName),
-					slog.String("reason", classification.RejectReason))
-			}
-			rejected++
-			continue
-		}
 		labelsJSON, err := classificationLabelsJSON(classification.Labels)
 		if err != nil {
 			return accepted, rejected, err
@@ -177,10 +166,10 @@ func projectHash(project config.Project) string {
 		fmt.Sprint(project.IncludePrerelease), fmt.Sprint(project.DownloadMultiplier),
 		assetRulesHash(project.AssetInclude),
 		assetRulesHash(project.AssetExclude),
-		project.ArchitectureRegex,
-		fmt.Sprint(project.ArchitectureMatchEnabled),
-		fmt.Sprint(project.SystemMatchEnabled),
-		project.SystemRegex,
+		project.ClassifyArchitectureRegex(),
+		fmt.Sprint(project.ClassifyArchitectureEnabled()),
+		fmt.Sprint(project.ClassifySystemEnabled()),
+		project.ClassifySystemRegex(),
 		assetPipelineHash(project.AssetPipeline),
 	}, "|")))
 	return hex.EncodeToString(sum[:])
@@ -195,10 +184,10 @@ func assetPipelineHash(pipeline config.AssetPipeline) string {
 }
 
 func compileArchitectureRegex(project config.Project) (*regexp.Regexp, error) {
-	if !project.ArchitectureMatchEnabled {
+	if !project.RegexClassificationEnabled() || !project.ClassifyArchitectureEnabled() {
 		return nil, nil
 	}
-	return regexp.Compile(project.ArchitectureRegex)
+	return regexp.Compile(project.ClassifyArchitectureRegex())
 }
 
 func assetArchitecture(name string, archRE *regexp.Regexp) string {
@@ -213,10 +202,10 @@ func assetArchitecture(name string, archRE *regexp.Regexp) string {
 }
 
 func compileSystemRegex(project config.Project) (*regexp.Regexp, error) {
-	if !project.SystemMatchEnabled {
+	if !project.RegexClassificationEnabled() || !project.ClassifySystemEnabled() {
 		return nil, nil
 	}
-	return regexp.Compile(project.SystemRegex)
+	return regexp.Compile(project.ClassifySystemRegex())
 }
 
 func assetSystem(name string, systemRE *regexp.Regexp) string {

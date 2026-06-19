@@ -10,8 +10,6 @@ import (
 )
 
 type assetClassification struct {
-	Accepted             bool
-	RejectReason         string
 	Architecture         string
 	System               string
 	Variant              string
@@ -47,50 +45,45 @@ func newAssetClassifier(project config.Project) (assetClassifier, error) {
 		usesArch:       project.PipelineUsesArchitecture(),
 		usesSystem:     project.PipelineUsesSystem(),
 	}
-	for _, rule := range project.AssetPipeline.Classify.Rules {
-		if strings.TrimSpace(rule.Match.Regex) == "" {
-			out.ruleRegexes = append(out.ruleRegexes, nil)
-			continue
+	if project.RuleClassificationEnabled() {
+		for _, rule := range project.AssetPipeline.Classify.Rules {
+			if strings.TrimSpace(rule.Match.Regex) == "" {
+				out.ruleRegexes = append(out.ruleRegexes, nil)
+				continue
+			}
+			re, err := regexp.Compile(rule.Match.Regex)
+			if err != nil {
+				return assetClassifier{}, err
+			}
+			out.ruleRegexes = append(out.ruleRegexes, re)
 		}
-		re, err := regexp.Compile(rule.Match.Regex)
+		script, err := loadStarlarkClassifier(project)
 		if err != nil {
 			return assetClassifier{}, err
 		}
-		out.ruleRegexes = append(out.ruleRegexes, re)
+		out.script = script
 	}
-	script, err := loadStarlarkClassifier(project)
-	if err != nil {
-		return assetClassifier{}, err
-	}
-	out.script = script
 	return out, nil
 }
 
 func (c assetClassifier) Classify(asset ResourceCandidate, release ResourceVersion, batch []ResourceCandidate) (assetClassification, error) {
 	out := assetClassification{
-		Accepted:     true,
 		Architecture: assetArchitecture(asset.FileName, c.architectureRE),
 		System:       assetSystem(asset.FileName, c.systemRE),
 	}
 	reasons := []string{}
-	for i, rule := range c.project.AssetPipeline.Classify.Rules {
-		matched, err := c.ruleMatches(rule.Match, i, asset.FileName)
-		if err != nil {
-			return assetClassification{}, err
-		}
-		if !matched {
-			continue
-		}
-		reasons = append(reasons, fmt.Sprintf("rule:%d", i+1))
-		if rule.Assign.Accept != nil && !*rule.Assign.Accept {
-			out.Accepted = false
-			out.RejectReason = strings.TrimSpace(rule.Assign.RejectReason)
-			if out.RejectReason == "" {
-				out.RejectReason = "asset classify reject"
+	if c.project.RuleClassificationEnabled() {
+		for i, rule := range c.project.AssetPipeline.Classify.Rules {
+			matched, err := c.ruleMatches(rule.Match, i, asset.FileName)
+			if err != nil {
+				return assetClassification{}, err
 			}
-			break
+			if !matched {
+				continue
+			}
+			reasons = append(reasons, fmt.Sprintf("rule:%d", i+1))
+			applyClassificationAssign(&out, rule.Assign)
 		}
-		applyClassificationAssign(&out, rule.Assign)
 	}
 	out.ClassificationReason = strings.Join(reasons, ",")
 	if c.script != nil {

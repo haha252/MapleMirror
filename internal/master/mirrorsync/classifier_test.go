@@ -66,6 +66,62 @@ func TestClassifyRulesApplyInOrder(t *testing.T) {
 	}
 }
 
+func TestClassifyModeRegexIgnoresRules(t *testing.T) {
+	classifier, err := newAssetClassifier(config.Project{
+		AssetPipeline: config.AssetPipeline{Classify: config.AssetClassifyConfig{
+			Mode: "regex",
+			Regex: config.AssetClassifyRegexConfig{
+				ArchitectureMatchEnabled: true,
+				ArchitectureRegex:        `(amd64)`,
+			},
+			Rules: []config.AssetClassifyRule{{
+				Match:  config.AssetClassifyMatch{Regex: "("},
+				Assign: config.AssetClassification{System: "win", Architecture: "arm64"},
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := classifier.Classify(ResourceCandidate{FileName: "tool-amd64.zip"}, ResourceVersion{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Architecture != "amd64" || got.System != "" {
+		t.Fatalf("regex 模式不应执行 rules：+%v", got)
+	}
+}
+
+func TestClassifyModeRulesIgnoresRegex(t *testing.T) {
+	classifier, err := newAssetClassifier(config.Project{
+		AssetPipeline: config.AssetPipeline{Classify: config.AssetClassifyConfig{
+			Mode: "rules",
+			Regex: config.AssetClassifyRegexConfig{
+				ArchitectureMatchEnabled: true,
+				ArchitectureRegex:        "(",
+				SystemMatchEnabled:       true,
+				SystemRegex:              "(",
+			},
+			Rules: []config.AssetClassifyRule{{
+				Match: config.AssetClassifyMatch{Exact: "tool.exe"},
+				Assign: config.AssetClassification{
+					System: "win", Architecture: "amd64",
+				},
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := classifier.Classify(ResourceCandidate{FileName: "tool.exe"}, ResourceVersion{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.System != "win" || got.Architecture != "amd64" {
+		t.Fatalf("rules 模式不应编译或执行旧 regex：+%v", got)
+	}
+}
+
 func TestStarlarkClassifierAssignsAssetFields(t *testing.T) {
 	classifier, err := newAssetClassifier(config.Project{
 		AssetPipeline: config.AssetPipeline{Classify: config.AssetClassifyConfig{

@@ -82,6 +82,14 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 		SystemMatchEnabled:         raw.SystemMatchEnabled,
 		SystemRegex:                raw.SystemRegex,
 	}
+	if raw.ArchitectureMatchEnabled || strings.TrimSpace(raw.ArchitectureRegex) != "" {
+		p.AssetPipeline.Classify.Regex.ArchitectureMatchEnabled = raw.ArchitectureMatchEnabled
+		p.AssetPipeline.Classify.Regex.ArchitectureRegex = raw.ArchitectureRegex
+	}
+	if raw.SystemMatchEnabled || strings.TrimSpace(raw.SystemRegex) != "" {
+		p.AssetPipeline.Classify.Regex.SystemMatchEnabled = raw.SystemMatchEnabled
+		p.AssetPipeline.Classify.Regex.SystemRegex = raw.SystemRegex
+	}
 	return nil
 }
 
@@ -176,11 +184,11 @@ func validateProject(p Project, known map[string]bool) error {
 	if p.RetainVersions <= 0 || p.DownloadMultiplier <= 0 {
 		return errors.New("项目保留版本数和下载倍率必须大于零")
 	}
-	if p.ArchitectureMatchEnabled {
-		if strings.TrimSpace(p.ArchitectureRegex) == "" {
+	if p.RegexClassificationEnabled() && p.ClassifyArchitectureEnabled() {
+		if strings.TrimSpace(p.ClassifyArchitectureRegex()) == "" {
 			return fmt.Errorf("项目 %s 启用架构匹配时必须配置 architecture_regex", p.ID)
 		}
-		if _, err := regexp.Compile(p.ArchitectureRegex); err != nil {
+		if _, err := regexp.Compile(p.ClassifyArchitectureRegex()); err != nil {
 			return fmt.Errorf("项目 %s 的架构提取正则无效：%w", p.ID, err)
 		}
 	}
@@ -193,11 +201,11 @@ func validateProject(p Project, known map[string]bool) error {
 	if err := validateAssetPipeline(p.ID, p.AssetPipeline); err != nil {
 		return err
 	}
-	if p.SystemMatchEnabled {
-		if strings.TrimSpace(p.SystemRegex) == "" {
+	if p.RegexClassificationEnabled() && p.ClassifySystemEnabled() {
+		if strings.TrimSpace(p.ClassifySystemRegex()) == "" {
 			return fmt.Errorf("项目 %s 启用系统匹配时必须配置 system_regex", p.ID)
 		}
-		if _, err := regexp.Compile(p.SystemRegex); err != nil {
+		if _, err := regexp.Compile(p.ClassifySystemRegex()); err != nil {
 			return fmt.Errorf("项目 %s 的系统提取正则无效：%w", p.ID, err)
 		}
 	}

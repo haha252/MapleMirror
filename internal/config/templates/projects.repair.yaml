@@ -41,17 +41,24 @@ projects:
         type: glob
         # required=false 命中即排除；required=true 参与组合排除。
         required: false
-    # 默认不区分架构；启用后 architecture_regex 从已入选资产文件名提取展示架构。
-    architecture_match_enabled: false
-    # 架构提取正则；仅在 architecture_match_enabled=true 时编译和使用。
-    architecture_regex: "(?i)(amd64|arm64|x86_64)"
-    # 默认不区分系统；启用后 system_regex 从文件名提取系统并规范化为 win/linux/darwin。
-    system_match_enabled: false
-    # 系统提取正则；仅在 system_match_enabled=true 时编译和使用。
-    system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
     # 可选：分类/指派规则。过滤仍由 asset_include 和 asset_exclude 决定。
     asset_pipeline:
-      # classify 定义资产分类规则；未配置规则时只使用旧的正则提取。
+      # classify.mode 为每个项目选择一种资产分类方式。
+      # - regex：只使用 regex 子节点里的提取配置，rules 和 script 不参与分类。
+      # - rules：只使用下方 rules/script，旧正则配置即使存在也不会执行。
+      # - 留空：兼容旧配置，会先跑旧正则再跑 rules/script；新项目建议显式写 regex 或 rules。
       classify:
+        # 分类模式；补齐时留空以保持旧配置的兼容行为。
+        mode: ""
+        # regex 模式专用配置；mode=rules 时不会执行。
+        regex:
+          # 启用后 architecture_regex 从已入选资产文件名提取展示架构。
+          architecture_match_enabled: false
+          # 仅在 architecture_match_enabled=true 时编译和使用。
+          architecture_regex: "(?i)(amd64|arm64|x86_64)"
+          # 启用后 system_regex 从文件名提取并规范化为 win/linux/darwin。
+          system_match_enabled: false
+          # 仅在 system_match_enabled=true 时编译和使用。
+          system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
         # rules 按顺序应用；后命中的赋值可以覆盖前面规则的赋值。
         rules: []

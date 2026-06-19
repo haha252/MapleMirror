@@ -12,8 +12,17 @@ type AssetPipeline struct {
 }
 
 type AssetClassifyConfig struct {
-	Rules  []AssetClassifyRule `yaml:"rules"`
-	Script AssetClassifyScript `yaml:"script"`
+	Mode   string                   `yaml:"mode"`
+	Regex  AssetClassifyRegexConfig `yaml:"regex"`
+	Rules  []AssetClassifyRule      `yaml:"rules"`
+	Script AssetClassifyScript      `yaml:"script"`
+}
+
+type AssetClassifyRegexConfig struct {
+	ArchitectureMatchEnabled bool   `yaml:"architecture_match_enabled"`
+	ArchitectureRegex        string `yaml:"architecture_regex"`
+	SystemMatchEnabled       bool   `yaml:"system_match_enabled"`
+	SystemRegex              string `yaml:"system_regex"`
 }
 
 type AssetClassifyRule struct {
@@ -28,8 +37,6 @@ type AssetClassifyMatch struct {
 }
 
 type AssetClassification struct {
-	Accept       *bool    `yaml:"accept,omitempty"`
-	RejectReason string   `yaml:"reject_reason,omitempty"`
 	System       string   `yaml:"system,omitempty"`
 	Architecture string   `yaml:"architecture,omitempty"`
 	Variant      string   `yaml:"variant,omitempty"`
@@ -44,8 +51,11 @@ type AssetClassifyScript struct {
 }
 
 func (p Project) PipelineUsesArchitecture() bool {
-	if p.ArchitectureMatchEnabled {
+	if p.RegexClassificationEnabled() && p.ClassifyArchitectureEnabled() {
 		return true
+	}
+	if !p.RuleClassificationEnabled() {
+		return false
 	}
 	if p.AssetPipeline.Classify.Script.Path != "" || p.AssetPipeline.Classify.Script.Inline != "" {
 		return true
@@ -59,8 +69,11 @@ func (p Project) PipelineUsesArchitecture() bool {
 }
 
 func (p Project) PipelineUsesSystem() bool {
-	if p.SystemMatchEnabled {
+	if p.RegexClassificationEnabled() && p.ClassifySystemEnabled() {
 		return true
+	}
+	if !p.RuleClassificationEnabled() {
+		return false
 	}
 	if p.AssetPipeline.Classify.Script.Path != "" || p.AssetPipeline.Classify.Script.Inline != "" {
 		return true
@@ -73,7 +86,63 @@ func (p Project) PipelineUsesSystem() bool {
 	return false
 }
 
+func (p Project) RegexClassificationEnabled() bool {
+	mode := p.classifyMode()
+	return mode == "" || mode == "regex"
+}
+
+func (p Project) RuleClassificationEnabled() bool {
+	mode := p.classifyMode()
+	return mode == "" || mode == "rules"
+}
+
+func (p Project) classifyMode() string {
+	return strings.ToLower(strings.TrimSpace(p.AssetPipeline.Classify.Mode))
+}
+
+func (p Project) ClassifyArchitectureEnabled() bool {
+	if p.AssetPipeline.Classify.hasRegexConfig() {
+		return p.AssetPipeline.Classify.Regex.ArchitectureMatchEnabled
+	}
+	return p.ArchitectureMatchEnabled
+}
+
+func (p Project) ClassifyArchitectureRegex() string {
+	if p.AssetPipeline.Classify.hasRegexConfig() {
+		return p.AssetPipeline.Classify.Regex.ArchitectureRegex
+	}
+	return p.ArchitectureRegex
+}
+
+func (p Project) ClassifySystemEnabled() bool {
+	if p.AssetPipeline.Classify.hasRegexConfig() {
+		return p.AssetPipeline.Classify.Regex.SystemMatchEnabled
+	}
+	return p.SystemMatchEnabled
+}
+
+func (p Project) ClassifySystemRegex() string {
+	if p.AssetPipeline.Classify.hasRegexConfig() {
+		return p.AssetPipeline.Classify.Regex.SystemRegex
+	}
+	return p.SystemRegex
+}
+
+func (c AssetClassifyConfig) hasRegexConfig() bool {
+	return c.Regex.ArchitectureMatchEnabled || c.Regex.ArchitectureRegex != "" ||
+		c.Regex.SystemMatchEnabled || c.Regex.SystemRegex != ""
+}
+
 func validateAssetPipeline(projectID string, pipeline AssetPipeline) error {
+	mode := strings.ToLower(strings.TrimSpace(pipeline.Classify.Mode))
+	switch mode {
+	case "", "regex", "rules":
+	default:
+		return fmt.Errorf("项目 %s 的 asset_pipeline.classify.mode 必须为 regex 或 rules", projectID)
+	}
+	if mode == "regex" {
+		return nil
+	}
 	script := pipeline.Classify.Script
 	if strings.TrimSpace(script.Path) != "" && strings.TrimSpace(script.Inline) != "" {
 		return fmt.Errorf("项目 %s 的 asset_pipeline.classify.script 只能配置 path 或 inline 之一", projectID)
@@ -147,12 +216,18 @@ func NormalizeAssetSystem(value string) (string, bool) {
 
 func NormalizeAssetArchitecture(value string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "amd64", "x64", "x86_64":
+	case "amd64", "x64":
 		return "amd64", true
+	case "x86_64":
+		return "x86_64", true
 	case "arm64", "aarch64", "armv8":
 		return "arm64", true
+	case "arm64-v8a":
+		return "arm64-v8a", true
 	case "arm":
 		return "arm", true
+	case "armeabi-v7a":
+		return "armeabi-v7a", true
 	case "x86", "i386", "i686":
 		return "x86", true
 	case "all", "universal", "any":
