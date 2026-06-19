@@ -30,6 +30,9 @@ type downloadAssetUI struct {
 	FileName          string `json:"file_name"`
 	Architecture      string `json:"architecture"`
 	System            string `json:"system"`
+	Variant           string `json:"variant,omitempty"`
+	DisplayLabel      string `json:"display_label,omitempty"`
+	Priority          int    `json:"priority,omitempty"`
 	SizeBytes         int64  `json:"size_bytes"`
 	Available         bool   `json:"available"`
 	UnavailableReason string `json:"unavailable_reason"`
@@ -128,6 +131,9 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 			FileName:          asset.FileName,
 			Architecture:      asset.Architecture,
 			System:            asset.System,
+			Variant:           asset.Variant,
+			DisplayLabel:      asset.DisplayLabel,
+			Priority:          asset.Priority,
 			SizeBytes:         asset.SizeBytes,
 			Available:         asset.Available,
 			UnavailableReason: asset.UnavailableReason,

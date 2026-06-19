@@ -57,3 +57,23 @@ projects:
     system_match_enabled: false
     # 系统提取正则；仅在 system_match_enabled=true 时编译和使用。
     system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
+    # 可选：分类/指派规则。过滤仍由 asset_include 和 asset_exclude 决定；
+    # 这里用于为文件补充 system、architecture、variant 等展示和选择信息。
+    asset_pipeline:
+      # classify 定义资产分类规则；未配置规则时只使用旧的正则提取。
+      classify:
+        # rules 按顺序应用；后命中的赋值可以覆盖前面规则的赋值。
+        rules:
+          -
+            # match 定义要匹配的资产文件名，exact、glob、regex 三选一。
+            match:
+              # regex 使用 Go 正则匹配资产文件名。
+              regex: "^7z\\d+\\.exe$"
+            # assign 定义命中后写入资产展示和选择字段的值。
+            assign:
+              # system 可写 win、linux、darwin 或 None。
+              system: "win"
+              # architecture 可写 amd64、arm64、arm、x86、all 或 None。
+              architecture: "amd64"
+              # variant 用于区分 binary、src、extra 等资产变体。
+              variant: "binary"

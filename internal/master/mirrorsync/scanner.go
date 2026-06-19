@@ -14,6 +14,7 @@ import (
 type Scanner struct {
 	Store  Store
 	GitHub GitHubClient
+	Source ResourceSource
 	Logger *logging.Logger
 }
 
@@ -46,7 +47,11 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 				slog.String("project_id", project.ID),
 				slog.String("repository", project.Repository))
 		}
-		releases, err := s.GitHub.ListReleases(ctx, project.Repository)
+		source := s.Source
+		if source == nil {
+			source = GitHubReleaseSource{Client: s.GitHub}
+		}
+		releases, err := source.ListResourceVersions(ctx, project)
 		if err != nil {
 			if s.Logger != nil {
 				s.Logger.Warn(ctx, "项目 Release 扫描失败",
@@ -84,7 +89,7 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 	return nil
 }
 
-func (s Scanner) writeProject(ctx context.Context, project config.Project, releases []GitHubRelease) (ScanSummary, error) {
+func (s Scanner) writeProject(ctx context.Context, project config.Project, releases []ResourceVersion) (ScanSummary, error) {
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return ScanSummary{}, err
@@ -142,23 +147,27 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 	return summary, nil
 }
 
-func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, releases []GitHubRelease, now string, logger *logging.Logger) (ScanSummary, error) {
+func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, releases []ResourceVersion, now string, logger *logging.Logger) (ScanSummary, error) {
 	var summary ScanSummary
 	_, _ = tx.ExecContext(ctx, `UPDATE releases SET selected = 0 WHERE project_id = ?`, project.ID)
 	for _, rel := range releases {
 		summary.SelectedReleases++
-		releaseID := fmt.Sprintf("%s:%d", project.ID, rel.ID)
+		releaseID := fmt.Sprintf("%s:%d", project.ID, rel.NumericID)
 		_, err := tx.ExecContext(ctx, `INSERT INTO releases
-			(id, project_id, github_release_id, tag_name, prerelease, published_at, selected, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+			(id, project_id, github_release_id, tag_name, prerelease, published_at,
+			selected, created_at, source_type, source_release_key)
+			VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
 			ON CONFLICT(project_id, github_release_id) DO UPDATE SET tag_name = excluded.tag_name,
-			prerelease = excluded.prerelease, published_at = excluded.published_at, selected = 1`,
-			releaseID, project.ID, rel.ID, rel.TagName, boolInt(rel.Prerelease),
-			rel.PublishedAt.UTC().Format(time.RFC3339Nano), now)
+			prerelease = excluded.prerelease, published_at = excluded.published_at,
+			selected = 1, source_type = excluded.source_type,
+			source_release_key = excluded.source_release_key`,
+			releaseID, project.ID, rel.NumericID, rel.Version, boolInt(rel.Prerelease),
+			rel.PublishedAt.UTC().Format(time.RFC3339Nano), now,
+			rel.SourceType, rel.SourceReleaseKey)
 		if err != nil {
 			return summary, err
 		}
-		accepted, rejected, err := writeAssets(ctx, tx, project, releaseID, rel.Assets, logger, now)
+		accepted, rejected, err := writeAssets(ctx, tx, project, releaseID, rel, logger, now)
 		summary.AcceptedAssets += accepted
 		summary.RejectedAssets += rejected
 		if err != nil {

@@ -33,13 +33,15 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertColumn(t, db, "nodes", "project_assignment_mode")
 	assertColumn(t, db, "nodes", "last_public_probe_at")
 	assertColumn(t, db, "nodes", "public_probe_network_failures")
+	assertColumn(t, db, "assets", "variant")
+	assertColumn(t, db, "assets", "classification_reason")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	assertDBVersion(t, db, "master", 2)
+	assertDBVersion(t, db, "master", 3)
 	var legacyCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
 		t.Fatal(err)

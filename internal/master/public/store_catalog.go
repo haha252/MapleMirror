@@ -53,7 +53,8 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, error) {
 	args := append(s.routableAssetReplicaArgs(), projectID)
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.id, r.tag_name, r.prerelease,
-		a.file_name, a.architecture, a.system, a.size_bytes, a.digest_sha256,
+		a.file_name, a.architecture, a.system, a.variant, a.display_label,
+		a.priority, a.size_bytes, a.digest_sha256,
 		EXISTS(SELECT 1 FROM node_inventory ni
 			JOIN target_inventory ti ON ti.node_id = ni.node_id
 				AND ti.asset_id = a.id
@@ -81,7 +82,9 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 		var item AssetSummary
 		var prerelease, available int
 		if err := rows.Scan(&item.AssetID, &item.Version, &prerelease, &item.FileName,
-			&item.Architecture, &item.System, &item.SizeBytes, &item.DigestSHA256, &available, &item.PublishedAt); err != nil {
+			&item.Architecture, &item.System, &item.Variant, &item.DisplayLabel,
+			&item.Priority, &item.SizeBytes, &item.DigestSHA256, &available,
+			&item.PublishedAt); err != nil {
 			return nil, err
 		}
 		item.Prerelease = prerelease == 1
@@ -126,7 +129,8 @@ func (s Store) downloadAsset(ctx context.Context, where string, args ...any) (Do
 	var available int
 	queryArgs := append(s.routableAssetReplicaArgs(), args...)
 	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.name, p.repository, a.id,
-		r.tag_name, a.file_name, a.architecture, a.system, a.size_bytes,
+		r.tag_name, a.file_name, a.architecture, a.system, a.variant,
+		a.display_label, a.priority, a.size_bytes,
 		EXISTS(SELECT 1 FROM node_inventory ni
 			JOIN target_inventory ti ON ti.node_id = ni.node_id
 				AND ti.asset_id = a.id
@@ -156,6 +160,7 @@ func (s Store) downloadAsset(ctx context.Context, where string, args ...any) (Do
 		}
 		if err := rows.Scan(&item.ProjectID, &item.ProjectName, &item.Repository, &item.AssetID,
 			&item.Version, &item.FileName, &item.Architecture, &item.System,
+			&item.Variant, &item.DisplayLabel, &item.Priority,
 			&item.SizeBytes, &available); err != nil {
 			_ = rows.Close()
 			return DownloadAssetSummary{}, err

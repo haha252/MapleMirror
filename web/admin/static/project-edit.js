@@ -3,6 +3,7 @@
   if (!a || a.page() !== "project-edit") return;
   var projects = [];
   var originalID = new URLSearchParams(location.search).get("id") || "";
+  var currentProject = null;
 
   function val(p, name, fallback) {
     return p[name] != null ? p[name] : p[name.charAt(0).toLowerCase() + name.slice(1)] || fallback;
@@ -19,6 +20,7 @@
       DownloadMultiplier: Number(val(p, "DownloadMultiplier", 1)) || 1,
       AssetInclude: (val(p, "AssetInclude", []) || []).map(rule),
       AssetExclude: (val(p, "AssetExclude", []) || []).map(rule),
+      AssetPipeline: val(p, "AssetPipeline", val(p, "asset_pipeline", {})) || {},
       ArchitectureMatchEnabled: !!val(p, "ArchitectureMatchEnabled", false),
       ArchitectureRegex: val(p, "ArchitectureRegex", ""),
       SystemMatchEnabled: !!val(p, "SystemMatchEnabled", false),
@@ -68,7 +70,7 @@
   }
 
   function readProject() {
-    var p = normalize({});
+    var p = normalize(currentProject || {});
     document.querySelectorAll("[data-field]").forEach(function (el) {
       var name = el.getAttribute("data-field");
       p[name] = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value.trim();
@@ -108,6 +110,7 @@
   a.api("/admin/api/projects").then(function (data) {
     projects = (data.Projects || data.projects || []).map(normalize);
     var current = projects.find(function (p) { return p.ID === originalID; }) || normalize({});
+    currentProject = current;
     a.text("project-edit-summary", originalID ? "正在编辑 " + originalID : "正在新增项目");
     render(current);
   }).catch(function (err) { a.setStatus(err.message); });

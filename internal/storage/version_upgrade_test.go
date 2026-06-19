@@ -48,7 +48,7 @@ func TestOpenMasterBackfillsAdminBlockDisplayIPForExistingV1Database(t *testing.
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "admin_ip_blocks", "display_ip")
-	assertDBVersion(t, opened, "master", 2)
+	assertDBVersion(t, opened, "master", 3)
 }
 
 func TestOpenNodeBackfillsInventoryForceColumnForExistingV1Database(t *testing.T) {

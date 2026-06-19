@@ -16,22 +16,24 @@ type Projects struct {
 }
 
 type Project struct {
-	ID                         string     `yaml:"id"`
-	Name                       string     `yaml:"name"`
-	Repository                 string     `yaml:"repository"`
-	IconPath                   string     `yaml:"icon_path"`
-	Enabled                    bool       `yaml:"enabled"`
-	RetainVersions             int        `yaml:"retain_versions"`
-	IncludePrerelease          bool       `yaml:"include_prerelease"`
-	DownloadMultiplier         int        `yaml:"download_multiplier"`
-	AssetInclude               AssetRules `yaml:"asset_include"`
-	AssetExclude               AssetRules `yaml:"asset_exclude"`
-	ArchitectureMatchEnabled   bool       `yaml:"architecture_match_enabled"`
-	ArchitectureRegex          string     `yaml:"architecture_regex"`
-	ArchitectureDefaultEnabled bool       `yaml:"-" json:"-"`
-	SystemMatchEnabled         bool       `yaml:"system_match_enabled"`
-	SystemRegex                string     `yaml:"system_regex"`
-	ResolvedIconPath           string     `yaml:"-"`
+	ID                         string        `yaml:"id"`
+	Name                       string        `yaml:"name"`
+	Repository                 string        `yaml:"repository"`
+	IconPath                   string        `yaml:"icon_path"`
+	Enabled                    bool          `yaml:"enabled"`
+	RetainVersions             int           `yaml:"retain_versions"`
+	IncludePrerelease          bool          `yaml:"include_prerelease"`
+	DownloadMultiplier         int           `yaml:"download_multiplier"`
+	AssetInclude               AssetRules    `yaml:"asset_include"`
+	AssetExclude               AssetRules    `yaml:"asset_exclude"`
+	AssetPipeline              AssetPipeline `yaml:"asset_pipeline"`
+	ArchitectureMatchEnabled   bool          `yaml:"architecture_match_enabled"`
+	ArchitectureRegex          string        `yaml:"architecture_regex"`
+	ArchitectureDefaultEnabled bool          `yaml:"-" json:"-"`
+	SystemMatchEnabled         bool          `yaml:"system_match_enabled"`
+	SystemRegex                string        `yaml:"system_regex"`
+	ResolvedIconPath           string        `yaml:"-"`
+	ResolvedClassifyScriptPath string        `yaml:"-"`
 }
 
 type AssetRule struct {
@@ -44,21 +46,22 @@ type AssetRules []AssetRule
 
 func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 	type projectYAML struct {
-		ID                         string     `yaml:"id"`
-		Name                       string     `yaml:"name"`
-		Repository                 string     `yaml:"repository"`
-		IconPath                   string     `yaml:"icon_path"`
-		Enabled                    bool       `yaml:"enabled"`
-		RetainVersions             int        `yaml:"retain_versions"`
-		IncludePrerelease          bool       `yaml:"include_prerelease"`
-		DownloadMultiplier         int        `yaml:"download_multiplier"`
-		AssetInclude               AssetRules `yaml:"asset_include"`
-		AssetExclude               AssetRules `yaml:"asset_exclude"`
-		ArchitectureMatchEnabled   bool       `yaml:"architecture_match_enabled"`
-		ArchitectureRegex          string     `yaml:"architecture_regex"`
-		ArchitectureDefaultEnabled bool       `yaml:"architecture_default_enabled"`
-		SystemMatchEnabled         bool       `yaml:"system_match_enabled"`
-		SystemRegex                string     `yaml:"system_regex"`
+		ID                         string        `yaml:"id"`
+		Name                       string        `yaml:"name"`
+		Repository                 string        `yaml:"repository"`
+		IconPath                   string        `yaml:"icon_path"`
+		Enabled                    bool          `yaml:"enabled"`
+		RetainVersions             int           `yaml:"retain_versions"`
+		IncludePrerelease          bool          `yaml:"include_prerelease"`
+		DownloadMultiplier         int           `yaml:"download_multiplier"`
+		AssetInclude               AssetRules    `yaml:"asset_include"`
+		AssetExclude               AssetRules    `yaml:"asset_exclude"`
+		AssetPipeline              AssetPipeline `yaml:"asset_pipeline"`
+		ArchitectureMatchEnabled   bool          `yaml:"architecture_match_enabled"`
+		ArchitectureRegex          string        `yaml:"architecture_regex"`
+		ArchitectureDefaultEnabled bool          `yaml:"architecture_default_enabled"`
+		SystemMatchEnabled         bool          `yaml:"system_match_enabled"`
+		SystemRegex                string        `yaml:"system_regex"`
 	}
 	var raw projectYAML
 	if err := value.Decode(&raw); err != nil {
@@ -71,6 +74,7 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 		IncludePrerelease:  raw.IncludePrerelease,
 		DownloadMultiplier: raw.DownloadMultiplier,
 		AssetInclude:       raw.AssetInclude, AssetExclude: raw.AssetExclude,
+		AssetPipeline:              raw.AssetPipeline,
 		ArchitectureMatchEnabled:   raw.ArchitectureMatchEnabled,
 		ArchitectureRegex:          raw.ArchitectureRegex,
 		ArchitectureDefaultEnabled: raw.ArchitectureDefaultEnabled,
@@ -150,6 +154,7 @@ func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 			return c, err
 		}
 		p.ResolvedIconPath = resolved
+		p.ResolvedClassifyScriptPath = resolveOptionalProjectPath(baseDir, p.AssetPipeline.Classify.Script.Path)
 		if err := validateProject(*p, known); err != nil {
 			return c, err
 		}
@@ -181,6 +186,9 @@ func validateProject(p Project, known map[string]bool) error {
 		return err
 	}
 	if err := validateAssetRules(p.ID, "asset_exclude", p.AssetExclude); err != nil {
+		return err
+	}
+	if err := validateAssetPipeline(p.ID, p.AssetPipeline); err != nil {
 		return err
 	}
 	if p.SystemMatchEnabled {

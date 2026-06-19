@@ -46,3 +46,9 @@ projects:
     system_match_enabled: false
     # 系统提取正则；仅在 system_match_enabled=true 时编译和使用。
     system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
+    # 可选：分类/指派规则。过滤仍由 asset_include 和 asset_exclude 决定。
+    asset_pipeline:
+      # classify 定义资产分类规则；未配置规则时只使用旧的正则提取。
+      classify:
+        # rules 按顺序应用；后命中的赋值可以覆盖前面规则的赋值。
+        rules: []

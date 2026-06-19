@@ -1,0 +1,9 @@
+ALTER TABLE releases ADD COLUMN source_type TEXT NOT NULL DEFAULT 'github_releases';
+ALTER TABLE releases ADD COLUMN source_release_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE assets ADD COLUMN source_type TEXT NOT NULL DEFAULT 'github_releases';
+ALTER TABLE assets ADD COLUMN source_asset_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE assets ADD COLUMN variant TEXT NOT NULL DEFAULT '';
+ALTER TABLE assets ADD COLUMN display_label TEXT NOT NULL DEFAULT '';
+ALTER TABLE assets ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE assets ADD COLUMN labels_json TEXT NOT NULL DEFAULT '';
+ALTER TABLE assets ADD COLUMN classification_reason TEXT NOT NULL DEFAULT '';

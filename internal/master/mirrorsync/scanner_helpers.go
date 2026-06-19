@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -16,19 +17,16 @@ import (
 	"mirror-server/internal/master/assetstate"
 )
 
-func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releaseID string, assets []GitHubAsset, logger *logging.Logger, now string) (int, int, error) {
-	archRE, err := compileArchitectureRegex(project)
-	if err != nil {
-		return 0, 0, err
-	}
-	systemRE, err := compileSystemRegex(project)
+func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releaseID string, release ResourceVersion, logger *logging.Logger, now string) (int, int, error) {
+	classifier, err := newAssetClassifier(project)
 	if err != nil {
 		return 0, 0, err
 	}
 	acceptedIDs := map[int64]struct{}{}
 	var accepted, rejected int
+	assets := release.Assets
 	for _, asset := range assets {
-		allowed, reason, err := assetAllowed(asset.Name, project.AssetInclude, project.AssetExclude)
+		allowed, reason, err := assetAllowed(asset.FileName, project.AssetInclude, project.AssetExclude)
 		if err != nil {
 			return accepted, rejected, err
 		}
@@ -37,7 +35,7 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 				logger.Debug(ctx, "资产未进入镜像流程",
 					slog.String("project_id", project.ID),
 					slog.String("release_id", releaseID),
-					slog.String("asset_name", asset.Name),
+					slog.String("asset_name", asset.FileName),
 					slog.String("reason", reason))
 			}
 			rejected++
@@ -49,41 +47,68 @@ func writeAssets(ctx context.Context, tx *sql.Tx, project config.Project, releas
 				logger.Debug(ctx, "资产未进入镜像流程",
 					slog.String("project_id", project.ID),
 					slog.String("release_id", releaseID),
-					slog.String("asset_name", asset.Name),
+					slog.String("asset_name", asset.FileName),
 					slog.String("reason", "digest invalid"))
 			}
 			rejected++
 			continue
 		}
-		arch := assetArchitecture(asset.Name, archRE)
-		system := assetSystem(asset.Name, systemRE)
-		assetID := fmt.Sprintf("%s:%d", releaseID, asset.ID)
-		if err := markInventoryStaleOnAssetChange(ctx, tx, assetID, digest, asset.Size, now); err != nil {
+		classification, err := classifier.Classify(asset, release, assets)
+		if err != nil {
+			return accepted, rejected, err
+		}
+		if !classification.Accepted {
+			if logger != nil {
+				logger.Debug(ctx, "资产未进入镜像流程",
+					slog.String("project_id", project.ID),
+					slog.String("release_id", releaseID),
+					slog.String("asset_name", asset.FileName),
+					slog.String("reason", classification.RejectReason))
+			}
+			rejected++
+			continue
+		}
+		labelsJSON, err := classificationLabelsJSON(classification.Labels)
+		if err != nil {
+			return accepted, rejected, err
+		}
+		assetID := fmt.Sprintf("%s:%d", releaseID, asset.NumericID)
+		if err := markInventoryStaleOnAssetChange(ctx, tx, assetID, digest, asset.SizeBytes, now); err != nil {
 			return accepted, rejected, err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO assets
 			(id, release_id, github_asset_id, file_name, architecture, system, size_bytes,
-			source_url, digest_sha256, service_state, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?)
+			source_url, digest_sha256, service_state, created_at, source_type,
+			source_asset_key, variant, display_label, priority, labels_json,
+			classification_reason)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(release_id, github_asset_id) DO UPDATE SET
 			file_name = excluded.file_name, architecture = excluded.architecture,
 			system = excluded.system,
 			size_bytes = excluded.size_bytes, source_url = excluded.source_url,
-			digest_sha256 = excluded.digest_sha256, service_state = 'candidate'`,
-			assetID, releaseID, asset.ID, asset.Name, arch, system, asset.Size,
-			asset.URL, digest, now)
+			digest_sha256 = excluded.digest_sha256, service_state = 'candidate',
+			source_type = excluded.source_type, source_asset_key = excluded.source_asset_key,
+			variant = excluded.variant, display_label = excluded.display_label,
+			priority = excluded.priority, labels_json = excluded.labels_json,
+			classification_reason = excluded.classification_reason`,
+			assetID, releaseID, asset.NumericID, asset.FileName, classification.Architecture,
+			classification.System, asset.SizeBytes, asset.DownloadURL, digest, now,
+			asset.SourceType, asset.SourceAssetKey, classification.Variant,
+			classification.DisplayLabel, classification.Priority, labelsJSON,
+			classification.ClassificationReason)
 		if err != nil {
 			return accepted, rejected, err
 		}
-		acceptedIDs[asset.ID] = struct{}{}
+		acceptedIDs[asset.NumericID] = struct{}{}
 		if logger != nil {
 			logger.Debug(ctx, "资产已进入镜像候选",
 				slog.String("project_id", project.ID),
 				slog.String("release_id", releaseID),
 				slog.String("asset_id", assetID),
-				slog.String("asset_name", asset.Name),
-				slog.String("architecture", arch),
-				slog.String("system", system),
+				slog.String("asset_name", asset.FileName),
+				slog.String("architecture", classification.Architecture),
+				slog.String("system", classification.System),
+				slog.String("variant", classification.Variant),
 				slog.String("digest_sha256", digest))
 		}
 		accepted++
@@ -117,8 +142,16 @@ func supersedeDuplicatePublicPaths(ctx context.Context, tx *sql.Tx, projectID st
 	return assetstate.ReconcilePublicPaths(ctx, tx, projectID)
 }
 
-func selectReleases(releases []GitHubRelease, includePrerelease bool, keep int) []GitHubRelease {
-	var selected []GitHubRelease
+func classificationLabelsJSON(labels []string) (string, error) {
+	if len(labels) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(labels)
+	return string(data), err
+}
+
+func selectReleases(releases []ResourceVersion, includePrerelease bool, keep int) []ResourceVersion {
+	var selected []ResourceVersion
 	for _, rel := range releases {
 		if rel.Draft || (rel.Prerelease && !includePrerelease) {
 			continue
@@ -127,7 +160,7 @@ func selectReleases(releases []GitHubRelease, includePrerelease bool, keep int) 
 	}
 	sort.SliceStable(selected, func(i, j int) bool {
 		if selected[i].PublishedAt.Equal(selected[j].PublishedAt) {
-			return selected[i].ID > selected[j].ID
+			return selected[i].NumericID > selected[j].NumericID
 		}
 		return selected[i].PublishedAt.After(selected[j].PublishedAt)
 	})
@@ -148,8 +181,17 @@ func projectHash(project config.Project) string {
 		fmt.Sprint(project.ArchitectureMatchEnabled),
 		fmt.Sprint(project.SystemMatchEnabled),
 		project.SystemRegex,
+		assetPipelineHash(project.AssetPipeline),
 	}, "|")))
 	return hex.EncodeToString(sum[:])
+}
+
+func assetPipelineHash(pipeline config.AssetPipeline) string {
+	data, err := json.Marshal(pipeline)
+	if err != nil {
+		return fmt.Sprintf("%+v", pipeline)
+	}
+	return string(data)
 }
 
 func compileArchitectureRegex(project config.Project) (*regexp.Regexp, error) {
@@ -193,16 +235,7 @@ func assetSystem(name string, systemRE *regexp.Regexp) string {
 }
 
 func normalizeSystem(value string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "win", "windows", "win32", "win64":
-		return "win", true
-	case "linux":
-		return "linux", true
-	case "darwin", "macos", "osx":
-		return "darwin", true
-	default:
-		return "", false
-	}
+	return config.NormalizeAssetSystem(value)
 }
 
 func boolInt(v bool) int {
