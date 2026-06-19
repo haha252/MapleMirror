@@ -42,8 +42,10 @@ type NodeStorage struct {
 	StateDB       string `yaml:"state_db"`
 }
 type Bandwidth struct {
-	Target    string `yaml:"target"`
-	TargetBPS int64  `yaml:"-"`
+	Target     string `yaml:"target"`
+	Minimum    string `yaml:"minimum"`
+	TargetBPS  int64  `yaml:"-"`
+	MinimumBPS int64  `yaml:"-"`
 }
 type Sync struct {
 	MaxWorkers                int    `yaml:"max_workers"`
@@ -113,6 +115,7 @@ func applyNodeDefaults(c *Node, warn WarnFunc) {
 		c.Sync.MaxWorkers = 2
 		warnDefault(warn, "sync.max_workers", "2")
 	}
+	setString(&c.Bandwidth.Minimum, "5 MiB/s", "bandwidth.minimum", warn)
 	setString(&c.Sync.BandwidthLimit, "0", "sync.bandwidth_limit", warn)
 	if c.Sync.PeerFallbackMaxConcurrent == 0 {
 		c.Sync.PeerFallbackMaxConcurrent = 3
@@ -170,6 +173,14 @@ func validateNode(c *Node) error {
 		return err
 	}
 	c.Bandwidth.TargetBPS = target
+	minimum, err := ParseBandwidthBPS("bandwidth.minimum", c.Bandwidth.Minimum, true)
+	if err != nil {
+		return err
+	}
+	if minimum > target {
+		return errors.New("节点保底带宽不得大于目标带宽")
+	}
+	c.Bandwidth.MinimumBPS = minimum
 	if c.Sync.MaxWorkers <= 0 {
 		return errors.New("同步线程数必须大于零")
 	}

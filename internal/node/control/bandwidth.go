@@ -20,6 +20,10 @@ func NewNetworkBandwidthSampler() *NetworkBandwidthSampler {
 	return &NetworkBandwidthSampler{read: readNonLoopbackNetworkBytes}
 }
 
+func ReadNonLoopbackNetworkBytes() (uint64, error) {
+	return readNonLoopbackNetworkBytes()
+}
+
 func (s *NetworkBandwidthSampler) SampleBandwidthBPS(window time.Duration) int64 {
 	if s == nil {
 		return 0

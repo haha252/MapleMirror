@@ -21,8 +21,40 @@ func TestLoadNodeParsesBandwidthFields(t *testing.T) {
 	if cfg.Bandwidth.TargetBPS != 100*1024*1024 {
 		t.Fatalf("target bandwidth parsed incorrectly: %d", cfg.Bandwidth.TargetBPS)
 	}
+	if cfg.Bandwidth.MinimumBPS != 5*1024*1024 {
+		t.Fatalf("minimum bandwidth parsed incorrectly: %d", cfg.Bandwidth.MinimumBPS)
+	}
 	if cfg.Sync.BandwidthLimitBPS != 10*1000*1000 {
 		t.Fatalf("sync bandwidth limit parsed incorrectly: %d", cfg.Sync.BandwidthLimitBPS)
+	}
+}
+
+func TestLoadNodeAllowsZeroMinimumBandwidth(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "node.yaml")
+	body := strings.Replace(string(NodeExample), `minimum: "5 MiB/s"`,
+		`minimum: "0"`, 1)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadNode(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bandwidth.MinimumBPS != 0 {
+		t.Fatalf("minimum bandwidth = %d, want 0", cfg.Bandwidth.MinimumBPS)
+	}
+}
+
+func TestLoadNodeRejectsMinimumAboveTarget(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "node.yaml")
+	body := strings.Replace(string(NodeExample), `minimum: "5 MiB/s"`,
+		`minimum: "200 MiB/s"`, 1)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadNode(path, nil)
+	if err == nil || !strings.Contains(err.Error(), "保底带宽") {
+		t.Fatalf("expected minimum bandwidth error, got %v", err)
 	}
 }
 

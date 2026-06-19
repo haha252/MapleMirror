@@ -25,6 +25,7 @@ type Handler struct {
 	Signer          downloadtoken.Signer
 	TrustedCIDRs    []string
 	Logger          *logging.Logger
+	TrafficLimiter  trafficLimiter
 	ProbeStore      interface {
 		Response(string) (protocol.PublicProbeResponse, bool)
 	}
@@ -112,7 +113,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment",
 		map[string]string{"filename": filepath.Base(asset.RelativePath)}))
-	counter := &limitCountingWriter{ResponseWriter: w, handler: h,
+	target := h.rateLimitedResponseWriter(r, w)
+	counter := &limitCountingWriter{ResponseWriter: target, handler: h,
 		authorizationID: claims.AuthorizationID, limit: limit, sent: sent}
 	http.ServeContent(counter, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
 	if counter.bytes > 0 {

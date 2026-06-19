@@ -57,7 +57,8 @@ func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("X-Replication-Task-ID", claims.TaskID)
-	http.ServeContent(w, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
+	target := h.rateLimitedResponseWriter(r, w)
+	http.ServeContent(target, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
 }
 
 func validateReplicationRange(r *http.Request, start, end int64) error {

@@ -29,10 +29,12 @@ storage:
   # 节点状态库将持久化节点身份材料、登记临时状态、同步状态和未被主节点确认的流量事件。
   state_db: "data/node-state.db"
 
-# 下载节点带宽目标配置。
+# 下载节点出口带宽预算配置。
 bandwidth:
-  # 目标出口带宽；支持 MiB/s、MB/s、Mbps，节点会上报为 target_bandwidth_bps。
+  # 服务器总出口目标带宽，也是 mirror 节点自身上行硬上限；支持 MiB/s、MB/s、Mbps。
   target: "100 MiB/s"
+  # 其它服务占用较高时，mirror 上行仍保留的最低带宽；"0" 表示不保底。
+  minimum: "5 MiB/s"
 
 # 下载节点同步执行配置。
 sync:
