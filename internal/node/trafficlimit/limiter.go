@@ -5,6 +5,15 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
+)
+
+const (
+	minWriteChunkBytes = 64 * 1024
+	maxWriteChunkBytes = 512 * 1024
+	minBurstBytes      = 256 * 1024
+	maxBurstBytes      = 2 * 1024 * 1024
 )
 
 type Limiter struct {
@@ -15,12 +24,12 @@ type Limiter struct {
 	HostRead    func() (uint64, error)
 
 	mu           sync.Mutex
+	bucket       *rate.Limiter
 	hostReady    bool
 	hostPrevious uint64
 	mirrorRead   int64
 	lastMirror   int64
 	updated      time.Time
-	allowance    float64
 	allowedBPS   int64
 }
 
@@ -35,7 +44,8 @@ func New(target, minimum int64, read func() (uint64, error)) *Limiter {
 		minimum = target
 	}
 	return &Limiter{TargetBPS: target, MinimumBPS: minimum,
-		SampleEvery: time.Second, HostRead: read}
+		SampleEvery: time.Second, HostRead: read,
+		bucket: rate.NewLimiter(rate.Limit(target), burstBytes(target))}
 }
 
 func (l *Limiter) WrapWriter(ctx context.Context, w io.Writer) io.Writer {
@@ -58,13 +68,18 @@ func (l *Limiter) Wait(ctx context.Context, n int) error {
 	if l == nil || n <= 0 {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	bucket := l.rateLimiter()
 	remaining := n
 	for remaining > 0 {
+		l.refreshNow()
 		chunk := remaining
-		if chunk > 32*1024 {
-			chunk = 32 * 1024
+		if burst := bucket.Burst(); burst > 0 && chunk > burst {
+			chunk = burst
 		}
-		if err := l.waitChunk(ctx, int64(chunk)); err != nil {
+		if err := bucket.WaitN(ctx, chunk); err != nil {
 			return err
 		}
 		remaining -= chunk
@@ -72,51 +87,26 @@ func (l *Limiter) Wait(ctx context.Context, n int) error {
 	return nil
 }
 
-func (l *Limiter) waitChunk(ctx context.Context, n int64) error {
-	for {
-		sleep := l.reserve(n)
-		if sleep <= 0 {
-			return nil
-		}
-		timer := time.NewTimer(sleep)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
-		}
-	}
-}
-
-func (l *Limiter) reserve(n int64) time.Duration {
+func (l *Limiter) rateLimiter() *rate.Limiter {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	now := l.now()
-	l.refresh(now)
-	if l.allowedBPS <= 0 {
-		l.allowedBPS = l.TargetBPS
+	if l.bucket == nil {
+		l.bucket = rate.NewLimiter(rate.Limit(l.TargetBPS), burstBytes(l.TargetBPS))
 	}
-	capacity := float64(l.TargetBPS)
-	if l.allowance > capacity {
-		l.allowance = capacity
-	}
-	if l.allowance >= float64(n) {
-		l.allowance -= float64(n)
-		return 0
-	}
-	need := float64(n) - l.allowance
-	wait := time.Duration(need / float64(l.allowedBPS) * float64(time.Second))
-	l.allowance = 0
-	if wait < time.Millisecond {
-		return time.Millisecond
-	}
-	return wait
+	return l.bucket
+}
+
+func (l *Limiter) refreshNow() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.refresh(l.now())
 }
 
 func (l *Limiter) refresh(now time.Time) {
 	if l.updated.IsZero() {
 		l.updated = now
 		l.allowedBPS = l.TargetBPS
+		l.applyRateLocked(l.allowedBPS)
 		l.sampleHostLocked(0)
 		return
 	}
@@ -127,7 +117,6 @@ func (l *Limiter) refresh(now time.Time) {
 	if elapsed >= l.sampleEvery() {
 		l.sampleHostLocked(elapsed)
 	}
-	l.allowance += elapsed.Seconds() * float64(l.allowedBPS)
 	l.updated = now
 }
 
@@ -139,11 +128,13 @@ func (l *Limiter) sampleHostLocked(window time.Duration) {
 	total, err := read()
 	if err != nil {
 		l.allowedBPS = l.TargetBPS
+		l.applyRateLocked(l.allowedBPS)
 		return
 	}
 	if !l.hostReady || total < l.hostPrevious || window <= 0 {
 		l.hostReady, l.hostPrevious = true, total
 		l.allowedBPS = l.TargetBPS
+		l.applyRateLocked(l.allowedBPS)
 		l.lastMirror = l.mirrorRead
 		return
 	}
@@ -161,7 +152,31 @@ func (l *Limiter) sampleHostLocked(window time.Duration) {
 		allowed = l.TargetBPS
 	}
 	l.allowedBPS = allowed
+	l.applyRateLocked(allowed)
 	l.hostPrevious, l.lastMirror = total, l.mirrorRead
+}
+
+func (l *Limiter) applyRateLocked(bps int64) {
+	if bps <= 0 {
+		bps = l.TargetBPS
+	}
+	if l.bucket == nil {
+		l.bucket = rate.NewLimiter(rate.Limit(bps), burstBytes(bps))
+		return
+	}
+	l.bucket.SetLimit(rate.Limit(bps))
+	l.bucket.SetBurst(burstBytes(bps))
+}
+
+func burstBytes(bps int64) int {
+	burst := bps / 5
+	if burst < minBurstBytes {
+		burst = minBurstBytes
+	}
+	if burst > maxBurstBytes {
+		burst = maxBurstBytes
+	}
+	return int(burst)
 }
 
 func (l *Limiter) now() time.Time {
