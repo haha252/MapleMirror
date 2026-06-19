@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"mirror-server/internal/config"
 )
@@ -73,6 +74,24 @@ func TestPublicResourceLimiterUnknownClientUsesSharedBucket(t *testing.T) {
 		if i == 1 && rec.Code != http.StatusTooManyRequests {
 			t.Fatalf("second unknown request should be limited, status=%d body=%s", rec.Code, rec.Body.String())
 		}
+	}
+}
+
+func TestPublicResourceLimiterResetExactKeepsRelatedScopes(t *testing.T) {
+	limiter := newPublicResourceLimiter(testResourceQuota(10, 10))
+	now := time.Now().UTC()
+	hostScope := resourceScope{Kind: "ipv4_32", Key: "198.51.100.9/32"}
+	networkScope := resourceScope{Kind: "ipv4_24", Key: "198.51.100.0/24"}
+	limiter.buckets[hostScope] = resourceBucket{tokens: 0, updated: now}
+	limiter.buckets[networkScope] = resourceBucket{tokens: 0, updated: now}
+
+	limiter.resetExact("198.51.100.9/32")
+
+	if _, ok := limiter.buckets[hostScope]; ok {
+		t.Fatal("host scope bucket should be reset")
+	}
+	if _, ok := limiter.buckets[networkScope]; !ok {
+		t.Fatal("network scope bucket should remain")
 	}
 }
 

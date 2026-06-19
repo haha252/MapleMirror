@@ -110,21 +110,21 @@ func main() {
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
-	startControlServices(cfg, repo, logger)
-	startAdminService(cfg, repo, syncService, projectLoader, logger)
-	startConsolePairing(cfg, repo, logger)
-
-	publicHandler, err := publicHandler(cfg, quota, notices, projects, *projectsPath, *noticesPath, location, database, runtime, logger, tokenSigner)
+	publicServer, err := newPublicServer(cfg, quota, notices, projects, *projectsPath,
+		*noticesPath, location, database, runtime, logger, tokenSigner)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	startControlServices(cfg, repo, logger)
+	startAdminService(cfg, repo, syncService, projectLoader, &publicServer, logger)
+	startConsolePairing(cfg, repo, logger)
 
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Ready: func() bool { return true }, Version: version,
 	}, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
-	mux.Handle("/", requestid.Middleware(publicHandler, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
+	mux.Handle("/", requestid.Middleware(publicServer.Handler(), cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
 	runServer(cfg.Server.PublicListen, mux, logger)
 }
 
@@ -162,7 +162,10 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *
 	return service
 }
 
-func publicHandler(cfg config.Master, quota config.Quota, notices config.Notices, projects config.Projects, projectsPath, noticesPath string, loc *time.Location, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger, signer downloadtoken.Signer) (http.Handler, error) {
+func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notices,
+	projects config.Projects, projectsPath, noticesPath string, loc *time.Location,
+	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger,
+	signer downloadtoken.Signer) (public.Server, error) {
 	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
@@ -172,7 +175,7 @@ func publicHandler(cfg config.Master, quota config.Quota, notices config.Notices
 		cfg.Proxy.TrustedCIDRs, projects, projectsPath, noticesPath, notices.Notices, runtime, logger,
 		cfg.Node.PublicProbeNetworkFailures)
 	if err != nil {
-		return nil, err
+		return public.Server{}, err
 	}
 	go func() {
 		ticker := time.NewTicker(time.Minute)
@@ -181,7 +184,7 @@ func publicHandler(cfg config.Master, quota config.Quota, notices config.Notices
 			_ = server.Store.SampleNodeAvailability(context.Background())
 		}
 	}()
-	return server.Handler(), nil
+	return server, nil
 }
 
 func startControlServices(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {

@@ -147,6 +147,47 @@ func (l *publicResourceLimiter) rule(kind string) bucketRule {
 	return bucketRule{capacity: 3600, refill: time.Hour}
 }
 
+func (l *publicResourceLimiter) resetExact(clientPrefix string) {
+	if l == nil {
+		return
+	}
+	scope, ok := exactPublicResourceScope(clientPrefix)
+	if !ok {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.buckets, scope)
+}
+
+func exactPublicResourceScope(clientPrefix string) (resourceScope, bool) {
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(clientPrefix))
+	if err != nil {
+		return resourceScope{}, false
+	}
+	addr := prefix.Addr()
+	bits := prefix.Bits()
+	if addr.Is4() {
+		switch bits {
+		case 32:
+			return resourceScope{Kind: "ipv4_32", Key: prefix.Masked().String()}, true
+		case 24:
+			return resourceScope{Kind: "ipv4_24", Key: prefix.Masked().String()}, true
+		}
+		return resourceScope{}, false
+	}
+	if bits == 128 {
+		return resourceScope{Kind: "ipv6_128", Key: prefix.Masked().String()}, true
+	}
+	return resourceScope{}, false
+}
+
+func (s Server) ResetResourceLimiter(clientPrefix string) {
+	if s.ResourceLimiter != nil {
+		s.ResourceLimiter.resetExact(clientPrefix)
+	}
+}
+
 func (l *publicResourceLimiter) exempt(prefix string) bool {
 	if prefix == "" || prefix == "unknown" || len(l.exemptions) == 0 {
 		return false

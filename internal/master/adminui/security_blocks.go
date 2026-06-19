@@ -143,19 +143,54 @@ func (s *Server) deleteBlock(r *http.Request, kind, key string) error {
 	if key == "" {
 		return sql.ErrNoRows
 	}
-	query := map[string]string{
-		"admin":  `DELETE FROM admin_ip_blocks WHERE ip_key = ?`,
-		"client": `DELETE FROM client_blocks WHERE client_prefix_key = ?`,
-	}[kind]
-	if query == "" {
+	switch kind {
+	case "admin":
+		return s.deleteAdminBlock(r, key)
+	case "client":
+		return s.deleteClientBlock(r, key)
+	default:
 		return sql.ErrNoRows
 	}
-	result, err := s.repo.DB.ExecContext(r.Context(), query, key)
+}
+
+func (s *Server) deleteAdminBlock(r *http.Request, key string) error {
+	result, err := s.repo.DB.ExecContext(r.Context(),
+		`DELETE FROM admin_ip_blocks WHERE ip_key = ?`, key)
 	if err != nil {
 		return err
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Server) deleteClientBlock(r *http.Request, key string) error {
+	scope, err := clientLimitScope(key)
+	if err != nil {
+		return err
+	}
+	tx, err := s.repo.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(r.Context(),
+		`DELETE FROM client_blocks WHERE client_prefix_key = ?`, key)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	if err := s.clearClientLimitScope(r, tx, scope); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if s.resetResourceLimiter != nil {
+		s.resetResourceLimiter(key)
 	}
 	return nil
 }

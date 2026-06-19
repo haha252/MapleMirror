@@ -109,7 +109,7 @@ func newAdminHandlerForTest(t *testing.T) http.Handler {
 	}
 	t.Cleanup(func() { _ = logger.Close() })
 	sync := mirrorsync.Service{Scanner: mirrorsync.Scanner{Store: mirrorsync.Store{DB: db}}}
-	handler, err := adminHandler(cfg, mastercontrol.Repository{DB: db}, sync, nil, logger,
+	handler, err := adminHandler(cfg, mastercontrol.Repository{DB: db}, sync, nil, nil, logger,
 		mastercontrol.CertificateSigner{})
 	if err != nil {
 		t.Fatal(err)
