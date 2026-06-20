@@ -93,7 +93,7 @@ func aboutBody(sponsors []Sponsor, staticURL func(string) string) template.HTML 
 	}
 	body := `<section class="about-stack">`
 	body += aboutCard("info", "项目简介", mirrorDescription)
-	body += `<section class="panel-card about-card"><div class="about-card__title">` + aboutIcon("heart") + `<h2>赞助支持</h2></div><p>您的支持将会<strong>全部用于</strong> 枫源镜像 的服务器、带宽、域名等支出。</p><div class="donate-grid"><article><h3>微信</h3><img src="` + esc(staticURL("wechat.png")) + `" alt="微信赞助二维码"></article><article><h3>支付宝</h3><img src="` + esc(staticURL("alipay.png")) + `" alt="支付宝赞助二维码"></article></div></section>`
+	body += `<section class="panel-card about-card"><div class="about-card__title">` + aboutIcon("heart") + `<h2>赞助支持</h2></div><p><strong>请备注昵称后，展示页会展示你的昵称！如不备注则默认为 &lt;None&gt;。</strong>您的支持将会<strong>全部用于</strong> 枫源镜像 的服务器、带宽、域名等支出。</p><div class="donate-grid"><article><h3>微信</h3><img src="` + esc(staticURL("wechat.png")) + `" alt="微信赞助二维码"></article><article><h3>支付宝</h3><img src="` + esc(staticURL("alipay.png")) + `" alt="支付宝赞助二维码"></article></div></section>`
 	body += sponsorsCard(sponsors)
 	body += `<section class="about-section"><h2>致谢</h2><div class="thanks-grid"><article class="panel-card thanks-card"><h3>页面设计</h3><p>本站的页面设计大量参考了<a href="https://miawa.cn/" rel="noopener noreferrer" target="_blank"><strong>柠枺镜像</strong></a>的现代化设计。</p></article></div></section>`
 	body += `<section class="panel-card about-card"><h2>贡献</h2><p>想为我们贡献服务器节点？亦或者是发现了安全漏洞向我们报告？我们随时欢迎！邮箱：<a href="mailto:frostlynx@qq.com">frostlynx@qq.com</a></p></section>`
