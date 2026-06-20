@@ -1,15 +1,29 @@
 package adminui
 
 import (
+	"context"
+
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/mirrorsync"
 )
 
-func (s *Server) nodeSummaries(items []mastercontrol.NodeSummary) []mastercontrol.NodeSummary {
-	out := make([]mastercontrol.NodeSummary, 0, len(items))
+func (s *Server) nodeSummaries(ctx context.Context, items []mastercontrol.NodeSummary) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		item.LastHeartbeat = s.displayTime(item.LastHeartbeat)
-		out = append(out, item)
+		row := map[string]any{
+			"node_id": item.NodeID, "public_name": item.PublicName,
+			"state": item.State, "connection_state": item.ConnectionState,
+			"routing_ready": item.RoutingReady, "target_bandwidth_bps": item.TargetBandwidthBPS,
+			"download_priority": item.DownloadPriority, "max_mirror_projects": item.MaxMirrorProjects,
+			"project_assignment_mode": item.AssignmentMode,
+			"last_heartbeat_at":       s.displayTime(item.LastHeartbeat),
+		}
+		if pressure, err := s.repo.LatestPressureReport(ctx, item.NodeID); err == nil {
+			row["pressure"] = s.displayTimeMap(pressure)
+		} else if heartbeat, err := s.repo.LatestHeartbeat(ctx, item.NodeID); err == nil {
+			row["pressure"] = s.displayTimeMap(heartbeat)
+		}
+		out = append(out, row)
 	}
 	return out
 }

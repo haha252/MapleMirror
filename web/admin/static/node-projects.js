@@ -95,4 +95,5 @@
   });
 
   load();
+  a.autoRefresh(load, 30000);
 })();

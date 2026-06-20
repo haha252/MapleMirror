@@ -20,7 +20,7 @@ func (s *Server) nodesAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "节点列表查询失败"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"nodes": s.nodeSummaries(items)})
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": s.nodeSummaries(r.Context(), items)})
 }
 
 func (s *Server) nodeActionAPI(w http.ResponseWriter, r *http.Request) {

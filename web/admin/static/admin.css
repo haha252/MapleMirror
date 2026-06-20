@@ -1,34 +1,3 @@
-﻿.page-admin-login {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-}
-.admin-login {
-  width: min(92vw, 440px);
-}
-.admin-login__box {
-  display: grid;
-  gap: 18px;
-  padding: 24px;
-}
-.admin-login__brand {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-.admin-login__brand img {
-  width: 46px;
-  height: 46px;
-  border-radius: 8px;
-}
-.admin-login__brand h1 {
-  margin-bottom: 2px;
-  font-size: 24px;
-}
-.admin-login__brand p {
-  margin-bottom: 0;
-  color: var(--muted);
-}
 .admin-field {
   display: grid;
   gap: 7px;
@@ -48,6 +17,7 @@
   cursor: pointer;
   font: inherit;
   font-weight: 700;
+  transition: background .16s ease, transform .16s ease;
 }
 .admin-secondary {
   display: inline-flex;
@@ -64,6 +34,11 @@
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.admin-primary:hover,
+.admin-secondary:hover {
+  transform: translateY(-1px);
 }
 .admin-link-button { text-decoration: none; }
 .admin-danger {
@@ -91,18 +66,34 @@
   background: var(--panel-muted);
   color: var(--text);
 }
-.admin-main { width: min(94vw, 1560px); }
+.admin-main {
+  width: min(96vw, 1600px);
+}
+.page-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.page-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
 .admin-metric {
   display: grid;
   gap: 8px;
-  padding: 16px;
+  padding: 14px;
 }
 .admin-metric span {
   color: var(--muted);
   font-size: 13px;
 }
 .admin-metric strong {
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1.1;
 }
 .admin-grid {
@@ -123,7 +114,7 @@
 }
 .admin-panel {
   min-width: 0;
-  padding: 16px;
+  padding: 14px;
 }
 .admin-panel__head {
   display: flex;
@@ -134,13 +125,20 @@
 }
 .admin-panel__head h2 {
   margin-bottom: 0;
-  font-size: 20px;
+  font-size: 18px;
 }
 .admin-table-wrap {
   overflow: auto;
 }
 .admin-table-wrap table {
   min-width: 720px;
+  border-spacing: 0;
+}
+.admin-table-wrap th,
+.admin-table-wrap td {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  vertical-align: top;
 }
 .admin-table-wrap th:last-child,
 .admin-table-wrap td:last-child {
@@ -221,9 +219,4 @@
   color: var(--text);
   font-size: 13px;
   white-space: nowrap;
-}
-@media (max-width: 920px) {
-  .admin-grid {
-    grid-template-columns: 1fr;
-  }
 }

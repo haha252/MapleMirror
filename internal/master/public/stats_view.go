@@ -80,12 +80,12 @@ func trendChart(trends []DailyTrend) string {
 
 func nodesTable(nodes []NodeSummary) string {
 	body := `<div class="node-table panel-card"><div class="node-table__scroll"><table>` +
-		`<tr><th>节点名称</th><th>状态</th><th>24小时 SLA</th>` +
+		`<tr><th>节点名称</th><th>状态</th><th>压力</th><th>24小时 SLA</th>` +
 		`<th>7天 SLA</th><th>总下载流量</th></tr>`
 	for _, n := range nodes {
 		body += `<tr><td>` + esc(n.PublicName) + renderDetail("最近心跳", displayTime(n.LastHeartbeat)) +
 			`</td><td>` + esc(stateText(n.State)) + downloadDetail(n) + `</td><td>` +
-			esc(n.SLA24H) + `</td><td>` + esc(n.SLA7D) + `</td><td>` +
+			esc(n.PressureRatio) + `</td><td>` + esc(n.SLA24H) + `</td><td>` + esc(n.SLA7D) + `</td><td>` +
 			bytesText(n.TotalSentBytes) + `</td></tr>`
 	}
 	body += `</table></div></div>`

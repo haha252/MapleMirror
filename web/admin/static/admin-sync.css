@@ -1,0 +1,18 @@
+.sync-task-actions {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) auto;
+  gap: 10px;
+  align-items: center;
+}
+.sync-task-actions .admin-control {
+  min-height: 36px;
+}
+.sync-task-actions .admin-secondary {
+  min-height: 36px;
+}
+@media (max-width: 560px) {
+  .sync-task-actions {
+    width: 100%;
+    grid-template-columns: 1fr auto;
+  }
+}

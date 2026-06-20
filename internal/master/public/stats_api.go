@@ -93,7 +93,8 @@ func compactStatsDetails(stats StatsDashboard, nodes []NodeSummary) statsDetails
 		}
 		out.Nodes = append(out.Nodes, []any{
 			item.PublicName, item.State, item.LastHeartbeat, ready,
-			item.DownloadReadyReason, item.SLA24H, item.SLA7D, item.TotalSentBytes,
+			item.DownloadReadyReason, item.SLA24H, item.SLA7D,
+			item.TotalSentBytes, item.PressureRatio,
 		})
 	}
 	out.Trend = compactTrend(stats.Trend)

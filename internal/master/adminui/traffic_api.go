@@ -10,16 +10,24 @@ func (s *Server) trafficEventsAPI(w http.ResponseWriter, r *http.Request) {
 	authID := r.URL.Query().Get("authorization_id")
 	page := paginationFrom(r, 20)
 	var total int
-	if err := s.repo.DB.QueryRowContext(r.Context(), `SELECT COUNT(*)
-		FROM traffic_events WHERE authorization_id = ?`, authID).Scan(&total); err != nil {
+	countSQL := `SELECT COUNT(*) FROM traffic_events`
+	countArgs := []any{}
+	whereSQL := ""
+	if authID != "" {
+		whereSQL = ` WHERE authorization_id = ?`
+		countArgs = append(countArgs, authID)
+	}
+	if err := s.repo.DB.QueryRowContext(r.Context(), countSQL+whereSQL, countArgs...).Scan(&total); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "流量事件查询失败"})
 		return
 	}
+	queryArgs := append([]any{}, countArgs...)
+	queryArgs = append(queryArgs, page.PageSize, page.offset())
 	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT node_id, event_sequence,
 		authorization_id, node_request_id, master_request_id, sent_bytes, status,
 		COALESCE(accounted_at, '') FROM traffic_events
-		WHERE authorization_id = ? ORDER BY node_id, event_sequence LIMIT ? OFFSET ?`,
-		authID, page.PageSize, page.offset())
+		`+whereSQL+` ORDER BY COALESCE(accounted_at, '') DESC, node_id, event_sequence LIMIT ? OFFSET ?`,
+		queryArgs...)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "流量事件查询失败"})
 		return

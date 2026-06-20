@@ -1,6 +1,9 @@
 package public
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, public_name, state,
@@ -46,9 +49,21 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 		out[i].SLA24H = s.slaText(ctx, out[i].NodeID, 24)
 		out[i].SLA7D = s.slaText(ctx, out[i].NodeID, 24*7)
 		out[i].SLA30D = s.slaText(ctx, out[i].NodeID, 24*30)
+		out[i].PressureRatio = "暂无"
+		if s.Runtime != nil {
+			if pressure, err := s.Runtime.LatestPressureReport(out[i].NodeID); err == nil {
+				if ratio, ok := pressure["pressure_ratio"].(float64); ok {
+					out[i].PressureRatio = percentText(ratio)
+				}
+			}
+		}
 		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
 			FROM daily_node_traffic_stats WHERE node_id = ?`, out[i].NodeID).
 			Scan(&out[i].TotalSentBytes)
 	}
 	return out, nil
+}
+
+func percentText(value float64) string {
+	return fmt.Sprintf("%.0f%%", value*100)
 }

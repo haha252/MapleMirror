@@ -87,6 +87,7 @@ type NodeSummary struct {
 	SLA24H                string `json:"sla_24h"`
 	SLA7D                 string `json:"sla_7d"`
 	SLA30D                string `json:"sla_30d"`
+	PressureRatio         string `json:"pressure_ratio"`
 	TotalSentBytes        int64  `json:"total_sent_bytes"`
 	PublicDownloadBaseURL string `json:"-"`
 }

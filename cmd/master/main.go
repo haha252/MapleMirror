@@ -118,7 +118,6 @@ func main() {
 	}
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, projectLoader, &publicServer, logger)
-	startConsolePairing(cfg, repo, logger)
 
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{

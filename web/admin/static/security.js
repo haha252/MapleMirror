@@ -83,28 +83,31 @@
     currentAuth = document.getElementById("authorization-id").value.trim();
     if (!currentAuth) return a.setStatus("authorization_id 不能为空。");
     a.api("/admin/api/authorizations/" + encodeURIComponent(currentAuth)).then(function (data) {
-      document.getElementById("authorization-result").innerHTML = a.kv({
-        "授权": data.authorization_id, "资产": data.asset_id, "节点": data.node_id,
-        "状态": data.state, "客户端前缀": data.client_prefix,
-        "已入账": a.bytes(data.sent_bytes), "首次传输": data.first_transfer_at || "暂无",
-        "过期时间": data.expires_at
-      });
+      a.setStatus("授权 " + data.authorization_id + "：节点 " + data.node_id + "，已入账 " + a.bytes(data.sent_bytes));
       loadTraffic(1);
     }).catch(function (err) { a.setStatus(err.message); });
   }
 
+  function clearAuthorization() {
+    currentAuth = "";
+    document.getElementById("authorization-id").value = "";
+    loadTraffic(1);
+  }
+
   function loadTraffic(page) {
     trafficPage = page || trafficPage;
-    if (!currentAuth) return;
-    a.api("/admin/api/traffic/events?authorization_id=" + encodeURIComponent(currentAuth) + "&page=" + trafficPage + "&page_size=20").then(function (data) {
+    var query = currentAuth ? "?authorization_id=" + encodeURIComponent(currentAuth) + "&" : "?";
+    a.text("traffic-scope", currentAuth ? "授权 " + currentAuth : "最近事件");
+    a.api("/admin/api/traffic/events" + query + "page=" + trafficPage + "&page_size=20").then(function (data) {
       var rows = data.events || [];
       var box = document.getElementById("traffic-events");
-      box.innerHTML = rows.length ? '<table><thead><tr><th>节点</th><th>序号</th><th>字节</th><th>状态</th><th>入账</th></tr></thead><tbody>' +
+      box.innerHTML = '<table><thead><tr><th>授权</th><th>节点</th><th>序号</th><th>字节</th><th>状态</th><th>入账</th></tr></thead><tbody>' +
+        (rows.length ? 
         rows.map(function (item) {
-          return "<tr><td>" + a.esc(item.node_id) + "</td><td>" + a.esc(item.event_sequence) +
+          return "<tr><td>" + a.esc(item.authorization_id) + "</td><td>" + a.esc(item.node_id) + "</td><td>" + a.esc(item.event_sequence) +
             "</td><td>" + a.esc(a.bytes(item.sent_bytes)) + "</td><td>" + a.badge(item.status) +
             "</td><td>" + a.esc(item.accounted_at || "未入账") + "</td></tr>";
-        }).join("") + "</tbody></table>" : '<div class="muted">暂无流量事件</div>';
+        }).join("") : '<tr><td colspan="6" class="muted">暂无流量事件</td></tr>') + "</tbody></table>";
       pager(document.getElementById("traffic-pager"), data.pagination.page, data.pagination.total, data.pagination.page_size, loadTraffic);
     }).catch(function (err) { a.setStatus(err.message); });
   }
@@ -120,6 +123,13 @@
   document.getElementById("block-create").addEventListener("click", createBlock);
   document.getElementById("security-refresh").addEventListener("click", function () { loadSecurity(blockPage); loadAudit(auditPage); });
   document.getElementById("authorization-query").addEventListener("click", queryAuthorization);
+  document.getElementById("authorization-clear").addEventListener("click", clearAuthorization);
+  document.getElementById("authorization-id").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") queryAuthorization();
+  });
   loadSecurity(1);
   loadAudit(1);
+  loadTraffic(1);
+  a.autoRefresh(function () { loadSecurity(blockPage); loadAudit(auditPage); }, 30000);
+  a.autoRefresh(function () { loadTraffic(trafficPage); }, 15000);
 })();

@@ -1,0 +1,41 @@
+{{define "security"}}
+<section class="security-layout">
+  <div class="security-main">
+    <article class="panel-card admin-panel security-block-card">
+      <div class="admin-panel__head"><h2>手动封禁</h2></div>
+      <div class="security-form">
+        <label class="admin-field"><span>封禁类型</span><select id="block-kind" class="admin-select"><option value="client">公开下载客户端</option><option value="admin">管理登录来源</option></select></label>
+        <label class="admin-field"><span>IP / 前缀键</span><input id="block-key" type="text" placeholder="管理登录填单个 IP；公开下载填单 IP 或 IPv4 /24"></label>
+        <label class="admin-field"><span>封禁原因</span><input id="block-reason" type="text" placeholder="中文原因摘要"></label>
+        <label class="admin-field security-duration"><span>封禁时长</span><input id="block-duration" type="text" value="168h"></label>
+        <div class="security-form-actions"><button id="block-create" class="admin-primary" type="button">添加封禁</button></div>
+      </div>
+    </article>
+    <article class="panel-card admin-panel">
+      <div class="admin-panel__head"><h2>封禁列表</h2><div class="admin-actions"><button id="blocks-delete-selected" class="admin-secondary" type="button">解除选中</button><button id="security-refresh" class="admin-secondary" type="button">刷新</button></div></div>
+      <div class="admin-table-wrap"><table><thead><tr><th><input id="blocks-check-all" type="checkbox" aria-label="全选封禁"></th><th>类型</th><th>来源</th><th>原因</th><th>过期时间</th><th>操作</th></tr></thead><tbody id="blocks-body"></tbody></table></div>
+      <div id="blocks-pager" class="admin-pager"></div>
+    </article>
+    <article class="panel-card admin-panel">
+      <div class="admin-panel__head security-traffic-head">
+        <h2>流量事件</h2>
+        <div class="traffic-filter">
+          <input id="authorization-id" type="text" placeholder="authorization_id">
+          <button id="authorization-query" class="admin-secondary" type="button">查询</button>
+          <button id="authorization-clear" class="admin-secondary" type="button">最近</button>
+          <span id="traffic-scope" class="muted">最近事件</span>
+        </div>
+      </div>
+      <div id="traffic-events" class="admin-table-wrap"></div>
+      <div id="traffic-pager" class="admin-pager"></div>
+    </article>
+  </div>
+  <aside class="security-side">
+    <article class="panel-card admin-panel">
+      <div class="admin-panel__head"><h2>审计摘要</h2></div>
+      <div class="admin-table-wrap"><table><thead><tr><th>操作</th><th>目标</th><th>结果</th><th>时间</th></tr></thead><tbody id="audit-body"></tbody></table></div>
+      <div id="audit-pager" class="admin-pager"></div>
+    </article>
+  </aside>
+</section>
+{{end}}

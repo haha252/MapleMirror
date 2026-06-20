@@ -94,4 +94,5 @@
 
   document.getElementById("projects-save").addEventListener("click", function () { saveAll(); });
   loadProjects();
+  a.autoRefresh(loadProjects, 30000);
 })();

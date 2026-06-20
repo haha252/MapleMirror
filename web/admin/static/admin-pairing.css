@@ -1,0 +1,59 @@
+.pairing-code-chip {
+  max-width: min(68vw, 520px);
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.pairing-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 900;
+  width: min(94vw, 440px);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+}
+.pairing-toast[hidden] {
+  display: none;
+}
+.pairing-toast__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+.pairing-toast__head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.pairing-toast__body {
+  display: grid;
+  gap: 8px;
+  max-height: min(52vh, 420px);
+  padding: 12px;
+  overflow: auto;
+}
+.pairing-toast__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-muted) 72%, var(--panel));
+}
+.pairing-toast__item div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pairing-toast__item span,
+.pairing-toast__item small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

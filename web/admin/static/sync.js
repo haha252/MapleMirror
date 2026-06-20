@@ -220,6 +220,13 @@
 
   document.getElementById("scan-all").addEventListener("click", function () { runScan(""); });
   document.getElementById("task-node-select").addEventListener("change", function () { loadTasks(this.value, 1); });
+  document.getElementById("tasks-refresh").addEventListener("click", function () {
+    loadTasks(document.getElementById("task-node-select").value, taskPage);
+  });
   loadScans();
   loadNodes();
+  a.autoRefresh(loadScans, 20000);
+  a.autoRefresh(function () {
+    loadTasks(document.getElementById("task-node-select").value, taskPage);
+  }, 15000);
 })();

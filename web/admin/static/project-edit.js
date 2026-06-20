@@ -4,6 +4,7 @@
   var projects = [];
   var originalID = new URLSearchParams(location.search).get("id") || "";
   var currentProject = null;
+  var dirty = false;
 
   function val(p, name, fallback) {
     return p[name] != null ? p[name] : p[name.charAt(0).toLowerCase() + name.slice(1)] || fallback;
@@ -103,15 +104,30 @@
 
   document.addEventListener("click", function (event) {
     var add = event.target.closest("[data-rule-add]");
-    if (add) document.querySelector('[data-rules="' + add.getAttribute("data-rule-add") + '"]').insertAdjacentHTML("beforeend", ruleRow(add.getAttribute("data-rule-add"), {}));
-    if (event.target.closest("[data-rule-remove]")) event.target.closest(".rule-row").remove();
+    if (add) {
+      dirty = true;
+      document.querySelector('[data-rules="' + add.getAttribute("data-rule-add") + '"]').insertAdjacentHTML("beforeend", ruleRow(add.getAttribute("data-rule-add"), {}));
+    }
+    if (event.target.closest("[data-rule-remove]")) {
+      dirty = true;
+      event.target.closest(".rule-row").remove();
+    }
   });
+  document.addEventListener("input", function (event) { if (event.target.closest("#project-editor")) dirty = true; });
+  document.addEventListener("change", function (event) { if (event.target.closest("#project-editor")) dirty = true; });
   document.getElementById("project-save").addEventListener("click", save);
-  a.api("/admin/api/projects").then(function (data) {
-    projects = (data.Projects || data.projects || []).map(normalize);
-    var current = projects.find(function (p) { return p.ID === originalID; }) || normalize({});
-    currentProject = current;
-    a.text("project-edit-summary", originalID ? "正在编辑 " + originalID : "正在新增项目");
-    render(current);
-  }).catch(function (err) { a.setStatus(err.message); });
+
+  function loadProjects() {
+    if (dirty) return Promise.resolve();
+    return a.api("/admin/api/projects").then(function (data) {
+      projects = (data.Projects || data.projects || []).map(normalize);
+      var current = projects.find(function (p) { return p.ID === originalID; }) || normalize({});
+      currentProject = current;
+      a.text("project-edit-summary", originalID ? "正在编辑 " + originalID : "正在新增项目");
+      render(current);
+    }).catch(function (err) { a.setStatus(err.message); });
+  }
+
+  loadProjects();
+  a.autoRefresh(loadProjects, 30000);
 })();

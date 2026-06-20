@@ -1,0 +1,17 @@
+{{define "projects"}}
+<section class="admin-toolbar">
+  <a id="project-add" class="admin-primary admin-link-button" href="/admin/projects/new">新增项目</a>
+  <button id="projects-save" class="admin-secondary" type="button">保存全部项目</button>
+  <span id="projects-summary" class="muted">加载中</span>
+</section>
+<section id="project-grid" class="project-grid admin-project-grid"></section>
+{{end}}
+
+{{define "project-edit"}}
+<section class="admin-toolbar">
+  <a class="admin-secondary" href="/admin/projects">返回项目列表</a>
+  <button id="project-save" class="admin-primary" type="button">保存项目</button>
+  <span id="project-edit-summary" class="muted">加载中</span>
+</section>
+<section id="project-editor" class="project-editor-page"></section>
+{{end}}

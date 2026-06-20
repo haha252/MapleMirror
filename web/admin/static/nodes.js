@@ -3,11 +3,17 @@
   if (!a || a.page() !== "nodes") return;
   var currentNode = "";
 
+  function routeLabel(node) {
+    var state = String(node.connection_state || node.state || "").toLowerCase();
+    if (state === "offline" || state === "disabled") return "不路由";
+    return node.routing_ready ? "全量就绪" : "未全量就绪";
+  }
+
   function renderNodes(nodes) {
     var body = document.getElementById("nodes-body");
     if (!body) return;
     if (!nodes || !nodes.length) {
-      body.innerHTML = '<tr><td colspan="6" class="muted">暂无节点</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" class="muted">暂无节点</td></tr>';
       currentNode = "";
       return;
     }
@@ -19,7 +25,9 @@
         a.esc(node.public_name || node.node_id) +
         '</strong><span class="sub">' + a.esc(node.node_id) + "</span></td><td>" +
         a.badge(a.connectionLabel(state)) + "</td><td>" +
-        a.badge(node.routing_ready ? "全量就绪" : "未全量就绪") + "</td><td>" +
+        a.badge(routeLabel(node)) + "</td><td>" +
+        '<span class="metric-inline">' + a.esc(a.bandwidthText(node)) + "</span></td><td>" +
+        a.pressureMeter(node) + "</td><td>" +
         '<span data-node-priority-value="' + a.esc(node.node_id) + '">' +
         a.esc(node.download_priority == null ? 50 : node.download_priority) + "</span></td><td>" +
         a.esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
@@ -74,7 +82,7 @@
       row = document.createElement("tr");
       row.className = "admin-inline-detail-row";
       row.setAttribute("data-node-detail-row", nodeID);
-      row.innerHTML = '<td colspan="6"><div class="admin-inline-detail detail-stack"></div></td>';
+      row.innerHTML = '<td colspan="8"><div class="admin-inline-detail detail-stack"></div></td>';
       anchor.insertAdjacentElement("afterend", row);
     }
     var box = row.querySelector(".admin-inline-detail");
@@ -138,34 +146,9 @@
     }).catch(function (err) { a.setStatus(err.message); });
   }
 
-  function loadPairing() {
-    return a.api("/admin/api/pairing-requests").then(function (data) {
-      var body = document.getElementById("pairing-body");
-      if (!body) return;
-      var rows = data.requests || [];
-      if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="4" class="muted">暂无待审批登记</td></tr>';
-        return;
-      }
-      body.innerHTML = rows.map(function (item) {
-        var name = item.PublicName || item.public_name || "";
-        var fp = item.Fingerprint || item.fingerprint || "";
-        var id = item.ID || item.id;
-        return "<tr><td>" + a.esc(name) + "</td><td>" + a.esc(fp) +
-          "</td><td>" + a.esc(item.ExpiresAt || item.expires_at || "") +
-          '</td><td><div class="admin-actions"><button class="admin-secondary" data-pairing-action="approve" data-name="' +
-          a.esc(name) + '" data-fingerprint="' + a.esc(fp) + '" data-id="' + a.esc(id) +
-          '">批准</button><button class="admin-secondary" data-pairing-action="reject" data-id="' +
-          a.esc(id) + '">拒绝</button></div></td></tr>';
-      }).join("");
-    }).catch(function (err) { a.setStatus(err.message); });
-  }
-
   document.addEventListener("click", function (event) {
     var nodeButton = event.target.closest("[data-node-action]");
     if (nodeButton) return nodeAction(nodeButton);
-    var pairButton = event.target.closest("[data-pairing-action]");
-    if (pairButton) return pairingAction(pairButton);
   });
 
   function nodeAction(button) {
@@ -199,32 +182,18 @@
     });
   }
 
-  function pairingAction(button) {
-    var id = button.getAttribute("data-id");
-    var action = button.getAttribute("data-pairing-action");
-    a.confirmAction("登记请求", "确认" + (action === "approve" ? "批准" : "拒绝") + "该登记请求？", function () {
-      var payload = action === "approve" ? {
-        confirmed_public_name: button.getAttribute("data-name"),
-        confirmed_public_key_fingerprint: button.getAttribute("data-fingerprint")
-      } : {};
-      a.api("/admin/api/pairing-requests/" + encodeURIComponent(id) + "/" + action, {
-        method: "POST", body: JSON.stringify(payload)
-      }).then(function (data) { a.setStatus(data.message || "操作已完成"); loadPairing(); })
-        .catch(function (err) { a.setStatus(err.message); });
+  var pairingCreate = document.getElementById("pairing-create");
+  if (pairingCreate) {
+    pairingCreate.addEventListener("click", function () {
+      a.confirmAction("创建配对码", "确认创建一个 5 分钟有效的一次性配对码？", function () {
+        a.api("/admin/api/pairing-codes", { method: "POST", body: JSON.stringify({ ttl_seconds: 300 }) })
+          .then(function (data) {
+            a.infoDialog("配对码已创建", "过期时间：" + data.expires_at, data.pairing_code);
+          }).catch(function (err) { a.setStatus(err.message); });
+      });
     });
   }
 
-  document.getElementById("pairing-create").addEventListener("click", function () {
-    a.confirmAction("创建配对码", "确认创建一个 5 分钟有效的一次性配对码？", function () {
-      a.api("/admin/api/pairing-codes", { method: "POST", body: JSON.stringify({ ttl_seconds: 300 }) })
-        .then(function (data) {
-          var box = document.getElementById("pairing-code");
-          box.hidden = false;
-          box.textContent = "配对码：" + data.pairing_code + "，过期时间：" + data.expires_at;
-        }).catch(function (err) { a.setStatus(err.message); });
-    });
-  });
-
   loadNodes();
-  loadPairing();
+  a.autoRefresh(loadNodes, 3000);
 })();

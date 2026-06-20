@@ -34,15 +34,38 @@
     }).join("");
   }
 
-  a.api("/admin/api/overview").then(function (data) {
-    a.text("metric-auth", data.stats.authorization_count || 0);
-    a.text("metric-started", data.stats.transfer_started_count || 0);
-    a.text("metric-daily", a.bytes(data.stats.daily_sent_bytes));
-    a.text("metric-total", a.bytes(data.stats.total_sent_bytes));
-    renderNodeStats(data.node_stat || {});
-    renderScanAlerts(data.scans || []);
-    a.setStatus("");
-  }).catch(function (err) {
-    a.setStatus(err.message || "管理总览加载失败");
-  });
+  function renderNodes(nodes) {
+    var body = document.getElementById("overview-nodes-body");
+    if (!body) return;
+    if (!nodes || !nodes.length) {
+      body.innerHTML = '<tr><td colspan="4" class="muted">暂无节点</td></tr>';
+      return;
+    }
+    body.innerHTML = nodes.map(function (node) {
+      var state = node.connection_state || node.state;
+      return "<tr><td><strong>" + a.esc(node.public_name || node.node_id) +
+        '</strong><span class="sub">' + a.esc(node.node_id) + "</span></td><td>" +
+        a.badge(a.connectionLabel(state)) + "</td><td>" +
+        '<span class="metric-inline">' + a.esc(a.bandwidthText(node)) + "</span></td><td>" +
+        a.pressureMeter(node) + "</td></tr>";
+    }).join("");
+  }
+
+  function loadOverview() {
+    return a.api("/admin/api/overview").then(function (data) {
+      a.text("metric-auth", data.stats.authorization_count || 0);
+      a.text("metric-started", data.stats.transfer_started_count || 0);
+      a.text("metric-daily", a.bytes(data.stats.daily_sent_bytes));
+      a.text("metric-total", a.bytes(data.stats.total_sent_bytes));
+      renderNodeStats(data.node_stat || {});
+      renderNodes(data.nodes || []);
+      renderScanAlerts(data.scans || []);
+      a.setStatus("");
+    }).catch(function (err) {
+      a.setStatus(err.message || "管理总览加载失败");
+    });
+  }
+
+  loadOverview();
+  a.autoRefresh(loadOverview, 15000);
 })();

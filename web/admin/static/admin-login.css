@@ -1,0 +1,31 @@
+.page-admin-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+.admin-login {
+  width: min(92vw, 440px);
+}
+.admin-login__box {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+.admin-login__brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.admin-login__brand img {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+}
+.admin-login__brand h1 {
+  margin-bottom: 2px;
+  font-size: 24px;
+}
+.admin-login__brand p {
+  margin-bottom: 0;
+  color: var(--muted);
+}

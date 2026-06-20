@@ -1,15 +1,39 @@
-.admin-field input:not([type="checkbox"]):not([type="radio"]),
-.inline-form input:not([type="checkbox"]):not([type="radio"]),
-.rule-row input:not([type="checkbox"]):not([type="radio"]),
-.rule-row select,
-.admin-select {
+.admin-control {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 42px;
+  box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-muted);
   color: var(--text);
   font: inherit;
+  line-height: 1.35;
+}
+
+.admin-control[type="number"] {
+  appearance: textfield;
+}
+
+.admin-control:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 1px;
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+}
+
+.admin-field,
+.inline-form,
+.rule-row,
+.security-form,
+.traffic-filter {
+  min-width: 0;
+}
+
+.node-priority-save {
+  min-height: 42px;
 }
 
 .inline-form input[type="checkbox"],

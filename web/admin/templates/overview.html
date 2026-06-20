@@ -1,0 +1,24 @@
+{{define "overview"}}
+<section class="overview-top">
+  <div class="overview-metrics" aria-label="关键指标">
+    <article class="panel-card admin-metric"><span>今日授权</span><strong id="metric-auth">0</strong></article>
+    <article class="panel-card admin-metric"><span>今日传输</span><strong id="metric-started">0</strong></article>
+    <article class="panel-card admin-metric"><span>今日流量</span><strong id="metric-daily">0 B</strong></article>
+    <article class="panel-card admin-metric"><span>累计流量</span><strong id="metric-total">0 B</strong></article>
+  </div>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>节点摘要</h2><a class="admin-secondary" href="/admin/nodes">查看节点</a></div>
+    <div id="node-summary-grid" class="summary-grid"></div>
+  </article>
+</section>
+<section class="admin-extra overview-extra">
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>节点信息</h2><a class="admin-secondary" href="/admin/nodes">查看节点</a></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>节点</th><th>状态</th><th>带宽</th><th>压力</th></tr></thead><tbody id="overview-nodes-body"></tbody></table></div>
+  </article>
+  <article class="panel-card admin-panel">
+    <div class="admin-panel__head"><h2>扫描异常</h2><a class="admin-secondary" href="/admin/sync">查看同步</a></div>
+    <div class="admin-table-wrap"><table><thead><tr><th>项目</th><th>状态</th><th>摘要</th></tr></thead><tbody id="scan-alerts-body"></tbody></table></div>
+  </article>
+</section>
+{{end}}
