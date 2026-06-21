@@ -139,6 +139,11 @@ func (c Client) sendNextControlWork(conn net.Conn, reqID string,
 		return sent, err
 	}
 	next, sent, err = c.sendNextTrafficEvent(conn, reqID, state.sequence)
+	if err != nil || sent {
+		state.sequence = next
+		return sent, err
+	}
+	next, sent, err = c.sendNextAuthorizationStatusEvent(conn, reqID, state.sequence)
 	state.sequence = next
 	return sent, err
 }

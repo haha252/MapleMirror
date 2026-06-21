@@ -78,6 +78,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusUnauthorized, "下载令牌无效")
 		return
 	}
+	timing, err := h.beginAuthorization(claims)
+	if err != nil {
+		httpError(w, r, http.StatusUnauthorized, "下载令牌无效")
+		return
+	}
 	h.logDownloadRequestOnce(r, claims)
 	if !h.enter(claims.AuthorizationID, claims.RangeConcurrencyLimit) {
 		httpError(w, r, http.StatusTooManyRequests, "Range 并发数超过授权限制")
@@ -115,7 +120,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		map[string]string{"filename": filepath.Base(asset.RelativePath)}))
 	target := h.rateLimitedResponseWriter(r, w)
 	counter := &limitCountingWriter{ResponseWriter: target, handler: h,
-		authorizationID: claims.AuthorizationID, limit: limit, sent: sent}
+		authorizationID: claims.AuthorizationID, claims: claims, limit: limit,
+		sent: sent, timing: timing}
 	http.ServeContent(counter, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
 	if counter.bytes > 0 {
 		if err := h.recordTraffic(claims, asset.AssetID, requestid.FromContext(r.Context()), counter.bytes); err != nil && h.Logger != nil {

@@ -26,6 +26,9 @@ func repairYAML(data, example []byte, migrations ...yamlMigration) ([]byte, bool
 			changed = true
 		}
 	}
+	if pruneUnknownYAML(&current, &template) {
+		changed = true
+	}
 	if mergeMissingYAML(&current, &template) {
 		changed = true
 	}

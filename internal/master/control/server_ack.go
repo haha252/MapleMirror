@@ -22,6 +22,13 @@ func (s ControlServer) writeMessageAck(conn net.Conn, session Session, reqID str
 			Message:          "流量事件已入账",
 		})
 	}
+	if msg.MessageType == protocol.TypeAuthorizationStatusEvent {
+		messageType = protocol.TypeAuthorizationStatusAck
+		payload, _ = json.Marshal(protocol.AuthorizationStatusAck{
+			AcceptedSequence: result.AcceptedSequence,
+			Message:          "授权状态已确认",
+		})
+	}
 	return writeControlFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,
 		MessageType: messageType, SentAt: time.Now().UTC(),

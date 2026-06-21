@@ -181,3 +181,16 @@ type TrafficEventAck struct {
 	Duplicate        bool   `json:"duplicate"`
 	Message          string `json:"message"`
 }
+
+type AuthorizationStatusEvent struct {
+	AuthorizationID string    `json:"authorization_id"`
+	AssetID         string    `json:"asset_id"`
+	Status          string    `json:"status"`
+	Reason          string    `json:"reason,omitempty"`
+	OccurredAt      time.Time `json:"occurred_at"`
+}
+
+type AuthorizationStatusAck struct {
+	AcceptedSequence uint64 `json:"accepted_sequence"`
+	Message          string `json:"message"`
+}

@@ -27,17 +27,17 @@ type AuthorizationDebug struct {
 	TrafficRemainingBytes      map[string]int64
 }
 
-func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string) (IssuedAuthorization, AuthorizationDebug, error) {
-	auth, debug, _, err := s.issueAuthorization(ctx, c, ttl, reqID, nil)
+func (s *Store) IssueAuthorization(ctx context.Context, c Challenge, lifetime TokenLifetime, reqID string) (IssuedAuthorization, AuthorizationDebug, error) {
+	auth, debug, _, err := s.issueAuthorization(ctx, c, lifetime.normalized(), reqID, nil)
 	return auth, debug, err
 }
 
-func (s *Store) IssueSignedAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string,
+func (s *Store) IssueSignedAuthorization(ctx context.Context, c Challenge, lifetime TokenLifetime, reqID string,
 	sign func(downloadtoken.Claims) (string, error)) (IssuedAuthorization, AuthorizationDebug, string, error) {
-	return s.issueAuthorization(ctx, c, ttl, reqID, sign)
+	return s.issueAuthorization(ctx, c, lifetime.normalized(), reqID, sign)
 }
 
-func (s *Store) issueAuthorization(ctx context.Context, c Challenge, ttl time.Duration, reqID string,
+func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime TokenLifetime, reqID string,
 	sign func(downloadtoken.Claims) (string, error)) (IssuedAuthorization, AuthorizationDebug, string, error) {
 	locked, ok, busy := s.beginChallenge(c.ID)
 	if busy {
@@ -96,8 +96,10 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	if err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
-	expires := expiresAfter(ttl)
-	if err := insertAuthorization(ctx, tx, authID, c, asset.NodeID, maxBytes, rangeLimit, expires, reqID); err != nil {
+	issued := now.Format(time.RFC3339Nano)
+	expires := expiresAfter(now, lifetime.MaxDuration)
+	if err := insertAuthorization(ctx, tx, authID, c, asset.NodeID, maxBytes,
+		rangeLimit, issued, expires, reqID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
 	if err := insertReservation(ctx, tx, authID, day, maxBytes, reservationStatus, now, scopes); err != nil {
@@ -116,7 +118,11 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, ttl time.Du
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version, AuthorizationID: authID,
 		AssetID: c.AssetID, NodeID: asset.NodeID, ProjectID: asset.ProjectID,
 		System: asset.System, Architecture: asset.Architecture, ClientPrefix: c.ClientPrefixKey,
-		ExpiresAt: expires, MaxBytes: maxBytes, TrafficLimitBytes: trafficLimitBytes(maxBytes, trafficRemaining, exempt),
+		IssuedAt: issued, ExpiresAt: expires,
+		FirstConnectionSeconds: durationSeconds(lifetime.FirstConnectionTimeout),
+		IdleTimeoutSeconds:     durationSeconds(lifetime.IdleTimeout),
+		MaxDurationSeconds:     durationSeconds(lifetime.MaxDuration),
+		MaxBytes:               maxBytes, TrafficLimitBytes: trafficLimitBytes(maxBytes, trafficRemaining, exempt),
 		RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
 	debug := AuthorizationDebug{
 		ClientPrefix:               c.ClientPrefixKey,
@@ -229,22 +235,12 @@ func (s Store) rangeConcurrencyLimit() int {
 	return s.RangeLimit
 }
 
-func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge, nodeID string, size int64, rangeLimit int, expires, reqID string) error {
+func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge,
+	nodeID string, size int64, rangeLimit int, issued, expires, reqID string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO download_authorizations
 		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at,
 		max_bytes, range_limit, status, request_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
-		id, c.AssetID, nodeID, c.ClientPrefixKey, nowText(), expires, size, rangeLimit, reqID)
-	return err
-}
-
-func insertReservation(ctx context.Context, tx *sql.Tx, id, day string, size int64, status string, now time.Time, scopes [2]quotaScope) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO traffic_reservations
-		(authorization_id, scope_day, address_reserved_bytes, network_reserved_bytes,
-		settled_bytes, status, created_at, address_scope_kind, address_scope_key,
-		network_scope_kind, network_scope_key)
-		VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
-		id, day, size, size, status, now.Format(time.RFC3339Nano),
-		scopes[0].Kind, scopes[0].Key, scopes[1].Kind, scopes[1].Key)
+		id, c.AssetID, nodeID, c.ClientPrefixKey, issued, expires, size, rangeLimit, reqID)
 	return err
 }

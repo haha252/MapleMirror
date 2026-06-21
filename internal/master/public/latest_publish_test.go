@@ -89,7 +89,7 @@ func assertAuthorizationAsset(t *testing.T, store Store, wantAsset, wantURL stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-auth")
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-auth")
 	if err != nil {
 		t.Fatal(err)
 	}

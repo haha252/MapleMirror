@@ -57,10 +57,12 @@ type APIPoW struct {
 	ChallengeTTL    string `yaml:"challenge_ttl"`
 }
 type DownloadToken struct {
-	TTL                   string `yaml:"ttl"`
-	SigningPrivateKeyFile string `yaml:"signing_private_key_file"`
-	VerifyPublicKeyFile   string `yaml:"verify_public_key_file"`
-	SigningKeyFile        string `yaml:"signing_key_file"`
+	FirstConnectionTimeout string `yaml:"first_connection_timeout"`
+	IdleTimeout            string `yaml:"idle_timeout"`
+	MaxDuration            string `yaml:"max_duration"`
+	SigningPrivateKeyFile  string `yaml:"signing_private_key_file"`
+	VerifyPublicKeyFile    string `yaml:"verify_public_key_file"`
+	SigningKeyFile         string `yaml:"signing_key_file"`
 }
 type NodeControl struct {
 	HeartbeatTimeout           string `yaml:"heartbeat_timeout"`
@@ -124,7 +126,9 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 		warnDefault(warn, "api_pow.leading_zero_bits", "23")
 	}
 	setString(&c.APIPoW.ChallengeTTL, "2m", "api_pow.challenge_ttl", warn)
-	setString(&c.DownloadToken.TTL, "15m", "download_token.ttl", warn)
+	setString(&c.DownloadToken.FirstConnectionTimeout, "20s", "download_token.first_connection_timeout", warn)
+	setString(&c.DownloadToken.IdleTimeout, "120s", "download_token.idle_timeout", warn)
+	setString(&c.DownloadToken.MaxDuration, "30m", "download_token.max_duration", warn)
 	setString(&c.DownloadToken.SigningPrivateKeyFile, "secrets/download-token-ed25519.key", "download_token.signing_private_key_file", warn)
 	setString(&c.DownloadToken.VerifyPublicKeyFile, "secrets/download-token-ed25519.pub", "download_token.verify_public_key_file", warn)
 	setString(&c.Node.HeartbeatTimeout, "90s", "node.heartbeat_timeout", warn)
@@ -179,25 +183,7 @@ func validateMaster(c Master) error {
 	if err := validateLogging(c.Logging); err != nil {
 		return err
 	}
-	durations := map[string]string{
-		"database.busy_timeout":          c.Database.BusyTimeout,
-		"scan.interval":                  c.Scan.Interval,
-		"altcha.challenge_ttl":           c.ALTCHA.ChallengeTTL,
-		"api_pow.challenge_ttl":          c.APIPoW.ChallengeTTL,
-		"download_token.ttl":             c.DownloadToken.TTL,
-		"node.heartbeat_timeout":         c.Node.HeartbeatTimeout,
-		"node.heartbeat_offline_grace":   c.Node.HeartbeatOfflineGrace,
-		"node.heartbeat_interval":        c.Node.HeartbeatInterval,
-		"node.public_probe_interval":     c.Node.PublicProbeInterval,
-		"node.public_probe_timeout":      c.Node.PublicProbeTimeout,
-		"node.public_probe_ttl":          c.Node.PublicProbeTTL,
-		"node.enrollment_timeout":        c.Node.EnrollmentTimeout,
-		"node.pairing_code_ttl":          c.Node.PairingCodeTTL,
-		"admin.web.session_ttl":          c.Admin.Web.SessionTTL,
-		"admin.web.login_failure_window": c.Admin.Web.LoginFailureWindow,
-		"admin.web.login_ban_duration":   c.Admin.Web.LoginBanDuration,
-	}
-	for field, value := range durations {
+	for field, value := range masterDurations(c) {
 		if err := validDuration(field, value); err != nil {
 			return err
 		}

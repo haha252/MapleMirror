@@ -22,7 +22,7 @@ type Server struct {
 	ALTCHATTL        time.Duration
 	ALTCHADifficulty int
 	APITTL           time.Duration
-	TokenTTL         time.Duration
+	TokenLifetime    TokenLifetime
 	APIZeroBits      int
 	TrustedCIDRs     []string
 	Logger           *logging.Logger
@@ -37,7 +37,14 @@ type Server struct {
 	ResourceLimiter  *publicResourceLimiter
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL time.Duration,
+type TokenLifetime struct {
+	FirstConnectionTimeout time.Duration
+	IdleTimeout            time.Duration
+	MaxDuration            time.Duration
+}
+
+func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duration,
+	tokenLifetime TokenLifetime,
 	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
 	projects config.Projects, projectsPath, noticesPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
@@ -59,7 +66,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL, tokenTTL ti
 		ALTCHATTL:        altchaTTL,
 		ALTCHADifficulty: altchaDifficulty,
 		APITTL:           apiTTL,
-		TokenTTL:         tokenTTL,
+		TokenLifetime:    tokenLifetime,
 		APIZeroBits:      apiBits,
 		TrustedCIDRs:     trusted,
 		Logger:           logger,

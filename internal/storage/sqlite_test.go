@@ -43,7 +43,7 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	assertDBVersion(t, db, "master", 4)
+	assertDBVersion(t, db, "master", 5)
 	var legacyCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
 		t.Fatal(err)
@@ -62,6 +62,7 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertTable(t, db, "local_assets")
 	assertTable(t, db, "pending_traffic_events")
 	assertTable(t, db, "control_identity")
+	assertTable(t, db, "local_authorizations")
 	assertTable(t, db, "node_enrollment_state")
 	assertTable(t, db, "local_sync_tasks")
 	assertTable(t, db, "pending_sync_task_results")
@@ -71,7 +72,7 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertColumn(t, db, "control_identity", "private_key_pem")
 	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
 	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
-	assertDBVersion(t, db, "node", 3)
+	assertDBVersion(t, db, "node", 4)
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {

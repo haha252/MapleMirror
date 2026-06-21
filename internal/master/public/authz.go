@@ -31,7 +31,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		return
 	}
 	auth, debug, token, err := s.Store.IssueSignedAuthorization(r.Context(),
-		loaded, s.TokenTTL, requestID(r), s.Signer.Sign)
+		loaded, s.TokenLifetime, requestID(r), s.Signer.Sign)
 	if err != nil {
 		code, stable := http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR"
 		message := "下载授权签发失败"
@@ -146,6 +146,6 @@ func authorizationBearer(r *http.Request) string {
 	return ""
 }
 
-func expiresAfter(ttl time.Duration) string {
-	return time.Now().UTC().Add(ttl).Format(time.RFC3339Nano)
+func expiresAfter(now time.Time, ttl time.Duration) string {
+	return now.Add(ttl).Format(time.RFC3339Nano)
 }

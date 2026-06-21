@@ -93,6 +93,14 @@ func validateAckSequence(msg protocol.Envelope, sentSequence uint64) error {
 		if ack.AcceptedSequence < sentSequence {
 			return errors.New("主节点流量 ACK 序号未覆盖当前控制消息")
 		}
+	case protocol.TypeAuthorizationStatusAck:
+		var ack protocol.AuthorizationStatusAck
+		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+			return err
+		}
+		if ack.AcceptedSequence < sentSequence {
+			return errors.New("主节点授权状态 ACK 序号未覆盖当前控制消息")
+		}
 	}
 	return nil
 }

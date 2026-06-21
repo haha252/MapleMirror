@@ -27,7 +27,7 @@ func TestIssueAuthorizationWaitsForRouteRecovery(t *testing.T) {
 	}()
 
 	started := time.Now()
-	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestIssueAuthorizationReturnsNoRowsAfterRouteRecoveryTimeout(t *testing.T) 
 	mustExec(t, db, `UPDATE nodes SET public_download_base_url = '' WHERE id = 'node-1'`)
 
 	started := time.Now()
-	_, _, err = store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	_, _, err = store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != sql.ErrNoRows {
 		t.Fatalf("超时后应保持无可路由节点错误：%v", err)
 	}

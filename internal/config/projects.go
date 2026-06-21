@@ -82,6 +82,12 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 		SystemMatchEnabled:         raw.SystemMatchEnabled,
 		SystemRegex:                raw.SystemRegex,
 	}
+	if raw.AssetPipeline.Classify.hasRegexConfig() {
+		p.ArchitectureMatchEnabled = raw.AssetPipeline.Classify.Regex.ArchitectureMatchEnabled
+		p.ArchitectureRegex = raw.AssetPipeline.Classify.Regex.ArchitectureRegex
+		p.SystemMatchEnabled = raw.AssetPipeline.Classify.Regex.SystemMatchEnabled
+		p.SystemRegex = raw.AssetPipeline.Classify.Regex.SystemRegex
+	}
 	if raw.ArchitectureMatchEnabled || strings.TrimSpace(raw.ArchitectureRegex) != "" {
 		p.AssetPipeline.Classify.Regex.ArchitectureMatchEnabled = raw.ArchitectureMatchEnabled
 		p.AssetPipeline.Classify.Regex.ArchitectureRegex = raw.ArchitectureRegex
@@ -136,6 +142,9 @@ func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 	data, repaired, err := readYAMLWithRepair(path, &c, ProjectsExample, ProjectsRepairExample,
 		func(doc *yaml.Node) bool {
 			changed, found := migrateProjectsArchitectureDefault(doc)
+			if migrateProjectsLegacyRegex(doc) {
+				changed = true
+			}
 			legacyArchitectureDefault = legacyArchitectureDefault || found
 			return changed
 		})

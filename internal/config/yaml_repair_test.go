@@ -104,6 +104,47 @@ master:
 	}
 }
 
+func TestExistingYAMLPrunesUnknownKeys(t *testing.T) {
+	dir := t.TempDir()
+	masterPath := filepath.Join(dir, "config.yaml")
+	projectPath := filepath.Join(dir, "projects.yaml")
+	writeTestFile(t, masterPath, []byte(`server:
+  public_listen: ":8080"
+download_token:
+  ttl: "15m"
+  first_connection_timeout: "20s"
+  idle_timeout: "120s"
+  max_duration: "30m"
+  signing_private_key_file: "secrets/download-token-ed25519.key"
+  verify_public_key_file: "secrets/download-token-ed25519.pub"
+unused_root: true
+`))
+	writeTestFile(t, projectPath, []byte(`projects:
+  - id: a
+    name: 示例
+    repository: owner/repo
+    enabled: true
+    unused_project_key: true
+`))
+	if _, err := LoadMaster(masterPath, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadProjects(projectPath, nil); err != nil {
+		t.Fatal(err)
+	}
+	masterContent := readTestFile(t, masterPath)
+	if strings.Contains(masterContent, "\n  ttl:") ||
+		strings.Contains(masterContent, "\n    ttl:") ||
+		strings.Contains(masterContent, "unused_root") {
+		t.Fatalf("主配置多余字段应被删除：%s", masterContent)
+	}
+	projectContent := readTestFile(t, projectPath)
+	if strings.Contains(projectContent, "unused_project_key") ||
+		!strings.Contains(projectContent, "id: a") {
+		t.Fatalf("项目配置应只删除多余字段并保留项目条目：%s", projectContent)
+	}
+}
+
 func TestRepairDoesNotOverwriteInvalidConfiguration(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

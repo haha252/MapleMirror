@@ -64,6 +64,9 @@ func LoadProjectFile(path string, warn WarnFunc) (Project, error) {
 		return project, fmt.Errorf("解析项目配置文件失败：%w", err)
 	}
 	changed, found := migrateSingleProjectArchitectureDefault(&doc)
+	if migrateSingleProjectLegacyRegex(&doc) {
+		changed = true
+	}
 	if found {
 		warnDeprecated(warn, "projects[].architecture_default_enabled",
 			"projects[].architecture_match_enabled")

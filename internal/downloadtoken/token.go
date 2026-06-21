@@ -21,19 +21,23 @@ type Signer struct {
 }
 
 type Claims struct {
-	TokenVersion          string `json:"token_version"`
-	AuthorizationID       string `json:"authorization_id"`
-	AssetID               string `json:"asset_id"`
-	NodeID                string `json:"node_id"`
-	ProjectID             string `json:"project_id,omitempty"`
-	System                string `json:"system,omitempty"`
-	Architecture          string `json:"architecture,omitempty"`
-	ClientPrefix          string `json:"client_prefix"`
-	ExpiresAt             string `json:"expires_at"`
-	MaxBytes              int64  `json:"max_bytes"`
-	TrafficLimitBytes     int64  `json:"traffic_limit_bytes,omitempty"`
-	RangeConcurrencyLimit int    `json:"range_concurrency_limit"`
-	RequestID             string `json:"request_id"`
+	TokenVersion           string `json:"token_version"`
+	AuthorizationID        string `json:"authorization_id"`
+	AssetID                string `json:"asset_id"`
+	NodeID                 string `json:"node_id"`
+	ProjectID              string `json:"project_id,omitempty"`
+	System                 string `json:"system,omitempty"`
+	Architecture           string `json:"architecture,omitempty"`
+	ClientPrefix           string `json:"client_prefix"`
+	IssuedAt               string `json:"issued_at,omitempty"`
+	ExpiresAt              string `json:"expires_at"`
+	FirstConnectionSeconds int    `json:"first_connection_timeout_seconds,omitempty"`
+	IdleTimeoutSeconds     int    `json:"idle_timeout_seconds,omitempty"`
+	MaxDurationSeconds     int    `json:"max_duration_seconds,omitempty"`
+	MaxBytes               int64  `json:"max_bytes"`
+	TrafficLimitBytes      int64  `json:"traffic_limit_bytes,omitempty"`
+	RangeConcurrencyLimit  int    `json:"range_concurrency_limit"`
+	RequestID              string `json:"request_id"`
 }
 
 type ReplicationClaims struct {
@@ -160,6 +164,22 @@ func (s Signer) Verify(token string) (Claims, error) {
 		return out, errors.New("令牌已过期")
 	}
 	return out, nil
+}
+
+func (c Claims) Timing() (time.Time, time.Time, bool) {
+	expires, err := time.Parse(time.RFC3339Nano, c.ExpiresAt)
+	if err != nil {
+		return time.Time{}, time.Time{}, false
+	}
+	if c.IssuedAt == "" || c.FirstConnectionSeconds <= 0 ||
+		c.IdleTimeoutSeconds <= 0 || c.MaxDurationSeconds <= 0 {
+		return time.Time{}, expires, false
+	}
+	issued, err := time.Parse(time.RFC3339Nano, c.IssuedAt)
+	if err != nil {
+		return time.Time{}, expires, false
+	}
+	return issued, expires, true
 }
 
 func (s Signer) VerifyReplication(token string) (ReplicationClaims, error) {

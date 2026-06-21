@@ -3,18 +3,33 @@ package files
 import (
 	"io"
 	"net/http"
+	"time"
+
+	"mirror-server/internal/downloadtoken"
 )
 
 type limitCountingWriter struct {
 	http.ResponseWriter
 	handler         *Handler
 	authorizationID string
+	claims          downloadtoken.Claims
 	limit           int64
 	sent            int64
 	bytes           int64
+	timing          authorizationTiming
 }
 
 func (w *limitCountingWriter) Write(data []byte) (int, error) {
+	now := time.Now().UTC()
+	if !w.timing.MaxDeadline.IsZero() && now.After(w.timing.MaxDeadline) {
+		_ = w.handler.expireAuthorization(w.claims, authorizationStatusExpiredMaxDuration, now)
+		return 0, io.ErrShortWrite
+	}
+	if w.timing.IdleTimeout > 0 && !w.timing.LastWriteAt.IsZero() &&
+		now.Sub(w.timing.LastWriteAt) > w.timing.IdleTimeout {
+		_ = w.handler.expireAuthorization(w.claims, authorizationStatusExpiredIdle, now)
+		return 0, io.ErrShortWrite
+	}
 	grant := w.handler.claimAuthorizationBytes(w.authorizationID, w.limit, w.sent, int64(len(data)))
 	if grant <= 0 {
 		return 0, io.ErrShortWrite
@@ -24,6 +39,10 @@ func (w *limitCountingWriter) Write(data []byte) (int, error) {
 	}
 	n, err := w.ResponseWriter.Write(data)
 	w.bytes += int64(n)
+	if n > 0 {
+		w.timing.LastWriteAt = time.Now().UTC()
+		_ = w.handler.touchAuthorization(w.authorizationID, w.timing.LastWriteAt)
+	}
 	if err != nil {
 		return n, err
 	}

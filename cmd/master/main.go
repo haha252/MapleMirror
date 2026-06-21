@@ -102,10 +102,9 @@ func main() {
 		logger.Error(context.Background(), "下载令牌签发私钥加载失败", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
 	repo := mastercontrol.Repository{
 		DB: database, Logger: logger, Runtime: runtime,
-		ReplicationSigner: tokenSigner, ReplicationTokenTTL: tokenTTL,
+		ReplicationSigner:          tokenSigner,
 		PublicProbeNetworkFailures: cfg.Node.PublicProbeNetworkFailures,
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
@@ -167,9 +166,16 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 	signer downloadtoken.Signer) (public.Server, error) {
 	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
-	tokenTTL, _ := time.ParseDuration(cfg.DownloadToken.TTL)
+	firstConnectionTimeout, _ := time.ParseDuration(cfg.DownloadToken.FirstConnectionTimeout)
+	idleTimeout, _ := time.ParseDuration(cfg.DownloadToken.IdleTimeout)
+	maxDuration, _ := time.ParseDuration(cfg.DownloadToken.MaxDuration)
+	tokenLifetime := public.TokenLifetime{
+		FirstConnectionTimeout: firstConnectionTimeout,
+		IdleTimeout:            idleTimeout,
+		MaxDuration:            maxDuration,
+	}
 	logger.Info(context.Background(), "公共下载链路已启用")
-	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenTTL,
+	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenLifetime,
 		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
 		cfg.Proxy.TrustedCIDRs, projects, projectsPath, noticesPath, notices.Notices, runtime, logger,
 		cfg.Node.PublicProbeNetworkFailures)

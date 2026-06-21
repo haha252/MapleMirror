@@ -67,7 +67,7 @@ func prepareAuthorizationStatus(t *testing.T) (Server, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, _, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}

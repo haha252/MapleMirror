@@ -48,7 +48,7 @@ func TestOpenMasterBackfillsAdminBlockDisplayIPForExistingV1Database(t *testing.
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "admin_ip_blocks", "display_ip")
-	assertDBVersion(t, opened, "master", 4)
+	assertDBVersion(t, opened, "master", 5)
 }
 
 func TestOpenMasterBackfillsDownloadPriorityForExistingV3Database(t *testing.T) {
@@ -91,7 +91,7 @@ func TestOpenMasterBackfillsDownloadPriorityForExistingV3Database(t *testing.T) 
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "nodes", "download_priority")
-	assertDBVersion(t, opened, "master", 4)
+	assertDBVersion(t, opened, "master", 5)
 	var priority int
 	if err := opened.QueryRow(`SELECT download_priority FROM nodes WHERE id = 'node-1'`).Scan(&priority); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,8 @@ func TestOpenNodeBackfillsInventoryForceColumnForExistingV1Database(t *testing.T
 	defer opened.Close()
 	assertColumn(t, opened, "inventory_report_cursor", "force_report_requested_at")
 	assertColumn(t, opened, "pending_sync_task_results", "peer_fallback_attempted")
-	assertDBVersion(t, opened, "node", 3)
+	assertTable(t, opened, "local_authorizations")
+	assertDBVersion(t, opened, "node", 4)
 }
 
 func TestMissingUpgradeDoesNotAdvanceDatabaseVersion(t *testing.T) {
@@ -193,7 +194,7 @@ func TestFutureDatabaseVersionFailsWithoutChangingVersion(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	statements := []string{
 		`CREATE TABLE database_version (kind TEXT PRIMARY KEY, version INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
-		`INSERT INTO database_version(kind, version, updated_at) VALUES ('node', 4, '` + now + `')`,
+		`INSERT INTO database_version(kind, version, updated_at) VALUES ('node', 5, '` + now + `')`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {
@@ -215,5 +216,5 @@ func TestFutureDatabaseVersionFailsWithoutChangingVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer check.Close()
-	assertDBVersion(t, check, "node", 4)
+	assertDBVersion(t, check, "node", 5)
 }

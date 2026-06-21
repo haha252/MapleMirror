@@ -27,6 +27,14 @@ func openMaster(t *testing.T) *sql.DB {
 	return db
 }
 
+func testTokenLifetime(max time.Duration) TokenLifetime {
+	return TokenLifetime{
+		FirstConnectionTimeout: 20 * time.Second,
+		IdleTimeout:            120 * time.Second,
+		MaxDuration:            max,
+	}
+}
+
 func seedRoutableAsset(t *testing.T, db *sql.DB) {
 	t.Helper()
 	mustExec(t, db, `INSERT INTO projects

@@ -73,8 +73,12 @@ api_pow:
 
 # 下载令牌签发与验证密钥配置。
 download_token:
-  # 主节点签发的下载令牌有效时间。
-  ttl: "15m"
+  # 令牌签发后必须首次连接下载节点的时间窗口。
+  first_connection_timeout: "20s"
+  # 活跃授权在没有新请求、且传输中没有成功写出字节时的空闲超时。
+  idle_timeout: "120s"
+  # 从签发开始计算的最长授权时长，到期后下载节点会断开传输。
+  max_duration: "30m"
   # 主节点保存 Ed25519 私钥用于签发下载令牌，私钥不得分发给下载节点。
   signing_private_key_file: "secrets/download-token-ed25519.key"
   # 下载节点只需要同一对密钥的公钥来验证令牌。

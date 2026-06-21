@@ -41,7 +41,7 @@ func TestIssueAuthorizationAllowsFileReadyReplicaWhenNodeRoutingReadyFalse(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestRecentlyReconnectedNodeKeepsVerifiedReplicaRoutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, _, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestRemovedTargetIsUnavailableAndNotAuthorizable(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	_, _, err = store.IssueAuthorization(ctx, challenge, time.Minute, "req-auth")
+	_, _, err = store.IssueAuthorization(ctx, challenge, testTokenLifetime(time.Minute), "req-auth")
 	if err == nil {
 		t.Fatal("removed target should not issue authorization")
 	}
@@ -199,7 +199,7 @@ func TestIssueAuthorizationRejectsAfterProjectOrReleaseUnavailable(t *testing.T)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			defer cancel()
-			_, _, err = store.IssueAuthorization(ctx, challenge, time.Minute, "req-auth")
+			_, _, err = store.IssueAuthorization(ctx, challenge, testTokenLifetime(time.Minute), "req-auth")
 			if err == nil {
 				t.Fatal("unavailable asset should not issue authorization")
 			}

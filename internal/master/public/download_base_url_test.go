@@ -67,7 +67,7 @@ func TestIssueAuthorizationSkipsUnsafeDownloadBaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}

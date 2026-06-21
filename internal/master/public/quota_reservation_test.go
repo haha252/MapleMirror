@@ -18,7 +18,7 @@ func TestIssueAuthorizationIgnoresOutstandingTrafficReservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	_, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatalf("未结算预留不应参与事后限流：%v", err)
 	}
@@ -40,7 +40,7 @@ func TestIssueAuthorizationRejectsAfterActualTrafficLimitReached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2"); err != errTrafficLimit {
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2"); err != errTrafficLimit {
 		t.Fatalf("真实流量达到上限后应拒绝新授权：%v", err)
 	}
 }
@@ -57,7 +57,7 @@ func TestIssueAuthorizationCapsTokenByActualTrafficRemaining(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, _, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}

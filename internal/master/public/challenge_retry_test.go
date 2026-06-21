@@ -28,7 +28,7 @@ func TestAuthorizationFailureKeepsChallengeRetryable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err = store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	_, _, err = store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if !errors.Is(err, errRequestQuota) {
 		t.Fatalf("quota failure should be returned, got %v", err)
 	}
@@ -49,7 +49,7 @@ func TestSignedAuthorizationFailureKeepsChallengeRetryable(t *testing.T) {
 	signErr := errors.New("sign failed")
 
 	_, _, _, err = store.IssueSignedAuthorization(context.Background(), challenge,
-		time.Minute, "req-2", func(downloadtoken.Claims) (string, error) {
+		testTokenLifetime(time.Minute), "req-2", func(downloadtoken.Claims) (string, error) {
 			return "", signErr
 		})
 	if !errors.Is(err, signErr) {
@@ -69,7 +69,7 @@ func TestHTTPAuthorizationSignFailureKeepsChallengeRetryable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := Server{Store: store, TokenTTL: time.Minute}
+	server := Server{Store: store, TokenLifetime: testTokenLifetime(time.Minute)}
 	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/authorizations", nil)
 	req.RemoteAddr = "192.0.2.1:12345"
 	rec := httptest.NewRecorder()

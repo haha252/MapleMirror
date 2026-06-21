@@ -23,7 +23,7 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		t.Fatal("测试 nonce 未满足 PoW")
 	}
 
-	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestIssueAuthorizationUsesConfiguredRangeConcurrencyLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestIssueAuthorizationRejectsRequestQuotaExhausted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2")
+	_, _, err = store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
 	if err != errRequestQuota {
 		t.Fatalf("请求额度不足应拒绝授权：%v", err)
 	}
@@ -157,7 +157,7 @@ func TestIssueAuthorizationBypassesRequestQuotaForLoopback(t *testing.T) {
 		t.Fatal("测试 nonce 未满足 PoW")
 	}
 
-	if _, _, err := store.IssueAuthorization(context.Background(), challenge1, time.Minute, "req-2"); err != nil {
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge1, testTokenLifetime(time.Minute), "req-2"); err != nil {
 		t.Fatalf("白名单客户端首次授权失败：%v", err)
 	}
 	challenge2, err := store.CreateChallenge(context.Background(), "api_pow",
@@ -169,7 +169,7 @@ func TestIssueAuthorizationBypassesRequestQuotaForLoopback(t *testing.T) {
 	if !validLeadingZeros(challenge2, nonce) {
 		t.Fatal("第二个测试 nonce 未满足 PoW")
 	}
-	if _, _, err := store.IssueAuthorization(context.Background(), challenge2, time.Minute, "req-4"); err != nil {
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge2, testTokenLifetime(time.Minute), "req-4"); err != nil {
 		t.Fatalf("白名单客户端重复授权不应触发请求额度不足：%v", err)
 	}
 
@@ -203,7 +203,7 @@ func TestIssueAuthorizationBypassesTrafficLimitForLoopback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.IssueAuthorization(context.Background(), challenge, time.Minute, "req-2"); err != nil {
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2"); err != nil {
 		t.Fatalf("白名单客户端不应触发每日流量额度不足：%v", err)
 	}
 

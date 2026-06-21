@@ -60,8 +60,10 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	}
 	if event.SentBytes > 0 && !info.Started {
 		_, err = tx.ExecContext(ctx, `UPDATE download_authorizations
-			SET first_transfer_at = ? WHERE id = ? AND first_transfer_at IS NULL`,
-			now, event.AuthorizationID)
+			SET first_transfer_at = ?, status = CASE WHEN status = 'issued' THEN 'active' ELSE status END,
+				status_updated_at = CASE WHEN status = 'issued' THEN ? ELSE status_updated_at END
+			WHERE id = ? AND first_transfer_at IS NULL`,
+			now, now, event.AuthorizationID)
 		if err != nil {
 			return HeartbeatResult{}, err
 		}

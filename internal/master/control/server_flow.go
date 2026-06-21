@@ -104,6 +104,14 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 		}
 		result, err := s.Repo.AcceptTrafficEvent(context.Background(), session, msg.Sequence, event)
 		return controlMessageResult{HeartbeatResult: result}, err
+	case protocol.TypeAuthorizationStatusEvent:
+		var event protocol.AuthorizationStatusEvent
+		if err := json.Unmarshal(msg.Payload, &event); err != nil {
+			return controlMessageResult{}, err
+		}
+		result, err := s.Repo.AcceptAuthorizationStatusEvent(context.Background(),
+			session, msg.Sequence, event)
+		return controlMessageResult{HeartbeatResult: result}, err
 	default:
 		return controlMessageResult{}, fmt.Errorf("不支持的控制消息类型: %s", msg.MessageType)
 	}
