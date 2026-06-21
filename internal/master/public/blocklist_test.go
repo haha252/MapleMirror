@@ -53,6 +53,9 @@ func TestParseBlocklistFeed(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("订阅源应只保留有效 IP/CIDR：%+v", entries)
 	}
+	if entries[1].note != "comment" {
+		t.Fatalf("订阅源应保留 IP 前一行注释：%+v", entries)
+	}
 }
 
 func TestAutoBlockPersistsAndExpires(t *testing.T) {

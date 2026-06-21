@@ -145,6 +145,26 @@
 }
 ```
 
+### 3.4 封禁列表订阅
+
+`GET /api/public/v1/blocklist.txt`
+
+返回当前生效的公共下载封禁列表，格式为一行注释原因、一行 IP 或 CIDR。内容包含 `quota.yaml` 静态黑名单和本站手动/自动封禁记录，不包含远程订阅源快照。服务端缓存生成后的 txt 内容 60 秒，TTL 内重复请求不会重新查询和合并列表。
+
+响应头：
+
+```http
+Content-Type: text/plain; charset=utf-8
+Cache-Control: public, max-age=60, must-revalidate
+```
+
+示例：
+
+```txt
+# [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3
+2.59.169.232
+```
+
 ## 4. 下载接入方式
 
 公开下载分为两条线。网页、官网、论坛、公告页或前端页面里的下载按钮，推荐跳转主站验证页；命令行工具、自动更新器、CI 脚本、下载器或后端服务，使用程序 API 链路。

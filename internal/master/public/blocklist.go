@@ -1,7 +1,6 @@
 package public
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -33,6 +32,7 @@ type blocklistPolicy struct {
 type blocklistEntry struct {
 	prefix netip.Prefix
 	source string
+	note   string
 }
 
 type blocklistFeed struct {
@@ -174,27 +174,6 @@ func (p *blocklistPolicy) refreshFeed(feed blocklistFeed) {
 	p.mu.Lock()
 	p.feedItems[feed.url] = entries
 	p.mu.Unlock()
-}
-
-func parseBlocklistFeed(reader io.Reader, _ string) []blocklistEntry {
-	var entries []blocklistEntry
-	seen := map[string]struct{}{}
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := strings.TrimSpace(strings.Split(scanner.Text(), "#")[0])
-		if line == "" {
-			continue
-		}
-		if prefix, err := parseBlockPrefix(line); err == nil {
-			key := prefix.String()
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			entries = append(entries, blocklistEntry{prefix: prefix, source: line})
-		}
-	}
-	return entries
 }
 
 func parseBlockPrefix(raw string) (netip.Prefix, error) {

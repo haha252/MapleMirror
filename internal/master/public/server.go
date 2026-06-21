@@ -34,6 +34,7 @@ type Server struct {
 	NoticeStore      *noticeStore
 	PageViews        *pageViewTracker
 	Blocklist        *blocklistPolicy
+	BlocklistExport  *blocklistExportCache
 	ResourceLimiter  *publicResourceLimiter
 }
 
@@ -78,6 +79,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 		NoticeStore:      newNoticeStore(notices),
 		PageViews:        newPageViewTracker(),
 		Blocklist:        blocklist,
+		BlocklistExport:  newBlocklistExportCache(time.Minute),
 		ResourceLimiter:  newPublicResourceLimiter(quota),
 	}, nil
 }
@@ -177,6 +179,9 @@ func minDuration(values ...time.Duration) time.Duration {
 }
 
 func (s Server) Handler() http.Handler {
+	if s.BlocklistExport == nil {
+		s.BlocklistExport = newBlocklistExportCache(blocklistExportCacheTTL)
+	}
 	mux := http.NewServeMux()
 	if s.WebAssets != nil && s.WebAssets.staticFS != nil {
 		mux.Handle("/static/public/", immutableCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(s.WebAssets.staticFS)))))
@@ -192,6 +197,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
+	mux.HandleFunc("/api/public/v1/blocklist.txt", s.blocklistTXT)
 	mux.HandleFunc("/api/public/v1/catalog", s.catalog)
 	mux.Handle("/api/public/v1/stats", statsJSONCompression(http.HandlerFunc(s.statsAPI)))
 	mux.Handle("/api/public/v1/stats/details", statsJSONCompression(http.HandlerFunc(s.statsDetailsAPI)))

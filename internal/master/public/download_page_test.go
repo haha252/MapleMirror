@@ -224,6 +224,8 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/api/public/v1/projects/{project_id}/assets`,
 		`/api/public/v1/api/challenges`,
 		`/api/public/v1/api/authorizations`,
+		`/api/public/v1/blocklist.txt`,
+		`响应在服务端缓存 60 秒`,
 		`/{project_id}/{version}/{file_name}`,
 		`download_url`,
 		`Authorization: Bearer &lt;download_token&gt;`,
