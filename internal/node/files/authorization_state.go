@@ -28,8 +28,7 @@ func (h *Handler) beginAuthorization(claims downloadtoken.Claims) (authorization
 	issued, expires, ok := claims.Timing()
 	if !ok {
 		return authorizationTiming{StartedAt: time.Now().UTC(),
-			LastWriteAt: time.Now().UTC(), MaxDeadline: expires,
-			IdleTimeout: 0}, nil
+			LastWriteAt: time.Now().UTC()}, nil
 	}
 	now := time.Now().UTC()
 	firstTimeout := time.Duration(claims.FirstConnectionSeconds) * time.Second

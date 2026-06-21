@@ -30,6 +30,7 @@ func (w *limitCountingWriter) Write(data []byte) (int, error) {
 		_ = w.handler.expireAuthorization(w.claims, authorizationStatusExpiredIdle, now)
 		return 0, io.ErrShortWrite
 	}
+	w.setWriteDeadline(now)
 	grant := w.handler.claimAuthorizationBytes(w.authorizationID, w.limit, w.sent, int64(len(data)))
 	if grant <= 0 {
 		return 0, io.ErrShortWrite
@@ -50,6 +51,24 @@ func (w *limitCountingWriter) Write(data []byte) (int, error) {
 		return n, io.ErrShortWrite
 	}
 	return n, nil
+}
+
+func (w *limitCountingWriter) setWriteDeadline(now time.Time) {
+	deadline := w.timing.MaxDeadline
+	if w.timing.IdleTimeout > 0 {
+		idleDeadline := now.Add(w.timing.IdleTimeout)
+		if deadline.IsZero() || idleDeadline.Before(deadline) {
+			deadline = idleDeadline
+		}
+	}
+	if deadline.IsZero() {
+		return
+	}
+	_ = http.NewResponseController(w.ResponseWriter).SetWriteDeadline(deadline)
+}
+
+func (w *limitCountingWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (h *Handler) claimAuthorizationBytes(id string, limit, sent, want int64) int64 {

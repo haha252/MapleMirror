@@ -67,6 +67,9 @@ func LoadProjectFile(path string, warn WarnFunc) (Project, error) {
 	if migrateSingleProjectLegacyRegex(&doc) {
 		changed = true
 	}
+	if pruneProjectFileUnknownKeys(&doc) {
+		changed = true
+	}
 	if found {
 		warnDeprecated(warn, "projects[].architecture_default_enabled",
 			"projects[].architecture_match_enabled")
@@ -87,6 +90,14 @@ func LoadProjectFile(path string, warn WarnFunc) (Project, error) {
 		}
 	}
 	return project, nil
+}
+
+func pruneProjectFileUnknownKeys(doc *yaml.Node) bool {
+	var template yaml.Node
+	if err := yaml.Unmarshal(ProjectExample, &template); err != nil {
+		return false
+	}
+	return pruneUnknownYAML(doc, &template)
 }
 
 func cleanProjectFileEntry(value string) (string, bool, error) {

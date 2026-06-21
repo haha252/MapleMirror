@@ -29,3 +29,7 @@ type rateLimitedResponseWriter struct {
 func (w rateLimitedResponseWriter) Write(data []byte) (int, error) {
 	return w.writer.Write(data)
 }
+
+func (w rateLimitedResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}

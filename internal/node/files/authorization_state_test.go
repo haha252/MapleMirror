@@ -69,6 +69,21 @@ func TestLimitWriterExpiresAtMaxDuration(t *testing.T) {
 	assertLocalAuthorizationStatus(t, db, "auth-max", authorizationStatusExpiredMaxDuration)
 }
 
+func TestLegacyTokenDoesNotGetStreamingDeadline(t *testing.T) {
+	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
+		AuthorizationID: "auth-legacy", AssetID: "asset-1", NodeID: "node-1",
+		ClientPrefix: "192.0.2.1/32",
+		ExpiresAt:    time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
+		MaxBytes:     10, RangeConcurrencyLimit: 2, RequestID: "req-1"}
+	timing, err := (&Handler{}).beginAuthorization(claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !timing.MaxDeadline.IsZero() || timing.IdleTimeout != 0 {
+		t.Fatalf("旧令牌不应获得传输中断时限：%+v", timing)
+	}
+}
+
 func TestLimitWriterExpiresAfterIdleWriteWindow(t *testing.T) {
 	db, _, _ := prepareNodeFile(t)
 	handler := &Handler{DB: db}

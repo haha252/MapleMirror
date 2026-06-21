@@ -62,3 +62,9 @@ projects:
           system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
         # rules 按顺序应用；后命中的赋值可以覆盖前面规则的赋值。
         rules: []
+        # script 可选；用于通过 Starlark 脚本执行高级分类。
+        script:
+          # path 为相对当前项目配置文件的脚本路径。
+          path: ""
+          # inline 为内联脚本；通常建议使用 path 便于维护。
+          inline: ""
