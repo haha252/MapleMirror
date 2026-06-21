@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"log/slog"
 
 	nodeupgrades "mirror-server/internal/storage/upgrades/node"
 )
@@ -12,7 +13,7 @@ import (
 //go:embed migrations/master/*.sql migrations/node/*.sql
 var schemaFiles embed.FS
 
-func applyDatabaseVersion(db *sql.DB, kind string) error {
+func applyDatabaseVersion(db *sql.DB, kind string, opts openOptions) error {
 	plan, err := versionPlan(kind)
 	if err != nil {
 		return err
@@ -50,12 +51,18 @@ func applyDatabaseVersion(db *sql.DB, kind string) error {
 			return err
 		}
 	}
+	if version < plan.CurrentVersion && opts.versionLogger != nil {
+		opts.versionLogger(ctx(), "数据库需要升级",
+			slog.String("database_kind", plan.Kind),
+			slog.Int("current_version", version),
+			slog.Int("target_version", plan.CurrentVersion))
+	}
 	if plan.Kind == databaseKindNode && version == 1 {
 		if err := nodeupgrades.EnsureV1IdentityMaterials(ctx(), tx); err != nil {
 			return err
 		}
 	}
-	if _, err := applyVersionPlan(ctx(), tx, plan, version); err != nil {
+	if _, err := applyVersionPlan(ctx(), tx, plan, version, opts.versionLogger); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {

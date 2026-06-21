@@ -12,20 +12,20 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func OpenMaster(cfg config.Database) (*sql.DB, error) {
+func OpenMaster(cfg config.Database, options ...OpenOption) (*sql.DB, error) {
 	timeout, err := time.ParseDuration(cfg.BusyTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("数据库等待时间无效：%w", err)
 	}
 	wal := cfg.WAL != nil && *cfg.WAL
-	return open(cfg.Path, timeout, wal, databaseKindMaster)
+	return open(cfg.Path, timeout, wal, databaseKindMaster, collectOpenOptions(options))
 }
 
-func OpenNode(path string) (*sql.DB, error) {
-	return open(path, 5*time.Second, true, databaseKindNode)
+func OpenNode(path string, options ...OpenOption) (*sql.DB, error) {
+	return open(path, 5*time.Second, true, databaseKindNode, collectOpenOptions(options))
 }
 
-func open(path string, timeout time.Duration, wal bool, kind string) (*sql.DB, error) {
+func open(path string, timeout time.Duration, wal bool, kind string, opts openOptions) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("创建数据库目录失败：%w", err)
 	}
@@ -38,7 +38,7 @@ func open(path string, timeout time.Duration, wal bool, kind string) (*sql.DB, e
 		_ = db.Close()
 		return nil, err
 	}
-	if err := applyDatabaseVersion(db, kind); err != nil {
+	if err := applyDatabaseVersion(db, kind, opts); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

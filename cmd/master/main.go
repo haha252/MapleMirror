@@ -88,7 +88,7 @@ func main() {
 		logger.ConfigWarning(item[0], item[1])
 	}
 
-	database, err := storage.OpenMaster(cfg.Database)
+	database, err := storage.OpenMaster(cfg.Database, storage.WithVersionLogger(logger.Info))
 	if err != nil {
 		logger.Error(context.Background(), "数据库初始化失败，主节点无法启动", slog.String("error", err.Error()))
 		os.Exit(1)

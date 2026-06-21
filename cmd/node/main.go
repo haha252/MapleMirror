@@ -55,7 +55,7 @@ func main() {
 	for _, item := range warnings {
 		logger.ConfigWarning(item[0], item[1])
 	}
-	database, err := storage.OpenNode(cfg.Storage.StateDB)
+	database, err := storage.OpenNode(cfg.Storage.StateDB, storage.WithVersionLogger(logger.Info))
 	if err != nil {
 		logger.Error(context.Background(), "节点状态库初始化失败，下载节点无法就绪", slog.String("error", err.Error()))
 		os.Exit(1)

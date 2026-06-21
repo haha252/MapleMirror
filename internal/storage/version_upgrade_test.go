@@ -170,11 +170,15 @@ func TestMissingUpgradeDoesNotAdvanceDatabaseVersion(t *testing.T) {
 	if err := setVersion(tx, "test", 1); err != nil {
 		t.Fatal(err)
 	}
+	var events []versionLogEvent
 	_, err = applyVersionPlan(context.Background(), tx, databaseVersionPlan{
 		Kind: "test", CurrentVersion: 2,
-	}, 1)
+	}, 1, collectVersionLogEvents(&events))
 	if err == nil {
 		t.Fatal("expected missing upgrade to fail")
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected no version upgrade logs, got %+v", events)
 	}
 	var got int
 	if err := tx.QueryRow(`SELECT version FROM database_version WHERE kind = 'test'`).Scan(&got); err != nil {
