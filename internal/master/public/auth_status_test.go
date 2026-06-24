@@ -26,10 +26,25 @@ func TestAuthorizationStatusRequiresBearerToken(t *testing.T) {
 	}
 }
 
-func TestAuthorizationStatusAllowsDifferentClientPrefix(t *testing.T) {
+func TestAuthorizationStatusRejectsDifferentClientPrefix(t *testing.T) {
 	server, authID, token := prepareAuthorizationStatus(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/public/v1/authorizations/"+authID, nil)
 	req.RemoteAddr = "198.51.100.9:12345"
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.authorization(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"DOWNLOAD_TOKEN_INVALID"`) {
+		t.Fatalf("expected token error, body=%s", rec.Body.String())
+	}
+}
+
+func TestAuthorizationStatusAllowsMatchingClientPrefix(t *testing.T) {
+	server, authID, token := prepareAuthorizationStatus(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/public/v1/authorizations/"+authID, nil)
+	req.RemoteAddr = "192.0.2.1:12345"
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.authorization(rec, req)

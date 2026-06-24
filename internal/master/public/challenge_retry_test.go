@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,4 +88,38 @@ func TestHTTPAuthorizationSignFailureKeepsChallengeRetryable(t *testing.T) {
 	assertChallengeLoadable(t, store, challenge.ID)
 	assertPublicTableCount(t, db, "download_authorizations", 0)
 	assertPublicTableCount(t, db, "traffic_reservations", 0)
+}
+
+func TestHTTPAuthorizationRejectsDifferentClientPrefix(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := Store{DB: db}
+	challenge, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := Server{Store: store, Signer: testDownloadTokenSigner(t),
+		TokenLifetime: testTokenLifetime(time.Minute)}
+	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/authorizations", nil)
+	req.RemoteAddr = "198.51.100.9:12345"
+	rec := httptest.NewRecorder()
+
+	server.authorize(rec, req, challengeSubmit{
+		Kind:        "api_pow",
+		ChallengeID: challenge.ID,
+		AssetID:     "asset-1",
+		Solution:    solveNonce(challenge),
+	})
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"CHALLENGE_FAILED"`) {
+		t.Fatalf("expected challenge failure, body=%s", rec.Body.String())
+	}
+	assertChallengeLoadable(t, store, challenge.ID)
+	assertPublicTableCount(t, db, "download_authorizations", 0)
+	assertPublicTableCount(t, db, "traffic_reservations", 0)
+	assertPublicTableCount(t, db, "quota_buckets", 0)
 }

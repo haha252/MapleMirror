@@ -26,6 +26,10 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与资产不匹配")
 		return
 	}
+	if loaded.ClientPrefixKey != s.clientPrefix(r) {
+		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与客户端不匹配")
+		return
+	}
 	if !s.validSolution(loaded, normalizeSolution(in.Solution)) {
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战校验失败")
 		return
@@ -126,7 +130,7 @@ func (s Server) authorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if claims.AssetID != auth.AssetID || claims.NodeID != auth.NodeID ||
-		claims.ClientPrefix != auth.ClientPrefixKey {
+		claims.ClientPrefix != auth.ClientPrefixKey || claims.ClientPrefix != s.clientPrefix(r) {
 		writeError(w, r, http.StatusUnauthorized, "DOWNLOAD_TOKEN_INVALID", "下载令牌无效")
 		return
 	}
