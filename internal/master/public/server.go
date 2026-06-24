@@ -198,6 +198,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
 	mux.HandleFunc("/api/public/v1/blocklist.txt", s.blocklistTXT)
+	mux.HandleFunc("/api/public/v1/blocklist.json", s.blocklistJSON)
 	mux.HandleFunc("/api/public/v1/catalog", s.catalog)
 	mux.Handle("/api/public/v1/stats", statsJSONCompression(http.HandlerFunc(s.statsAPI)))
 	mux.Handle("/api/public/v1/stats/details", statsJSONCompression(http.HandlerFunc(s.statsDetailsAPI)))

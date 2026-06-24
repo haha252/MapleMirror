@@ -145,32 +145,13 @@
 }
 ```
 
-### 3.4 封禁列表订阅
-
-`GET /api/public/v1/blocklist.txt`
-
-返回当前生效的公共下载封禁列表，格式为一行注释原因、一行 IP 或 CIDR。内容包含 `quota.yaml` 静态黑名单和本站手动/自动封禁记录，不包含远程订阅源快照。服务端缓存生成后的 txt 内容 60 秒，TTL 内重复请求不会重新查询和合并列表。
-
-响应头：
-
-```http
-Content-Type: text/plain; charset=utf-8
-Cache-Control: public, max-age=60, must-revalidate
-```
-
-示例：
-
-```txt
-# [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3
-2.59.169.232
-```
-
 ## 4. 下载接入方式
 
 公开下载分为两条线。网页、官网、论坛、公告页或前端页面里的下载按钮，推荐跳转主站验证页；命令行工具、自动更新器、CI 脚本、下载器或后端服务，使用程序 API 链路。
 
 - [方式一：跳转主站验证页下载](#41-方式一跳转主站验证页下载)
 - [方式二：程序调用-api-下载](#42-方式二程序调用-api-下载)
+- [其他接口](#43-其他接口)
 
 ### 4.1 方式一：跳转主站验证页下载
 
@@ -305,6 +286,56 @@ Range: bytes=1048576-2097151
 ```
 
 `download_url` 通常指向下载节点。程序调用 API 的这条链路里，下载文件时访问节点地址是正确的；但网页按钮下载时，入口仍应该是主站验证页。
+
+### 4.3 其他接口
+
+下面这些接口不是“方式二：程序调用 API 下载”的步骤，只用于订阅、状态查询或排障。
+
+#### 4.3.1 封禁列表订阅
+
+`GET /api/public/v1/blocklist.txt`
+
+`GET /api/public/v1/blocklist.json`
+
+返回当前生效的公共下载封禁列表。内容包含 `quota.yaml` 静态黑名单和本站手动/自动封禁记录，不包含远程订阅源快照。服务端缓存生成后的封禁快照 60 秒，TTL 内重复请求不会重新查询和合并列表。
+
+TXT 响应头：
+
+```http
+Content-Type: text/plain; charset=utf-8
+Cache-Control: public, max-age=60, must-revalidate
+```
+
+TXT 示例：
+
+```txt
+# [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3
+2.59.169.232
+```
+
+JSON 示例：
+
+```json
+{
+  "status": "success",
+  "message": "查询成功",
+  "data": {
+    "cache_expires_at": "2026-06-21T12:01:00Z",
+    "blocks": [
+      {
+        "entry": "2.59.169.232",
+        "reason": "traffic_limit_exceeded",
+        "attempts_after_block": 3,
+        "blocked_at": "2026-06-21T12:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+#### 4.3.2 授权状态查询
+
+授权查询接口完整字段见[授权查询](#7-授权查询)。
 
 ## 5. 网页下载挑战授权接口
 

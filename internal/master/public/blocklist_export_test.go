@@ -2,6 +2,7 @@ package public
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -84,6 +85,55 @@ func TestBlocklistTXTHandler(t *testing.T) {
 	if !strings.Contains(body, "# [枫源镜像封禁] 封禁原因: static_blocklist") ||
 		!strings.Contains(body, "\n192.0.2.9\n") {
 		t.Fatalf("unexpected blocklist body: %s", body)
+	}
+}
+
+func TestBlocklistJSONHandler(t *testing.T) {
+	db := openMaster(t)
+	mustExec(t, db, `INSERT INTO client_blocks
+		(client_prefix_key, reason, source, blocked_at, expires_at,
+		attempts_after_block, last_attempt_at, updated_at)
+		VALUES ('192.0.2.9/32', 'traffic_limit_exceeded', 'local_auto_ban',
+		'2026-06-21T12:00:00Z', '2999-06-22T12:00:00Z', 3,
+		'2026-06-21T12:00:00Z', '2026-06-21T12:00:00Z')`)
+	policy := newBlocklistPolicy(config.Quota{}, nil)
+	policy.feedItems["https://feed.example.test/all.txt"] = []blocklistEntry{
+		{prefix: mustBlockPrefix(t, "2001:db8::/32"), source: "2001:db8::/32"},
+	}
+	srv := Server{Store: Store{DB: db}, Blocklist: policy}
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/public/v1/blocklist.json", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var body response
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("blocklist JSON should use standard response: %v body=%s", err, rec.Body.String())
+	}
+	data := body.Data.(map[string]any)
+	blocks := data["blocks"].([]any)
+	if len(blocks) != 1 {
+		t.Fatalf("expected only local block exported: %s", rec.Body.String())
+	}
+	block := blocks[0].(map[string]any)
+	if block["entry"] != "192.0.2.9" || block["reason"] != "traffic_limit_exceeded" {
+		t.Fatalf("unexpected JSON block: %s", rec.Body.String())
+	}
+	if block["blocked_at"] != "2026-06-21T12:00:00Z" {
+		t.Fatalf("JSON block should expose blocked_at: %s", rec.Body.String())
+	}
+	if _, ok := block["expires_at"]; ok {
+		t.Fatalf("JSON block should not expose expires_at: %s", rec.Body.String())
+	}
+	if _, ok := block["prefix"]; ok {
+		t.Fatalf("JSON block should not expose prefix: %s", rec.Body.String())
+	}
+	if _, ok := block["source"]; ok {
+		t.Fatalf("JSON block should not expose source: %s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "2001:db8") {
+		t.Fatalf("remote feed blocks should not be exported: %s", rec.Body.String())
 	}
 }
 

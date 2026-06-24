@@ -20,6 +20,7 @@ type blocklistExportEntry struct {
 	Source   string
 	Note     string
 	Attempts int64
+	Blocked  string
 	Expires  string
 }
 
@@ -27,6 +28,7 @@ type blocklistExportCache struct {
 	mu        sync.Mutex
 	ttl       time.Duration
 	expiresAt time.Time
+	entries   []blocklistExportEntry
 	body      []byte
 }
 
@@ -54,6 +56,19 @@ func (s Server) blocklistTXT(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) cachedBlocklistTXT(ctx context.Context, now time.Time) ([]byte, error) {
+	_, body, _, err := s.cachedBlocklistPayload(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func (s Server) cachedBlocklistSnapshot(ctx context.Context, now time.Time) ([]blocklistExportEntry, time.Time, error) {
+	entries, _, expiresAt, err := s.cachedBlocklistPayload(ctx, now)
+	return entries, expiresAt, err
+}
+
+func (s Server) cachedBlocklistPayload(ctx context.Context, now time.Time) ([]blocklistExportEntry, []byte, time.Time, error) {
 	cache := s.BlocklistExport
 	if cache == nil {
 		cache = newBlocklistExportCache(blocklistExportCacheTTL)
@@ -61,15 +76,16 @@ func (s Server) cachedBlocklistTXT(ctx context.Context, now time.Time) ([]byte, 
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 	if !cache.expiresAt.IsZero() && now.Before(cache.expiresAt) {
-		return append([]byte(nil), cache.body...), nil
+		return cloneBlocklistExportEntries(cache.entries), append([]byte(nil), cache.body...), cache.expiresAt, nil
 	}
 	entries, err := s.blocklistExportEntries(ctx, now)
 	if err != nil {
-		return nil, err
+		return nil, nil, time.Time{}, err
 	}
+	cache.entries = cloneBlocklistExportEntries(entries)
 	cache.body = renderBlocklistTXT(entries)
 	cache.expiresAt = now.Add(cache.ttl)
-	return append([]byte(nil), cache.body...), nil
+	return cloneBlocklistExportEntries(cache.entries), append([]byte(nil), cache.body...), cache.expiresAt, nil
 }
 
 func (s Server) blocklistExportEntries(ctx context.Context, now time.Time) ([]blocklistExportEntry, error) {
@@ -101,7 +117,7 @@ func (p *blocklistPolicy) exportEntries() []blocklistExportEntry {
 
 func (s Store) ActiveClientBlocks(ctx context.Context, now time.Time) ([]blocklistExportEntry, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT client_prefix_key, reason, source,
-		attempts_after_block, expires_at FROM client_blocks
+		attempts_after_block, blocked_at, expires_at FROM client_blocks
 		WHERE expires_at > ? ORDER BY client_prefix_key`, now.Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -109,9 +125,9 @@ func (s Store) ActiveClientBlocks(ctx context.Context, now time.Time) ([]blockli
 	defer rows.Close()
 	var entries []blocklistExportEntry
 	for rows.Next() {
-		var raw, reason, source, expires string
+		var raw, reason, source, blocked, expires string
 		var attempts int64
-		if err := rows.Scan(&raw, &reason, &source, &attempts, &expires); err != nil {
+		if err := rows.Scan(&raw, &reason, &source, &attempts, &blocked, &expires); err != nil {
 			return nil, err
 		}
 		prefix, err := parseBlockPrefix(raw)
@@ -119,7 +135,8 @@ func (s Store) ActiveClientBlocks(ctx context.Context, now time.Time) ([]blockli
 			continue
 		}
 		entries = append(entries, blocklistExportEntry{
-			Prefix: prefix, Reason: reason, Source: source, Attempts: attempts, Expires: expires,
+			Prefix: prefix, Reason: reason, Source: source, Attempts: attempts,
+			Blocked: blocked, Expires: expires,
 		})
 	}
 	if err := rows.Close(); err != nil {
@@ -149,6 +166,9 @@ func mergeBlocklistExportEntries(entries []blocklistExportEntry) []blocklistExpo
 		if entry.Attempts > current.Attempts {
 			current.Attempts = entry.Attempts
 		}
+		if current.Blocked == "" || (entry.Blocked != "" && entry.Blocked < current.Blocked) {
+			current.Blocked = entry.Blocked
+		}
 		if current.Expires == "" || (entry.Expires != "" && entry.Expires > current.Expires) {
 			current.Expires = entry.Expires
 		}
@@ -173,6 +193,15 @@ func renderBlocklistTXT(entries []blocklistExportEntry) []byte {
 		buf.WriteByte('\n')
 	}
 	return buf.Bytes()
+}
+
+func cloneBlocklistExportEntries(entries []blocklistExportEntry) []blocklistExportEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]blocklistExportEntry, len(entries))
+	copy(out, entries)
+	return out
 }
 
 func blocklistComment(entry blocklistExportEntry) string {

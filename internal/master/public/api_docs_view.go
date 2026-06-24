@@ -25,7 +25,7 @@ const apiDocsBody = `
     <div class="api-jump-links" aria-label="下载接入方式">
       <a href="#web-download-flow">方式一：跳转主站验证页下载</a>
       <a href="#api-download-flow">方式二：程序调用 API 下载</a>
-      <a href="#blocklist-feed">封禁列表订阅</a>
+      <a href="#other-public-apis">其他接口</a>
     </div>
   </section>
 
@@ -168,13 +168,28 @@ Authorization: Bearer &lt;download_token&gt;
 Range: bytes=1048576-2097151</code></pre>
   </section>
 
+  <section class="api-endpoint api-flow" id="other-public-apis">
+    <h2>其他接口</h2>
+    <p>下面这些接口不是程序下载流程的步骤，只用于订阅、状态查询或排障。</p>
+  </section>
+
   <section class="api-endpoint" id="blocklist-feed">
     <h2>封禁列表订阅</h2>
     <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/blocklist.txt</code></div>
-    <p>返回当前生效的公共下载封禁列表，格式为一行注释原因、一行 IP 或 CIDR。内容包含 <code>quota.yaml</code> 静态黑名单和本站手动/自动封禁记录，不包含远程订阅源快照，响应在服务端缓存 60 秒。</p>
-    <p class="api-label">Example Response</p>
+    <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/blocklist.json</code></div>
+    <p>返回当前生效的公共下载封禁列表。内容包含 <code>quota.yaml</code> 静态黑名单和本站手动/自动封禁记录，不包含远程订阅源快照，响应在服务端缓存 60 秒。</p>
+    <p class="api-label">TXT Example Response</p>
     <pre><code># [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3
 2.59.169.232</code></pre>
+    <p class="api-label">JSON Example Response</p>
+    <pre><code>{
+  "status": "success",
+  "data": {
+    "blocks": [
+      {"entry": "2.59.169.232", "reason": "traffic_limit_exceeded", "attempts_after_block": 3, "blocked_at": "2026-06-21T12:00:00Z"}
+    ]
+  }
+}</code></pre>
   </section>
 
   <section class="api-endpoint">
