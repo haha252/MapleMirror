@@ -61,6 +61,7 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
 	maxBytes := s.maxBytesPolicy().maxBytes(asset.SizeBytes)
+	trafficLimit := maxBytes
 	rangeLimit := s.rangeConcurrencyLimit()
 	now := time.Now().UTC()
 	scopes, err := quotaScopes(c.ClientPrefixKey)
@@ -88,9 +89,11 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 		reservationStatus = "exempt"
 	}
 	if !exempt {
-		if err := quota.reserve(ctx, tx, day, scopes); err != nil {
+		reservedBytes, err := quota.reserve(ctx, tx, day, scopes, maxBytes)
+		if err != nil {
 			return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 		}
+		trafficLimit = reservedBytes
 	}
 	authID, err := requestid.New()
 	if err != nil {
@@ -102,7 +105,7 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 		rangeLimit, issued, expires, reqID); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
-	if err := insertReservation(ctx, tx, authID, day, maxBytes, reservationStatus, now, scopes); err != nil {
+	if err := insertReservation(ctx, tx, authID, day, trafficLimit, reservationStatus, now, scopes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
 	if err := upsertProjectStats(ctx, tx, day, asset.ProjectID, 1, 0, 0); err != nil {
@@ -122,7 +125,7 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 		FirstConnectionSeconds: durationSeconds(lifetime.FirstConnectionTimeout),
 		IdleTimeoutSeconds:     durationSeconds(lifetime.IdleTimeout),
 		MaxDurationSeconds:     durationSeconds(lifetime.MaxDuration),
-		MaxBytes:               maxBytes, TrafficLimitBytes: trafficLimitBytes(maxBytes, trafficRemaining, exempt),
+		MaxBytes:               maxBytes, TrafficLimitBytes: trafficLimitBytes(trafficLimit, exempt),
 		RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
 	debug := AuthorizationDebug{
 		ClientPrefix:               c.ClientPrefixKey,
@@ -152,15 +155,9 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	return IssuedAuthorization{Claims: claims}, debug, token, nil
 }
 
-func trafficLimitBytes(maxBytes int64, remaining map[string]int64, exempt bool) int64 {
+func trafficLimitBytes(limit int64, exempt bool) int64 {
 	if exempt {
 		return 0
-	}
-	limit := maxBytes
-	for _, value := range remaining {
-		if value > 0 && value < limit {
-			limit = value
-		}
 	}
 	return limit
 }

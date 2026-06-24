@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestIssueAuthorizationIgnoresOutstandingTrafficReservation(t *testing.T) {
+func TestIssueAuthorizationRejectsOutstandingTrafficReservationAtLimit(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	now := time.Now().UTC()
@@ -18,13 +18,40 @@ func TestIssueAuthorizationIgnoresOutstandingTrafficReservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
-	if err != nil {
-		t.Fatalf("未结算预留不应参与事后限流：%v", err)
+	if _, _, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2"); err != errTrafficLimit {
+		t.Fatalf("未结算预留占满额度时应拒绝新授权：%v", err)
 	}
-	if debug.TrafficRemainingBytes["ipv4_32"] != 24 {
-		t.Fatalf("剩余额度应只按真实入账计算：remaining=%d",
+	assertPublicTableCount(t, db, "download_authorizations", 1)
+}
+
+func TestIssueAuthorizationNarrowsTokenByOutstandingTrafficReservation(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	now := time.Now().UTC()
+	seedTrafficReservation(t, db, now, "auth-old", now.Add(time.Minute), 0)
+
+	store := Store{DB: db, Quota: tinyTrafficQuota(36)}
+	challenge, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, debug, err := store.IssueAuthorization(context.Background(), challenge, testTokenLifetime(time.Minute), "req-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth.Claims.MaxBytes != 24 || auth.Claims.TrafficLimitBytes != 12 {
+		t.Fatalf("授权应保留资产上限并按未预留额度收窄流量上限：claims=%+v", auth.Claims)
+	}
+	if debug.TrafficRemainingBytes["ipv4_32"] != 0 {
+		t.Fatalf("剩余额度应包含新旧预留：remaining=%d",
 			debug.TrafficRemainingBytes["ipv4_32"])
+	}
+	var reserved int64
+	err = db.QueryRow(`SELECT address_reserved_bytes FROM traffic_reservations
+		WHERE authorization_id = ?`, auth.Claims.AuthorizationID).Scan(&reserved)
+	if err != nil || reserved != 12 {
+		t.Fatalf("新授权应只预留剩余额度：reserved=%d err=%v", reserved, err)
 	}
 }
 

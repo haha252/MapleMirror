@@ -155,20 +155,22 @@ func statDay(t time.Time, loc *time.Location) string {
 	return t.In(loc).Format("2006-01-02")
 }
 
-func (p quotaPolicy) reserve(ctx context.Context, tx *sql.Tx, day string, scopes [2]quotaScope) error {
+func (p quotaPolicy) reserve(ctx context.Context, tx *sql.Tx, day string, scopes [2]quotaScope, size int64) (int64, error) {
+	reserved := size
 	for _, scope := range scopes {
-		var accounted int64
-		err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
-			FROM daily_traffic_stats WHERE stat_day = ? AND scope_kind = ?
-			AND scope_key = ?`, day, scope.Kind, scope.Key).Scan(&accounted)
+		used, err := trafficUsed(ctx, tx, day, scope)
 		if err != nil {
-			return err
+			return 0, err
 		}
-		if accounted >= p.daily[scope.Kind] {
-			return errTrafficLimit
+		remaining := p.daily[scope.Kind] - used
+		if remaining <= 0 {
+			return 0, errTrafficLimit
+		}
+		if remaining < reserved {
+			reserved = remaining
 		}
 	}
-	return nil
+	return reserved, nil
 }
 
 func (p quotaPolicy) snapshot(ctx context.Context, tx *sql.Tx, day string, scopes [2]quotaScope) (map[string]int64, map[string]int64, error) {
@@ -181,17 +183,44 @@ func (p quotaPolicy) snapshot(ctx context.Context, tx *sql.Tx, day string, scope
 			return nil, nil, err
 		}
 		requestRemaining[scope.Kind] = tokens
-		var accounted int64
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
-			FROM daily_traffic_stats WHERE stat_day = ? AND scope_kind = ?
-			AND scope_key = ?`, day, scope.Kind, scope.Key).Scan(&accounted); err != nil {
+		used, err := trafficUsed(ctx, tx, day, scope)
+		if err != nil {
 			return nil, nil, err
 		}
-		remaining := p.daily[scope.Kind] - accounted
+		remaining := p.daily[scope.Kind] - used
 		if remaining < 0 {
 			remaining = 0
 		}
 		trafficRemaining[scope.Kind] = remaining
 	}
 	return requestRemaining, trafficRemaining, nil
+}
+
+func trafficUsed(ctx context.Context, tx *sql.Tx, day string, scope quotaScope) (int64, error) {
+	var accounted int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
+		FROM daily_traffic_stats WHERE stat_day = ? AND scope_kind = ?
+		AND scope_key = ?`, day, scope.Kind, scope.Key).Scan(&accounted); err != nil {
+		return 0, err
+	}
+	var reserved int64
+	switch scope.Kind {
+	case "ipv4_32", "ipv6_128":
+		err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(MAX(address_reserved_bytes - settled_bytes, 0)), 0)
+			FROM traffic_reservations WHERE scope_day = ? AND status = 'active'
+			AND address_scope_kind = ? AND address_scope_key = ?`,
+			day, scope.Kind, scope.Key).Scan(&reserved)
+		if err != nil {
+			return 0, err
+		}
+	case "ipv4_24", "ipv6_64":
+		err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(MAX(network_reserved_bytes - settled_bytes, 0)), 0)
+			FROM traffic_reservations WHERE scope_day = ? AND status = 'active'
+			AND network_scope_kind = ? AND network_scope_key = ?`,
+			day, scope.Kind, scope.Key).Scan(&reserved)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return accounted + reserved, nil
 }
