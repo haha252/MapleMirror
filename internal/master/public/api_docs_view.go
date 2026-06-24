@@ -6,6 +6,10 @@ import (
 )
 
 func (s Server) apiDocsPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
 	s.trackPageView(w, r)
 	s.renderPage(w, pageData{
 		Title:        "API 文档",
@@ -171,6 +175,24 @@ Range: bytes=1048576-2097151</code></pre>
   <section class="api-endpoint api-flow" id="other-public-apis">
     <h2>其他接口</h2>
     <p>下面这些接口不是程序下载流程的步骤，只用于订阅、状态查询或排障。</p>
+  </section>
+
+  <section class="api-endpoint" id="catalog-api">
+    <h2>首页聚合目录</h2>
+    <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/catalog</code></div>
+    <p>返回主站首页和外部下载列表可直接使用的项目与资产聚合数据，避免按项目逐个请求资产列表。响应带有 <code>ETag</code>，客户端带 <code>If-None-Match</code> 命中时返回 <code>304 Not Modified</code>。</p>
+    <p class="api-label">Example Response</p>
+    <pre><code>{
+  "projects": [
+    {
+      "project_id": "example",
+      "display_name": "示例项目",
+      "available": true,
+      "default_version": "v1.2.3",
+      "assets": []
+    }
+  ]
+}</code></pre>
   </section>
 
   <section class="api-endpoint" id="blocklist-feed">

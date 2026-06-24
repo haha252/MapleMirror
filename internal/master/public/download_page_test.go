@@ -226,6 +226,10 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/api/public/v1/projects/{project_id}/assets`,
 		`/api/public/v1/api/challenges`,
 		`/api/public/v1/api/authorizations`,
+		`/api/public/v1/catalog`,
+		`ETag`,
+		`If-None-Match`,
+		`304 Not Modified`,
 		`/api/public/v1/blocklist.txt`,
 		`/api/public/v1/blocklist.json`,
 		`/{project_id}/{version}/{file_name}`,
@@ -246,5 +250,25 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 	about := strings.Index(body, `href="/about"`)
 	if home < 0 || stats < 0 || docs < 0 || about < 0 || !(home < stats && stats < docs && docs < about) {
 		t.Fatalf("expected nav order home, stats, API docs, about: %s", body)
+	}
+}
+
+func TestAPIDocsPageRejectsNonGETWithoutPageView(t *testing.T) {
+	db := openMaster(t)
+	srv := Server{Store: Store{DB: db}}
+	req := httptest.NewRequest(http.MethodPost, "/api-docs", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"INVALID_REQUEST"`) {
+		t.Fatalf("expected JSON method error, body=%s", rec.Body.String())
+	}
+	var rows int
+	err := db.QueryRow(`SELECT COUNT(*) FROM daily_site_stats`).Scan(&rows)
+	if err != nil || rows != 0 {
+		t.Fatalf("non-GET /api-docs should not count page view: rows=%d err=%v", rows, err)
 	}
 }
