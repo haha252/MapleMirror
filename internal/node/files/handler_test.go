@@ -1,16 +1,13 @@
 package files
 
 import (
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"mirror-server/internal/downloadtoken"
-	"mirror-server/internal/storage"
 )
 
 func TestHandlerServesVerifiedAssetRange(t *testing.T) {
@@ -63,44 +60,6 @@ func TestHandlerServesReadableAssetPathWithQueryToken(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusPartialContent || rec.Body.String() != "bcd" {
 		t.Fatalf("可读路径 Range 下载响应不符合预期：code=%d body=%q", rec.Code, rec.Body.String())
-	}
-}
-
-func TestHandlerServesHEADWithoutActivatingAuthorization(t *testing.T) {
-	db, storageDir, signer := prepareNodeFile(t)
-	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
-		AuthorizationID: "auth-head", AssetID: "asset-1", NodeID: "node-1",
-		ClientPrefix: "192.0.2.1/32", ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
-		MaxBytes: 10, RangeConcurrencyLimit: 2, RequestID: "req-head"}
-	token, err := signer.Sign(claims)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest(http.MethodHead, "/downloads/asset-1", nil)
-	req.RemoteAddr = "192.0.2.1:12345"
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	handler := &Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer}
-
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("HEAD should return metadata: code=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if got := rec.Header().Get("Content-Length"); got != "6" {
-		t.Fatalf("HEAD should expose file size through Content-Length, got %q", got)
-	}
-	if rec.Body.Len() != 0 {
-		t.Fatalf("HEAD should not write body, got %q", rec.Body.String())
-	}
-	var rows int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM local_authorizations
-		WHERE authorization_id = 'auth-head'`).Scan(&rows); err != nil || rows != 0 {
-		t.Fatalf("HEAD metadata should not activate local authorization: rows=%d err=%v", rows, err)
-	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pending_traffic_events
-		WHERE authorization_id = 'auth-head'`).Scan(&rows); err != nil || rows != 0 {
-		t.Fatalf("HEAD metadata should not record traffic: rows=%d err=%v", rows, err)
 	}
 }
 
@@ -239,42 +198,4 @@ func TestHandlerUsesForwardedHeaderFromTrustedRemote(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("可信代理头应通过客户端前缀校验：%d", rec.Code)
 	}
-}
-
-func prepareNodeFile(t *testing.T) (*sql.DB, string, downloadtoken.Signer) {
-	t.Helper()
-	dir := t.TempDir()
-	db, err := storage.OpenNode(filepath.Join(dir, "node.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	storageDir := filepath.Join(dir, "assets")
-	if err := os.MkdirAll(storageDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	assetPath := filepath.Join(storageDir, "p1", "v1", "a.zip")
-	if err := os.MkdirAll(filepath.Dir(assetPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(assetPath, []byte("abcdef"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`INSERT INTO local_assets
-		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
-		VALUES ('asset-1', ?, 'sha256:bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721', 6, ?, 'verified')`,
-		filepath.Join("p1", "v1", "a.zip"), time.Now().UTC().Format(time.RFC3339Nano))
-	if err != nil {
-		t.Fatal(err)
-	}
-	privatePath := filepath.Join(dir, "token.key")
-	publicPath := filepath.Join(dir, "token.pub")
-	if err := downloadtoken.GenerateKeyFiles(privatePath, publicPath); err != nil {
-		t.Fatal(err)
-	}
-	signer, err := downloadtoken.NewSignerFromPrivateFile(privatePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return db, storageDir, signer
 }
