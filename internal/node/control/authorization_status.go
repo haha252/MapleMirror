@@ -78,7 +78,9 @@ func (c Client) sendAuthorizationStatusEvent(conn net.Conn, reqID string, sequen
 		return sequence, err
 	}
 	_, err = c.DB.Exec(`UPDATE local_authorizations SET reported_at = ?
-		WHERE authorization_id = ?`, time.Now().UTC().Format(time.RFC3339Nano),
-		event.AuthorizationID)
+		WHERE authorization_id = ? AND status = ? AND reason = ?
+		AND updated_at = ? AND reported_at IS NULL`,
+		time.Now().UTC().Format(time.RFC3339Nano), event.AuthorizationID,
+		event.Status, event.Reason, event.OccurredAt.Format(time.RFC3339Nano))
 	return next, err
 }
