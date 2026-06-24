@@ -66,7 +66,7 @@ func TestHandlerServesReadableAssetPathWithQueryToken(t *testing.T) {
 	}
 }
 
-func TestHandlerRejectsHEADWithoutActivatingAuthorization(t *testing.T) {
+func TestHandlerServesHEADWithoutActivatingAuthorization(t *testing.T) {
 	db, storageDir, signer := prepareNodeFile(t)
 	claims := downloadtoken.Claims{TokenVersion: downloadtoken.Version,
 		AuthorizationID: "auth-head", AssetID: "asset-1", NodeID: "node-1",
@@ -84,17 +84,23 @@ func TestHandlerRejectsHEADWithoutActivatingAuthorization(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("HEAD should be rejected: code=%d body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HEAD should return metadata: code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Length"); got != "6" {
+		t.Fatalf("HEAD should expose file size through Content-Length, got %q", got)
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("HEAD should not write body, got %q", rec.Body.String())
 	}
 	var rows int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM local_authorizations
 		WHERE authorization_id = 'auth-head'`).Scan(&rows); err != nil || rows != 0 {
-		t.Fatalf("HEAD should not activate local authorization: rows=%d err=%v", rows, err)
+		t.Fatalf("HEAD metadata should not activate local authorization: rows=%d err=%v", rows, err)
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM pending_traffic_events
 		WHERE authorization_id = 'auth-head'`).Scan(&rows); err != nil || rows != 0 {
-		t.Fatalf("HEAD should not record traffic: rows=%d err=%v", rows, err)
+		t.Fatalf("HEAD metadata should not record traffic: rows=%d err=%v", rows, err)
 	}
 }
 
