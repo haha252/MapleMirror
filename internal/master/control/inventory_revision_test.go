@@ -72,6 +72,45 @@ func TestDuplicateInventoryRevisionAfterReconnectIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestDuplicatePartialInventoryDoesNotInflateCompleteItemCount(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+	seedSecondAssetTarget(t, repo, session.NodeID)
+	first := protocol.InventoryReport{
+		ReportID: "r-partial-1", Revision: 1, GeneratedAt: time.Now(), Complete: false,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-1", SizeBytes: 10,
+			DigestSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			LocalState:   "verified",
+		}},
+	}
+	if _, err := repo.AcceptInventoryReport(context.Background(), session, 1, first); err != nil {
+		t.Fatal(err)
+	}
+	first.ReportID = "r-partial-1-retry"
+	if _, err := repo.AcceptInventoryReport(context.Background(), session, 2, first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AcceptInventoryReport(context.Background(), session, 3, protocol.InventoryReport{
+		ReportID: "r-complete", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-2", SizeBytes: 20,
+			DigestSHA256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			LocalState:   "verified",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var itemCount int
+	err := repo.DB.QueryRow(`SELECT item_count FROM node_inventory_reports
+		WHERE node_id = ? AND revision = 1`, session.NodeID).Scan(&itemCount)
+	if err != nil || itemCount != 2 {
+		t.Fatalf("complete item_count should match unique inventory assets, count=%d err=%v", itemCount, err)
+	}
+}
+
 func TestStaleInventoryRevisionDoesNotReconcileNewTargets(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

@@ -63,6 +63,9 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		if err := markMissingInventory(ctx, tx, session.NodeID, now, reported); err != nil {
 			return HeartbeatResult{}, err
 		}
+		if err := setCompleteInventoryItemCount(ctx, tx, session.NodeID, report.Revision, now); err != nil {
+			return HeartbeatResult{}, err
+		}
 		resetTasks, err := resetMissingDownloadTasks(ctx, tx, session.NodeID, now)
 		if err != nil {
 			return HeartbeatResult{}, err

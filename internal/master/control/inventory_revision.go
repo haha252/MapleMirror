@@ -71,3 +71,16 @@ func (r Repository) acceptStaleInventoryReport(ctx context.Context, tx *sql.Tx, 
 	ready := r.nodeRoutingReady(ctx, session.NodeID)
 	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
 }
+
+func setCompleteInventoryItemCount(ctx context.Context, tx *sql.Tx, nodeID string,
+	revision uint64, reportedAt string) error {
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_inventory
+		WHERE node_id = ? AND verified_at = ?`, nodeID, reportedAt).Scan(&count); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE node_inventory_reports
+		SET item_count = ? WHERE node_id = ? AND revision = ?`,
+		count, nodeID, revision)
+	return err
+}
