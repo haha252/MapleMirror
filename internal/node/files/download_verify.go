@@ -91,5 +91,28 @@ func (h *Handler) updateLocalAssetState(assetID, state string) error {
 	_, err := h.DB.Exec(`UPDATE local_assets SET state = ?,
 		verified_at = ? WHERE asset_id = ?`,
 		state, h.now().Format(time.RFC3339Nano), assetID)
-	return err
+	if err != nil || state == localasset.StateVerified {
+		return err
+	}
+	return h.forceInventoryReportDue()
+}
+
+func (h *Handler) forceInventoryReportDue() error {
+	now := h.now().Format(time.RFC3339Nano)
+	tx, err := h.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO inventory_report_cursor
+		(id, next_revision, last_acked_revision, updated_at)
+		VALUES (1, 1, 0, ?)`, now); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE inventory_report_cursor
+		SET force_report_requested_at = COALESCE(NULLIF(force_report_requested_at, ''), ?)
+		WHERE id = 1`, now); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

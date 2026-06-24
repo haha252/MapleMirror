@@ -82,6 +82,7 @@ func TestHandlerMarksExpiredMismatchedFile(t *testing.T) {
 		t.Fatalf("过期但后台校验未完成前不应阻塞下载：code=%d body=%q", rec.Code, rec.Body.String())
 	}
 	waitForLocalAssetState(t, db, "mismatch")
+	assertInventoryForceRequested(t, db)
 }
 
 func TestHandlerMarksExpiredMissingFile(t *testing.T) {
@@ -100,6 +101,7 @@ func TestHandlerMarksExpiredMissingFile(t *testing.T) {
 		t.Fatalf("过期后文件缺失应拒绝下载：%d", rec.Code)
 	}
 	waitForLocalAssetState(t, db, "missing")
+	assertInventoryForceRequested(t, db)
 }
 
 func tamperAssetWithBackdatedMTime(t *testing.T, storageDir string, verifiedAt time.Time) {
@@ -138,6 +140,21 @@ func assertLocalAssetState(t *testing.T, db *sql.DB, want string) {
 	if state != want {
 		t.Fatalf("本地资产状态 got=%q want=%q", state, want)
 	}
+}
+
+func assertInventoryForceRequested(t *testing.T, db *sql.DB) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		var force string
+		err := db.QueryRow(`SELECT COALESCE(force_report_requested_at, '')
+			FROM inventory_report_cursor WHERE id = 1`).Scan(&force)
+		if err == nil && force != "" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("资产校验失败后应强制下一次完整库存上报")
 }
 
 func waitForLocalAssetState(t *testing.T, db *sql.DB, want string) {
