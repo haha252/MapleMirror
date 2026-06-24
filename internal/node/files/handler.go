@@ -55,7 +55,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveReplication(w, r)
 		return
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+	if r.Method != http.MethodGet {
 		httpError(w, r, http.StatusMethodNotAllowed, "请求方法不支持")
 		return
 	}
@@ -94,7 +94,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	sent, err := h.authorizationBytes(claims.AuthorizationID)
 	limit := h.authorizationLimit(claims)
-	if err != nil || (r.Method != http.MethodHead && sent >= limit) {
+	if err != nil || sent >= limit {
 		httpError(w, r, http.StatusForbidden, "授权可发送字节数不足")
 		return
 	}
