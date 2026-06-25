@@ -51,5 +51,5 @@ func TestOpenMasterBackfillsAuthorizationStatusForExistingV4Database(t *testing.
 	assertColumn(t, opened, "download_authorizations", "status_reason")
 	assertColumn(t, opened, "download_authorizations", "status_updated_at")
 	assertColumn(t, opened, "download_authorizations", "token_hash")
-	assertDBVersion(t, opened, "master", 7)
+	assertDBVersion(t, opened, "master", 8)
 }

@@ -108,7 +108,7 @@ func (w *Writer) write(ctx context.Context, kind, eventTime string, committed ti
 		return ctx.Err()
 	default:
 	}
-	path := filepath.Join(w.root, kind, when.Format("2006-01-02")+".jsonl")
+	path := w.archivePath(kind, when)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("创建归档目录失败：%w", err)
 	}

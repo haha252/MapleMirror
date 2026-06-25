@@ -13,7 +13,7 @@ import (
 const (
 	databaseKindMaster = "master"
 	databaseKindNode   = "node"
-	masterDBVersion    = 7
+	masterDBVersion    = 8
 	nodeDBVersion      = 5
 )
 
@@ -44,6 +44,7 @@ func versionPlan(kind string) (databaseVersionPlan, error) {
 				{From: 4, To: 5, Apply: masterupgrades.V4ToV5},
 				{From: 5, To: 6, Apply: masterupgrades.V5ToV6},
 				{From: 6, To: 7, Apply: masterupgrades.V6ToV7},
+				{From: 7, To: 8, Apply: masterupgrades.V7ToV8},
 			},
 		}, nil
 	case databaseKindNode:

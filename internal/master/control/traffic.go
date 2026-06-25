@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"mirror-server/internal/master/accountingstate"
 	"mirror-server/internal/protocol"
 )
 
@@ -48,13 +49,11 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		return HeartbeatResult{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `INSERT INTO traffic_events
-		(node_id, event_sequence, authorization_id, node_request_id,
-		master_request_id, sent_bytes, reported_at, accounted_at, asset_id, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	_, err = tx.ExecContext(ctx, `INSERT INTO traffic_event_dedupe
+		(node_id, event_sequence, authorization_id, event_hash, accounted_at)
+		VALUES (?, ?, ?, ?, ?)`,
 		session.NodeID, event.EventSequence, event.AuthorizationID,
-		event.NodeRequestID, event.MasterRequestID, event.SentBytes,
-		event.ReportedAt.Format(time.RFC3339Nano), now, event.AssetID, event.Status)
+		accountingstate.TrafficEventHash(session.NodeID, event), now)
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
@@ -74,6 +73,9 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		return HeartbeatResult{}, err
 	}
 	if err := r.updateSequence(session, seq); err != nil {
+		return HeartbeatResult{}, err
+	}
+	if err := updateTrafficCursor(ctx, tx, session.NodeID, event.EventSequence, now); err != nil {
 		return HeartbeatResult{}, err
 	}
 	ready := routingReady(ctx, tx, session.NodeID)
@@ -109,24 +111,30 @@ type authAccounting struct {
 }
 
 func existingTraffic(ctx context.Context, tx *sql.Tx, nodeID string, event protocol.TrafficEvent) (bool, error) {
-	var bytes int64
-	var authID, assetID, nodeReqID, masterReqID, status string
-	err := tx.QueryRowContext(ctx, `SELECT authorization_id, asset_id, node_request_id,
-		master_request_id, sent_bytes, status FROM traffic_events
-		WHERE node_id = ? AND event_sequence = ?`, nodeID, event.EventSequence).
-		Scan(&authID, &assetID, &nodeReqID, &masterReqID, &bytes, &status)
+	var authID, hash string
+	err := tx.QueryRowContext(ctx, `SELECT authorization_id, event_hash
+		FROM traffic_event_dedupe WHERE node_id = ? AND event_sequence = ?`,
+		nodeID, event.EventSequence).Scan(&authID, &hash)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	if authID != event.AuthorizationID || assetID != event.AssetID ||
-		nodeReqID != event.NodeRequestID || masterReqID != event.MasterRequestID ||
-		bytes != event.SentBytes || status != event.Status {
+	if authID != event.AuthorizationID || hash != accountingstate.TrafficEventHash(nodeID, event) {
 		return true, fmt.Errorf("重复流量事件内容不一致")
 	}
 	return true, nil
+}
+
+func updateTrafficCursor(ctx context.Context, tx *sql.Tx, nodeID string, sequence uint64, now string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO node_traffic_cursors
+		(node_id, last_event_sequence, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(node_id) DO UPDATE SET
+			last_event_sequence = MAX(last_event_sequence, excluded.last_event_sequence),
+			updated_at = excluded.updated_at`,
+		nodeID, sequence, now)
+	return err
 }
 
 func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event protocol.TrafficEvent) (authAccounting, error) {

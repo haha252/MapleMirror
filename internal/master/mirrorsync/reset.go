@@ -25,6 +25,9 @@ func (s Store) ResetProject(ctx context.Context, projectID string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM traffic_events WHERE authorization_id IN (`+projectAuthorizations+`)`, projectID); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM traffic_event_dedupe WHERE authorization_id IN (`+projectAuthorizations+`)`, projectID); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM traffic_reservations WHERE authorization_id IN (`+projectAuthorizations+`)`, projectID); err != nil {
 		return err
 	}

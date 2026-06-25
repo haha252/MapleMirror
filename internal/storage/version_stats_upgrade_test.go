@@ -62,5 +62,5 @@ func TestOpenMasterCreatesPublicStatsIndexesForExistingV6Database(t *testing.T) 
 	defer opened.Close()
 	assertIndex(t, opened, "idx_node_availability_samples_window")
 	assertIndex(t, opened, "idx_daily_node_traffic_stats_node")
-	assertDBVersion(t, opened, "master", 7)
+	assertDBVersion(t, opened, "master", 8)
 }

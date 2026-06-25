@@ -33,6 +33,7 @@ func main() {
 	projectsPath := flag.String("projects", "projects.yaml", "项目清单配置文件路径")
 	quotaPath := flag.String("quota", "quota.yaml", "额度配置文件路径")
 	noticesPath := flag.String("notices", "notices.yaml", "公告配置文件路径")
+	archiveAccounting := flag.Bool("archive-accounting", false, "归档旧数据库明细并收缩在线状态")
 	flag.Parse()
 
 	var warnings [][2]string
@@ -101,6 +102,15 @@ func main() {
 	}
 	defer closeDatabaseWithCheckpoint(cfg, database, walTruncateThreshold, logger)
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
+	if *archiveAccounting {
+		runAccountingArchiveMigration(cfg, database, walTruncateThreshold, logger)
+		return
+	}
+	if err := accountingarchive.EnsureTrafficArchiveReady(context.Background(), database); err != nil {
+		logger.Error(context.Background(), "旧流量明细归档未完成，主节点无法启动",
+			slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 	startDatabaseMaintenance(cfg, database, walTruncateThreshold, logger)
 	archive := newAccountingArchive(cfg, logger)
 
@@ -145,28 +155,6 @@ func handleLoad(err error, name string, created *bool) bool {
 		return true
 	}
 	return false
-}
-
-func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger) mirrorsync.Service {
-	interval, _ := time.ParseDuration(cfg.Scan.Interval)
-	token := ""
-	if cfg.Scan.GitHubTokenEnv != "" {
-		token = os.Getenv(cfg.Scan.GitHubTokenEnv)
-	}
-	store := mirrorsync.Store{DB: db, Runtime: runtime}
-	service := mirrorsync.Service{
-		Scanner: mirrorsync.Scanner{
-			Store: store, GitHub: mirrorsync.HTTPGitHubClient{
-				Client: &http.Client{Timeout: mirrorsync.DefaultGitHubClientTimeout},
-				Token:  token,
-			}, Logger: logger,
-		},
-		Projects: projects, Interval: interval, Logger: logger,
-	}
-	ctx := context.Background()
-	go service.Run(ctx)
-	logger.Info(ctx, "Release 扫描调度已启动", slog.String("interval", cfg.Scan.Interval))
-	return service
 }
 
 func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notices,

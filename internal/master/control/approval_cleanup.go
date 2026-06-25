@@ -40,6 +40,8 @@ func deleteQuarantinedNodesByName(ctx context.Context, tx *sql.Tx, name, newNode
 func deleteNodeData(ctx context.Context, tx *sql.Tx, nodeID string) error {
 	statements := []string{
 		`DELETE FROM traffic_events WHERE node_id = ?`,
+		`DELETE FROM traffic_event_dedupe WHERE node_id = ?`,
+		`DELETE FROM node_traffic_cursors WHERE node_id = ?`,
 		`DELETE FROM traffic_reservations WHERE authorization_id IN (
 			SELECT id FROM download_authorizations WHERE node_id = ?
 		)`,

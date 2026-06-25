@@ -21,6 +21,11 @@ func TestAcceptTrafficEventAccountsOnceAndStartsTransfer(t *testing.T) {
 	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err != nil {
 		t.Fatal(err)
 	}
+	assertTableCount(t, repo, "traffic_events", "node_id = 'node-1'", 0)
+	assertTableCount(t, repo, "traffic_event_dedupe",
+		"node_id = 'node-1' AND event_sequence = 1", 1)
+	assertTableCount(t, repo, "node_traffic_cursors",
+		"node_id = 'node-1' AND last_event_sequence = 1", 1)
 	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 3, event); err != nil {
 		t.Fatal(err)
 	}
