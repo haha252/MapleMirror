@@ -38,13 +38,15 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertColumn(t, db, "assets", "variant")
 	assertColumn(t, db, "assets", "classification_reason")
 	assertColumn(t, db, "download_authorizations", "token_hash")
+	assertIndex(t, db, "idx_node_availability_samples_window")
+	assertIndex(t, db, "idx_daily_node_traffic_stats_node")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	assertDBVersion(t, db, "master", 6)
+	assertDBVersion(t, db, "master", 7)
 	var legacyCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
 		t.Fatal(err)
@@ -83,6 +85,15 @@ func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }
 	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&count)
 	if err != nil || count != 1 {
 		t.Fatalf("缺少数据表 %s：%v", table, err)
+	}
+}
+
+func assertIndex(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, index string) {
+	t.Helper()
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", index).Scan(&count)
+	if err != nil || count != 1 {
+		t.Fatalf("缺少索引 %s：%v", index, err)
 	}
 }
 

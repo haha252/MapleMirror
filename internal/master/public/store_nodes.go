@@ -12,7 +12,6 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var out []NodeSummary
 	for rows.Next() {
@@ -27,11 +26,27 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	nodeIDs := make([]string, 0, len(out))
+	for _, item := range out {
+		nodeIDs = append(nodeIDs, item.NodeID)
+	}
+	downloadStates, err := s.loadNodeDownloadReadyStates(ctx, nodeIDs)
+	if err != nil {
+		return nil, err
+	}
+	slaTexts, err := s.loadNodeSLATexts(ctx, nodeIDs)
+	if err != nil {
+		return nil, err
+	}
+	trafficTotals, err := s.loadNodeTrafficTotals(ctx, nodeIDs)
+	if err != nil {
+		return nil, err
+	}
 	for i := range out {
-		status, err := s.loadNodeDownloadReadyState(ctx, out[i].NodeID)
-		if err != nil {
-			return nil, err
-		}
+		status := downloadStates[out[i].NodeID]
 		out[i].DownloadReady = status.DownloadableCopies > 0 &&
 			out[i].State != "disabled" && out[i].State != "offline" &&
 			out[i].LastHeartbeat != "" && out[i].PublicDownloadBaseURL != "" &&
@@ -46,9 +61,9 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 			out[i].RoutingReadyReason = info.Summary
 			out[i].RoutingReadyDetails = info.Detail
 		}
-		out[i].SLA24H = s.slaText(ctx, out[i].NodeID, 24)
-		out[i].SLA7D = s.slaText(ctx, out[i].NodeID, 24*7)
-		out[i].SLA30D = s.slaText(ctx, out[i].NodeID, 24*30)
+		out[i].SLA24H = slaTexts[out[i].NodeID].H24
+		out[i].SLA7D = slaTexts[out[i].NodeID].D7
+		out[i].SLA30D = slaTexts[out[i].NodeID].D30
 		out[i].PressureRatio = "暂无"
 		if s.Runtime != nil {
 			if pressure, err := s.Runtime.LatestPressureReport(out[i].NodeID); err == nil {
@@ -57,9 +72,7 @@ func (s Store) Nodes(ctx context.Context) ([]NodeSummary, error) {
 				}
 			}
 		}
-		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
-			FROM daily_node_traffic_stats WHERE node_id = ?`, out[i].NodeID).
-			Scan(&out[i].TotalSentBytes)
+		out[i].TotalSentBytes = trafficTotals[out[i].NodeID]
 	}
 	return out, nil
 }

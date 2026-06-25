@@ -36,6 +36,7 @@ type Server struct {
 	Blocklist        *blocklistPolicy
 	BlocklistExport  *blocklistExportCache
 	ResourceLimiter  *publicResourceLimiter
+	StatsCache       *statsCache
 }
 
 type TokenLifetime struct {
@@ -81,6 +82,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 		Blocklist:        blocklist,
 		BlocklistExport:  newBlocklistExportCache(time.Minute),
 		ResourceLimiter:  newPublicResourceLimiter(quota),
+		StatsCache:       &statsCache{},
 	}, nil
 }
 
@@ -181,6 +183,9 @@ func minDuration(values ...time.Duration) time.Duration {
 func (s Server) Handler() http.Handler {
 	if s.BlocklistExport == nil {
 		s.BlocklistExport = newBlocklistExportCache(blocklistExportCacheTTL)
+	}
+	if s.StatsCache == nil {
+		s.StatsCache = &statsCache{}
 	}
 	mux := http.NewServeMux()
 	if s.WebAssets != nil && s.WebAssets.staticFS != nil {

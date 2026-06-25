@@ -31,7 +31,7 @@ func (s Server) statsAPI(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
 		return
 	}
-	stats, err := s.Store.StatsRealtime(r.Context())
+	stats, err := s.statsCache().fast(r.Context(), s.Store)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "统计数据读取失败")
 		return
@@ -44,28 +44,24 @@ func (s Server) statsDetailsAPI(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
 		return
 	}
-	stats, err := s.Store.StatsDashboard(r.Context())
+	stats, err := s.statsCache().details(r.Context(), s.Store)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "统计数据读取失败")
 		return
 	}
-	nodes, err := s.Store.Nodes(r.Context())
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "节点状态读取失败")
-		return
-	}
-	writeStatsJSON(w, compactStatsDetails(stats, nodes))
+	writeStatsJSON(w, stats)
 }
 
 func (s Store) StatsRealtime(ctx context.Context) (statsFastSnapshot, error) {
 	today := statDay(timeNow(), s.Location)
 	start, previousStart := dateOffset(today, -29), dateOffset(today, -59)
 	var out statsFastSnapshot
-	for i, kind := range []string{"views", "downloads", "traffic"} {
-		var metric MetricStat
-		if err := s.loadMetricSummary(ctx, kind, previousStart, start, today, &metric); err != nil {
-			return out, err
-		}
+	var views, downloads, traffic MetricStat
+	if err := s.loadMetricSummaries(ctx, previousStart, start, today,
+		&views, &downloads, &traffic); err != nil {
+		return out, err
+	}
+	for i, metric := range []MetricStat{views, downloads, traffic} {
 		out.Metrics[i] = metricTuple(metric)
 	}
 	point, err := s.DailyTrends(ctx, today, today)

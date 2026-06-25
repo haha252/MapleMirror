@@ -44,13 +44,8 @@ func (s Store) StatsDashboard(ctx context.Context) (StatsDashboard, error) {
 	start, previousStart := dateOffset(today, -29), dateOffset(today, -59)
 	var out StatsDashboard
 	out.Today = today
-	if err := s.loadMetric(ctx, "views", previousStart, start, today, &out.TotalViews); err != nil {
-		return out, err
-	}
-	if err := s.loadMetric(ctx, "downloads", previousStart, start, today, &out.TotalDownloads); err != nil {
-		return out, err
-	}
-	if err := s.loadMetric(ctx, "traffic", previousStart, start, today, &out.TotalTraffic); err != nil {
+	if err := s.loadMetricSummaries(ctx, previousStart, start, today,
+		&out.TotalViews, &out.TotalDownloads, &out.TotalTraffic); err != nil {
 		return out, err
 	}
 	resources, err := s.TopResources(ctx, start, today, 8)
