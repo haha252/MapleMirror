@@ -83,7 +83,7 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		hbResult, err := s.Repo.AcceptSyncTaskResult(context.Background(), session, msg.Sequence, result)
-		out := controlMessageResult{HeartbeatResult: hbResult, DispatchSyncTasks: shouldDispatch}
+		out := controlMessageResult{HeartbeatResult: hbResult, DispatchSyncTasks: shouldDispatch || hbResult.SyncTasksChanged}
 		if result.SyncTaskSlotsAvailable != nil {
 			out.SyncTaskSlotsAvailable = *result.SyncTaskSlotsAvailable
 			out.SyncTaskSlotsKnown = true

@@ -156,6 +156,7 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	quarantined := false
+	var pendingTaskNodes []string
 	if hasInventory && taskState != "obsolete" && taskState != "stale_result" {
 		if err := upsertSyncResultInventory(ctx, tx, session.NodeID, inventory, now); err != nil {
 			return HeartbeatResult{}, err
@@ -167,9 +168,11 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 			quarantined = true
 		}
 		if inventory.State == "verified" {
-			if err := publishVerifiedAsset(ctx, tx, inventory.AssetID, now); err != nil {
+			nodes, err := publishVerifiedAsset(ctx, tx, inventory.AssetID, now)
+			if err != nil {
 				return HeartbeatResult{}, err
 			}
+			pendingTaskNodes = append(pendingTaskNodes, nodes...)
 		}
 	}
 	if taskState == "succeeded" {
@@ -199,6 +202,9 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	if err := tx.Commit(); err != nil {
 		return HeartbeatResult{}, err
 	}
+	if len(pendingTaskNodes) > 0 {
+		r.runtime().NotifySyncTasks(pendingTaskNodes...)
+	}
 	if quarantined {
 		r.runtime().CloseNodeSessions(session.NodeID)
 		return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(false), RoutingReady: false}, nil
@@ -206,5 +212,8 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	if taskState == "retry_wait" && retryAfter != "" {
 		r.scheduleSyncTaskRetryWake(session.NodeID, retryAfter)
 	}
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, nil
+	return HeartbeatResult{
+		AcceptedSequence: seq, ManagedState: managedState(ready),
+		RoutingReady: ready, SyncTasksChanged: len(pendingTaskNodes) > 0,
+	}, nil
 }

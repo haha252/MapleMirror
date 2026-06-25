@@ -16,7 +16,11 @@ func GenerateNodeTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int
 }
 
 func GenerateDeleteTasks(ctx context.Context, tx *sql.Tx, now string) (int, error) {
-	return generateDeleteTasks(ctx, tx, now, "")
+	return generateDeleteTasks(ctx, tx, now, "", "")
+}
+
+func GenerateProjectDeleteTasks(ctx context.Context, tx *sql.Tx, projectID, now string) (int, error) {
+	return generateDeleteTasks(ctx, tx, now, "", projectID)
 }
 
 func generateTasks(ctx context.Context, tx *sql.Tx, now, nodeID string) (int, error) {
@@ -24,7 +28,7 @@ func generateTasks(ctx context.Context, tx *sql.Tx, now, nodeID string) (int, er
 	if err != nil {
 		return downloads, err
 	}
-	deletes, err := generateDeleteTasks(ctx, tx, now, nodeID)
+	deletes, err := generateDeleteTasks(ctx, tx, now, nodeID, "")
 	return downloads + deletes, err
 }
 
@@ -62,7 +66,7 @@ func generateDownloadTasks(ctx context.Context, tx *sql.Tx, now, nodeID string) 
 	return generated, rows.Err()
 }
 
-func generateDeleteTasks(ctx context.Context, tx *sql.Tx, now, nodeID string) (int, error) {
+func generateDeleteTasks(ctx context.Context, tx *sql.Tx, now, nodeID, projectID string) (int, error) {
 	query := `SELECT ti.node_id, ti.asset_id
 		FROM target_inventory ti
 		JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
@@ -71,6 +75,12 @@ func generateDeleteTasks(ctx context.Context, tx *sql.Tx, now, nodeID string) (i
 	if nodeID != "" {
 		query += ` AND ti.node_id = ?`
 		args = append(args, nodeID)
+	}
+	if projectID != "" {
+		query += ` AND EXISTS (
+			SELECT 1 FROM assets a JOIN releases r ON r.id = a.release_id
+			WHERE a.id = ti.asset_id AND r.project_id = ?)`
+		args = append(args, projectID)
 	}
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {

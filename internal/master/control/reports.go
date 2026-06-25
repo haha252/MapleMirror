@@ -40,6 +40,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	}
 	reported := make(map[string]bool, len(report.Items))
 	quarantined := false
+	var pendingTaskNodes []string
 	for _, item := range report.Items {
 		reported[item.AssetID] = true
 		result, err := acceptInventoryItem(ctx, tx, session.NodeID, item, now)
@@ -54,8 +55,13 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 			break
 		}
 		if result.State == "verified" {
-			if err := publishVerifiedAsset(ctx, tx, result.AssetID, now); err != nil {
+			nodes, err := publishVerifiedAsset(ctx, tx, result.AssetID, now)
+			if err != nil {
 				return HeartbeatResult{}, err
+			}
+			if len(nodes) > 0 {
+				pendingTaskNodes = append(pendingTaskNodes, nodes...)
+				syncTasksChanged = true
 			}
 		}
 	}
@@ -78,7 +84,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		if err != nil {
 			return HeartbeatResult{}, err
 		}
-		syncTasksChanged = resetTasks > 0 || generatedTasks > 0
+		syncTasksChanged = syncTasksChanged || resetTasks > 0 || generatedTasks > 0
 		completedReconcileTasks, err := completeInventoryReconcileTasks(ctx, tx, session.NodeID, now)
 		if err != nil {
 			return HeartbeatResult{}, err
@@ -110,6 +116,9 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	}
 	if syncTasksChanged {
 		r.runtime().NotifySyncTasks(session.NodeID)
+	}
+	if len(pendingTaskNodes) > 0 {
+		r.runtime().NotifySyncTasks(pendingTaskNodes...)
 	}
 	if report.Complete || quarantined {
 		r.runtime().FinishInventoryBatch(session.NodeID, report.Revision)

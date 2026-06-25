@@ -15,7 +15,7 @@ func TestVerifiedPendingLatestPublishesCandidate(t *testing.T) {
 	seedDownloadTask(t, repo, session.NodeID, "task-new", "asset-new", 0, "")
 	markTaskRunning(t, repo, "task-new")
 
-	_, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
+	result, err := repo.AcceptSyncTaskResult(context.Background(), session, 1, protocol.SyncTaskResult{
 		TaskID:            "task-new",
 		AssetID:           "asset-new",
 		Result:            "succeeded",
@@ -32,6 +32,14 @@ func TestVerifiedPendingLatestPublishesCandidate(t *testing.T) {
 		"node_id = 'node-1' AND asset_id = 'asset-old' AND desired_state = 'remove'", 1)
 	assertTableCount(t, repo, "target_inventory",
 		"node_id = 'node-1' AND asset_id = 'asset-new' AND desired_state = 'required'", 1)
+	assertTableCount(t, repo, "node_tasks",
+		"node_id = 'node-1' AND asset_id = 'asset-old' AND task_type = 'asset_delete' AND state = 'pending'", 1)
+	if !result.SyncTasksChanged {
+		t.Fatal("发布新版本后应通知节点清理旧资产")
+	}
+	if !repo.runtime().ConsumeSyncTaskWake(session.NodeID) {
+		t.Fatal("旧资产删除任务生成后应唤醒在线节点")
+	}
 }
 
 func seedPendingLatestTarget(t *testing.T, repo Repository, nodeID string) {
