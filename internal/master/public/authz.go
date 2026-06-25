@@ -72,6 +72,34 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, code, stable, message)
 		return
 	}
+	if err := s.Store.waitForAuthorizationDelivered(r.Context(),
+		auth.Claims.AuthorizationID, debug.NodeID); err != nil {
+		if s.Logger != nil {
+			s.Logger.Debug(r.Context(), "等待下载授权同步到节点失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("authorization_id", auth.Claims.AuthorizationID),
+				slog.String("asset_id", in.AssetID),
+				slog.String("node_id", debug.NodeID),
+				slog.String("error", err.Error()))
+		}
+		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "下载授权同步到节点失败")
+		return
+	}
+	if expiresAt, err := s.Store.authorizationExpiresAt(r.Context(),
+		auth.Claims.AuthorizationID, debug.NodeID); err != nil {
+		if s.Logger != nil {
+			s.Logger.Debug(r.Context(), "读取下载授权过期时间失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("authorization_id", auth.Claims.AuthorizationID),
+				slog.String("node_id", debug.NodeID),
+				slog.String("error", err.Error()))
+		}
+		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "下载授权签发失败")
+		return
+	} else if expiresAt != "" {
+		auth.Claims.ExpiresAt = expiresAt
+		debug.ExpiresAt = expiresAt
+	}
 	if s.Logger != nil {
 		s.Logger.Info(r.Context(), "下载令牌已签发",
 			slog.String("request_id", requestID(r)),

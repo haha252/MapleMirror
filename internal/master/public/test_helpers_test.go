@@ -3,6 +3,7 @@ package public
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -102,6 +103,40 @@ func assertPublicTableCount(t *testing.T, db *sql.DB, table string, want int) {
 	if got != want {
 		t.Fatalf("%s count=%d want %d", table, got, want)
 	}
+}
+
+func deliverNextAuthorization(t *testing.T, db *sql.DB, nodeID string) <-chan error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		deadline := time.After(2 * time.Second)
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			var id string
+			err := db.QueryRow(`SELECT id FROM download_authorizations
+				WHERE node_id = ? AND COALESCE(delivered_at, '') = ''
+				ORDER BY issued_at LIMIT 1`, nodeID).Scan(&id)
+			if err == nil {
+				_, err = db.Exec(`UPDATE download_authorizations
+					SET delivered_at = ? WHERE id = ?`,
+					time.Now().UTC().Format(time.RFC3339Nano), id)
+				done <- err
+				return
+			}
+			if err != sql.ErrNoRows {
+				done <- err
+				return
+			}
+			select {
+			case <-deadline:
+				done <- fmt.Errorf("timed out waiting for authorization insert")
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	return done
 }
 
 func solveNonce(challenge Challenge) string {

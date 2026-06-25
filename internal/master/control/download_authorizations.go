@@ -69,16 +69,15 @@ func (s ControlServer) dispatchDownloadAuthorizations(conn net.Conn,
 func (r Repository) NextDownloadAuthorization(ctx context.Context,
 	nodeID string) (protocol.DownloadAuthorization, bool, error) {
 	var out protocol.DownloadAuthorization
-	var issued, expires string
 	err := r.DB.QueryRowContext(ctx, `SELECT id, token_hash, asset_id, node_id,
-		client_prefix_key, issued_at, expires_at, first_connection_timeout_seconds,
+		client_prefix_key, first_connection_timeout_seconds,
 		idle_timeout_seconds, max_duration_seconds, max_bytes, traffic_limit_bytes,
 		range_limit, request_id FROM download_authorizations
 		WHERE node_id = ? AND token_hash != '' AND delivered_at = ''
 		AND status IN ('issued', 'active')
 		ORDER BY issued_at LIMIT 1`, nodeID).
 		Scan(&out.AuthorizationID, &out.TokenHash, &out.AssetID, &out.NodeID,
-			&out.ClientPrefix, &issued, &expires, &out.FirstConnectionSeconds,
+			&out.ClientPrefix, &out.FirstConnectionSeconds,
 			&out.IdleTimeoutSeconds, &out.MaxDurationSeconds, &out.MaxBytes,
 			&out.TrafficLimitBytes, &out.RangeConcurrencyLimit, &out.RequestID)
 	if err == sql.ErrNoRows {
@@ -87,8 +86,18 @@ func (r Repository) NextDownloadAuthorization(ctx context.Context,
 	if err != nil {
 		return out, false, err
 	}
-	out.IssuedAt, _ = time.Parse(time.RFC3339Nano, issued)
-	out.ExpiresAt, _ = time.Parse(time.RFC3339Nano, expires)
+	out.IssuedAt = time.Now().UTC()
+	out.ExpiresAt = out.IssuedAt.Add(time.Duration(out.MaxDurationSeconds) * time.Second)
+	if out.MaxDurationSeconds <= 0 {
+		out.ExpiresAt = out.IssuedAt
+	}
+	if _, err := r.DB.ExecContext(ctx, `UPDATE download_authorizations
+		SET issued_at = ?, expires_at = ?
+		WHERE id = ? AND node_id = ? AND COALESCE(delivered_at, '') = ''`,
+		out.IssuedAt.Format(time.RFC3339Nano), out.ExpiresAt.Format(time.RFC3339Nano),
+		out.AuthorizationID, nodeID); err != nil {
+		return out, false, err
+	}
 	return out, true, nil
 }
 

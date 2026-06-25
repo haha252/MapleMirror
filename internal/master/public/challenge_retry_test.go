@@ -2,6 +2,7 @@ package public
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -74,6 +75,7 @@ func TestHTTPAuthorizationReturnsShortOpaqueToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/authorizations", nil)
 	req.RemoteAddr = "192.0.2.1:12345"
 	rec := httptest.NewRecorder()
+	delivered := deliverNextAuthorization(t, db, "node-1")
 
 	server.authorize(rec, req, challengeSubmit{
 		Kind:        "api_pow",
@@ -84,6 +86,9 @@ func TestHTTPAuthorizationReturnsShortOpaqueToken(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("authorization status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if err := <-delivered; err != nil {
+		t.Fatal(err)
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, `"download_token":"`) {
@@ -98,6 +103,69 @@ func TestHTTPAuthorizationReturnsShortOpaqueToken(t *testing.T) {
 	if err := db.QueryRow(`SELECT token_hash FROM download_authorizations
 		WHERE asset_id = 'asset-1'`).Scan(&hash); err != nil || hash == "" || strings.Contains(hash, token) {
 		t.Fatalf("authorization should store only token hash: hash=%q err=%v", hash, err)
+	}
+}
+
+func TestHTTPAuthorizationWaitsForNodeDeliveryBeforeResponding(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := Store{DB: db}
+	challenge, err := store.CreateChallenge(context.Background(), "api_pow",
+		"asset-1", "192.0.2.1/32", 4, time.Minute, "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := Server{Store: store, TokenLifetime: testTokenLifetime(time.Minute)}
+	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/authorizations", nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.authorize(rec, req, challengeSubmit{
+			Kind:        "api_pow",
+			ChallengeID: challenge.ID,
+			AssetID:     "asset-1",
+			Solution:    solveNonce(challenge),
+		})
+	}()
+
+	select {
+	case <-done:
+		t.Fatalf("authorization responded before node delivery: status=%d body=%s",
+			rec.Code, rec.Body.String())
+	case <-time.After(authorizationDeliveryPoll + 50*time.Millisecond):
+	}
+	var id string
+	deadline := time.After(2 * time.Second)
+	for id == "" {
+		err := db.QueryRow(`SELECT id FROM download_authorizations
+			WHERE asset_id = 'asset-1'`).Scan(&id)
+		if err == nil {
+			break
+		}
+		if err != sql.ErrNoRows {
+			t.Fatal(err)
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for authorization insert")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	mustExec(t, db, `UPDATE download_authorizations
+		SET delivered_at = '2026-01-01T00:00:03Z' WHERE id = '`+id+`'`)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("authorization did not respond after node delivery")
+	}
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("authorization status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"download_url":"https://node-1.example.com/p1/v1/a.zip"`) {
+		t.Fatalf("response should include real download url after delivery: %s", rec.Body.String())
 	}
 }
 

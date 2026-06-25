@@ -84,7 +84,7 @@
       } catch (err) {
         throw new Error(powStartupMessage());
       }
-      setStatus("正在领取下载授权...", "muted");
+      setStatus("正在签发并同步下载令牌...", "muted");
       const authResp = await postJSON("/api/public/v1/web/authorizations", {
         challenge_id: challengeData.challenge_id,
         asset_id: asset.asset_id,
@@ -92,7 +92,7 @@
       });
       const authData = authResp.data || {};
       if (!authData.download_url || !authData.download_token) throw new Error("授权数据缺失");
-      setStatus("授权已签发，正在开始下载。", "ok");
+      setStatus("令牌签发完成，正在开始下载。", "ok");
       window.location.assign(downloadURL(authData));
     } catch (err) {
       setStatus(err && err.message ? err.message : "下载失败", "warn");
