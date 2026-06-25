@@ -30,7 +30,7 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 		COALESCE(SUM(sent_bytes), 0) FROM daily_project_stats
 		WHERE stat_day = ?`, day).Scan(&auth, &started, &daily)
 	_ = s.repo.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
-		FROM traffic_events WHERE accounted_at IS NOT NULL`).Scan(&total)
+		FROM daily_project_stats`).Scan(&total)
 	out := overviewResponse{
 		Stats: map[string]any{"stat_day": day, "authorization_count": auth,
 			"transfer_started_count": started, "daily_sent_bytes": daily,

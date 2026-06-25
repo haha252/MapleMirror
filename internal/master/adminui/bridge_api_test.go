@@ -99,10 +99,15 @@ func TestStatsAuthorizationAndTrafficBridge(t *testing.T) {
 		max_bytes, range_limit, status, request_id, first_transfer_at)
 		VALUES ('auth-1', 'asset-1', 'node-1', 'client-*', 'now', 'later',
 		1000, 1, 'issued', 'req-auth', 'now')`)
-	mustExecAdminUI(t, db, `INSERT INTO traffic_events
-		(node_id, event_sequence, authorization_id, node_request_id,
-		master_request_id, sent_bytes, reported_at, status, accounted_at)
-		VALUES ('node-1', 1, 'auth-1', 'node-req', 'master-req', 64, 'now', 'ok', 'now')`)
+	mustExecAdminUI(t, db, `INSERT INTO traffic_reservations
+		(authorization_id, scope_day, address_reserved_bytes, network_reserved_bytes,
+		settled_bytes, status, created_at, address_scope_kind, address_scope_key,
+		network_scope_kind, network_scope_key)
+		VALUES ('auth-1', '2026-06-06', 1000, 1000, 64, 'active', 'now',
+		'ipv4_32', '192.0.2.1/32', 'ipv4_24', '192.0.2.0/24')`)
+	mustExecAdminUI(t, db, `INSERT INTO traffic_event_dedupe
+		(node_id, event_sequence, authorization_id, event_hash, accounted_at)
+		VALUES ('node-1', 1, 'auth-1', 'hash-1', 'now')`)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/stats/projects?day=2026-06-06", nil)
@@ -119,7 +124,7 @@ func TestStatsAuthorizationAndTrafficBridge(t *testing.T) {
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/admin/api/traffic/events?authorization_id=auth-1", nil)
 	server.trafficEventsAPI(rec, req)
-	if rec.Code != http.StatusOK || !containsBody(rec, "node-req") {
+	if rec.Code != http.StatusOK || !containsBody(rec, "hash-1") {
 		t.Fatalf("traffic failed status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
@@ -146,16 +151,12 @@ func TestTrafficEventsAPIPaginates(t *testing.T) {
 		max_bytes, range_limit, status, request_id)
 		VALUES ('auth-1', 'asset-1', 'node-1', 'client-*', 'now', 'later',
 		1000, 1, 'issued', 'req-auth')`)
-	mustExecAdminUI(t, db, `INSERT INTO traffic_events
-		(node_id, event_sequence, authorization_id, node_request_id,
-		master_request_id, sent_bytes, reported_at, status, accounted_at)
-		VALUES ('node-1', 1, 'auth-1', 'node-req-1', 'master-req-1',
-		64, 'now', 'ok', 'now')`)
-	mustExecAdminUI(t, db, `INSERT INTO traffic_events
-		(node_id, event_sequence, authorization_id, node_request_id,
-		master_request_id, sent_bytes, reported_at, status, accounted_at)
-		VALUES ('node-1', 2, 'auth-1', 'node-req-2', 'master-req-2',
-		128, 'now', 'ok', 'now')`)
+	mustExecAdminUI(t, db, `INSERT INTO traffic_event_dedupe
+		(node_id, event_sequence, authorization_id, event_hash, accounted_at)
+		VALUES ('node-1', 1, 'auth-1', 'hash-1', '2026-06-01T00:00:00Z')`)
+	mustExecAdminUI(t, db, `INSERT INTO traffic_event_dedupe
+		(node_id, event_sequence, authorization_id, event_hash, accounted_at)
+		VALUES ('node-1', 2, 'auth-1', 'hash-2', '2026-06-02T00:00:00Z')`)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/traffic/events?authorization_id=auth-1&page=2&page_size=1", nil)
 	rec := httptest.NewRecorder()
@@ -173,7 +174,7 @@ func TestTrafficEventsAPIPaginates(t *testing.T) {
 	if body.Pagination.Page != 2 || body.Pagination.PageSize != 1 || body.Pagination.Total != 2 {
 		t.Fatalf("pagination = %+v", body.Pagination)
 	}
-	if len(body.Events) != 1 || body.Events[0]["node_request_id"] != "node-req-2" {
+	if len(body.Events) != 1 || body.Events[0]["event_hash"] != "hash-1" {
 		t.Fatalf("unexpected traffic page: %+v", body.Events)
 	}
 }

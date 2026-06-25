@@ -71,6 +71,25 @@ func TestAuthorizationStatusReturnsPublicNodeName(t *testing.T) {
 	}
 }
 
+func TestAuthorizationStatusUsesReservationSettledBytes(t *testing.T) {
+	server, authID, token := prepareAuthorizationStatus(t)
+	if _, err := server.Store.DB.Exec(`UPDATE traffic_reservations
+		SET settled_bytes = 64 WHERE authorization_id = ?`, authID); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/public/v1/authorizations/"+authID, nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.authorization(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"sent_bytes":64`) {
+		t.Fatalf("expected settled bytes in response, body=%s", rec.Body.String())
+	}
+}
+
 func prepareAuthorizationStatus(t *testing.T) (Server, string, string) {
 	t.Helper()
 	db := openMaster(t)

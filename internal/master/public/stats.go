@@ -75,10 +75,10 @@ func (s Store) IncrementPageView(ctx context.Context) error {
 func (s Store) AuthorizationBytes(ctx context.Context, id string) (int64, string, error) {
 	var bytes int64
 	var first sql.NullString
-	err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(te.sent_bytes), 0),
+	err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(tr.settled_bytes, 0),
 		COALESCE(da.first_transfer_at, '') FROM download_authorizations da
-		LEFT JOIN traffic_events te ON te.authorization_id = da.id
-		AND te.accounted_at IS NOT NULL WHERE da.id = ? GROUP BY da.id`, id).
+		LEFT JOIN traffic_reservations tr ON tr.authorization_id = da.id
+		WHERE da.id = ?`, id).
 		Scan(&bytes, &first)
 	if !first.Valid {
 		return bytes, "", err

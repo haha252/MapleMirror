@@ -10,7 +10,7 @@ func (s *Server) trafficEventsAPI(w http.ResponseWriter, r *http.Request) {
 	authID := r.URL.Query().Get("authorization_id")
 	page := paginationFrom(r, 20)
 	var total int
-	countSQL := `SELECT COUNT(*) FROM traffic_events`
+	countSQL := `SELECT COUNT(*) FROM traffic_event_dedupe`
 	countArgs := []any{}
 	whereSQL := ""
 	if authID != "" {
@@ -24,8 +24,7 @@ func (s *Server) trafficEventsAPI(w http.ResponseWriter, r *http.Request) {
 	queryArgs := append([]any{}, countArgs...)
 	queryArgs = append(queryArgs, page.PageSize, page.offset())
 	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT node_id, event_sequence,
-		authorization_id, node_request_id, master_request_id, sent_bytes, status,
-		COALESCE(accounted_at, '') FROM traffic_events
+		authorization_id, event_hash, COALESCE(accounted_at, '') FROM traffic_event_dedupe
 		`+whereSQL+` ORDER BY COALESCE(accounted_at, '') DESC, node_id, event_sequence LIMIT ? OFFSET ?`,
 		queryArgs...)
 	if err != nil {
@@ -35,17 +34,15 @@ func (s *Server) trafficEventsAPI(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var nodeID, authID, nodeReq, masterReq, state, accounted string
-		var seq, bytes int64
-		if err := rows.Scan(&nodeID, &seq, &authID, &nodeReq, &masterReq,
-			&bytes, &state, &accounted); err != nil {
+		var nodeID, authID, hash, accounted string
+		var seq int64
+		if err := rows.Scan(&nodeID, &seq, &authID, &hash, &accounted); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "流量事件读取失败"})
 			return
 		}
 		items = append(items, map[string]any{"node_id": nodeID,
 			"event_sequence": seq, "authorization_id": authID,
-			"node_request_id": nodeReq, "master_request_id": masterReq,
-			"sent_bytes": bytes, "status": state,
+			"event_hash":   hash,
 			"accounted_at": s.displayTime(accounted)})
 	}
 	if err := rows.Err(); err != nil {

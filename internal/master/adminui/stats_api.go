@@ -18,7 +18,7 @@ func (s *Server) statsOverviewAPI(w http.ResponseWriter, r *http.Request) {
 		COALESCE(SUM(sent_bytes), 0) FROM daily_project_stats
 		WHERE stat_day = ?`, day).Scan(&auth, &started, &daily)
 	_ = s.repo.DB.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(sent_bytes), 0)
-		FROM traffic_events WHERE accounted_at IS NOT NULL`).Scan(&total)
+		FROM daily_project_stats`).Scan(&total)
 	writeJSON(w, http.StatusOK, map[string]any{"stat_day": day,
 		"authorization_count": auth, "transfer_started_count": started,
 		"daily_sent_bytes": daily, "total_sent_bytes": total})
@@ -63,10 +63,9 @@ func (s *Server) authorizationAPI(w http.ResponseWriter, r *http.Request) {
 	var sent int64
 	err := s.repo.DB.QueryRowContext(r.Context(), `SELECT da.asset_id, da.node_id,
 		da.client_prefix_key, da.request_id, da.status, COALESCE(da.first_transfer_at, ''),
-		da.expires_at, COALESCE(SUM(te.sent_bytes), 0)
-		FROM download_authorizations da LEFT JOIN traffic_events te
-		ON te.authorization_id = da.id AND te.accounted_at IS NOT NULL
-		WHERE da.id = ? GROUP BY da.id`, id).
+		da.expires_at, COALESCE(tr.settled_bytes, 0)
+		FROM download_authorizations da LEFT JOIN traffic_reservations tr
+		ON tr.authorization_id = da.id WHERE da.id = ?`, id).
 		Scan(&assetID, &nodeID, &prefix, &reqID, &state, &first, &expires, &sent)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "授权不存在"})
