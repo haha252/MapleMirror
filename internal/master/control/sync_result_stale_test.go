@@ -74,6 +74,27 @@ func TestExpiredLeaseSyncTaskResultDoesNotPublishVerifiedAsset(t *testing.T) {
 	assertControlAssetState(t, repo, "asset-new", "pending")
 }
 
+func TestUnknownSyncTaskResultIsAcknowledged(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+
+	session := seedNodeAndSession(t, repo)
+	seedAssetTarget(t, repo, session.NodeID)
+
+	result, err := repo.AcceptSyncTaskResult(context.Background(), session, 1,
+		successfulTaskResult("missing-task", "asset-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AcceptedSequence != 1 {
+		t.Fatalf("unknown result should still ACK sequence, got=%d", result.AcceptedSequence)
+	}
+	assertTableCount(t, repo, "node_tasks",
+		"node_id = 'node-1' AND id = 'missing-task'", 0)
+	assertTableCount(t, repo, "node_inventory",
+		"node_id = 'node-1' AND asset_id = 'asset-1'", 0)
+}
+
 func TestLeasedSentSyncTaskResultCanComplete(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

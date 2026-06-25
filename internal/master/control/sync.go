@@ -128,6 +128,23 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 	now := nowValue.Format(time.RFC3339Nano)
 	boundResult, err := bindTaskResultAsset(ctx, tx, session.NodeID, result)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			if err := r.updateSequence(session, seq); err != nil {
+				return HeartbeatResult{}, err
+			}
+			ready := routingReady(ctx, tx, session.NodeID)
+			if r.Logger != nil {
+				r.Logger.Debug(ctx, "未知同步任务结果已忽略",
+					slog.String("node_id", session.NodeID),
+					slog.String("task_id", result.TaskID),
+					slog.String("asset_id", result.AssetID),
+					slog.String("result", result.Result))
+			}
+			return HeartbeatResult{
+				AcceptedSequence: seq, ManagedState: managedState(ready),
+				RoutingReady: ready,
+			}, tx.Commit()
+		}
 		return HeartbeatResult{}, err
 	}
 	checkedResult, inventory, hasInventory, err := inspectSucceededSyncResult(ctx, tx, boundResult)
