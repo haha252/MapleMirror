@@ -18,13 +18,6 @@ type controlMessageResult struct {
 	DispatchSyncTasks      bool
 }
 
-func learnSyncTaskSlots(result *controlMessageResult, nodeID string, runtime *RuntimeStore) {
-	if result == nil || !result.SyncTaskSlotsKnown || runtime == nil {
-		return
-	}
-	runtime.SetSyncTaskSlotsAvailable(nodeID, result.SyncTaskSlotsAvailable)
-}
-
 func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (controlMessageResult, error) {
 	last, err := s.Repo.currentSequence(session)
 	if err != nil {
@@ -103,6 +96,14 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 			return controlMessageResult{}, err
 		}
 		result, err := s.Repo.AcceptTrafficEvent(context.Background(), session, msg.Sequence, event)
+		return controlMessageResult{HeartbeatResult: result}, err
+	case protocol.TypeDownloadAuthorizationAck:
+		var ack protocol.DownloadAuthorizationAck
+		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+			return controlMessageResult{}, err
+		}
+		result, err := s.Repo.AcceptDownloadAuthorizationAck(context.Background(),
+			session, msg.Sequence, ack)
 		return controlMessageResult{HeartbeatResult: result}, err
 	case protocol.TypeAuthorizationStatusEvent:
 		var event protocol.AuthorizationStatusEvent

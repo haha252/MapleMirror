@@ -101,8 +101,24 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	}
 	issued := now.Format(time.RFC3339Nano)
 	expires := expiresAfter(now, lifetime.MaxDuration)
+	firstConnectionSeconds := durationSeconds(lifetime.FirstConnectionTimeout)
+	idleTimeoutSeconds := durationSeconds(lifetime.IdleTimeout)
+	maxDurationSeconds := durationSeconds(lifetime.MaxDuration)
+	var token string
+	if sign != nil {
+		token, err = sign(downloadtoken.Claims{AuthorizationID: authID})
+		if err != nil {
+			return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+		}
+	}
+	tokenHash := ""
+	if token != "" {
+		tokenHash = downloadtoken.OpaqueHash(token)
+	}
 	if err := insertAuthorization(ctx, tx, authID, c, asset.NodeID, maxBytes,
-		rangeLimit, issued, expires, reqID); err != nil {
+		trafficLimitBytes(trafficLimit, exempt), rangeLimit, issued, expires,
+		firstConnectionSeconds, idleTimeoutSeconds, maxDurationSeconds,
+		reqID, tokenHash); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
 	if err := insertReservation(ctx, tx, authID, day, trafficLimit, reservationStatus, now, scopes); err != nil {
@@ -122,9 +138,9 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 		AssetID: c.AssetID, NodeID: asset.NodeID, ProjectID: asset.ProjectID,
 		System: asset.System, Architecture: asset.Architecture, ClientPrefix: c.ClientPrefixKey,
 		IssuedAt: issued, ExpiresAt: expires,
-		FirstConnectionSeconds: durationSeconds(lifetime.FirstConnectionTimeout),
-		IdleTimeoutSeconds:     durationSeconds(lifetime.IdleTimeout),
-		MaxDurationSeconds:     durationSeconds(lifetime.MaxDuration),
+		FirstConnectionSeconds: firstConnectionSeconds,
+		IdleTimeoutSeconds:     idleTimeoutSeconds,
+		MaxDurationSeconds:     maxDurationSeconds,
 		MaxBytes:               maxBytes, TrafficLimitBytes: trafficLimitBytes(trafficLimit, exempt),
 		RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
 	debug := AuthorizationDebug{
@@ -141,15 +157,11 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 		RequestRemainingMicrounits: requestRemaining,
 		TrafficRemainingBytes:      trafficRemaining,
 	}
-	var token string
-	if sign != nil {
-		token, err = sign(claims)
-		if err != nil {
-			return IssuedAuthorization{}, AuthorizationDebug{}, "", err
-		}
-	}
 	if err := tx.Commit(); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+	}
+	if tokenHash != "" {
+		s.notifyAuthorizationDelivery(asset.NodeID)
 	}
 	s.finishChallenge(c.ID)
 	return IssuedAuthorization{Claims: claims}, debug, token, nil
@@ -166,10 +178,10 @@ func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatu
 	var out AuthorizationStatus
 	err := s.DB.QueryRowContext(ctx, `SELECT da.id, da.asset_id, da.node_id,
 		COALESCE(NULLIF(n.public_name, ''), '节点不可用'), da.client_prefix_key,
-		da.status, da.expires_at FROM download_authorizations da
+		da.status, da.expires_at, da.token_hash FROM download_authorizations da
 		LEFT JOIN nodes n ON n.id = da.node_id WHERE da.id = ?`, id).
 		Scan(&out.AuthorizationID, &out.AssetID, &out.NodeID, &out.NodeName,
-			&out.ClientPrefixKey, &out.State, &out.ExpiresAt)
+			&out.ClientPrefixKey, &out.State, &out.ExpiresAt, &out.TokenHash)
 	return out, err
 }
 
@@ -230,14 +242,4 @@ func (s Store) rangeConcurrencyLimit() int {
 		return 32
 	}
 	return s.RangeLimit
-}
-
-func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge,
-	nodeID string, size int64, rangeLimit int, issued, expires, reqID string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO download_authorizations
-		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at,
-		max_bytes, range_limit, status, request_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?)`,
-		id, c.AssetID, nodeID, c.ClientPrefixKey, issued, expires, size, rangeLimit, reqID)
-	return err
 }

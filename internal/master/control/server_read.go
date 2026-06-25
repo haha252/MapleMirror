@@ -15,16 +15,20 @@ func (s ControlServer) readControlFrameOrDispatchWake(conn net.Conn,
 	deadline := time.Now().Add(s.sessionReadTimeout())
 	for {
 		if s.Repo.runtime().ConsumeSyncTaskWake(session.NodeID) {
+			auths, err := s.dispatchDownloadAuthorizations(conn, session, reqID)
+			if err != nil {
+				return protocol.Envelope{}, auths, err
+			}
 			dispatched, _, err := s.dispatchSyncTasksInteractively(conn, session, reqID,
 				controlMessageResult{DispatchSyncTasks: true})
 			if err != nil {
-				return protocol.Envelope{}, dispatched, err
+				return protocol.Envelope{}, auths + dispatched, err
 			}
-			if dispatched > 0 {
-				return protocol.Envelope{}, dispatched, nil
+			if auths+dispatched > 0 {
+				return protocol.Envelope{}, auths + dispatched, nil
 			}
 			if ready, err := s.Repo.hasDispatchableSyncTask(context.Background(), session.NodeID); err != nil {
-				return protocol.Envelope{}, dispatched, err
+				return protocol.Envelope{}, auths + dispatched, err
 			} else if ready {
 				s.Repo.runtime().NotifySyncTasks(session.NodeID)
 			}

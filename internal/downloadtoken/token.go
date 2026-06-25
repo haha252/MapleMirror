@@ -3,8 +3,10 @@ package downloadtoken
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 
 const Version = "download.v2"
 const ReplicationVersion = "replication.v1"
+const OpaqueBytes = 32
 
 type Signer struct {
 	private ed25519.PrivateKey
@@ -99,6 +102,19 @@ func GenerateKeyFiles(privatePath, publicPath string) error {
 		return err
 	}
 	return writePEM(publicPath, "PUBLIC KEY", publicDER, 0o644)
+}
+
+func NewOpaque() (string, error) {
+	data := make([]byte, OpaqueBytes)
+	if _, err := rand.Read(data); err != nil {
+		return "", fmt.Errorf("生成下载令牌失败：%w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(data), nil
+}
+
+func OpaqueHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s Signer) Sign(claims Claims) (string, error) {

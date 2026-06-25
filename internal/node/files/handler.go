@@ -64,8 +64,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusNotFound, "资产不存在")
 		return
 	}
-	claims, err := h.Signer.Verify(bearer(r))
-	if err != nil || claims.NodeID != h.NodeID {
+	claims, err := h.verifyDownloadToken(bearer(r))
+	if err != nil {
 		httpError(w, r, http.StatusUnauthorized, "下载令牌无效")
 		return
 	}

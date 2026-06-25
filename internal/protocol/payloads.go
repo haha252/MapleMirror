@@ -182,6 +182,29 @@ type TrafficEventAck struct {
 	Message          string `json:"message"`
 }
 
+type DownloadAuthorization struct {
+	AuthorizationID        string    `json:"authorization_id"`
+	TokenHash              string    `json:"token_hash"`
+	AssetID                string    `json:"asset_id"`
+	NodeID                 string    `json:"node_id"`
+	ClientPrefix           string    `json:"client_prefix"`
+	IssuedAt               time.Time `json:"issued_at"`
+	ExpiresAt              time.Time `json:"expires_at"`
+	FirstConnectionSeconds int       `json:"first_connection_timeout_seconds"`
+	IdleTimeoutSeconds     int       `json:"idle_timeout_seconds"`
+	MaxDurationSeconds     int       `json:"max_duration_seconds"`
+	MaxBytes               int64     `json:"max_bytes"`
+	TrafficLimitBytes      int64     `json:"traffic_limit_bytes"`
+	RangeConcurrencyLimit  int       `json:"range_concurrency_limit"`
+	RequestID              string    `json:"request_id"`
+}
+
+type DownloadAuthorizationAck struct {
+	AcceptedSequence uint64 `json:"accepted_sequence"`
+	AuthorizationID  string `json:"authorization_id"`
+	Message          string `json:"message"`
+}
+
 type AuthorizationStatusEvent struct {
 	AuthorizationID string    `json:"authorization_id"`
 	AssetID         string    `json:"asset_id"`

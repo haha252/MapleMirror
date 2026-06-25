@@ -18,6 +18,8 @@ const (
 	TypeSyncTaskResult           = "sync_task_result"
 	TypeTrafficEvent             = "traffic_event"
 	TypeTrafficEventAck          = "traffic_event_ack"
+	TypeDownloadAuthorization    = "download_authorization"
+	TypeDownloadAuthorizationAck = "download_authorization_ack"
 	TypeAuthorizationStatusEvent = "authorization_status_event"
 	TypeAuthorizationStatusAck   = "authorization_status_event_ack"
 	TypeTrafficReplay            = "traffic_replay_request"
@@ -40,6 +42,7 @@ var controlTypes = map[string]bool{
 	TypeSyncTask: true, TypeSyncTaskAck: true,
 	TypeSyncTaskProgress: true, TypeSyncTaskResult: true,
 	TypeTrafficEvent: true, TypeTrafficEventAck: true,
+	TypeDownloadAuthorization: true, TypeDownloadAuthorizationAck: true,
 	TypeAuthorizationStatusEvent: true, TypeAuthorizationStatusAck: true,
 	TypeTrafficReplay:    true,
 	TypeReconcileRequest: true, TypeReconcileResult: true,

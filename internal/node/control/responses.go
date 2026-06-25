@@ -44,6 +44,17 @@ func (c Client) readExpectedResponse(conn net.Conn, reqID string,
 			*sequence = next
 			continue
 		}
+		if msg.MessageType == protocol.TypeDownloadAuthorization {
+			if sequence == nil {
+				return protocol.Envelope{}, errors.New("收到下载授权但当前控制序号不可用")
+			}
+			next, err := c.handleDownloadAuthorization(conn, reqID, *sequence, msg)
+			if err != nil {
+				return protocol.Envelope{}, err
+			}
+			*sequence = next
+			continue
+		}
 		for _, messageType := range expected {
 			if msg.MessageType == messageType {
 				return msg, nil

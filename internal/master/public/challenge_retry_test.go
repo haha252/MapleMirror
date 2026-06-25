@@ -61,7 +61,7 @@ func TestSignedAuthorizationFailureKeepsChallengeRetryable(t *testing.T) {
 	assertPublicTableCount(t, db, "traffic_reservations", 0)
 }
 
-func TestHTTPAuthorizationSignFailureKeepsChallengeRetryable(t *testing.T) {
+func TestHTTPAuthorizationReturnsShortOpaqueToken(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	store := Store{DB: db}
@@ -82,12 +82,23 @@ func TestHTTPAuthorizationSignFailureKeepsChallengeRetryable(t *testing.T) {
 		Solution:    solveNonce(challenge),
 	})
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("sign failure status=%d body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("authorization status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	assertChallengeLoadable(t, store, challenge.ID)
-	assertPublicTableCount(t, db, "download_authorizations", 0)
-	assertPublicTableCount(t, db, "traffic_reservations", 0)
+	body := rec.Body.String()
+	if !strings.Contains(body, `"download_token":"`) {
+		t.Fatalf("response should include download token: %s", body)
+	}
+	token := body[strings.Index(body, `"download_token":"`)+len(`"download_token":"`):]
+	token = token[:strings.Index(token, `"`)]
+	if len(token) != 43 {
+		t.Fatalf("opaque token length=%d want 43: %s", len(token), token)
+	}
+	var hash string
+	if err := db.QueryRow(`SELECT token_hash FROM download_authorizations
+		WHERE asset_id = 'asset-1'`).Scan(&hash); err != nil || hash == "" || strings.Contains(hash, token) {
+		t.Fatalf("authorization should store only token hash: hash=%q err=%v", hash, err)
+	}
 }
 
 func TestHTTPAuthorizationRejectsDifferentClientPrefix(t *testing.T) {

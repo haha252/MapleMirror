@@ -114,6 +114,7 @@ type AuthorizationStatus struct {
 	ClientPrefixKey string
 	State           string
 	ExpiresAt       string
+	TokenHash       string
 }
 
 func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, _ string) (Challenge, error) {
@@ -165,6 +166,12 @@ func (s *Store) finishChallenge(id string) {
 
 func (s *Store) releaseChallenge(id string) {
 	s.challengeMemory().release(id)
+}
+
+func (s Store) notifyAuthorizationDelivery(nodeID string) {
+	if s.Runtime != nil {
+		s.Runtime.NotifySyncTasks(nodeID)
+	}
 }
 
 func (s *Store) challengeMemory() *challengeMemory {

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"mirror-server/internal/downloadtoken"
 )
 
 type challengeSubmit struct {
@@ -35,7 +37,9 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		return
 	}
 	auth, debug, token, err := s.Store.IssueSignedAuthorization(r.Context(),
-		loaded, s.TokenLifetime, requestID(r), s.Signer.Sign)
+		loaded, s.TokenLifetime, requestID(r), func(downloadtoken.Claims) (string, error) {
+			return downloadtoken.NewOpaque()
+		})
 	if err != nil {
 		code, stable := http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR"
 		message := "下载授权签发失败"
@@ -119,18 +123,19 @@ func (s Server) authorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.URL.Path[len("/api/public/v1/authorizations/"):]
-	claims, err := s.Signer.Verify(authorizationBearer(r))
-	if err != nil || claims.AuthorizationID != id {
-		writeError(w, r, http.StatusUnauthorized, "DOWNLOAD_TOKEN_INVALID", "下载令牌无效")
-		return
-	}
 	auth, err := s.Store.Authorization(r.Context(), id)
 	if err != nil {
 		writeError(w, r, http.StatusNotFound, "ASSET_NOT_FOUND", "授权不存在")
 		return
 	}
-	if claims.AssetID != auth.AssetID || claims.NodeID != auth.NodeID ||
-		claims.ClientPrefix != auth.ClientPrefixKey || claims.ClientPrefix != s.clientPrefix(r) {
+	token := authorizationBearer(r)
+	claims, verifyErr := s.Signer.Verify(token)
+	legacyOK := verifyErr == nil && claims.AuthorizationID == id &&
+		claims.AssetID == auth.AssetID && claims.NodeID == auth.NodeID &&
+		claims.ClientPrefix == auth.ClientPrefixKey && claims.ClientPrefix == s.clientPrefix(r)
+	opaqueOK := auth.TokenHash != "" && auth.TokenHash == downloadtoken.OpaqueHash(token) &&
+		auth.ClientPrefixKey == s.clientPrefix(r)
+	if !legacyOK && !opaqueOK {
 		writeError(w, r, http.StatusUnauthorized, "DOWNLOAD_TOKEN_INVALID", "下载令牌无效")
 		return
 	}

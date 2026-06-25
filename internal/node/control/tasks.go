@@ -61,7 +61,7 @@ func (c Client) readReadyOptionalTasksToCapacity(conn net.Conn, reqID string,
 
 func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
 	sequence uint64, timeout time.Duration) (uint64, bool, error) {
-	if c.availableSyncTaskSlots() <= 0 {
+	if c.Executor == nil && c.DB == nil {
 		return sequence, false, nil
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
@@ -75,6 +75,13 @@ func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
 	}
 	if msg.MessageType == protocol.TypeProtocolError {
 		return sequence, false, parseRejectionError(msg)
+	}
+	if msg.MessageType == protocol.TypeDownloadAuthorization {
+		next, err := c.handleDownloadAuthorization(conn, reqID, sequence, msg)
+		if err != nil {
+			return sequence, false, err
+		}
+		return next, true, nil
 	}
 	if msg.MessageType != protocol.TypeSyncTask {
 		return sequence, false, nil

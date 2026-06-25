@@ -404,7 +404,7 @@ JSON 示例：
   "data": {
     "authorization_id": "授权标识",
     "download_url": "https://node.example/example/v1.2.3/example-windows-amd64.zip",
-    "download_token": "短时签名令牌",
+    "download_token": "43 字符短时随机令牌",
     "expires_at": "2026-05-28T12:05:00Z",
     "range_concurrency_limit": 32,
     "max_bytes": 246912
@@ -469,7 +469,7 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 }
 ```
 
-成功响应与网页授权一致。挑战只在授权记录、流量预留和下载令牌签名整体成功后才被消费；额度不足、无可路由节点、签名失败或服务端错误不会消费挑战，客户端可在挑战过期前重试。同一挑战并发提交时，正在处理中的请求返回 `CHALLENGE_IN_PROGRESS`。
+成功响应与网页授权一致。挑战只在授权记录、流量预留和短下载令牌生成整体成功后才被消费；额度不足、无可路由节点、令牌生成失败或服务端错误不会消费挑战，客户端可在挑战过期前重试。同一挑战并发提交时，正在处理中的请求返回 `CHALLENGE_IN_PROGRESS`。
 
 授权签发前会再次检查黑名单，覆盖“挑战创建后客户端被封禁”的窗口。命中后返回 `403 CLIENT_BLOCKED`，不会签发下载令牌。
 
@@ -479,7 +479,7 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 `GET /api/public/v1/authorizations/{authorization_id}`
 
-必须携带该授权对应的下载令牌，且客户端前缀必须与令牌一致。M5 返回授权基本状态和已由主节点幂等入账的真实发送字节；`node_id` 字段为公开节点名，不返回内部节点 ID。
+必须携带该授权对应的下载令牌，且客户端前缀必须与授权记录一致。M5 返回授权基本状态和已由主节点幂等入账的真实发送字节；`node_id` 字段为公开节点名，不返回内部节点 ID。
 
 ```text
 GET /api/public/v1/authorizations/{authorization_id}
@@ -548,13 +548,14 @@ X-Request-ID: 节点请求标识
 
 M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，实现应返回 `400 INVALID_REQUEST` 或 `416 RANGE_NOT_SATISFIABLE`，并保持错误码稳定。
 
-## 9. 下载令牌声明
+## 9. 下载令牌
 
-下载令牌至少绑定：
+公共下载授权返回的 `download_token` 是 32 字节随机数的 base64url 表示，长度固定为 43 字符。主节点只保存令牌的 SHA-256 哈希，并通过控制通道把授权详情下发到被绑定的下载节点；下载节点按本地缓存中的哈希和授权字段校验请求。
+
+授权详情至少绑定：
 
 | 声明 | 必填 | 说明 |
 | --- | --- | --- |
-| `token_version` | 是 | `download.v2` |
 | `authorization_id` | 是 | 主节点授权记录 |
 | `asset_id` | 是 | 只能下载该资产 |
 | `node_id` | 是 | 只能由该节点接受 |
@@ -564,7 +565,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 | `range_concurrency_limit` | 是 | 并发 Range 限制，默认来自 `quota.yaml` 的 `range_concurrency_limit`，默认值 `32` |
 | `request_id` | 是 | 主节点签发请求 ID |
 
-下载令牌使用 Ed25519 非对称签名：主节点持私钥签发，下载节点只持公钥验证。令牌格式仍为 `base64url(payload).base64url(signature)`。伪造、过期、跨节点、跨资产复用的令牌必须被拒绝。
+下载节点不得接受哈希不存在、过期、跨节点、跨资产或已本地作废的令牌。旧版 `download.v2` Ed25519 签名令牌在兼容期仍可由下载节点按原声明校验，但新签发的公共下载令牌使用 opaque token。
 
 ## 10. M5 统计字段
 

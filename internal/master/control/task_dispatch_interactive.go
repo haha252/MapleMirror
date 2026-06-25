@@ -73,12 +73,17 @@ func (s ControlServer) readInterleavedControlMessage(conn net.Conn, session Sess
 func (s ControlServer) writeResponsesAfterMessage(conn net.Conn, session Session, reqID string,
 	msg protocol.Envelope, result controlMessageResult) (int, error) {
 	dispatched := 0
+	auths, err := s.dispatchDownloadAuthorizations(conn, session, reqID)
+	if err != nil {
+		return auths, err
+	}
+	dispatched += auths
 	if result.DispatchSyncTasks && shouldDispatchNextTask(msg.MessageType) {
-		var err error
 		dispatched, result, err = s.dispatchSyncTasksInteractively(conn, session, reqID, result)
 		if err != nil {
 			return dispatched, err
 		}
+		dispatched += auths
 	}
 	return dispatched, s.writeMessageAck(conn, session, reqID, msg, result.HeartbeatResult)
 }

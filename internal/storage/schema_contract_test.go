@@ -33,6 +33,7 @@ var expectedSchemaFiles = map[string]string{
 	"migrations/master/000020_asset_classification.sql":     "98fdc26f2d792f8b1877708265d8804a77ebf3c0a7a40f2ef12fb4677895c8cb",
 	"migrations/master/000021_node_download_priority.sql":   "91ddf909b375e8bee6f53bd5ff86a861ac3d9a6b8ad0f25721dfa11b15bc499d",
 	"migrations/master/000022_authorization_status.sql":     "f5f7084ffa78c9ed956fff8c7ae90c311a59e9f08d593bb6799003e81d589b3e",
+	"migrations/master/000023_opaque_download_tokens.sql":   "94a34d6ad2e8ad2fcb9c8964931322db53114ec5cab3c7e43fe4be0a3a375689",
 	"migrations/node/000001_state.sql":                      "3501b8a94e3fac8eb0807afd32183effd81874e2001ff7b69cb43b0a25b3a0c2",
 	"migrations/node/000002_identity.sql":                   "dab9fe79b6b455ce7109c7eac041e17732ad5d0c2eb7f9c89bf3f793dd30b88e",
 	"migrations/node/000003_sync_state.sql":                 "973fb3190ee2a212b883e3d6686db18afdcb3bb1fdd59d719353ec0cf99d77e7",
@@ -41,6 +42,7 @@ var expectedSchemaFiles = map[string]string{
 	"migrations/node/000005_identity_materials.sql":         "c083a2ead0e7c1046a952661597ce2612df66ca78407ce482ff1aaf6199dfdcb",
 	"migrations/node/000006_inventory_force_report.sql":     "78b0bab767831725fd5b90fdf781095b0edf42d0e1a9bf56f30ba09852c432a3",
 	"migrations/node/000007_authorization_state.sql":        "091deeac4f7ef4a1196ff0f55af72b9b19eb064a35ca9e1d8235fc08f2d7743c",
+	"migrations/node/000008_opaque_download_tokens.sql":     "93376fc051fc9c73f5309aadcddd8860793ebf679b3b067f38f0835c4a8c0571",
 }
 
 func TestSchemaFilesRequireVersionedUpgrade(t *testing.T) {

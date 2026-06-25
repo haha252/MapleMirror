@@ -155,7 +155,7 @@ const apiDocsBody = `
   "data": {
     "authorization_id": "auth_123",
     "download_url": "https://node.example/example/v1.2.3/example-windows-amd64.zip",
-    "download_token": "短时签名令牌",
+    "download_token": "43 字符短时随机令牌",
     "expires_at": "2026-05-28T12:05:00Z"
   }
 }</code></pre>

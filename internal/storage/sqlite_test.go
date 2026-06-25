@@ -37,13 +37,14 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertColumnDefault(t, db, "nodes", "download_priority", "50")
 	assertColumn(t, db, "assets", "variant")
 	assertColumn(t, db, "assets", "classification_reason")
+	assertColumn(t, db, "download_authorizations", "token_hash")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	assertDBVersion(t, db, "master", 5)
+	assertDBVersion(t, db, "master", 6)
 	var legacyCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
 		t.Fatal(err)
@@ -72,7 +73,8 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertColumn(t, db, "control_identity", "private_key_pem")
 	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
 	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
-	assertDBVersion(t, db, "node", 4)
+	assertColumn(t, db, "local_authorizations", "token_hash")
+	assertDBVersion(t, db, "node", 5)
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {

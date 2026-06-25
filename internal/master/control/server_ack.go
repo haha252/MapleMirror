@@ -22,6 +22,10 @@ func (s ControlServer) writeMessageAck(conn net.Conn, session Session, reqID str
 			Message:          "流量事件已入账",
 		})
 	}
+	if msg.MessageType == protocol.TypeDownloadAuthorizationAck {
+		messageType = protocol.TypeHeartbeatAck
+		payload = HeartbeatAck(result)
+	}
 	if msg.MessageType == protocol.TypeAuthorizationStatusEvent {
 		messageType = protocol.TypeAuthorizationStatusAck
 		payload, _ = json.Marshal(protocol.AuthorizationStatusAck{

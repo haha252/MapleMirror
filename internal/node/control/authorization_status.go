@@ -31,7 +31,8 @@ func (c Client) loadPendingAuthorizationStatusEvents(limit int) ([]protocol.Auth
 	}
 	rows, err := c.DB.Query(`SELECT authorization_id, asset_id, status, reason,
 		updated_at FROM local_authorizations
-		WHERE reported_at IS NULL AND status != 'active'
+		WHERE reported_at IS NULL
+		AND status IN ('expired_first_connection', 'expired_idle', 'expired_max_duration')
 		ORDER BY updated_at LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
