@@ -93,8 +93,14 @@ func main() {
 		logger.Error(context.Background(), "数据库初始化失败，主节点无法启动", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	defer database.Close()
+	walTruncateThreshold, err := config.ParseBytes("database.wal_truncate_threshold", cfg.Database.WALTruncateThreshold, true)
+	if err != nil {
+		logger.Error(context.Background(), "数据库 WAL 配置无效", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer closeDatabaseWithCheckpoint(cfg, database, walTruncateThreshold, logger)
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
+	startDatabaseMaintenance(cfg, database, walTruncateThreshold, logger)
 
 	runtime := mastercontrol.NewRuntimeStore()
 	tokenSigner, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)

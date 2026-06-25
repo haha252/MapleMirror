@@ -95,6 +95,7 @@ type versionLogEvent struct {
 	Target  int
 	From    int
 	To      int
+	Mode    string
 }
 
 func collectVersionLogEvents(events *[]versionLogEvent) versionLogFunc {
@@ -112,10 +113,21 @@ func collectVersionLogEvents(events *[]versionLogEvent) versionLogFunc {
 				event.From = int(attr.Value.Int64())
 			case "to_version":
 				event.To = int(attr.Value.Int64())
+			case "checkpoint_mode":
+				event.Mode = attr.Value.String()
 			}
 		}
 		*events = append(*events, event)
 	}
+}
+
+func hasCheckpointMode(events []versionLogEvent, mode string) bool {
+	for _, event := range events {
+		if event.Mode == mode {
+			return true
+		}
+	}
+	return false
 }
 
 func assertVersionLogEvents(t *testing.T, got, want []versionLogEvent) {

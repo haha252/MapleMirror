@@ -19,6 +19,14 @@ database:
   busy_timeout: "5s"
   # 是否启用 SQLite WAL 日志模式；推荐保持 true 以减少读写互相阻塞。
   wal: true
+  # SQLite 自动 checkpoint 的 WAL 页数阈值。
+  wal_autocheckpoint_pages: 1000
+  # SQLite WAL 文件在 checkpoint 后建议保留的最大尺寸。
+  wal_journal_size_limit: "256 MiB"
+  # 主节点启动和后台维护时，WAL 文件超过该尺寸会尝试 TRUNCATE checkpoint。
+  wal_truncate_threshold: "256 MiB"
+  # 主节点运行期后台 WAL checkpoint 检查间隔。
+  wal_checkpoint_interval: "5m"
 
 # 主节点日志配置。
 logging:

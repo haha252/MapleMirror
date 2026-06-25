@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"mirror-server/internal/config"
 
@@ -77,6 +78,83 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
 	assertColumn(t, db, "local_authorizations", "token_hash")
 	assertDBVersion(t, db, "node", 5)
+}
+
+func TestConfigureSetsWALMaintenancePragmas(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "wal.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	settings := walSettings{
+		AutocheckpointPages:    123,
+		JournalSizeLimitBytes:  4 * 1024 * 1024,
+		TruncateThresholdBytes: 4 * 1024 * 1024,
+	}
+	if err := configure(db, 5*time.Second, true, settings); err != nil {
+		t.Fatal(err)
+	}
+	var autocheckpoint int
+	if err := db.QueryRow(`PRAGMA wal_autocheckpoint`).Scan(&autocheckpoint); err != nil {
+		t.Fatal(err)
+	}
+	if autocheckpoint != settings.AutocheckpointPages {
+		t.Fatalf("wal_autocheckpoint=%d want %d", autocheckpoint, settings.AutocheckpointPages)
+	}
+	var limit int64
+	if err := db.QueryRow(`PRAGMA journal_size_limit`).Scan(&limit); err != nil {
+		t.Fatal(err)
+	}
+	if limit != settings.JournalSizeLimitBytes {
+		t.Fatalf("journal_size_limit=%d want %d", limit, settings.JournalSizeLimitBytes)
+	}
+}
+
+func TestCheckpointWALTruncatesLargeWAL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wal.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	settings := walSettings{
+		AutocheckpointPages:    0,
+		JournalSizeLimitBytes:  0,
+		TruncateThresholdBytes: 1,
+	}
+	if err := configure(db, 5*time.Second, true, settings); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE items (id INTEGER PRIMARY KEY, value BLOB)`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 200; i++ {
+		if _, err := db.Exec(`INSERT INTO items(value) VALUES (zeroblob(4096))`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	size, exists, err := WALSize(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists || size <= 0 {
+		t.Fatalf("expected WAL file before checkpoint, exists=%v size=%d", exists, size)
+	}
+	var events []versionLogEvent
+	if err := CheckpointWAL(db, path, settings.TruncateThresholdBytes, collectVersionLogEvents(&events)); err != nil {
+		t.Fatal(err)
+	}
+	size, _, err = WALSize(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size > settings.TruncateThresholdBytes {
+		t.Fatalf("WAL was not truncated: size=%d threshold=%d", size, settings.TruncateThresholdBytes)
+	}
+	if !hasCheckpointMode(events, "TRUNCATE") {
+		t.Fatalf("expected truncate checkpoint log, got %+v", events)
+	}
 }
 
 func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {

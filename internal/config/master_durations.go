@@ -3,6 +3,7 @@ package config
 func masterDurations(c Master) map[string]string {
 	return map[string]string{
 		"database.busy_timeout":                   c.Database.BusyTimeout,
+		"database.wal_checkpoint_interval":        c.Database.WALCheckpointInterval,
 		"scan.interval":                           c.Scan.Interval,
 		"altcha.challenge_ttl":                    c.ALTCHA.ChallengeTTL,
 		"api_pow.challenge_ttl":                   c.APIPoW.ChallengeTTL,

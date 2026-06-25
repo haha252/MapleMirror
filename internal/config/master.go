@@ -29,9 +29,13 @@ type MasterServer struct {
 	EnrollmentListen string `yaml:"enrollment_listen"`
 }
 type Database struct {
-	Path        string `yaml:"path"`
-	BusyTimeout string `yaml:"busy_timeout"`
-	WAL         *bool  `yaml:"wal"`
+	Path                   string `yaml:"path"`
+	BusyTimeout            string `yaml:"busy_timeout"`
+	WAL                    *bool  `yaml:"wal"`
+	WALAutocheckpointPages int    `yaml:"wal_autocheckpoint_pages"`
+	WALJournalSizeLimit    string `yaml:"wal_journal_size_limit"`
+	WALTruncateThreshold   string `yaml:"wal_truncate_threshold"`
+	WALCheckpointInterval  string `yaml:"wal_checkpoint_interval"`
 }
 type RequestID struct {
 	ResponseHeader string `yaml:"response_header"`
@@ -111,6 +115,13 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 		c.Database.WAL = &value
 		warnDefault(warn, "database.wal", "true")
 	}
+	if c.Database.WALAutocheckpointPages == 0 {
+		c.Database.WALAutocheckpointPages = 1000
+		warnDefault(warn, "database.wal_autocheckpoint_pages", "1000")
+	}
+	setString(&c.Database.WALJournalSizeLimit, "256 MiB", "database.wal_journal_size_limit", warn)
+	setString(&c.Database.WALTruncateThreshold, "256 MiB", "database.wal_truncate_threshold", warn)
+	setString(&c.Database.WALCheckpointInterval, "5m", "database.wal_checkpoint_interval", warn)
 	setString(&c.RequestID.ResponseHeader, "X-Request-ID", "request_id.response_header", warn)
 	setString(&c.RequestID.ParentHeader, "X-Request-ID", "request_id.parent_header", warn)
 	setString(&c.Stats.Timezone, "Asia/Shanghai", "stats.timezone", warn)
@@ -200,6 +211,17 @@ func validateMaster(c Master) error {
 	}
 	if c.Node.PublicProbeNetworkFailures <= 0 {
 		return errors.New("node.public_probe_network_failures 必须大于零")
+	}
+	if c.Database.WALAutocheckpointPages < 0 {
+		return errors.New("配置字段 database.wal_autocheckpoint_pages 不得为负数")
+	}
+	for field, value := range map[string]string{
+		"database.wal_journal_size_limit": c.Database.WALJournalSizeLimit,
+		"database.wal_truncate_threshold": c.Database.WALTruncateThreshold,
+	} {
+		if _, err := ParseBytes(field, value, true); err != nil {
+			return err
+		}
 	}
 	if _, err := time.LoadLocation(c.Stats.Timezone); err != nil {
 		return fmt.Errorf("统计时区 stats.timezone 无效：%w", err)
