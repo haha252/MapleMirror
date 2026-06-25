@@ -116,7 +116,7 @@ func existingTraffic(ctx context.Context, tx *sql.Tx, nodeID string, event proto
 		FROM traffic_event_dedupe WHERE node_id = ? AND event_sequence = ?`,
 		nodeID, event.EventSequence).Scan(&authID, &hash)
 	if err == sql.ErrNoRows {
-		return false, nil
+		return existingLegacyTraffic(ctx, tx, nodeID, event)
 	}
 	if err != nil {
 		return false, err

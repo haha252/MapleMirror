@@ -67,22 +67,22 @@ func MigrateTrafficEvents(ctx context.Context, db *sql.DB, opts TrafficMigration
 	}
 }
 
-func EnsureTrafficArchiveReady(ctx context.Context, db *sql.DB) error {
+func TrafficArchiveWarning(ctx context.Context, db *sql.DB) (string, error) {
 	remaining, err := TrafficEventsRemaining(ctx, db)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if remaining == 0 {
-		return nil
+		return "", nil
 	}
 	done, err := TrafficArchiveMigrationComplete(ctx, db)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if done {
-		return fmt.Errorf("旧流量明细归档状态异常：traffic_events 仍有 %d 行", remaining)
+		return fmt.Sprintf("旧流量明细归档状态异常：traffic_events 仍有 %d 行", remaining), nil
 	}
-	return fmt.Errorf("旧流量明细尚未归档：traffic_events 仍有 %d 行，请先执行 -archive-accounting", remaining)
+	return fmt.Sprintf("旧流量明细尚未归档：traffic_events 仍有 %d 行；主节点将兼容旧表幂等检测，建议尽快执行 -archive-accounting", remaining), nil
 }
 
 func loadTrafficRows(ctx context.Context, db *sql.DB, limit int) ([]trafficRow, error) {

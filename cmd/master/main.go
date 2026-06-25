@@ -106,10 +106,13 @@ func main() {
 		runAccountingArchiveMigration(cfg, database, walTruncateThreshold, logger)
 		return
 	}
-	if err := accountingarchive.EnsureTrafficArchiveReady(context.Background(), database); err != nil {
-		logger.Error(context.Background(), "旧流量明细归档未完成，主节点无法启动",
-			slog.String("error", err.Error()))
+	warning, err := accountingarchive.TrafficArchiveWarning(context.Background(), database)
+	if err != nil {
+		logger.Error(context.Background(), "旧流量明细归档状态检查失败", slog.String("error", err.Error()))
 		os.Exit(1)
+	}
+	if warning != "" {
+		logger.Warn(context.Background(), "旧流量明细归档未完成", slog.String("detail", warning))
 	}
 	startDatabaseMaintenance(cfg, database, walTruncateThreshold, logger)
 	archive := newAccountingArchive(cfg, logger)

@@ -85,6 +85,41 @@ func TestAcceptTrafficEventRejectsReplayWithDifferentMetadata(t *testing.T) {
 	}
 }
 
+func TestAcceptTrafficEventAcceptsLegacyTrafficReplay(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	seedTrafficAuth(t, repo)
+	session := Session{ID: "sess-1", NodeID: "node-1"}
+	reported := time.Now().UTC()
+	event := protocol.TrafficEvent{
+		EventSequence: 1, AuthorizationID: "auth-1", AssetID: "asset-1",
+		NodeRequestID: "node-req-1", MasterRequestID: "master-req-1",
+		SentBytes: 5, Status: "completed", ReportedAt: reported,
+	}
+	insertLegacyTrafficEvent(t, repo, event)
+	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err != nil {
+		t.Fatal(err)
+	}
+	assertTableCount(t, repo, "daily_project_stats", "project_id = 'p1'", 0)
+}
+
+func TestAcceptTrafficEventRejectsLegacyTrafficConflict(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	seedTrafficAuth(t, repo)
+	session := Session{ID: "sess-1", NodeID: "node-1"}
+	event := protocol.TrafficEvent{
+		EventSequence: 1, AuthorizationID: "auth-1", AssetID: "asset-1",
+		NodeRequestID: "node-req-1", MasterRequestID: "master-req-1",
+		SentBytes: 5, Status: "completed", ReportedAt: time.Now().UTC(),
+	}
+	insertLegacyTrafficEvent(t, repo, event)
+	event.SentBytes = 7
+	if _, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event); err == nil {
+		t.Fatal("旧明细表中的冲突事件不应被静默确认")
+	}
+}
+
 func TestAcceptTrafficEventAccountsExemptReservation(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
@@ -112,6 +147,21 @@ func TestAcceptTrafficEventAccountsExemptReservation(t *testing.T) {
 		WHERE project_id = 'p1'`).Scan(&sent)
 	if err != nil || sent != 5 {
 		t.Fatalf("豁免授权流量仍应进入项目统计：sent=%d err=%v", sent, err)
+	}
+}
+
+func insertLegacyTrafficEvent(t *testing.T, repo Repository, event protocol.TrafficEvent) {
+	t.Helper()
+	_, err := repo.DB.Exec(`INSERT INTO traffic_events
+		(node_id, event_sequence, authorization_id, node_request_id,
+		master_request_id, sent_bytes, reported_at, accounted_at, asset_id, status)
+		VALUES ('node-1', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		event.EventSequence, event.AuthorizationID, event.NodeRequestID,
+		event.MasterRequestID, event.SentBytes,
+		event.ReportedAt.Format(time.RFC3339Nano),
+		event.ReportedAt.Format(time.RFC3339Nano), event.AssetID, event.Status)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
