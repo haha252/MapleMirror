@@ -56,6 +56,13 @@ stats:
   # 日统计、每日流量限额和日志轮转使用的 IANA 时区名称。
   timezone: "Asia/Shanghai"
 
+# 明细事件归档配置。
+archive:
+  # 是否把授权、授权状态和流量明细追加写入按天分段 JSONL 文件。
+  enabled: true
+  # 归档根目录；程序会写入 traffic/、authorization/ 和 authorization_status/ 子目录。
+  root: "logs"
+
 # GitHub Release 扫描配置。
 scan:
   # 单个启用项目的自动扫描间隔；项目配置变化后会尽快扫描。

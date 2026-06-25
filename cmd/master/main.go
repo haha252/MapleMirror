@@ -17,6 +17,7 @@ import (
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/health"
 	"mirror-server/internal/master/mirrorsync"
@@ -101,6 +102,7 @@ func main() {
 	defer closeDatabaseWithCheckpoint(cfg, database, walTruncateThreshold, logger)
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
 	startDatabaseMaintenance(cfg, database, walTruncateThreshold, logger)
+	archive := newAccountingArchive(cfg, logger)
 
 	runtime := mastercontrol.NewRuntimeStore()
 	tokenSigner, err := downloadtoken.NewSignerFromPrivateFile(cfg.DownloadToken.SigningPrivateKeyFile)
@@ -110,13 +112,14 @@ func main() {
 	}
 	repo := mastercontrol.Repository{
 		DB: database, Logger: logger, Runtime: runtime,
+		Archive:                    archive,
 		ReplicationSigner:          tokenSigner,
 		PublicProbeNetworkFailures: cfg.Node.PublicProbeNetworkFailures,
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
 	publicServer, err := newPublicServer(cfg, quota, notices, projects, *projectsPath,
-		*noticesPath, location, database, runtime, logger, tokenSigner)
+		*noticesPath, location, database, runtime, logger, tokenSigner, archive)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -169,7 +172,7 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader, db *
 func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notices,
 	projects config.Projects, projectsPath, noticesPath string, loc *time.Location,
 	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger,
-	signer downloadtoken.Signer) (public.Server, error) {
+	signer downloadtoken.Signer, archive *accountingarchive.Writer) (public.Server, error) {
 	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	firstConnectionTimeout, _ := time.ParseDuration(cfg.DownloadToken.FirstConnectionTimeout)
@@ -184,7 +187,7 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenLifetime,
 		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
 		cfg.Proxy.TrustedCIDRs, projects, projectsPath, noticesPath, notices.Notices, runtime, logger,
-		cfg.Node.PublicProbeNetworkFailures)
+		cfg.Node.PublicProbeNetworkFailures, archive)
 	if err != nil {
 		return public.Server{}, err
 	}

@@ -13,6 +13,7 @@ import (
 	"mirror-server/internal/config"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
 )
 
@@ -50,7 +51,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
 	projects config.Projects, projectsPath, noticesPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
-	logger *logging.Logger, publicProbeNetworkFailures int) (Server, error) {
+	logger *logging.Logger, publicProbeNetworkFailures int,
+	archive *accountingarchive.Writer) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
@@ -63,7 +65,9 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
 			Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota),
 			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime,
-			PublicProbeNetworkFailures: publicProbeNetworkFailures},
+			PublicProbeNetworkFailures: publicProbeNetworkFailures,
+			Archive:                    archive,
+			Logger:                     logger},
 		Signer:           signer,
 		ALTCHATTL:        altchaTTL,
 		ALTCHADifficulty: altchaDifficulty,

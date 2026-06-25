@@ -45,6 +45,7 @@ func (r Repository) AcceptAuthorizationStatusEvent(ctx context.Context, session 
 	if occurred.IsZero() {
 		occurred = time.Now().UTC()
 	}
+	event.OccurredAt = occurred
 	_, err = tx.ExecContext(ctx, `UPDATE download_authorizations
 		SET status = ?, status_reason = ?, status_updated_at = ?
 		WHERE id = ?`, event.Status, event.Reason,
@@ -56,8 +57,13 @@ func (r Repository) AcceptAuthorizationStatusEvent(ctx context.Context, session 
 		return HeartbeatResult{}, err
 	}
 	ready := routingReady(ctx, tx, session.NodeID)
-	return HeartbeatResult{AcceptedSequence: seq,
-		ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
+	result := HeartbeatResult{AcceptedSequence: seq,
+		ManagedState: managedState(ready), RoutingReady: ready}
+	if err := tx.Commit(); err != nil {
+		return HeartbeatResult{}, err
+	}
+	r.archiveAuthorizationStatus(ctx, session.NodeID, event, time.Now().UTC())
+	return result, nil
 }
 
 func validAuthorizationStatus(status string) bool {

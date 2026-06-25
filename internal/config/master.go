@@ -14,6 +14,7 @@ type Master struct {
 	RequestID     RequestID      `yaml:"request_id"`
 	Proxy         Proxy          `yaml:"proxy"`
 	Stats         Stats          `yaml:"stats"`
+	Archive       Archive        `yaml:"archive"`
 	Scan          Scan           `yaml:"scan"`
 	ALTCHA        ALTCHA         `yaml:"altcha"`
 	APIPoW        APIPoW         `yaml:"api_pow"`
@@ -28,15 +29,6 @@ type MasterServer struct {
 	ControlListen    string `yaml:"control_listen"`
 	EnrollmentListen string `yaml:"enrollment_listen"`
 }
-type Database struct {
-	Path                   string `yaml:"path"`
-	BusyTimeout            string `yaml:"busy_timeout"`
-	WAL                    *bool  `yaml:"wal"`
-	WALAutocheckpointPages int    `yaml:"wal_autocheckpoint_pages"`
-	WALJournalSizeLimit    string `yaml:"wal_journal_size_limit"`
-	WALTruncateThreshold   string `yaml:"wal_truncate_threshold"`
-	WALCheckpointInterval  string `yaml:"wal_checkpoint_interval"`
-}
 type RequestID struct {
 	ResponseHeader string `yaml:"response_header"`
 	ParentHeader   string `yaml:"parent_header"`
@@ -46,6 +38,10 @@ type Proxy struct {
 }
 type Stats struct {
 	Timezone string `yaml:"timezone"`
+}
+type Archive struct {
+	Enabled *bool  `yaml:"enabled"`
+	Root    string `yaml:"root"`
 }
 type Scan struct {
 	Interval       string `yaml:"interval"`
@@ -108,23 +104,11 @@ func LoadMaster(path string, warn WarnFunc) (Master, error) {
 func applyMasterDefaults(c *Master, warn WarnFunc) {
 	applyLoggingDefaults(&c.Logging, "logs/master", warn)
 	setString(&c.Server.ManagementListen, "127.0.0.1:9080", "server.management_listen", warn)
-	setString(&c.Database.Path, "data/master.db", "database.path", warn)
-	setString(&c.Database.BusyTimeout, "5s", "database.busy_timeout", warn)
-	if c.Database.WAL == nil {
-		value := true
-		c.Database.WAL = &value
-		warnDefault(warn, "database.wal", "true")
-	}
-	if c.Database.WALAutocheckpointPages == 0 {
-		c.Database.WALAutocheckpointPages = 1000
-		warnDefault(warn, "database.wal_autocheckpoint_pages", "1000")
-	}
-	setString(&c.Database.WALJournalSizeLimit, "256 MiB", "database.wal_journal_size_limit", warn)
-	setString(&c.Database.WALTruncateThreshold, "256 MiB", "database.wal_truncate_threshold", warn)
-	setString(&c.Database.WALCheckpointInterval, "5m", "database.wal_checkpoint_interval", warn)
+	applyDatabaseDefaults(c, warn)
 	setString(&c.RequestID.ResponseHeader, "X-Request-ID", "request_id.response_header", warn)
 	setString(&c.RequestID.ParentHeader, "X-Request-ID", "request_id.parent_header", warn)
 	setString(&c.Stats.Timezone, "Asia/Shanghai", "stats.timezone", warn)
+	applyArchiveDefaults(c, warn)
 	setString(&c.Scan.Interval, "15m", "scan.interval", warn)
 	if c.ALTCHA.Difficulty == 0 {
 		c.ALTCHA.Difficulty = 22
@@ -212,19 +196,14 @@ func validateMaster(c Master) error {
 	if c.Node.PublicProbeNetworkFailures <= 0 {
 		return errors.New("node.public_probe_network_failures 必须大于零")
 	}
-	if c.Database.WALAutocheckpointPages < 0 {
-		return errors.New("配置字段 database.wal_autocheckpoint_pages 不得为负数")
-	}
-	for field, value := range map[string]string{
-		"database.wal_journal_size_limit": c.Database.WALJournalSizeLimit,
-		"database.wal_truncate_threshold": c.Database.WALTruncateThreshold,
-	} {
-		if _, err := ParseBytes(field, value, true); err != nil {
-			return err
-		}
+	if err := validateDatabase(c.Database); err != nil {
+		return err
 	}
 	if _, err := time.LoadLocation(c.Stats.Timezone); err != nil {
 		return fmt.Errorf("统计时区 stats.timezone 无效：%w", err)
+	}
+	if err := validateArchive(c.Archive); err != nil {
+		return err
 	}
 	if c.ALTCHA.Difficulty <= 0 {
 		return errors.New("网页挑战难度必须大于零")

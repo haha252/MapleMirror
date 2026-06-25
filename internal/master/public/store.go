@@ -8,6 +8,8 @@ import (
 
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/downloadurl"
+	"mirror-server/internal/logging"
+	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/requestid"
 )
@@ -23,6 +25,8 @@ type Store struct {
 	RangeLimit                 int
 	Runtime                    *mastercontrol.RuntimeStore
 	PublicProbeNetworkFailures int
+	Archive                    *accountingarchive.Writer
+	Logger                     *logging.Logger
 }
 
 type ProjectSummary struct {

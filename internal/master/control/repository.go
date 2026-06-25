@@ -13,12 +13,14 @@ import (
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/master/accountingarchive"
 )
 
 type Repository struct {
 	DB                         *sql.DB
 	Logger                     *logging.Logger
 	Runtime                    *RuntimeStore
+	Archive                    *accountingarchive.Writer
 	ReplicationSigner          downloadtoken.Signer
 	ReplicationTokenTTL        time.Duration
 	PublicProbeNetworkFailures int

@@ -58,6 +58,7 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
+	archiveStarted := event.SentBytes > 0 && !info.Started && info.Status == "issued"
 	if event.SentBytes > 0 && !info.Started {
 		_, err = tx.ExecContext(ctx, `UPDATE download_authorizations
 			SET first_transfer_at = ?, status = CASE WHEN status = 'issued' THEN 'active' ELSE status END,
@@ -76,7 +77,20 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		return HeartbeatResult{}, err
 	}
 	ready := routingReady(ctx, tx, session.NodeID)
-	return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
+	result := HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}
+	if err := tx.Commit(); err != nil {
+		return HeartbeatResult{}, err
+	}
+	r.archiveTrafficEvent(ctx, session.NodeID, event, now, time.Now().UTC())
+	if archiveStarted {
+		r.archiveAuthorizationStatus(ctx, session.NodeID, protocol.AuthorizationStatusEvent{
+			AuthorizationID: event.AuthorizationID,
+			AssetID:         event.AssetID,
+			Status:          "active",
+			OccurredAt:      parseArchiveTime(now),
+		}, time.Now().UTC())
+	}
+	return result, nil
 }
 
 type authAccounting struct {
@@ -90,6 +104,7 @@ type authAccounting struct {
 	NetworkKind      string
 	NetworkKey       string
 	Started          bool
+	Status           string
 	StartedIncrement int64
 }
 
@@ -122,7 +137,7 @@ func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event pro
 	var first sql.NullString
 	err := tx.QueryRowContext(ctx, `SELECT r.project_id, tr.scope_day,
 		tr.address_scope_kind, tr.address_scope_key,
-		tr.network_scope_kind, tr.network_scope_key, da.first_transfer_at
+		tr.network_scope_kind, tr.network_scope_key, da.first_transfer_at, da.status
 		FROM download_authorizations da
 		JOIN assets a ON a.id = da.asset_id
 		JOIN releases r ON r.id = a.release_id
@@ -131,7 +146,7 @@ func loadAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, event pro
 		AND da.request_id = ?`,
 		event.AuthorizationID, nodeID, event.AssetID, event.MasterRequestID).
 		Scan(&info.ProjectID, &info.Day, &info.AddressKind, &info.AddressKey,
-			&info.NetworkKind, &info.NetworkKey, &first)
+			&info.NetworkKind, &info.NetworkKey, &first, &info.Status)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return loadLegacyAuthorization(ctx, tx, nodeID, event)
@@ -151,11 +166,11 @@ func loadLegacyAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, eve
 	var prefix string
 	var maxBytes int64
 	err := tx.QueryRowContext(ctx, `SELECT r.project_id, da.client_prefix_key,
-		da.max_bytes, da.first_transfer_at FROM download_authorizations da
+		da.max_bytes, da.first_transfer_at, da.status FROM download_authorizations da
 		JOIN assets a ON a.id = da.asset_id JOIN releases r ON r.id = a.release_id
 		WHERE da.id = ? AND da.node_id = ? AND da.asset_id = ? AND da.request_id = ?`,
 		event.AuthorizationID, nodeID, event.AssetID, event.MasterRequestID).
-		Scan(&info.ProjectID, &prefix, &maxBytes, &first)
+		Scan(&info.ProjectID, &prefix, &maxBytes, &first, &info.Status)
 	if err != nil {
 		return info, err
 	}

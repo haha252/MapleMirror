@@ -143,6 +143,9 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 		MaxDurationSeconds:     maxDurationSeconds,
 		MaxBytes:               maxBytes, TrafficLimitBytes: trafficLimitBytes(trafficLimit, exempt),
 		RangeConcurrencyLimit: rangeLimit, RequestID: reqID}
+	archiveRecord := authorizationArchiveRecord(authID, c, asset, issued, expires, maxBytes,
+		trafficLimitBytes(trafficLimit, exempt), rangeLimit, reqID, tokenHash,
+		firstConnectionSeconds, idleTimeoutSeconds, maxDurationSeconds)
 	debug := AuthorizationDebug{
 		ClientPrefix:               c.ClientPrefixKey,
 		NodeID:                     asset.NodeID,
@@ -160,6 +163,7 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	if err := tx.Commit(); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
+	s.archiveAuthorizationIssued(ctx, archiveRecord, time.Now().UTC())
 	if tokenHash != "" {
 		s.notifyAuthorizationDelivery(asset.NodeID)
 	}
