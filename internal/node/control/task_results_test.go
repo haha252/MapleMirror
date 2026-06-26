@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,6 +124,33 @@ func TestStorePendingTaskResultStopsRunningAck(t *testing.T) {
 	}
 	if next != 7 {
 		t.Fatalf("终态任务不得再发送 running ACK，next=%d", next)
+	}
+}
+
+func TestStorePendingTaskResultTrimsLargeMessage(t *testing.T) {
+	db := openNodeDB(t)
+	defer db.Close()
+	client := Client{NodeID: "node-1", DB: db}
+	err := client.storePendingTaskResult(protocol.SyncTaskResult{
+		TaskID:  "task-large-message",
+		AssetID: "asset-1",
+		Result:  "temporary_error",
+		Message: strings.Repeat("x", maxSyncTaskResultMessageBytes+1024),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var message string
+	err = db.QueryRow(`SELECT COALESCE(message, '') FROM pending_sync_task_results
+		WHERE task_id = 'task-large-message'`).Scan(&message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(message) > maxSyncTaskResultMessageBytes+len("...(truncated)") {
+		t.Fatalf("message was not trimmed, len=%d", len(message))
+	}
+	if !strings.HasSuffix(message, "...(truncated)") {
+		t.Fatalf("trimmed message missing suffix: %q", message[len(message)-20:])
 	}
 }
 

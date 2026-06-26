@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"mirror-server/internal/protocol"
 )
 
 const pendingTaskResultStoreAttempts = 5
+const maxSyncTaskResultMessageBytes = 16 * 1024
 
 func (c *Client) storePendingTaskResultWithRetry(result protocol.SyncTaskResult) error {
 	var err error
@@ -38,6 +40,7 @@ func (c *Client) storePendingTaskResult(result protocol.SyncTaskResult) error {
 	if c.DB == nil {
 		return nil
 	}
+	result.Message = trimSyncTaskResultMessage(result.Message)
 	tx, err := c.DB.Begin()
 	if err != nil {
 		return err
@@ -62,6 +65,17 @@ func (c *Client) storePendingTaskResult(result protocol.SyncTaskResult) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func trimSyncTaskResultMessage(message string) string {
+	if len(message) <= maxSyncTaskResultMessageBytes {
+		return message
+	}
+	out := message[:maxSyncTaskResultMessageBytes]
+	for !utf8.ValidString(out) && len(out) > 0 {
+		out = out[:len(out)-1]
+	}
+	return out + "...(truncated)"
 }
 
 func recordLocalTaskResult(tx *sql.Tx, result protocol.SyncTaskResult) error {

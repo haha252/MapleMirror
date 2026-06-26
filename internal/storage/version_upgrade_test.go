@@ -48,7 +48,7 @@ func TestOpenMasterBackfillsAdminBlockDisplayIPForExistingV1Database(t *testing.
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "admin_ip_blocks", "display_ip")
-	assertDBVersion(t, opened, "master", 8)
+	assertDBVersion(t, opened, "master", 9)
 }
 
 func TestOpenMasterBackfillsDownloadPriorityForExistingV3Database(t *testing.T) {
@@ -91,7 +91,7 @@ func TestOpenMasterBackfillsDownloadPriorityForExistingV3Database(t *testing.T) 
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "nodes", "download_priority")
-	assertDBVersion(t, opened, "master", 8)
+	assertDBVersion(t, opened, "master", 9)
 	var priority int
 	if err := opened.QueryRow(`SELECT download_priority FROM nodes WHERE id = 'node-1'`).Scan(&priority); err != nil {
 		t.Fatal(err)

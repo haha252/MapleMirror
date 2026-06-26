@@ -103,6 +103,30 @@ func TestAcceptTrafficEventAcceptsLegacyTrafficReplay(t *testing.T) {
 	assertTableCount(t, repo, "daily_project_stats", "project_id = 'p1'", 0)
 }
 
+func TestAcceptTrafficEventAcknowledgesUnknownAuthorization(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	seedTrafficAuth(t, repo)
+	session := Session{ID: "sess-1", NodeID: "node-1"}
+	event := protocol.TrafficEvent{
+		EventSequence: 9, AuthorizationID: "missing-auth", AssetID: "asset-1",
+		NodeRequestID: "node-req-1", MasterRequestID: "missing-req",
+		SentBytes: 5, Status: "completed", ReportedAt: time.Now().UTC(),
+	}
+	result, err := repo.AcceptTrafficEvent(context.Background(), session, 2, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AcceptedSequence != 2 {
+		t.Fatalf("unknown traffic should still ACK control sequence, got=%d", result.AcceptedSequence)
+	}
+	assertTableCount(t, repo, "traffic_event_dedupe",
+		"node_id = 'node-1' AND event_sequence = 9", 0)
+	assertTableCount(t, repo, "node_traffic_cursors",
+		"node_id = 'node-1' AND last_event_sequence = 9", 1)
+	assertTableCount(t, repo, "daily_project_stats", "project_id = 'p1'", 0)
+}
+
 func TestAcceptTrafficEventRejectsLegacyTrafficConflict(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

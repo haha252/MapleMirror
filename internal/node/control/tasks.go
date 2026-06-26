@@ -207,6 +207,7 @@ func (c Client) sendTaskResult(conn net.Conn, reqID string, sequence uint64,
 	result protocol.SyncTaskResult) (uint64, error) {
 	slots := c.availableSyncTaskSlots()
 	result.SyncTaskSlotsAvailable = &slots
+	result.Message = trimSyncTaskResultMessage(result.Message)
 	body, _ := json.Marshal(result)
 	if c.Logger != nil {
 		c.Logger.Debug(context.Background(), "node sync task result sent",

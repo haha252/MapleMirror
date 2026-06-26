@@ -140,6 +140,7 @@ func (s ControlServer) writeNextTask(conn net.Conn, session Session, reqID strin
 			slog.Int64("size_bytes", task.Asset.SizeBytes),
 			slog.Int("fallback_sources", len(task.FallbackSources)))
 	}
+	task = fitSyncTaskForControlFrame(task, session, reqID)
 	body, _ := json.Marshal(task)
 	if err := writeControlFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: task.TaskID,

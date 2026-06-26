@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,6 +128,34 @@ func TestSendFullInventoryReportSplitsIntoChunks(t *testing.T) {
 		t.Fatalf("expected next sequence 5, got %d", nextSeq)
 	}
 	<-done
+}
+
+func TestInventoryChunksRespectPayloadBudget(t *testing.T) {
+	var items []protocol.InventoryItem
+	longDigest := "sha256:" + strings.Repeat("a", 2048)
+	for i := 0; i < 600; i++ {
+		items = append(items, protocol.InventoryItem{
+			AssetID:      fmt.Sprintf("asset-%04d", i),
+			DigestSHA256: longDigest,
+			LocalState:   "verified",
+		})
+	}
+	chunks := inventoryChunks(items)
+	if len(chunks) < 2 {
+		t.Fatalf("expected byte-budget chunking, got %d chunk", len(chunks))
+	}
+	for i, chunk := range chunks {
+		if len(chunk) > inventoryChunkSize {
+			t.Fatalf("chunk %d has too many items: %d", i, len(chunk))
+		}
+		var payloadBytes int
+		for _, item := range chunk {
+			payloadBytes += inventoryItemJSONSize(item) + 1
+		}
+		if payloadBytes > inventoryChunkMaxPayloadBytes+len(chunk) {
+			t.Fatalf("chunk %d payload too large: %d", i, payloadBytes)
+		}
+	}
 }
 
 func TestPrepareInventoryReportUsesStoredSnapshot(t *testing.T) {

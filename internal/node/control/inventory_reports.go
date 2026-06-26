@@ -211,18 +211,3 @@ func shouldSendFullInventoryReport(cursor inventoryCursor, now time.Time) bool {
 	}
 	return now.Sub(updatedAt) >= inventoryReportMinInterval
 }
-
-func inventoryChunks(items []protocol.InventoryItem) [][]protocol.InventoryItem {
-	if len(items) == 0 {
-		return [][]protocol.InventoryItem{{}}
-	}
-	chunks := make([][]protocol.InventoryItem, 0, (len(items)+inventoryChunkSize-1)/inventoryChunkSize)
-	for start := 0; start < len(items); start += inventoryChunkSize {
-		end := start + inventoryChunkSize
-		if end > len(items) {
-			end = len(items)
-		}
-		chunks = append(chunks, items[start:end])
-	}
-	return chunks
-}

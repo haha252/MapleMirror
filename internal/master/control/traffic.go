@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/netip"
-	"strings"
 	"time"
 
 	"mirror-server/internal/master/accountingstate"
@@ -46,6 +44,9 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	}
 	info, err := loadAuthorization(ctx, tx, session.NodeID, event)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return r.acceptUnknownTrafficEvent(ctx, tx, session, seq, event, time.Now().UTC())
+		}
 		return HeartbeatResult{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -199,29 +200,6 @@ func loadLegacyAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, eve
 		event.AuthorizationID, info.Day, maxBytes, maxBytes, now.Format(time.RFC3339Nano),
 		info.AddressKind, info.AddressKey, info.NetworkKind, info.NetworkKey)
 	return info, err
-}
-
-type trafficScope struct {
-	Kind string
-	Key  string
-}
-
-func trafficScopes(prefix string) ([2]trafficScope, error) {
-	host := strings.TrimSuffix(strings.TrimSuffix(prefix, "/32"), "/128")
-	addr, err := netip.ParseAddr(host)
-	if err != nil {
-		return [2]trafficScope{}, err
-	}
-	if addr.Is4() {
-		return [2]trafficScope{
-			{"ipv4_32", addr.String() + "/32"},
-			{"ipv4_24", netip.PrefixFrom(addr, 24).Masked().String()},
-		}, nil
-	}
-	return [2]trafficScope{
-		{"ipv6_128", addr.String() + "/128"},
-		{"ipv6_64", netip.PrefixFrom(addr, 64).Masked().String()},
-	}, nil
 }
 
 func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, bytes int64, now string) error {
