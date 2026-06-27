@@ -45,6 +45,7 @@ type Client struct {
 	runningTaskAckLogged           map[string]time.Time
 	runningTaskAckSent             map[string]time.Time
 	controlWorkWake                chan struct{}
+	pendingPublicProbeReady        map[string]pendingPublicProbeReady
 	interruptedLocalTasksRecovered bool
 }
 
@@ -144,7 +145,7 @@ func (c Client) hello(conn net.Conn, reqID string) error {
 	})
 }
 
-func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
+func (c *Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 	actualBandwidth int64) (uint64, error) {
 	active := c.activeDownloads()
 	slots := c.availableSyncTaskSlots()
@@ -183,7 +184,7 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 	return next, nil
 }
 
-func (c Client) acceptPublicProbe(conn net.Conn, reqID string, sequence uint64,
+func (c *Client) acceptPublicProbe(conn net.Conn, reqID string, sequence uint64,
 	msg protocol.Envelope) (uint64, error) {
 	if c.ProbeStore == nil {
 		return sequence, nil
@@ -198,7 +199,12 @@ func (c Client) acceptPublicProbe(conn net.Conn, reqID string, sequence uint64,
 	if err := c.ProbeStore.Accept(*ack.PublicProbe); err != nil {
 		return sequence, err
 	}
-	return c.sendPublicProbeReady(conn, reqID, sequence, ack.PublicProbe.ChallengeID)
+	c.enqueuePublicProbeReady(*ack.PublicProbe)
+	next, _, err := c.flushPendingPublicProbeReady(conn, reqID, sequence, true)
+	if err != nil {
+		return sequence, err
+	}
+	return next, nil
 }
 
 func (c Client) logDebug(message string, attrs ...slog.Attr) {

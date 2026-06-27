@@ -71,8 +71,8 @@ func TestPublicProbeAllowsLoopbackSuccess(t *testing.T) {
 			}, nil
 		})},
 	}
-	err, network := service.verify("node-1", targetURL, challenge)
-	if err != nil || network {
-		t.Fatalf("loopback public probe should succeed: err=%v network=%v", err, network)
+	err, network, attempts := service.verify("node-1", targetURL, challenge)
+	if err != nil || network || attempts != 1 {
+		t.Fatalf("loopback public probe should succeed: err=%v network=%v attempts=%d", err, network, attempts)
 	}
 }

@@ -37,7 +37,7 @@ func (s *PublicProbeService) expirePending(nodeID string, challenge protocol.Pub
 	recordErr := s.Repo.RecordPublicProbeAnswerFailure(context.Background(),
 		nodeID, "public probe ready timeout")
 	s.logProbeFailure(nodeID, fmt.Errorf("public probe ready timeout"),
-		recordErr, true, true, "ready_timeout")
+		recordErr, true, true, "ready_timeout", 1)
 }
 
 func (s *PublicProbeService) cancelPending(nodeID, challengeID string) bool {
@@ -85,18 +85,19 @@ func (s *PublicProbeService) AcceptReady(nodeID string, ready protocol.PublicPro
 func (s *PublicProbeService) verifyAfterReady(nodeID, baseURL string,
 	challenge protocol.PublicProbeChallenge) {
 	defer s.clearActive(nodeID)
-	err, network := s.verify(nodeID, baseURL, challenge)
+	err, network, attempts := s.verify(nodeID, baseURL, challenge)
 	if err == nil {
+		s.logProbeRetriedSuccess(nodeID, attempts)
 		_ = s.Repo.RecordPublicProbeSuccess(context.Background(), nodeID)
 		return
 	}
 	if network {
 		thresholdReached, recordErr := s.Repo.RecordPublicProbeNetworkFailure(
 			context.Background(), nodeID, s.Config.NetworkFailures, err.Error())
-		s.logProbeFailure(nodeID, err, recordErr, false, thresholdReached, "network")
+		s.logProbeFailure(nodeID, err, recordErr, false, thresholdReached, "network", attempts)
 		return
 	}
 	recordErr := s.Repo.RecordPublicProbeAnswerFailure(context.Background(),
 		nodeID, err.Error())
-	s.logProbeFailure(nodeID, err, recordErr, true, true, "answer")
+	s.logProbeFailure(nodeID, err, recordErr, true, true, "answer", attempts)
 }

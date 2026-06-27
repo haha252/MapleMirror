@@ -25,6 +25,13 @@ type PublicProbeConfig struct {
 	NetworkFailures int
 }
 
+const publicProbeVerifyMaxAttempts = 3
+
+var publicProbeVerifyRetryBackoff = []time.Duration{
+	250 * time.Millisecond,
+	time.Second,
+}
+
 type PublicProbeService struct {
 	Repo    Repository
 	Config  PublicProbeConfig
@@ -87,32 +94,59 @@ func (s *PublicProbeService) clearActive(nodeID string) {
 }
 
 func (s *PublicProbeService) verify(nodeID, baseURL string,
-	challenge protocol.PublicProbeChallenge) (error, bool) {
+	challenge protocol.PublicProbeChallenge) (error, bool, int) {
+	attempts := 0
+	for {
+		attempts++
+		err, network, retryable := s.verifyOnce(nodeID, baseURL, challenge)
+		if err == nil {
+			return nil, false, attempts
+		}
+		if !retryable || !s.shouldRetryVerify(challenge.ExpiresAt, attempts) {
+			return err, network, attempts
+		}
+		time.Sleep(publicProbeVerifyRetryBackoff[attempts-1])
+	}
+}
+
+func (s *PublicProbeService) verifyOnce(nodeID, baseURL string,
+	challenge protocol.PublicProbeChallenge) (error, bool, bool) {
 	client := publicProbeHTTPClient(s.Client, s.Config.Timeout)
 	target, err := publicProbeURL(baseURL, challenge.ChallengeID)
 	if err != nil {
-		return err, false
+		return err, false, false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), s.Config.Timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return err, false
+		return err, false, false
 	}
 	req.Header.Set("Cache-Control", "no-store")
 	resp, err := client.Do(req)
 	if err != nil {
-		return err, true
+		return err, true, true
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("public probe HTTP status %d", resp.StatusCode), true, true
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("public probe HTTP status %d", resp.StatusCode), false
+		return fmt.Errorf("public probe HTTP status %d", resp.StatusCode), false, false
 	}
 	var body protocol.PublicProbeResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 8*1024)).Decode(&body); err != nil {
-		return err, false
+		return err, false, false
 	}
-	return s.verifyBody(nodeID, challenge, body), false
+	return s.verifyBody(nodeID, challenge, body), false, false
+}
+
+func (s *PublicProbeService) shouldRetryVerify(expiresAt time.Time, attempts int) bool {
+	if attempts >= publicProbeVerifyMaxAttempts || attempts > len(publicProbeVerifyRetryBackoff) {
+		return false
+	}
+	retryDeadline := time.Now().UTC().Add(publicProbeVerifyRetryBackoff[attempts-1] + s.Config.Timeout)
+	return retryDeadline.Before(expiresAt)
 }
 
 func (s *PublicProbeService) verifyBody(nodeID string,
@@ -136,18 +170,28 @@ func (s *PublicProbeService) verifyBody(nodeID string,
 }
 
 func (s *PublicProbeService) logProbeFailure(nodeID string, probeErr, recordErr error,
-	offline, thresholdReached bool, kind string) {
+	offline, thresholdReached bool, kind string, attempts int) {
 	if s.Logger == nil {
 		return
 	}
 	attrs := []slog.Attr{slog.String("node_id", nodeID),
 		slog.String("kind", kind), slog.Bool("offline", offline),
 		slog.Bool("threshold_reached", thresholdReached),
-		slog.String("error", probeErr.Error())}
+		slog.Int("attempts", attempts), slog.String("error", probeErr.Error())}
 	if recordErr != nil {
 		attrs = append(attrs, slog.String("record_error", recordErr.Error()))
 	}
 	s.Logger.Warn(context.Background(), "节点公网探测失败", attrs...)
+}
+
+func (s *PublicProbeService) logProbeRetriedSuccess(nodeID string, attempts int) {
+	if s.Logger == nil || attempts <= 1 {
+		return
+	}
+	s.Logger.Debug(context.Background(), "节点公网探测重试后成功",
+		slog.String("node_id", nodeID),
+		slog.String("kind", "network"),
+		slog.Int("attempts", attempts))
 }
 
 func newPublicProbeChallenge(now time.Time, ttl time.Duration) (protocol.PublicProbeChallenge, error) {

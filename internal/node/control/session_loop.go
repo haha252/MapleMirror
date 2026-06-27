@@ -14,7 +14,7 @@ type sessionLoopState struct {
 	pendingInventory *pendingInventoryReport
 }
 
-func (c Client) sendSessionReports(conn net.Conn, reqID string,
+func (c *Client) sendSessionReports(conn net.Conn, reqID string,
 	interval time.Duration) error {
 	if interval <= 0 {
 		interval = 5 * time.Second
@@ -60,10 +60,15 @@ func (c Client) sendSessionReports(conn net.Conn, reqID string,
 	}
 }
 
-func (c Client) sendHeartbeatWindow(conn net.Conn, reqID string,
+func (c *Client) sendHeartbeatWindow(conn net.Conn, reqID string,
 	state *sessionLoopState, interval time.Duration) error {
 	actualBandwidth := c.sampleBandwidth()
 	next, err := c.heartbeat(conn, reqID, state.sequence, actualBandwidth)
+	if err != nil {
+		return err
+	}
+	state.sequence = next
+	next, _, err = c.flushPendingPublicProbeReady(conn, reqID, state.sequence, true)
 	if err != nil {
 		return err
 	}
@@ -119,10 +124,15 @@ func (c Client) wakeControlWork() {
 	}
 }
 
-func (c Client) sendNextControlWork(conn net.Conn, reqID string,
+func (c *Client) sendNextControlWork(conn net.Conn, reqID string,
 	state *sessionLoopState) (bool, error) {
-	next, err := c.sendPendingTaskResults(conn, reqID, state.sequence)
-	sent := next != state.sequence
+	next, sent, err := c.flushPendingPublicProbeReady(conn, reqID, state.sequence, false)
+	if err != nil || sent {
+		state.sequence = next
+		return sent, err
+	}
+	next, err = c.sendPendingTaskResults(conn, reqID, state.sequence)
+	sent = next != state.sequence
 	if err != nil || sent {
 		state.sequence = next
 		return sent, err

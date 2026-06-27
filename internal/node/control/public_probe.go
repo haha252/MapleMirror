@@ -14,7 +14,7 @@ func (c Client) sendPublicProbeReady(conn net.Conn, reqID string, sequence uint6
 		return sequence, nil
 	}
 	body, _ := json.Marshal(protocol.PublicProbeReady{ChallengeID: challengeID})
-	messageID := reqID + "-public-probe-ready"
+	messageID := reqID + "-" + challengeID + "-public-probe-ready"
 	if err := c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: messageID,
 		MessageType: protocol.TypePublicProbeReady, SentAt: time.Now().UTC(),
