@@ -124,10 +124,11 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	if err := insertReservation(ctx, tx, authID, day, trafficLimit, reservationStatus, now, scopes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
-	if err := upsertProjectStats(ctx, tx, day, asset.ProjectID, 1, 0, 0); err != nil {
+	webAuth, apiAuth := authorizationSourceIncrements(c.Kind)
+	if err := upsertProjectStats(ctx, tx, day, asset.ProjectID, 1, webAuth, apiAuth, 0, 0); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
-	if err := upsertAssetStats(ctx, tx, day, c.AssetID, 1, 0, 0, nowText()); err != nil {
+	if err := upsertAssetStats(ctx, tx, day, c.AssetID, 1, webAuth, apiAuth, 0, 0, nowText()); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
 	requestRemaining, trafficRemaining, err := quota.snapshot(ctx, tx, day, scopes)

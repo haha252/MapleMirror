@@ -60,16 +60,18 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		t.Fatalf("请求额度未按倍率扣减：tokens=%d err=%v", tokens, err)
 	}
 
-	var authCount int
-	err = db.QueryRow(`SELECT authorization_count FROM daily_project_stats
-		WHERE project_id = 'p1'`).Scan(&authCount)
-	if err != nil || authCount != 1 {
-		t.Fatalf("下载授权次数未入账：count=%d err=%v", authCount, err)
+	var authCount, webAuthCount, apiAuthCount int
+	err = db.QueryRow(`SELECT authorization_count, web_authorization_count, api_authorization_count FROM daily_project_stats
+		WHERE project_id = 'p1'`).Scan(&authCount, &webAuthCount, &apiAuthCount)
+	if err != nil || authCount != 1 || webAuthCount != 0 || apiAuthCount != 1 {
+		t.Fatalf("下载授权次数未按 API 来源入账：total=%d web=%d api=%d err=%v",
+			authCount, webAuthCount, apiAuthCount, err)
 	}
-	err = db.QueryRow(`SELECT authorization_count FROM daily_asset_stats
-		WHERE asset_id = 'asset-1'`).Scan(&authCount)
-	if err != nil || authCount != 1 {
-		t.Fatalf("资源下载授权次数未入账：count=%d err=%v", authCount, err)
+	err = db.QueryRow(`SELECT authorization_count, web_authorization_count, api_authorization_count FROM daily_asset_stats
+		WHERE asset_id = 'asset-1'`).Scan(&authCount, &webAuthCount, &apiAuthCount)
+	if err != nil || authCount != 1 || webAuthCount != 0 || apiAuthCount != 1 {
+		t.Fatalf("资源下载授权次数未按 API 来源入账：total=%d web=%d api=%d err=%v",
+			authCount, webAuthCount, apiAuthCount, err)
 	}
 	var reserved int64
 	err = db.QueryRow(`SELECT address_reserved_bytes FROM traffic_reservations
@@ -78,10 +80,11 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		t.Fatalf("流量预留应按授权最大字节数计算：reserved=%d err=%v", reserved, err)
 	}
 	var rangeLimit int
-	err = db.QueryRow(`SELECT range_limit FROM download_authorizations
-		WHERE id = ?`, auth.Claims.AuthorizationID).Scan(&rangeLimit)
-	if err != nil || rangeLimit != 32 {
-		t.Fatalf("授权落库 Range 并发限制错误：limit=%d err=%v", rangeLimit, err)
+	var sourceKind string
+	err = db.QueryRow(`SELECT range_limit, source_kind FROM download_authorizations
+		WHERE id = ?`, auth.Claims.AuthorizationID).Scan(&rangeLimit, &sourceKind)
+	if err != nil || rangeLimit != 32 || sourceKind != "api" {
+		t.Fatalf("授权落库字段错误：limit=%d source=%q err=%v", rangeLimit, sourceKind, err)
 	}
 }
 

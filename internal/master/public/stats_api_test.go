@@ -22,7 +22,11 @@ func TestStatsAPIsSplitFastAndDetailsSnapshots(t *testing.T) {
 	var fast statsFastSnapshot
 	decodeStatsResponse(t, fastRec, &fast)
 	if fast.Metrics[0] != [3]int64{7, 7, 0} || fast.Metrics[1] != [3]int64{3, 3, 0} ||
-		fast.Metrics[2] != [3]int64{4096, 4096, 0} || fast.Today[1].(float64) != 7 {
+		fast.Metrics[2] != [3]int64{4096, 4096, 0} ||
+		fast.DownloadSources[0] != [3]int64{2, 2, 0} ||
+		fast.DownloadSources[1] != [3]int64{1, 1, 0} ||
+		fast.Today[1].(float64) != 7 ||
+		fast.Today[4].(float64) != 2 || fast.Today[5].(float64) != 1 {
 		t.Fatalf("unexpected fast stats snapshot: %+v", fast)
 	}
 	if strings.Contains(fastRec.Body.String(), `"r"`) || strings.Contains(fastRec.Body.String(), `"n"`) {
@@ -34,7 +38,8 @@ func TestStatsAPIsSplitFastAndDetailsSnapshots(t *testing.T) {
 	srv.Handler().ServeHTTP(detailsRec, req)
 	var details statsDetailsSnapshot
 	decodeStatsResponse(t, detailsRec, &details)
-	if len(details.Ranks) != 1 || details.Ranks[0][3].(float64) != 3 {
+	if len(details.Ranks) != 1 || details.Ranks[0][3].(float64) != 3 ||
+		details.Ranks[0][4].(float64) != 2 || details.Ranks[0][5].(float64) != 1 {
 		t.Fatalf("expected compact rank rows: %+v", details.Ranks)
 	}
 	if len(details.Nodes) != 1 || details.Nodes[0][3].(float64) != 1 ||
@@ -42,6 +47,7 @@ func TestStatsAPIsSplitFastAndDetailsSnapshots(t *testing.T) {
 		t.Fatalf("expected compact node rows: %+v", details.Nodes)
 	}
 	if len(details.Trend.Views) != 30 || len(details.Trend.Downloads) != 30 ||
+		len(details.Trend.WebDownloads) != 30 || len(details.Trend.APIDownloads) != 30 ||
 		len(details.Trend.Bytes) != 30 {
 		t.Fatalf("expected 30-day compact trend payload: %+v", details.Trend)
 	}
@@ -84,6 +90,7 @@ func TestStatsPageRendersShellWithoutInitialSnapshot(t *testing.T) {
 	if !strings.Contains(body, `id="stats-metrics"`) ||
 		!strings.Contains(body, `id="stats-chart"`) ||
 		!strings.Contains(body, `data-trends="[]"`) ||
+		!strings.Contains(body, `/static/public/stats-sources.js?v=`) ||
 		!strings.Contains(body, `/static/public/stats.js?v=`) {
 		t.Fatalf("expected JS-first stats shell: %s", body)
 	}
@@ -99,11 +106,13 @@ func seedStatsSnapshot(t *testing.T, db *sql.DB) {
 	mustExec(t, db, `INSERT INTO daily_site_stats
 		(stat_day, page_views, updated_at) VALUES ('`+day+`', 7, 'now')`)
 	mustExec(t, db, `INSERT INTO daily_project_stats
-		(stat_day, project_id, authorization_count, transfer_started_count, sent_bytes)
-		VALUES ('`+day+`', 'p1', 3, 2, 4096)`)
+		(stat_day, project_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes)
+		VALUES ('`+day+`', 'p1', 3, 2, 1, 2, 4096)`)
 	mustExec(t, db, `INSERT INTO daily_asset_stats
-		(stat_day, asset_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
-		VALUES ('`+day+`', 'asset-1', 3, 2, 4096, 'now')`)
+		(stat_day, asset_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('`+day+`', 'asset-1', 3, 2, 1, 2, 4096, 'now')`)
 	mustExec(t, db, `INSERT INTO daily_node_traffic_stats
 		(stat_day, node_id, sent_bytes, updated_at) VALUES ('`+day+`', 'node-1', 8192, 'now')`)
 }

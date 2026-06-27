@@ -9,8 +9,9 @@ import (
 )
 
 type statsFastSnapshot struct {
-	Metrics [3][3]int64 `json:"m"`
-	Today   [4]any      `json:"p"`
+	Metrics         [3][3]int64 `json:"m"`
+	DownloadSources [2][3]int64 `json:"ds"`
+	Today           [6]any      `json:"p"`
 }
 
 type statsDetailsSnapshot struct {
@@ -20,10 +21,12 @@ type statsDetailsSnapshot struct {
 }
 
 type statsTrendSnapshot struct {
-	Start     string  `json:"s"`
-	Views     []int64 `json:"v"`
-	Downloads []int64 `json:"d"`
-	Bytes     []int64 `json:"b"`
+	Start        string  `json:"s"`
+	Views        []int64 `json:"v"`
+	Downloads    []int64 `json:"d"`
+	WebDownloads []int64 `json:"wd"`
+	APIDownloads []int64 `json:"ad"`
+	Bytes        []int64 `json:"b"`
 }
 
 func (s Server) statsAPI(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +64,16 @@ func (s Store) StatsRealtime(ctx context.Context) (statsFastSnapshot, error) {
 		&views, &downloads, &traffic); err != nil {
 		return out, err
 	}
+	var webDownloads, apiDownloads MetricStat
+	if err := s.loadDownloadSourceSummaries(ctx, previousStart, start, today,
+		&webDownloads, &apiDownloads); err != nil {
+		return out, err
+	}
 	for i, metric := range []MetricStat{views, downloads, traffic} {
 		out.Metrics[i] = metricTuple(metric)
 	}
+	out.DownloadSources[0] = metricTuple(webDownloads)
+	out.DownloadSources[1] = metricTuple(apiDownloads)
 	point, err := s.DailyTrends(ctx, today, today)
 	if err != nil {
 		return out, err
@@ -71,6 +81,7 @@ func (s Store) StatsRealtime(ctx context.Context) (statsFastSnapshot, error) {
 	out.Today[0] = today
 	if len(point) > 0 {
 		out.Today[1], out.Today[2], out.Today[3] = point[0].Views, point[0].Downloads, point[0].SentBytes
+		out.Today[4], out.Today[5] = point[0].WebDownloads, point[0].APIDownloads
 	}
 	return out, nil
 }
@@ -80,6 +91,7 @@ func compactStatsDetails(stats StatsDashboard, nodes []NodeSummary) statsDetails
 	for _, item := range stats.Resources {
 		out.Ranks = append(out.Ranks, []any{
 			item.ProjectName, item.Version, item.Architecture, item.DownloadCount,
+			item.WebDownloadCount, item.APIDownloadCount,
 		})
 	}
 	for _, item := range nodes {
@@ -105,6 +117,8 @@ func compactTrend(trends []DailyTrend) statsTrendSnapshot {
 	for _, item := range trends {
 		out.Views = append(out.Views, item.Views)
 		out.Downloads = append(out.Downloads, item.Downloads)
+		out.WebDownloads = append(out.WebDownloads, item.WebDownloads)
+		out.APIDownloads = append(out.APIDownloads, item.APIDownloads)
 		out.Bytes = append(out.Bytes, item.SentBytes)
 	}
 	return out

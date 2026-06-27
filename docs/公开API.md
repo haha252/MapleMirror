@@ -579,7 +579,9 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 | `traffic_accounting_enabled` | `true` |
 | `statistics_enabled` | `true` |
 | `sla_enabled` | `true`，样本不足时显示“统计样本不足” |
-| `authorization_count` | 主节点成功签发下载令牌次数 |
+| `authorization_count` | 主节点成功签发下载令牌总次数 |
+| `web_authorization_count` | 网页验证链路成功签发下载令牌次数 |
+| `api_authorization_count` | 公开 API PoW 链路成功签发下载令牌次数 |
 | `started_transfer_count` | 首次产生正字节响应体的授权数 |
 | `daily_bytes` | 当前统计日真实发送字节 |
 | `node_sla` | 24h、7d、30d SLA |
@@ -647,7 +649,9 @@ M5 后统计数据页展示：
 
 | 字段 | 口径 |
 | --- | --- |
-| 下载授权次数 | 主节点成功签发下载令牌次数 |
+| 下载授权次数 | 主节点成功签发下载令牌总次数 |
+| Web 下载授权次数 | 网页验证链路成功签发下载令牌次数 |
+| API 下载授权次数 | 公开 API PoW 链路成功签发下载令牌次数 |
 | 开始传输授权数 | 授权首次产生正字节响应体次数 |
 | 当日流量 | 当前统计日真实发送字节 |
 | 累计流量 | 所有已入账真实发送字节 |

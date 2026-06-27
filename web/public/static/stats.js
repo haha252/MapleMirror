@@ -9,6 +9,7 @@
   let data = JSON.parse(chart.dataset.trends || "[]");
   let frame = 0;
   const metricNames = [["总访问量", "次访问", false], ["总下载量", "次下载", false], ["总流量", "", true]];
+  const sourceTools = window.MirrorStatsSources;
 
   function fmt(value) {
     return new Intl.NumberFormat("zh-CN").format(value || 0);
@@ -51,9 +52,7 @@
       " " + pad(parsed.getHours()) + ":" + pad(parsed.getMinutes());
   }
 
-  function detail(label, value) {
-    return value ? '<span class="sub">' + esc(label) + "：" + esc(value) + "</span>" : "";
-  }
+  function detail(label, value) { return value ? '<span class="sub">' + esc(label) + "：" + esc(value) + "</span>" : ""; }
 
   function moveTooltip(event) {
     const rect = chart.getBoundingClientRect();
@@ -93,7 +92,10 @@
     const pad = {left: width < 520 ? 50 : 70, right: 18, top: 18, bottom: 36};
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
-    const maxValue = Math.max(...data.map((item) => Math.max(item.views || 0, item.downloads || 0)));
+    const maxValue = Math.max(...data.map((item) => {
+      const parts = sourceTools.sourceParts(item);
+      return Math.max(item.views || 0, parts.total);
+    }));
     const maxY = maxValue > 0 ? maxValue / 0.95 : 1;
     const step = plotW / Math.max(data.length - 1, 1);
     const barW = Math.max(5, Math.min(24, step * 0.58));
@@ -110,8 +112,15 @@
     html += '<line class="chart-axis" x1="' + pad.left + '" x2="' + pad.left + '" y1="' + pad.top + '" y2="' + (pad.top + plotH) + '"/>';
     html += '<line class="chart-axis" x1="' + pad.left + '" x2="' + (width - pad.right) + '" y1="' + (pad.top + plotH) + '" y2="' + (pad.top + plotH) + '"/>';
     data.forEach((item, i) => {
-      const h = plotH - (y(item.downloads) - pad.top);
-      html += '<rect class="chart-bar" x="' + (x(i) - barW / 2) + '" y="' + (pad.top + plotH - h) + '" width="' + barW + '" height="' + h + '"/>';
+      const parts = sourceTools.sourceParts(item);
+      const scale = plotH / maxY;
+      const webH = Math.max(0, parts.web * scale);
+      const apiH = Math.max(0, parts.api * scale);
+      const bottom = pad.top + plotH;
+      html += '<rect class="chart-bar" x="' + (x(i) - barW / 2) + '" y="' + (bottom - webH) +
+        '" width="' + barW + '" height="' + webH + '"/>';
+      html += '<rect class="chart-bar chart-bar--api" x="' + (x(i) - barW / 2) + '" y="' + (bottom - webH - apiH) +
+        '" width="' + barW + '" height="' + apiH + '"/>';
     });
     html += '<path class="chart-line" d="' + smoothPath(data.map((item, i) => [x(i), y(item.views)])) + '"/>';
     data.forEach((item, i) => {
@@ -128,15 +137,17 @@
   function bindTooltip(hit) {
     hit.addEventListener("mousemove", function (event) {
       const item = data[Number(hit.dataset.index)];
+      const parts = sourceTools.sourceParts(item);
       tooltip.hidden = false;
       tooltip.innerHTML = "<b>" + item.day.slice(5) + "</b><br>访问量 " + fmt(item.views) +
-        "<br>下载量 " + fmt(item.downloads) + "<br>流量 " + bytes(item.sent_bytes);
+        "<br>下载量 " + fmt(parts.total) + "<br>Web 下载 " + fmt(parts.web) +
+        "<br>API 下载 " + fmt(parts.api) + "<br>流量 " + bytes(item.sent_bytes);
       moveTooltip(event);
     });
     hit.addEventListener("mouseleave", function () { tooltip.hidden = true; });
   }
 
-  function renderMetrics(items) {
+  function renderMetrics(items, sources) {
     if (!metrics || !Array.isArray(items)) return;
     metrics.innerHTML = items.map((row, i) => {
       const meta = metricNames[i];
@@ -144,9 +155,12 @@
       const recent = meta[2] ? bytes(row[1]) : fmt(row[1]) + " " + meta[1];
       const label = trendLabel(row[1], row[2]);
       const trendClass = label[0] === "-" ? "trend-down" : "trend-up";
+      const breakdown = i === 1 ? '<div class="metric-breakdown"><span>Web ' +
+        fmt(((sources || [])[0] || [])[1] || 0) + '</span><span>API ' +
+        fmt(((sources || [])[1] || [])[1] || 0) + '</span></div>' : "";
       return '<article class="metric-card panel-card"><div class="metric-card__top"><h3>' + meta[0] +
         '</h3><span class="' + trendClass + '">' + label + '</span></div><strong>' +
-        value + '</strong><p class="muted">近 30 日 ' + recent + '</p></article>';
+        value + '</strong><p class="muted">近 30 日 ' + recent + '</p>' + breakdown + '</article>';
     }).join("");
   }
 
@@ -160,7 +174,9 @@
       const badge = i < 3 ? "rank-badge" : "rank-badge rank-badge--muted";
       return '<div class="rank-item"><span class="' + badge + '"><span>' + (i + 1) +
         '</span></span><div><strong>' + esc(row[0]) + '</strong><span>' +
-        esc((row[1] || "") + " " + (row[2] || "")) + '</span></div><b>' + fmt(row[3]) + '</b></div>';
+        esc((row[1] || "") + " " + (row[2] || "")) + '</span><span class="rank-source">Web ' +
+        fmt(row[4] || 0) + " / API " + fmt(row[5] || 0) +
+        '</span></div><b>' + fmt(row[3]) + '</b></div>';
     }).join("");
   }
 
@@ -179,18 +195,8 @@
     nodes.innerHTML = html + "</table></div></div>";
   }
 
-  function compactTrend(trend) {
-    if (!trend || !trend.s) return [];
-    const start = new Date(trend.s + "T00:00:00Z");
-    return (trend.v || []).map((views, i) => {
-      const day = new Date(start.getTime() + i * 86400000).toISOString().slice(0, 10);
-      return {day: day, views: views, downloads: (trend.d || [])[i] || 0, sent_bytes: (trend.b || [])[i] || 0};
-    });
-  }
-
-  function applyTodayPoint(point) {
-    if (!Array.isArray(point) || !point[0]) return;
-    const item = {day: point[0], views: point[1] || 0, downloads: point[2] || 0, sent_bytes: point[3] || 0};
+  function mergeTodayPoint(item) {
+    if (!item) return;
     const index = data.findIndex((row) => row.day === item.day);
     if (index >= 0) {
       data[index] = item;
@@ -200,18 +206,15 @@
     }
   }
 
-  function scheduleRender() {
-    window.cancelAnimationFrame(frame);
-    frame = window.requestAnimationFrame(render);
-  }
+  function scheduleRender() { window.cancelAnimationFrame(frame); frame = window.requestAnimationFrame(render); }
 
   async function refreshFast() {
     try {
       const res = await fetch("/api/public/v1/stats", {cache: "no-store"});
       if (!res.ok) return;
       const snapshot = await res.json();
-      renderMetrics(snapshot.m);
-      applyTodayPoint(snapshot.p);
+      renderMetrics(snapshot.m, snapshot.ds);
+      mergeTodayPoint(sourceTools.todayPoint(snapshot.p));
       chart.dataset.trends = JSON.stringify(data);
       scheduleRender();
     } catch (_) {}
@@ -224,7 +227,7 @@
       const snapshot = await res.json();
       renderRanks(snapshot.r);
       renderNodes(snapshot.n);
-      data = compactTrend(snapshot.t);
+      data = sourceTools.compactTrend(snapshot.t);
       chart.dataset.trends = JSON.stringify(data);
       scheduleRender();
     } catch (_) {}
@@ -236,10 +239,7 @@
   } else {
     window.addEventListener("resize", scheduleRender);
   }
-  function refreshAll() {
-    refreshDetails();
-    refreshFast();
-  }
+  function refreshAll() { refreshDetails(); refreshFast(); }
 
   refreshAll();
   window.setInterval(function () { if (!document.hidden) refreshFast(); }, 10000);

@@ -12,7 +12,7 @@ func statsShellBody() template.HTML {
 	body := `<section class="stats-section"><h2>总计信息</h2><div id="stats-metrics" class="metric-grid">` +
 		metricPlaceholder("总访问量") + metricPlaceholder("总下载量") + metricPlaceholder("总流量") + `</div>`
 	body += `<div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目版本</p><div id="stats-ranks" class="rank-list"><p class="muted empty">正在加载统计数据...</p></div></section>` +
-		`<section class="panel-card chart-card"><div class="chart-card__head"><h3>下载趋势</h3><p class="muted">最近 30 天访问量与下载量变化</p></div><div id="stats-chart" class="stats-chart" data-trends="[]"></div><div id="stats-tooltip" class="stats-tooltip" hidden></div></section></div></section>`
+		`<section class="panel-card chart-card"><div class="chart-card__head"><h3>下载趋势</h3><p class="muted">最近 30 天访问量与 Web/API 下载量变化</p></div><div id="stats-chart" class="stats-chart" data-trends="[]"></div><div id="stats-tooltip" class="stats-tooltip" hidden></div></section></div></section>`
 	body += `<section class="stats-section"><h2>节点信息</h2><div id="stats-nodes"><p class="muted empty">正在加载节点状态...</p></div></section>`
 	return template.HTML(body)
 }
@@ -33,7 +33,9 @@ func statsBody(stats StatsDashboard, nodes []NodeSummary) template.HTML {
 func metricsGrid(stats StatsDashboard) string {
 	body := `<div id="stats-metrics" class="metric-grid">`
 	body += metricCard("总访问量", stats.TotalViews, numComma(stats.TotalViews.Total), "近 30 日 "+numComma(stats.TotalViews.Recent)+" 次访问")
-	body += metricCard("总下载量", stats.TotalDownloads, numComma(stats.TotalDownloads.Total), "近 30 日 "+numComma(stats.TotalDownloads.Recent)+" 次下载")
+	body += metricCardWithBreakdown("总下载量", stats.TotalDownloads,
+		numComma(stats.TotalDownloads.Total), "近 30 日 "+numComma(stats.TotalDownloads.Recent)+" 次下载",
+		stats.DownloadSources.Web, stats.DownloadSources.API)
 	body += metricCard("总流量", stats.TotalTraffic, bytesText(stats.TotalTraffic.Total), "近 30 日 "+bytesText(stats.TotalTraffic.Recent))
 	return body + `</div>`
 }
@@ -59,6 +61,13 @@ func metricCard(title string, metric MetricStat, value, sub string) string {
 		esc(value) + `</strong><p class="muted">` + esc(sub) + `</p></article>`
 }
 
+func metricCardWithBreakdown(title string, metric MetricStat, value, sub string, web, api MetricStat) string {
+	body := metricCard(title, metric, value, sub)
+	breakdown := `<div class="metric-breakdown"><span>Web ` + numComma(web.Recent) +
+		`</span><span>API ` + numComma(api.Recent) + `</span></div>`
+	return strings.Replace(body, `</article>`, breakdown+`</article>`, 1)
+}
+
 func rankItem(rank int, item ResourceRank) string {
 	badge := "rank-badge"
 	if rank > 3 {
@@ -66,14 +75,15 @@ func rankItem(rank int, item ResourceRank) string {
 	}
 	return `<div class="rank-item"><span class="` + badge + `"><span>` + numComma(int64(rank)) +
 		`</span></span><div><strong>` + esc(item.ProjectName) + `</strong><span>` +
-		esc(item.Version+" "+item.Architecture) + `</span></div><b>` +
-		numComma(item.DownloadCount) + `</b></div>`
+		esc(item.Version+" "+item.Architecture) + `</span><span class="rank-source">Web ` +
+		numComma(item.WebDownloadCount) + ` / API ` + numComma(item.APIDownloadCount) +
+		`</span></div><b>` + numComma(item.DownloadCount) + `</b></div>`
 }
 
 func trendChart(trends []DailyTrend) string {
 	data, _ := json.Marshal(trends)
 	return `<section class="panel-card chart-card"><div class="chart-card__head">` +
-		`<h3>下载趋势</h3><p class="muted">最近 30 天访问量与下载量变化</p></div>` +
+		`<h3>下载趋势</h3><p class="muted">最近 30 天访问量与 Web/API 下载量变化</p></div>` +
 		`<div id="stats-chart" class="stats-chart" data-trends='` +
 		template.HTMLEscapeString(string(data)) + `'></div><div id="stats-tooltip" class="stats-tooltip" hidden></div></section>`
 }

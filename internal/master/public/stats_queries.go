@@ -36,10 +36,33 @@ func (s Store) loadMetricSummaries(ctx context.Context, previousStart, start, en
 	return nil
 }
 
+func (s Store) loadDownloadSourceSummaries(ctx context.Context, previousStart, start, end string,
+	web, api *MetricStat) error {
+	if err := s.DB.QueryRowContext(ctx, `SELECT
+		COALESCE(SUM(web_authorization_count), 0),
+		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN web_authorization_count ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN web_authorization_count ELSE 0 END), 0),
+		COALESCE(SUM(api_authorization_count), 0),
+		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN api_authorization_count ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN api_authorization_count ELSE 0 END), 0)
+		FROM daily_project_stats`,
+		start, end, previousStart, dateOffset(start, -1),
+		start, end, previousStart, dateOffset(start, -1)).
+		Scan(&web.Total, &web.Recent, &web.Previous,
+			&api.Total, &api.Recent, &api.Previous); err != nil {
+		return err
+	}
+	web.TrendLabel = trendLabel(web.Recent, web.Previous)
+	api.TrendLabel = trendLabel(api.Recent, api.Previous)
+	return nil
+}
+
 func (s Store) TopResources(ctx context.Context, start, end string, limit int) ([]ResourceRank, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT p.name, r.tag_name, a.file_name, a.architecture,
 		COALESCE(a.system, '') AS system,
-		COALESCE(SUM(das.authorization_count), 0) AS downloads
+		COALESCE(SUM(das.authorization_count), 0) AS downloads,
+		COALESCE(SUM(das.web_authorization_count), 0) AS web_downloads,
+		COALESCE(SUM(das.api_authorization_count), 0) AS api_downloads
 		FROM daily_asset_stats das
 		JOIN assets a ON a.id = das.asset_id
 		JOIN releases r ON r.id = a.release_id
@@ -55,7 +78,8 @@ func (s Store) TopResources(ctx context.Context, start, end string, limit int) (
 	for rows.Next() {
 		var item ResourceRank
 		if err := rows.Scan(&item.ProjectName, &item.Version, &item.FileName,
-			&item.Architecture, &item.System, &item.DownloadCount); err != nil {
+			&item.Architecture, &item.System, &item.DownloadCount,
+			&item.WebDownloadCount, &item.APIDownloadCount); err != nil {
 			return nil, err
 		}
 		out = append(out, item)
@@ -67,12 +91,16 @@ func (s Store) DailyTrends(ctx context.Context, start, end string) ([]DailyTrend
 	rows, err := s.DB.QueryContext(ctx, `SELECT stat_day,
 		COALESCE(SUM(page_views), 0),
 		COALESCE(SUM(authorization_count), 0),
+		COALESCE(SUM(web_authorization_count), 0),
+		COALESCE(SUM(api_authorization_count), 0),
 		COALESCE(SUM(sent_bytes), 0)
 		FROM (
-			SELECT stat_day, page_views, 0 AS authorization_count, 0 AS sent_bytes
+			SELECT stat_day, page_views, 0 AS authorization_count,
+				0 AS web_authorization_count, 0 AS api_authorization_count, 0 AS sent_bytes
 			FROM daily_site_stats WHERE stat_day BETWEEN ? AND ?
 			UNION ALL
-			SELECT stat_day, 0 AS page_views, authorization_count, sent_bytes
+			SELECT stat_day, 0 AS page_views, authorization_count,
+				web_authorization_count, api_authorization_count, sent_bytes
 			FROM daily_project_stats WHERE stat_day BETWEEN ? AND ?
 		) GROUP BY stat_day`, start, end, start, end)
 	if err != nil {
@@ -81,21 +109,26 @@ func (s Store) DailyTrends(ctx context.Context, start, end string) ([]DailyTrend
 	defer rows.Close()
 	views := map[string]int64{}
 	downloads := map[string]int64{}
+	webDownloads := map[string]int64{}
+	apiDownloads := map[string]int64{}
 	bytes := map[string]int64{}
 	for rows.Next() {
 		var day string
-		var viewCount, downloadCount, sentBytes int64
-		if err := rows.Scan(&day, &viewCount, &downloadCount, &sentBytes); err != nil {
+		var viewCount, downloadCount, webDownloadCount, apiDownloadCount, sentBytes int64
+		if err := rows.Scan(&day, &viewCount, &downloadCount,
+			&webDownloadCount, &apiDownloadCount, &sentBytes); err != nil {
 			return nil, err
 		}
 		views[day] = viewCount
 		downloads[day] = downloadCount
+		webDownloads[day] = webDownloadCount
+		apiDownloads[day] = apiDownloadCount
 		bytes[day] = sentBytes
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return combineTrends(start, end, views, downloads, bytes), nil
+	return combineTrends(start, end, views, downloads, webDownloads, apiDownloads, bytes), nil
 }
 
 func dateOffset(day string, days int) string {

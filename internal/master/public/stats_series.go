@@ -16,12 +16,14 @@ func fillSeries(start, end string, values map[string]int64) []int64 {
 	return out
 }
 
-func combineTrends(start, end string, views, downloads, bytes map[string]int64) []DailyTrend {
+func combineTrends(start, end string, views, downloads, webDownloads, apiDownloads, bytes map[string]int64) []DailyTrend {
 	days := daysBetween(start, end)
 	out := make([]DailyTrend, 0, len(days))
 	for _, day := range days {
 		out = append(out, DailyTrend{
-			Day: day, Views: views[day], Downloads: downloads[day], SentBytes: bytes[day],
+			Day: day, Views: views[day], Downloads: downloads[day],
+			WebDownloads: webDownloads[day], APIDownloads: apiDownloads[day],
+			SentBytes: bytes[day],
 		})
 	}
 	return out

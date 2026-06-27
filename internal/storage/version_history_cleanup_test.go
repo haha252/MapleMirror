@@ -33,7 +33,7 @@ func TestOpenMasterV9CleansBoundedHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer opened.Close()
-	assertDBVersion(t, opened, "master", 9)
+	assertDBVersion(t, opened, "master", 10)
 	assertCountAtMost(t, opened, "node_control_sessions", 1000)
 	assertCountAtMost(t, opened, "node_inventory_reports", 200)
 

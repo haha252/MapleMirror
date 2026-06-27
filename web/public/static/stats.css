@@ -33,6 +33,20 @@
 .metric-card h3 { margin-bottom: 0; font-size: 15px; }
 .metric-card strong { display: block; margin: 10px 0 4px; font-size: 30px; line-height: 1.1; overflow-wrap: anywhere; }
 .metric-card p { margin-bottom: 12px; font-size: 13px; }
+.metric-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.metric-breakdown span {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-muted);
+}
 .trend-up, .trend-down { font-size: 13px; font-weight: 700; white-space: nowrap; }
 .trend-up { color: var(--ok); }
 .trend-down { color: #ff5d5d; }
@@ -85,6 +99,7 @@
 .rank-item strong, .rank-item > div span { display: block; overflow-wrap: anywhere; }
 .rank-item strong { color: var(--text); font-weight: 800; }
 .rank-item > div span { color: var(--muted); font-size: 13px; }
+.rank-item > div .rank-source { margin-top: 2px; font-size: 12px; }
 .rank-item b { justify-self: end; color: var(--text); font-size: 16px; line-height: 1; white-space: nowrap; }
 .empty { margin-bottom: 0; }
 .chart-card { min-height: 420px; }
@@ -98,6 +113,7 @@
 .chart-label { fill: var(--muted); font-size: 12px; }
 .chart-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .chart-bar { fill: var(--accent); rx: 4; }
+.chart-bar--api { fill: var(--muted); opacity: .78; }
 .chart-hit { fill: transparent; cursor: crosshair; }
 .stats-tooltip {
   position: fixed;

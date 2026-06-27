@@ -7,12 +7,13 @@ import (
 )
 
 type StatsDashboard struct {
-	Today          string
-	TotalViews     MetricStat
-	TotalDownloads MetricStat
-	TotalTraffic   MetricStat
-	Resources      []ResourceRank
-	Trend          []DailyTrend
+	Today           string
+	TotalViews      MetricStat
+	TotalDownloads  MetricStat
+	DownloadSources DownloadSourceStats
+	TotalTraffic    MetricStat
+	Resources       []ResourceRank
+	Trend           []DailyTrend
 }
 
 type MetricStat struct {
@@ -24,19 +25,28 @@ type MetricStat struct {
 }
 
 type ResourceRank struct {
-	ProjectName   string
-	Version       string
-	FileName      string
-	Architecture  string
-	System        string
-	DownloadCount int64
+	ProjectName      string
+	Version          string
+	FileName         string
+	Architecture     string
+	System           string
+	DownloadCount    int64
+	WebDownloadCount int64
+	APIDownloadCount int64
 }
 
 type DailyTrend struct {
-	Day       string `json:"day"`
-	Views     int64  `json:"views"`
-	Downloads int64  `json:"downloads"`
-	SentBytes int64  `json:"sent_bytes"`
+	Day          string `json:"day"`
+	Views        int64  `json:"views"`
+	Downloads    int64  `json:"downloads"`
+	WebDownloads int64  `json:"web_downloads"`
+	APIDownloads int64  `json:"api_downloads"`
+	SentBytes    int64  `json:"sent_bytes"`
+}
+
+type DownloadSourceStats struct {
+	Web MetricStat
+	API MetricStat
 }
 
 func (s Store) StatsDashboard(ctx context.Context) (StatsDashboard, error) {
@@ -46,6 +56,10 @@ func (s Store) StatsDashboard(ctx context.Context) (StatsDashboard, error) {
 	out.Today = today
 	if err := s.loadMetricSummaries(ctx, previousStart, start, today,
 		&out.TotalViews, &out.TotalDownloads, &out.TotalTraffic); err != nil {
+		return out, err
+	}
+	if err := s.loadDownloadSourceSummaries(ctx, previousStart, start, today,
+		&out.DownloadSources.Web, &out.DownloadSources.API); err != nil {
 		return out, err
 	}
 	resources, err := s.TopResources(ctx, start, today, 8)
@@ -86,28 +100,43 @@ func (s Store) AuthorizationBytes(ctx context.Context, id string) (int64, string
 	return bytes, first.String, err
 }
 
-func upsertProjectStats(ctx context.Context, tx *sql.Tx, day, projectID string, auth, started, bytes int64) error {
+func upsertProjectStats(ctx context.Context, tx *sql.Tx, day, projectID string,
+	auth, webAuth, apiAuth, started, bytes int64) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO daily_project_stats
-		(stat_day, project_id, authorization_count, transfer_started_count, sent_bytes)
-		VALUES (?, ?, ?, ?, ?)
+		(stat_day, project_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(stat_day, project_id) DO UPDATE SET
 		authorization_count = authorization_count + excluded.authorization_count,
+		web_authorization_count = web_authorization_count + excluded.web_authorization_count,
+		api_authorization_count = api_authorization_count + excluded.api_authorization_count,
 		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
 		sent_bytes = sent_bytes + excluded.sent_bytes`,
-		day, projectID, auth, started, bytes)
+		day, projectID, auth, webAuth, apiAuth, started, bytes)
 	return err
 }
 
-func upsertAssetStats(ctx context.Context, tx *sql.Tx, day, assetID string, auth, started, bytes int64, now string) error {
+func upsertAssetStats(ctx context.Context, tx *sql.Tx, day, assetID string,
+	auth, webAuth, apiAuth, started, bytes int64, now string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO daily_asset_stats
-		(stat_day, asset_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		(stat_day, asset_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(stat_day, asset_id) DO UPDATE SET
 		authorization_count = authorization_count + excluded.authorization_count,
+		web_authorization_count = web_authorization_count + excluded.web_authorization_count,
+		api_authorization_count = api_authorization_count + excluded.api_authorization_count,
 		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
 		sent_bytes = sent_bytes + excluded.sent_bytes, updated_at = excluded.updated_at`,
-		day, assetID, auth, started, bytes, now)
+		day, assetID, auth, webAuth, apiAuth, started, bytes, now)
 	return err
+}
+
+func authorizationSourceIncrements(challengeKind string) (int64, int64) {
+	if authorizationSourceKind(challengeKind) == "api" {
+		return 0, 1
+	}
+	return 1, 0
 }
 
 func timeNow() time.Time {

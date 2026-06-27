@@ -29,6 +29,7 @@ type AuthorizationRecord struct {
 	AssetID                       string `json:"asset_id"`
 	NodeID                        string `json:"node_id"`
 	ClientPrefixKey               string `json:"client_prefix_key"`
+	SourceKind                    string `json:"source_kind"`
 	ProjectID                     string `json:"project_id"`
 	System                        string `json:"system"`
 	Architecture                  string `json:"architecture"`
