@@ -42,6 +42,47 @@ func TestPublicProbeWaitsForReadyBeforeVerify(t *testing.T) {
 	}
 }
 
+func TestPublicProbeReadyTimeoutCountsAsNetworkFailure(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	_, certPEM := publicProbeTestCertificate(t)
+	seedPublicProbeNode(t, repo, "node-1", "https://node.example.com", certPEM)
+	service := PublicProbeService{
+		Repo: repo,
+		Config: PublicProbeConfig{
+			Enabled:         true,
+			Interval:        time.Second,
+			Timeout:         time.Second,
+			TTL:             20 * time.Millisecond,
+			NetworkFailures: 2,
+		},
+	}
+
+	challenge := service.ChallengeForHeartbeat("node-1")
+	if challenge == nil {
+		t.Fatal("expected public probe challenge")
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		var state, result, message string
+		var failures int
+		err := repo.DB.QueryRow(`SELECT state, last_public_probe_result,
+			COALESCE(last_public_probe_error, ''), public_probe_network_failures
+			FROM nodes WHERE id = ?`, "node-1").
+			Scan(&state, &result, &message, &failures)
+		if err == nil && result == "network_error" {
+			if state != "online" || failures != 1 || message != "public probe ready timeout" {
+				t.Fatalf("ready timeout state=%s result=%s failures=%d message=%q",
+					state, result, failures, message)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("expected ready timeout to be recorded")
+}
+
 func TestPublicProbeReadyTriggersVerify(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()

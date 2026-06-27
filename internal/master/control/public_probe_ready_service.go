@@ -34,10 +34,11 @@ func (s *PublicProbeService) expirePending(nodeID string, challenge protocol.Pub
 	if !s.cancelPending(nodeID, challenge.ChallengeID) {
 		return
 	}
-	recordErr := s.Repo.RecordPublicProbeAnswerFailure(context.Background(),
-		nodeID, "public probe ready timeout")
+	thresholdReached, recordErr := s.Repo.RecordPublicProbeNetworkFailure(
+		context.Background(), nodeID, s.Config.NetworkFailures,
+		"public probe ready timeout")
 	s.logProbeFailure(nodeID, fmt.Errorf("public probe ready timeout"),
-		recordErr, true, true, "ready_timeout", 1)
+		recordErr, false, thresholdReached, "ready_timeout", 1)
 }
 
 func (s *PublicProbeService) cancelPending(nodeID, challengeID string) bool {

@@ -181,7 +181,11 @@ func (s *PublicProbeService) logProbeFailure(nodeID string, probeErr, recordErr 
 	if recordErr != nil {
 		attrs = append(attrs, slog.String("record_error", recordErr.Error()))
 	}
-	s.Logger.Warn(context.Background(), "节点公网探测失败", attrs...)
+	if offline || thresholdReached {
+		s.Logger.Warn(context.Background(), "节点公网探测失败", attrs...)
+		return
+	}
+	s.Logger.Debug(context.Background(), "节点公网探测失败", attrs...)
 }
 
 func (s *PublicProbeService) logProbeRetriedSuccess(nodeID string, attempts int) {

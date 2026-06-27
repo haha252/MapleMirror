@@ -1,0 +1,116 @@
+package control
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
+	"io"
+	"math/big"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"mirror-server/internal/protocol"
+)
+
+func seedPublicProbeNode(t *testing.T, repo Repository, nodeID, baseURL, certPEM string) {
+	t.Helper()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	mustExecControl(t, repo.DB, `INSERT INTO nodes
+		(id, public_name, certificate_fingerprint, state, target_bandwidth_bps,
+		last_heartbeat_at, routing_ready, public_download_base_url, created_at, updated_at)
+		VALUES (?, 'node', 'sha256:aa', 'online', 0, ?, 1, ?, ?, ?)`,
+		nodeID, now, baseURL, now, now)
+	mustExecControl(t, repo.DB, `INSERT INTO node_certificates
+		(id, node_id, serial_number, fingerprint, not_before, not_after,
+		status, issued_request_id, created_at, certificate_pem) VALUES
+		('cert-`+nodeID+`', ?, ?, 'sha256:aa', ?, ?, 'active', 'req', ?, ?)`,
+		nodeID, nodeID, now, time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano),
+		now, certPEM)
+}
+
+func assertProbeNodeState(t *testing.T, repo Repository, nodeID, state string, failures int) {
+	t.Helper()
+	var gotState string
+	var gotFailures, ready int
+	err := repo.DB.QueryRow(`SELECT state, public_probe_network_failures,
+		routing_ready FROM nodes WHERE id = ?`, nodeID).
+		Scan(&gotState, &gotFailures, &ready)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotState != state || gotFailures != failures {
+		t.Fatalf("probe state=%s failures=%d ready=%d", gotState, gotFailures, ready)
+	}
+	if state == "offline" && ready != 0 {
+		t.Fatalf("offline public probe node should not be routable: %d", ready)
+	}
+}
+
+func publicProbeTestCertificate(t *testing.T) (*ecdsa.PrivateKey, string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	tpl := &x509.Certificate{SerialNumber: big.NewInt(1),
+		Subject:   pkix.Name{CommonName: "node-1"},
+		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	return key, string(certPEM)
+}
+
+func publicProbeTestClient(body protocol.PublicProbeResponse) *http.Client {
+	return &http.Client{Transport: probeRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		data, _ := json.Marshal(body)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(string(data))),
+			Request:    req,
+		}, nil
+	})}
+}
+
+func stubPublicProbeLookup(t *testing.T, ip net.IP) func() {
+	t.Helper()
+	previous := publicProbeLookupIPAddr
+	publicProbeLookupIPAddr = func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: ip}}, nil
+	}
+	return func() { publicProbeLookupIPAddr = previous }
+}
+
+func stubPublicProbeDial(t *testing.T, dial func(context.Context, string, string) (net.Conn, error)) func() {
+	t.Helper()
+	previous := publicProbeDialContext
+	publicProbeDialContext = dial
+	return func() { publicProbeDialContext = previous }
+}
+
+func publicProbePublicURL(t *testing.T, serverURL string) string {
+	t.Helper()
+	parsed, err := url.Parse(serverURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "http://node.example.test:" + port
+}
