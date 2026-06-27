@@ -65,6 +65,7 @@ func metricCardWithBreakdown(title string, metric MetricStat, value, sub string,
 	body := metricCard(title, metric, value, sub)
 	breakdown := `<div class="metric-breakdown"><span>Web ` + numComma(web.Recent) +
 		`</span><span>API ` + numComma(api.Recent) + `</span></div>`
+	body = strings.Replace(body, `metric-card panel-card`, `metric-card metric-card--sources panel-card`, 1)
 	return strings.Replace(body, `</article>`, breakdown+`</article>`, 1)
 }
 

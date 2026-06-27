@@ -158,7 +158,8 @@
       const breakdown = i === 1 ? '<div class="metric-breakdown"><span>Web ' +
         fmt(((sources || [])[0] || [])[1] || 0) + '</span><span>API ' +
         fmt(((sources || [])[1] || [])[1] || 0) + '</span></div>' : "";
-      return '<article class="metric-card panel-card"><div class="metric-card__top"><h3>' + meta[0] +
+      const cardClass = i === 1 ? "metric-card metric-card--sources panel-card" : "metric-card panel-card";
+      return '<article class="' + cardClass + '"><div class="metric-card__top"><h3>' + meta[0] +
         '</h3><span class="' + trendClass + '">' + label + '</span></div><strong>' +
         value + '</strong><p class="muted">近 30 日 ' + recent + '</p>' + breakdown + '</article>';
     }).join("");
