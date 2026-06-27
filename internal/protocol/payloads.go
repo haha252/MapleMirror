@@ -67,6 +67,10 @@ type PublicProbeResponse struct {
 	Signature   string    `json:"signature"`
 }
 
+type PublicProbeReady struct {
+	ChallengeID string `json:"challenge_id"`
+}
+
 type Heartbeat struct {
 	Status                  string         `json:"status"`
 	UptimeSeconds           uint64         `json:"uptime_seconds"`

@@ -26,13 +26,14 @@ type PublicProbeConfig struct {
 }
 
 type PublicProbeService struct {
-	Repo   Repository
-	Config PublicProbeConfig
-	Logger *logging.Logger
-	Client *http.Client
-	mu     sync.Mutex
-	last   map[string]time.Time
-	active map[string]bool
+	Repo    Repository
+	Config  PublicProbeConfig
+	Logger  *logging.Logger
+	Client  *http.Client
+	mu      sync.Mutex
+	last    map[string]time.Time
+	active  map[string]bool
+	pending map[string]pendingPublicProbe
 }
 
 func (s *PublicProbeService) ChallengeForHeartbeat(nodeID string) *protocol.PublicProbeChallenge {
@@ -53,7 +54,7 @@ func (s *PublicProbeService) ChallengeForHeartbeat(nodeID string) *protocol.Publ
 		s.clearActive(nodeID)
 		return nil
 	}
-	go s.verifyAfterGrace(nodeID, baseURL, challenge)
+	s.issuePending(nodeID, baseURL, challenge)
 	return &challenge
 }
 
@@ -83,26 +84,6 @@ func (s *PublicProbeService) clearActive(nodeID string) {
 	if s.active != nil {
 		delete(s.active, nodeID)
 	}
-}
-
-func (s *PublicProbeService) verifyAfterGrace(nodeID, baseURL string,
-	challenge protocol.PublicProbeChallenge) {
-	defer s.clearActive(nodeID)
-	time.Sleep(250 * time.Millisecond)
-	err, network := s.verify(nodeID, baseURL, challenge)
-	if err == nil {
-		_ = s.Repo.RecordPublicProbeSuccess(context.Background(), nodeID)
-		return
-	}
-	if network {
-		thresholdReached, recordErr := s.Repo.RecordPublicProbeNetworkFailure(
-			context.Background(), nodeID, s.Config.NetworkFailures, err.Error())
-		s.logProbeFailure(nodeID, err, recordErr, false, thresholdReached, "network")
-		return
-	}
-	recordErr := s.Repo.RecordPublicProbeAnswerFailure(context.Background(),
-		nodeID, err.Error())
-	s.logProbeFailure(nodeID, err, recordErr, true, true, "answer")
 }
 
 func (s *PublicProbeService) verify(nodeID, baseURL string,

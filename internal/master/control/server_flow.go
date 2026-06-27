@@ -64,6 +64,22 @@ func (s ControlServer) handleMessage(session Session, msg protocol.Envelope) (co
 		}
 		learnSyncTaskSlots(&out, session.NodeID, s.Repo.runtime())
 		return out, err
+	case protocol.TypePublicProbeReady:
+		var ready protocol.PublicProbeReady
+		if err := json.Unmarshal(msg.Payload, &ready); err != nil {
+			return controlMessageResult{}, err
+		}
+		if ready.ChallengeID == "" {
+			return controlMessageResult{}, fmt.Errorf("公网探测就绪消息缺少 challenge_id")
+		}
+		result, err := s.Repo.AcceptPublicProbeReady(context.Background(), session, msg.Sequence)
+		if err != nil {
+			return controlMessageResult{}, err
+		}
+		if shouldDispatch && s.PublicProbes != nil {
+			s.PublicProbes.AcceptReady(session.NodeID, ready)
+		}
+		return controlMessageResult{HeartbeatResult: result}, nil
 	case protocol.TypeSyncTaskAck:
 		var ack protocol.SyncTaskAck
 		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
@@ -206,42 +222,4 @@ func (s ControlServer) dispatchSyncTasksAfterMessage(conn net.Conn, session Sess
 		return 0, nil
 	}
 	return s.writeSyncTasks(conn, session, reqID)
-}
-
-func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {
-	msg, err := readControlFrame(conn, s.HeartbeatTimeout)
-	if err != nil {
-		return err
-	}
-	if err := msg.Validate(protocol.Control); err != nil {
-		s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
-			"CONTROL_PROTOCOL_ERROR", "hello 消息无效: "+err.Error())
-		return err
-	}
-	if msg.NodeID != session.NodeID {
-		err := fmt.Errorf("hello 节点标识不匹配")
-		s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
-			"NODE_ID_MISMATCH", err.Error())
-		return err
-	}
-	if msg.MessageType != protocol.TypeHello {
-		err := fmt.Errorf("期望 hello 消息，实际为 %s", msg.MessageType)
-		s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
-			"CONTROL_PROTOCOL_ERROR", err.Error())
-		return err
-	}
-	ready := s.Repo.nodeRoutingReady(context.Background(), session.NodeID)
-	body, _ := json.Marshal(protocol.Welcome{
-		SessionID: session.ID, AcceptedSequence: session.AcceptedSequence,
-		HeartbeatIntervalSecond: int(s.HeartbeatInterval.Seconds()),
-		HeartbeatTimeoutSecond:  int(s.HeartbeatTimeout.Seconds()),
-		ManagedState:            managedState(ready),
-		RoutingReady:            ready,
-	})
-	return writeControlFrame(conn, protocol.Envelope{
-		ProtocolVersion: protocol.Version, MessageID: reqID,
-		MessageType: protocol.TypeWelcome, SentAt: time.Now().UTC(),
-		NodeID: session.NodeID, RequestID: reqID, ReplyTo: msg.MessageID,
-		Payload: body,
-	})
 }

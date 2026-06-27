@@ -174,7 +174,8 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 	if err != nil {
 		return sequence, err
 	}
-	if err := c.acceptPublicProbe(msg); err != nil {
+	next, err = c.acceptPublicProbe(conn, reqID, next, msg)
+	if err != nil {
 		return sequence, err
 	}
 	c.logDebug("node heartbeat ack received", slog.String("node_id", c.NodeID),
@@ -182,18 +183,22 @@ func (c Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 	return next, nil
 }
 
-func (c Client) acceptPublicProbe(msg protocol.Envelope) error {
+func (c Client) acceptPublicProbe(conn net.Conn, reqID string, sequence uint64,
+	msg protocol.Envelope) (uint64, error) {
 	if c.ProbeStore == nil {
-		return nil
+		return sequence, nil
 	}
 	var ack protocol.HeartbeatAckPayload
 	if err := json.Unmarshal(msg.Payload, &ack); err != nil {
-		return err
+		return sequence, err
 	}
 	if ack.PublicProbe == nil {
-		return nil
+		return sequence, nil
 	}
-	return c.ProbeStore.Accept(*ack.PublicProbe)
+	if err := c.ProbeStore.Accept(*ack.PublicProbe); err != nil {
+		return sequence, err
+	}
+	return c.sendPublicProbeReady(conn, reqID, sequence, ack.PublicProbe.ChallengeID)
 }
 
 func (c Client) logDebug(message string, attrs ...slog.Attr) {

@@ -10,6 +10,7 @@ const (
 	TypeWelcome                  = "welcome"
 	TypeHeartbeat                = "heartbeat"
 	TypeHeartbeatAck             = "heartbeat_ack"
+	TypePublicProbeReady         = "public_probe_ready"
 	TypeInventoryReport          = "inventory_report"
 	TypePressureReport           = "pressure_report"
 	TypeSyncTask                 = "sync_task"
@@ -37,8 +38,9 @@ var enrollmentTypes = map[string]bool{
 
 var controlTypes = map[string]bool{
 	TypeHello: true, TypeWelcome: true, TypeHeartbeat: true,
-	TypeHeartbeatAck: true, TypeInventoryReport: true,
-	TypePressureReport: true, TypeNodeDisabled: true,
+	TypeHeartbeatAck: true, TypePublicProbeReady: true,
+	TypeInventoryReport: true,
+	TypePressureReport:  true, TypeNodeDisabled: true,
 	TypeSyncTask: true, TypeSyncTaskAck: true,
 	TypeSyncTaskProgress: true, TypeSyncTaskResult: true,
 	TypeTrafficEvent: true, TypeTrafficEventAck: true,
