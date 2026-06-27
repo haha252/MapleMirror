@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"mirror-server/internal/master/assignment"
 	"mirror-server/internal/protocol"
 )
 
@@ -47,14 +48,14 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		if err != nil {
 			return HeartbeatResult{}, err
 		}
-		if result.PublicAsset && result.State == "mismatch" {
+		if result.TargetRequired && result.PublicAsset && result.State == "mismatch" {
 			if err := r.quarantineNodeForPublicAssetMismatch(ctx, tx, session, result, now); err != nil {
 				return HeartbeatResult{}, err
 			}
 			quarantined = true
 			break
 		}
-		if result.State == "verified" {
+		if result.TargetRequired && result.State == "verified" {
 			nodes, err := publishVerifiedAsset(ctx, tx, result.AssetID, now)
 			if err != nil {
 				return HeartbeatResult{}, err
@@ -66,6 +67,10 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		}
 	}
 	if report.Complete && !quarantined {
+		markedRemovals, err := markNonRequiredVerifiedInventoryRemoved(ctx, tx, session.NodeID, now)
+		if err != nil {
+			return HeartbeatResult{}, err
+		}
 		if err := markMissingInventory(ctx, tx, session.NodeID, now, reported); err != nil {
 			return HeartbeatResult{}, err
 		}
@@ -84,7 +89,11 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		if err != nil {
 			return HeartbeatResult{}, err
 		}
-		syncTasksChanged = syncTasksChanged || resetTasks > 0 || generatedTasks > 0
+		deleteTasks, err := assignment.GenerateNodeDeleteTasks(ctx, tx, session.NodeID, now)
+		if err != nil {
+			return HeartbeatResult{}, err
+		}
+		syncTasksChanged = syncTasksChanged || resetTasks > 0 || generatedTasks > 0 || deleteTasks > 0
 		completedReconcileTasks, err := completeInventoryReconcileTasks(ctx, tx, session.NodeID, now)
 		if err != nil {
 			return HeartbeatResult{}, err
@@ -101,8 +110,10 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 				slog.Bool("complete", report.Complete),
 				slog.Int("missing_targets", missing),
 				slog.Int("running_tasks", running),
+				slog.Int("marked_remove_targets", markedRemovals),
 				slog.Int("reset_missing_tasks", resetTasks),
 				slog.Int("generated_repair_tasks", generatedTasks),
+				slog.Int("generated_delete_tasks", deleteTasks),
 				slog.Int("cleared_satisfied_tasks", clearedTasks),
 				slog.Int("completed_reconcile_tasks", completedReconcileTasks),
 				slog.Bool("routing_ready", ready))

@@ -15,6 +15,10 @@ func GenerateNodeTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int
 	return generateTasks(ctx, tx, now, nodeID)
 }
 
+func GenerateNodeDeleteTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
+	return generateDeleteTasks(ctx, tx, now, nodeID, "")
+}
+
 func GenerateDeleteTasks(ctx context.Context, tx *sql.Tx, now string) (int, error) {
 	return generateDeleteTasks(ctx, tx, now, "", "")
 }

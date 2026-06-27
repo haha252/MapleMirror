@@ -10,6 +10,7 @@ type inventoryAcceptResult struct {
 	AssetID        string
 	State          string
 	PublicAsset    bool
+	TargetRequired bool
 	ExpectedDigest string
 	ExpectedSize   int64
 	LocalDigest    string

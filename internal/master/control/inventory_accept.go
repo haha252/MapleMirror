@@ -26,32 +26,24 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 	if err != nil {
 		return result, err
 	}
-	if !inventoryTargetRequired(ctx, tx, nodeID, item.AssetID) {
-		return result, nil
-	}
 	result.ExpectedDigest = expectedDigest
 	result.ExpectedSize = expectedSize
-	result.PublicAsset = publicCandidateAsset(ctx, tx, item.AssetID)
+	result.TargetRequired = inventoryTargetRequired(ctx, tx, nodeID, item.AssetID)
+	if result.TargetRequired {
+		result.PublicAsset = publicCandidateAsset(ctx, tx, item.AssetID)
+	}
 	localDigest := item.DigestSHA256
 	localSize := item.SizeBytes
 	previousState, previousDigest, previousSize, err := currentInventory(ctx, tx, nodeID, item.AssetID)
 	if err != nil {
 		return result, err
 	}
-	state := "verified"
-	switch item.LocalState {
-	case "missing":
-		state = "missing"
-		if localDigest == "" {
-			localSize = 0
-		}
-	case "mismatch":
-		state = "mismatch"
-	case "removed":
-		state = "removed"
+	state := normalizedInventoryState(item.LocalState)
+	if state == "missing" || state == "removed" {
 		localDigest = ""
 		localSize = 0
-	default:
+	}
+	if result.TargetRequired && state == "verified" {
 		if previousState == "stale" && localDigest == previousDigest && localSize == previousSize {
 			state = "stale"
 		} else if localDigest != expectedDigest || localSize != expectedSize {
@@ -70,4 +62,13 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 	result.LocalDigest = localDigest
 	result.LocalSize = localSize
 	return result, err
+}
+
+func normalizedInventoryState(localState string) string {
+	switch localState {
+	case "missing", "mismatch", "removed":
+		return localState
+	default:
+		return "verified"
+	}
 }
