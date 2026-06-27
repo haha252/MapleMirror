@@ -1,6 +1,7 @@
 package public
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/logging"
 )
 
 func TestBlocklistRejectsChallengeAndCountsAttempts(t *testing.T) {
@@ -126,5 +128,71 @@ func TestQuotaErrorWritesAutoBlock(t *testing.T) {
 	}
 	if !decision.Blocked || decision.Reason != "traffic_limit_exceeded" {
 		t.Fatalf("额度错误应写入自动封禁：%+v", decision)
+	}
+}
+
+func TestRejectBlockedDownloadLogsCanceledLookupAsDebug(t *testing.T) {
+	db := openMaster(t)
+	var console bytes.Buffer
+	logger, err := logging.New("master", config.Logging{
+		ConsoleLevel: "debug", FileLevel: "debug", Directory: t.TempDir(), RetentionDays: 1,
+	}, time.Local, &console)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logger.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/challenges", nil).WithContext(ctx)
+	req.RemoteAddr = "192.0.2.9:12345"
+
+	server := Server{
+		Store:     Store{DB: db},
+		Blocklist: newBlocklistPolicy(config.Quota{}, nil),
+		Logger:    logger,
+	}
+	rec := httptest.NewRecorder()
+	if server.rejectBlockedDownload(rec, req, "asset-1", "api_challenge") {
+		t.Fatal("已取消请求不应被误判为已封禁")
+	}
+
+	line := console.String()
+	if !strings.Contains(line, "调试 master 请求已取消，自动封禁状态查询终止") {
+		t.Fatalf("expected debug log for canceled request, got: %s", line)
+	}
+	if strings.Contains(line, "警告 master 自动封禁状态查询失败，继续处理请求") {
+		t.Fatalf("canceled request should not log warn: %s", line)
+	}
+}
+
+func TestRejectBlockedDownloadKeepsWarnForOtherLookupErrors(t *testing.T) {
+	db := openMaster(t)
+	_ = db.Close()
+	var console bytes.Buffer
+	logger, err := logging.New("master", config.Logging{
+		ConsoleLevel: "debug", FileLevel: "debug", Directory: t.TempDir(), RetentionDays: 1,
+	}, time.Local, &console)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logger.Close() })
+
+	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/challenges", nil)
+	req.RemoteAddr = "192.0.2.9:12345"
+
+	server := Server{
+		Store:     Store{DB: db},
+		Blocklist: newBlocklistPolicy(config.Quota{}, nil),
+		Logger:    logger,
+	}
+	rec := httptest.NewRecorder()
+	if server.rejectBlockedDownload(rec, req, "asset-1", "api_challenge") {
+		t.Fatal("数据库故障不应被误判为已封禁")
+	}
+
+	line := console.String()
+	if !strings.Contains(line, "警告 master 自动封禁状态查询失败，继续处理请求") {
+		t.Fatalf("expected warn log for non-context error, got: %s", line)
 	}
 }

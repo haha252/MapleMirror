@@ -1,6 +1,8 @@
 package public
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -12,10 +14,17 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 	if !decision.Blocked && !s.Blocklist.exempt(clientPrefix) && s.Store.DB != nil {
 		stored, err := s.Store.ActiveAutoBlock(r.Context(), clientPrefix, time.Now().UTC())
 		if err != nil && s.Logger != nil {
-			s.Logger.Warn(r.Context(), "自动封禁状态查询失败，继续处理请求",
-				slog.String("request_id", requestID(r)),
-				slog.String("client_prefix", clientPrefix),
-				slog.String("error", err.Error()))
+			if requestContextDone(err) {
+				s.Logger.Debug(r.Context(), "请求已取消，自动封禁状态查询终止",
+					slog.String("request_id", requestID(r)),
+					slog.String("client_prefix", clientPrefix),
+					slog.String("error", err.Error()))
+			} else {
+				s.Logger.Warn(r.Context(), "自动封禁状态查询失败，继续处理请求",
+					slog.String("request_id", requestID(r)),
+					slog.String("client_prefix", clientPrefix),
+					slog.String("error", err.Error()))
+			}
 		}
 		if err == nil {
 			decision = stored
@@ -37,6 +46,10 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 	}
 	writeError(w, r, http.StatusForbidden, "CLIENT_BLOCKED", "客户端已被封禁，无法领取下载授权")
 	return true
+}
+
+func requestContextDone(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func (s Server) autoBlockAfterQuotaError(r *http.Request, clientPrefix, assetID string, err error) {
