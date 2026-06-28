@@ -48,9 +48,9 @@ func TestBlocklistTXTExportsMergedActiveBlocks(t *testing.T) {
 	}
 	body := string(renderBlocklistTXT(entries))
 	for _, want := range []string{
-		"# [枫源镜像封禁] 封禁原因: static_blocklist; traffic_limit_exceeded, 来源: 192.0.2.9; local_auto_ban, 封禁后尝试次数: 3",
+		"# [枫源镜像封禁] 封禁原因: static_blocklist; traffic_limit_exceeded, 来源: 192.0.2.9; local_auto_ban, 封禁后尝试次数: 3, 封禁时间: 2026-06-21T11:00:00Z",
 		"192.0.2.9\n",
-		"# [枫源镜像封禁] 封禁原因: 人工预封禁, 来源: manual, 封禁后尝试次数: 1",
+		"# [枫源镜像封禁] 封禁原因: 人工预封禁, 来源: manual, 封禁后尝试次数: 1, 封禁时间: 2026-06-21T11:00:00Z",
 		"198.51.100.0/24\n",
 	} {
 		if !strings.Contains(body, want) {
@@ -85,6 +85,9 @@ func TestBlocklistTXTHandler(t *testing.T) {
 	if !strings.Contains(body, "# [枫源镜像封禁] 封禁原因: static_blocklist") ||
 		!strings.Contains(body, "\n192.0.2.9\n") {
 		t.Fatalf("unexpected blocklist body: %s", body)
+	}
+	if strings.Contains(body, "过期时间") {
+		t.Fatalf("blocklist txt should not expose expires time: %s", body)
 	}
 }
 

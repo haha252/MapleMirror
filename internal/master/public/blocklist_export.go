@@ -215,8 +215,8 @@ func blocklistComment(entry blocklistExportEntry) string {
 	if entry.Attempts > 0 {
 		parts = append(parts, fmt.Sprintf("封禁后尝试次数: %d", entry.Attempts))
 	}
-	if entry.Expires != "" {
-		parts = append(parts, fmt.Sprintf("过期时间: %s", entry.Expires))
+	if entry.Blocked != "" {
+		parts = append(parts, fmt.Sprintf("封禁时间: %s", entry.Blocked))
 	}
 	return "# [枫源镜像封禁] " + strings.Join(parts, ", ")
 }

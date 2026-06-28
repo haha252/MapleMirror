@@ -298,6 +298,7 @@ Range: bytes=1048576-2097151
 `GET /api/public/v1/blocklist.json`
 
 返回当前生效的公共下载封禁列表。内容包含 `quota.yaml` 静态黑名单和本站手动/自动封禁记录，不包含远程订阅源快照。服务端缓存生成后的封禁快照 60 秒，TTL 内重复请求不会重新查询和合并列表。
+TXT 只展示封禁原因、来源、尝试次数和封禁时间，不写过期时间；JSON 仍会返回结构化的 `blocked_at`。
 
 TXT 响应头：
 
@@ -309,7 +310,7 @@ Cache-Control: public, max-age=60, must-revalidate
 TXT 示例：
 
 ```txt
-# [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3
+# [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3, 封禁时间: 2026-06-21T12:00:00Z
 2.59.169.232
 ```
 
