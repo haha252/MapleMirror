@@ -140,7 +140,6 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		RequestID: session.RequestID, Reported: now, Valid: true,
 	})
 	if quarantined {
-		r.runtime().CloseNodeSessions(session.NodeID)
 		return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(false), RoutingReady: false}, nil
 	}
 	ready := r.nodeRoutingReady(ctx, session.NodeID)

@@ -157,6 +157,27 @@ func TestRuntimeLatestReportsAreEmptyAfterRuntimeReset(t *testing.T) {
 	}
 }
 
+func TestDisabledNodeCanReconnectWithoutBecomingOnline(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	if err := repo.DisableNode(context.Background(), session.NodeID, "req-disable", "测试禁用"); err != nil {
+		t.Fatal(err)
+	}
+	reconnected, err := repo.StartSession(context.Background(), "sha256:aa", "req-reconnect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state, certStatus string
+	var ready int
+	_ = repo.DB.QueryRow("SELECT state, routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&state, &ready)
+	_ = repo.DB.QueryRow("SELECT status FROM node_certificates WHERE id = 'cert-1'").Scan(&certStatus)
+	if reconnected.NodeID != session.NodeID || state != "disabled" || ready != 0 || certStatus != "active" {
+		t.Fatalf("disabled reconnect mismatch session=%+v state=%s ready=%d cert=%s",
+			reconnected, state, ready, certStatus)
+	}
+}
+
 func TestDisableNodeAuditsAndMasksRouting(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
@@ -164,11 +185,16 @@ func TestDisableNodeAuditsAndMasksRouting(t *testing.T) {
 	if err := repo.DisableNode(context.Background(), session.NodeID, "req-disable", "测试禁用"); err != nil {
 		t.Fatal(err)
 	}
-	var state string
+	var state, certStatus, disconnected string
 	var ready, audits int
 	_ = repo.DB.QueryRow("SELECT state, routing_ready FROM nodes WHERE id = ?", session.NodeID).Scan(&state, &ready)
+	_ = repo.DB.QueryRow("SELECT status FROM node_certificates WHERE id = 'cert-1'").Scan(&certStatus)
+	_ = repo.DB.QueryRow(`SELECT COALESCE(disconnected_at, '') FROM node_control_sessions
+		WHERE id = ?`, session.ID).Scan(&disconnected)
 	_ = repo.DB.QueryRow("SELECT COUNT(*) FROM admin_audit_events WHERE request_id = 'req-disable'").Scan(&audits)
-	if state != "disabled" || ready != 0 || audits == 0 {
-		t.Fatalf("禁用节点结果错误 state=%s ready=%d audits=%d", state, ready, audits)
+	if state != "disabled" || ready != 0 || certStatus != "active" || disconnected != "" || audits == 0 ||
+		!repo.runtime().ActiveSession(session.NodeID) {
+		t.Fatalf("禁用节点结果错误 state=%s ready=%d cert=%s disconnected=%q audits=%d active=%v",
+			state, ready, certStatus, disconnected, audits, repo.runtime().ActiveSession(session.NodeID))
 	}
 }

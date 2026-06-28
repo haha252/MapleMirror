@@ -206,7 +206,6 @@ func (r Repository) AcceptSyncTaskResult(ctx context.Context, session Session, s
 		r.runtime().NotifySyncTasks(pendingTaskNodes...)
 	}
 	if quarantined {
-		r.runtime().CloseNodeSessions(session.NodeID)
 		return HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(false), RoutingReady: false}, nil
 	}
 	if taskState == "retry_wait" && retryAfter != "" {

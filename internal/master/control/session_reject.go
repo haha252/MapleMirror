@@ -24,8 +24,6 @@ func (s ControlServer) writeStartSessionReject(conn net.Conn, tlsConn *tls.Conn,
 	switch {
 	case errors.Is(err, ErrCertificateNotActive):
 		code = "CERTIFICATE_NOT_ACTIVE"
-	case errors.Is(err, ErrNodeDisabled):
-		code = "NODE_DISABLED"
 	}
 	nodeID := rejectNodeID(s, tlsConn, fingerprint)
 	s.writeProtocolError(conn, nodeID, reqID, "", code, message)

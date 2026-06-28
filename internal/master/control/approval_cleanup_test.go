@@ -112,11 +112,11 @@ func seedDisabledNode(t *testing.T, repo Repository, nodeID, name string) {
 		(id, node_id, serial_number, fingerprint, not_before, not_after, status,
 		issued_request_id, revoked_at, created_at)
 		VALUES ('cert-old', ?, 'old-1', 'sha256:old-cert', 'now', '2999-01-01T00:00:00Z',
-		'revoked', 'req-old', 'now', 'now')`, nodeID)
+		'active', 'req-old', NULL, 'now')`, nodeID)
 	execApprovalCleanup(t, repo, `INSERT INTO node_control_sessions
 		(id, node_id, certificate_id, request_id, connected_at, last_message_sequence,
 		disconnected_at, close_reason)
-		VALUES ('session-old', ?, 'cert-old', 'req-old', 'now', 1, 'now', '公开资产库存校验不一致')`, nodeID)
+		VALUES ('session-old', ?, 'cert-old', 'req-old', 'now', 1, NULL, '')`, nodeID)
 }
 
 func assertNodeCount(t *testing.T, repo Repository, name string, want int) {

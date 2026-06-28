@@ -45,17 +45,8 @@ func (r Repository) quarantineNodeForPublicAssetMismatch(ctx context.Context, tx
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE node_certificates SET status = 'revoked',
-		revoked_at = ? WHERE node_id = ? AND status = 'active'`, now, session.NodeID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
-		close_reason = '公开资产库存校验不一致' WHERE node_id = ? AND disconnected_at IS NULL`,
-		now, session.NodeID); err != nil {
-		return err
-	}
 	if err := auditTx(ctx, tx, "node.security_quarantine", "node", session.NodeID, "success",
-		session.RequestID, "公开资产库存校验不一致，节点已隔离并撤销证书", ""); err != nil {
+		session.RequestID, "公开资产库存校验不一致，节点已隔离并停止公开路由", ""); err != nil {
 		return err
 	}
 	if r.Logger != nil {

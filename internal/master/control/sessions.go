@@ -11,7 +11,6 @@ const syncTaskLeaseDuration = 5 * time.Minute
 
 var (
 	ErrCertificateNotActive = errors.New("证书未批准或已失效")
-	ErrNodeDisabled         = errors.New("节点已禁用")
 	ErrSessionUnavailable   = errors.New("控制会话不可用")
 )
 
@@ -30,21 +29,17 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 	}
 	defer tx.Rollback()
 	var session Session
-	var nodeState string
-	err = tx.QueryRowContext(ctx, `SELECT c.id, c.node_id, n.state
+	err = tx.QueryRowContext(ctx, `SELECT c.id, c.node_id
 		FROM node_certificates c JOIN nodes n ON n.id = c.node_id
 		WHERE c.fingerprint = ? AND c.status = 'active' AND c.revoked_at IS NULL
 		AND c.not_before <= ? AND c.not_after > ?`,
 		certFingerprint, time.Now().UTC().Format(time.RFC3339Nano),
-		time.Now().UTC().Format(time.RFC3339Nano)).Scan(&session.CertificateID, &session.NodeID, &nodeState)
+		time.Now().UTC().Format(time.RFC3339Nano)).Scan(&session.CertificateID, &session.NodeID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return Session{}, ErrCertificateNotActive
 		}
 		return Session{}, err
-	}
-	if nodeState == "disabled" {
-		return Session{}, ErrNodeDisabled
 	}
 	session.ID, err = newID()
 	if err != nil {
@@ -64,7 +59,8 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 	if err != nil {
 		return Session{}, err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET
+		state = CASE WHEN state = 'disabled' THEN state ELSE 'online' END,
 		updated_at = ? WHERE id = ?`, now, session.NodeID)
 	if err != nil {
 		return Session{}, err

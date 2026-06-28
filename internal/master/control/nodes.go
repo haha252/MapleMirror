@@ -73,11 +73,6 @@ func (r Repository) DisableNode(ctx context.Context, nodeID, requestID, reason s
 	if affected, _ := result.RowsAffected(); affected == 0 {
 		return sql.ErrNoRows
 	}
-	_, _ = r.DB.ExecContext(ctx, `UPDATE node_certificates SET status = 'revoked',
-		revoked_at = ? WHERE node_id = ? AND status = 'active'`, now, nodeID)
-	_, _ = r.DB.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
-		close_reason = '管理员禁用' WHERE node_id = ? AND disconnected_at IS NULL`, now, nodeID)
-	r.runtime().CloseNodeSessions(nodeID)
 	return r.Audit(ctx, "node.disable", "node", nodeID, "success", requestID, reason, "")
 }
 

@@ -66,12 +66,12 @@ func TestSucceededSyncTaskResultMismatchQuarantinesPublicAsset(t *testing.T) {
 	_ = repo.DB.QueryRow("SELECT status FROM node_certificates WHERE id = 'cert-1'").Scan(&certStatus)
 	_ = repo.DB.QueryRow(`SELECT COUNT(*) FROM admin_audit_events
 		WHERE operation = 'node.security_quarantine' AND target_id = ?`, session.NodeID).Scan(&audits)
-	if nodeState != "disabled" || certStatus != "revoked" || audits != 1 {
+	if nodeState != "disabled" || certStatus != "active" || audits != 1 {
 		t.Fatalf("public mismatch should quarantine node state=%s cert=%s audits=%d",
 			nodeState, certStatus, audits)
 	}
-	if repo.runtime().ActiveSession(session.NodeID) {
-		t.Fatal("runtime session should be closed after sync result quarantine")
+	if !repo.runtime().ActiveSession(session.NodeID) {
+		t.Fatal("runtime session should stay active after sync result quarantine")
 	}
 }
 

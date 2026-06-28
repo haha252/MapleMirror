@@ -11,7 +11,7 @@ type queryer interface {
 }
 
 func ReconcileAllNodes(ctx context.Context, tx *sql.Tx, now string) error {
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM nodes WHERE state != 'disabled'`)
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM nodes`)
 	if err != nil {
 		return err
 	}

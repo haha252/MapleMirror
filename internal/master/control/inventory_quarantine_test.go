@@ -32,12 +32,12 @@ func TestPublicAssetInventoryMismatchQuarantinesNode(t *testing.T) {
 		session.ID).Scan(&disconnected)
 	_ = repo.DB.QueryRow(`SELECT COUNT(*) FROM admin_audit_events
 		WHERE operation = 'node.security_quarantine' AND target_id = ?`, session.NodeID).Scan(&audits)
-	if state != "disabled" || ready != 0 || certStatus != "revoked" || disconnected == "" || audits != 1 {
+	if state != "disabled" || ready != 0 || certStatus != "active" || disconnected != "" || audits != 1 {
 		t.Fatalf("节点隔离结果错误 state=%s ready=%d cert=%s disconnected=%q audits=%d",
 			state, ready, certStatus, disconnected, audits)
 	}
-	if repo.runtime().ActiveSession(session.NodeID) {
-		t.Fatal("runtime session should be closed after quarantine")
+	if !repo.runtime().ActiveSession(session.NodeID) {
+		t.Fatal("runtime session should stay active after quarantine")
 	}
 }
 

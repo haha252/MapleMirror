@@ -26,6 +26,18 @@ func TestAutoAssignmentUsesTopProjects(t *testing.T) {
 	assertRequiredTargets(t, db, 2)
 }
 
+func TestReconcileAllNodesIncludesDisabledNodes(t *testing.T) {
+	db := testDB(t)
+	seedAssignmentNode(t, db, 1)
+	mustExec(t, db, `UPDATE nodes SET state = 'disabled' WHERE id = 'node-1'`)
+	seedProject(t, db, "p1", "项目一", 30)
+
+	reconcile(t, db)
+
+	assertAssigned(t, db, "p1", true)
+	assertRequiredTargets(t, db, 1)
+}
+
 func TestAutoAssignmentKeepsCloseProject(t *testing.T) {
 	db := testDB(t)
 	seedAssignmentNode(t, db, 2)

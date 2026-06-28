@@ -41,7 +41,8 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 		WHERE id = ?`, session.NodeID).Scan(&previousMax); err != nil {
 		return HeartbeatResult{}, err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE nodes SET state = 'online',
+	_, err = tx.ExecContext(ctx, `UPDATE nodes SET
+		state = CASE WHEN state = 'disabled' THEN state ELSE 'online' END,
 		last_heartbeat_at = ?, public_download_base_url = ?,
 		target_bandwidth_bps = CASE WHEN ? > 0 THEN ? ELSE target_bandwidth_bps END,
 		max_mirror_projects = ?,
