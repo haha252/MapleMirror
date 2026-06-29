@@ -30,10 +30,13 @@
   background: var(--panel-muted);
   object-fit: cover;
   flex: 0 0 auto;
+  cursor: pointer;
 }
 
 .project-card__title { min-width: 0; }
 .project-card__title h2 { margin-bottom: 4px; font-size: 21px; line-height: 1.2; overflow-wrap: anywhere; }
+.project-link { color: var(--text); }
+.project-link:hover { color: var(--accent-hover); }
 .project-card__title .version-badge { color: var(--muted); font-size: 14px; margin-left: 4px; }
 .project-repository { font-size: 13px; overflow-wrap: anywhere; }
 .project-card__summary { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }

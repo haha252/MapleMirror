@@ -1,0 +1,73 @@
+<section class="project-page" data-project-id="{{.ProjectID}}">
+  <a class="project-back" href="/" aria-label="返回枫源镜像">
+    <span class="project-back__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path d="M15 5 8 12l7 7"></path>
+      </svg>
+    </span>
+    <span>返回枫源镜像</span>
+  </a>
+
+  <section class="project-layout">
+    <div class="project-art">
+      <img class="project-hero__icon" src="{{.IconURL}}" alt="{{.DisplayName}} 图标">
+    </div>
+
+    <div class="project-main">
+      <div class="project-heading">
+        <div class="project-title-wrap">
+          <h2>{{.DisplayName}}</h2>
+          <p class="muted">{{.Repository}}</p>
+          {{if .LatestPublishedAt}}<p class="muted">最近更新：{{.LatestPublishedAt}}</p>{{end}}
+        </div>
+        {{if .HomepageURL}}
+        <a class="project-homepage" href="{{.HomepageURL}}" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 4h6v6"></path>
+            <path d="M10 14 20 4"></path>
+            <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path>
+          </svg>
+          <span>转到官网</span>
+        </a>
+        {{end}}
+      </div>
+
+      <section class="project-download">
+        <div class="project-download__summary">
+          <p id="project-download-status">正在加载下载组件...</p>
+        </div>
+        <div class="project-download__controls">
+          <label class="field">
+            <span>版本</span>
+            <select id="project-version"></select>
+          </label>
+          <label class="field" id="project-system-field" hidden>
+            <span>系统</span>
+            <select id="project-system"></select>
+          </label>
+          <label class="field" id="project-architecture-field" hidden>
+            <span>架构</span>
+            <select id="project-architecture"></select>
+          </label>
+        </div>
+        <div class="project-download__asset">
+          <div>
+            <p id="project-file-name">暂无可下载文件</p>
+            <p id="project-file-meta"></p>
+          </div>
+          <div class="project-download__action">
+            <p id="project-availability" class="project-availability"></p>
+            <button id="project-download-button" class="download-button" type="button" disabled>下载</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  {{if .Description}}
+  <section class="project-description panel-card">
+    <h2>项目描述</h2>
+    <p>{{.Description}}</p>
+  </section>
+  {{end}}
+</section>

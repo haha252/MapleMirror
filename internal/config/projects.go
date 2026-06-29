@@ -2,10 +2,7 @@ package config
 
 import (
 	"errors"
-	"fmt"
-	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -20,6 +17,8 @@ type Project struct {
 	ID                         string        `yaml:"id"`
 	Name                       string        `yaml:"name"`
 	Repository                 string        `yaml:"repository"`
+	Description                string        `yaml:"description"`
+	HomepageURL                string        `yaml:"homepage_url"`
 	IconPath                   string        `yaml:"icon_path"`
 	Enabled                    bool          `yaml:"enabled"`
 	RetainVersions             int           `yaml:"retain_versions"`
@@ -50,6 +49,8 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 		ID                         string        `yaml:"id"`
 		Name                       string        `yaml:"name"`
 		Repository                 string        `yaml:"repository"`
+		Description                string        `yaml:"description"`
+		HomepageURL                string        `yaml:"homepage_url"`
 		IconPath                   string        `yaml:"icon_path"`
 		Enabled                    bool          `yaml:"enabled"`
 		RetainVersions             int           `yaml:"retain_versions"`
@@ -70,6 +71,7 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 	}
 	*p = Project{
 		ID: raw.ID, Name: raw.Name, Repository: raw.Repository,
+		Description: raw.Description, HomepageURL: raw.HomepageURL,
 		IconPath: raw.IconPath, Enabled: raw.Enabled,
 		RetainVersions:     raw.RetainVersions,
 		IncludePrerelease:  raw.IncludePrerelease,
@@ -180,64 +182,4 @@ func LoadProjects(path string, warn WarnFunc) (Projects, error) {
 		c.Projects = append(c.Projects, project)
 	}
 	return c, writeRepairedYAML(path, data, repaired)
-}
-
-func validateProject(p Project, known map[string]bool) error {
-	if p.ID == "" || p.Name == "" || known[p.ID] {
-		return errors.New("项目 id 和中文名称必须存在，且 id 不得重复")
-	}
-	parts := strings.Split(p.Repository, "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.Contains(p.Repository, "://") {
-		return errors.New("项目 repository 必须使用公开 GitHub 仓库的 owner/repo 格式")
-	}
-	if p.RetainVersions <= 0 || p.DownloadMultiplier <= 0 {
-		return errors.New("项目保留版本数和下载倍率必须大于零")
-	}
-	if p.RegexClassificationEnabled() && p.ClassifyArchitectureEnabled() {
-		if strings.TrimSpace(p.ClassifyArchitectureRegex()) == "" {
-			return fmt.Errorf("项目 %s 启用架构匹配时必须配置 architecture_regex", p.ID)
-		}
-		if _, err := regexp.Compile(p.ClassifyArchitectureRegex()); err != nil {
-			return fmt.Errorf("项目 %s 的架构提取正则无效：%w", p.ID, err)
-		}
-	}
-	if err := validateAssetRules(p.ID, "asset_include", p.AssetInclude); err != nil {
-		return err
-	}
-	if err := validateAssetRules(p.ID, "asset_exclude", p.AssetExclude); err != nil {
-		return err
-	}
-	if err := validateAssetPipeline(p.ID, p.AssetPipeline); err != nil {
-		return err
-	}
-	if p.RegexClassificationEnabled() && p.ClassifySystemEnabled() {
-		if strings.TrimSpace(p.ClassifySystemRegex()) == "" {
-			return fmt.Errorf("项目 %s 启用系统匹配时必须配置 system_regex", p.ID)
-		}
-		if _, err := regexp.Compile(p.ClassifySystemRegex()); err != nil {
-			return fmt.Errorf("项目 %s 的系统提取正则无效：%w", p.ID, err)
-		}
-	}
-	return nil
-}
-
-func validateAssetRules(projectID, field string, rules AssetRules) error {
-	for _, rule := range rules {
-		if strings.TrimSpace(rule.Pattern) == "" {
-			return fmt.Errorf("项目 %s 的 %s 规则 pattern 不能为空", projectID, field)
-		}
-		switch rule.Type {
-		case "", "glob":
-			if _, err := path.Match(rule.Pattern, ""); err != nil {
-				return fmt.Errorf("项目 %s 的 %s glob 规则无效：%w", projectID, field, err)
-			}
-		case "regex":
-			if _, err := regexp.Compile(rule.Pattern); err != nil {
-				return fmt.Errorf("项目 %s 的 %s 正则规则无效：%w", projectID, field, err)
-			}
-		default:
-			return fmt.Errorf("项目 %s 的 %s 规则 type 必须为 glob 或 regex", projectID, field)
-		}
-	}
-	return nil
 }

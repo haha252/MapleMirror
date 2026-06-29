@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     repository TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    homepage_url TEXT NOT NULL DEFAULT '',
     enabled INTEGER NOT NULL,
     retain_versions INTEGER NOT NULL,
     include_prerelease INTEGER NOT NULL,

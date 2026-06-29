@@ -1,0 +1,36 @@
+@media (max-width: 900px) {
+  .project-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 0;
+  }
+  .project-art {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+  .project-hero__icon {
+    width: 110px;
+    height: 110px;
+  }
+  .project-heading,
+  .project-download__asset {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .project-homepage {
+    width: fit-content;
+  }
+  .project-download__controls {
+    grid-template-columns: 1fr;
+  }
+  .project-description {
+    width: 100%;
+  }
+  .project-download .download-button {
+    width: 100%;
+  }
+  .project-download__action {
+    justify-content: space-between;
+    width: 100%;
+  }
+}

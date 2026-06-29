@@ -33,6 +33,8 @@ type ProjectSummary struct {
 	ProjectID          string `json:"project_id"`
 	Repository         string `json:"repository"`
 	DisplayName        string `json:"display_name"`
+	Description        string `json:"description"`
+	HomepageURL        string `json:"homepage_url"`
 	Available          bool   `json:"available"`
 	LatestPublishedAt  string `json:"-"`
 	UnavailableReason  string `json:"-"`

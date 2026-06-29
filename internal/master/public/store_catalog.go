@@ -9,12 +9,14 @@ import (
 
 func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.repository, p.name,
+		COALESCE(p.description, ''), COALESCE(p.homepage_url, ''),
 		EXISTS(SELECT 1 FROM releases r JOIN assets a ON a.release_id = r.id`+routableAssetReplicaSQL+`
 			WHERE r.project_id = p.id AND p.enabled = 1 AND r.selected = 1
 			AND a.service_state = 'candidate') AS available,
 		COALESCE(MAX(CASE WHEN r.selected = 1 THEN r.published_at ELSE '' END), '')
 		FROM projects p LEFT JOIN releases r ON r.project_id = p.id
-		WHERE p.enabled = 1 GROUP BY p.id, p.repository, p.name ORDER BY p.name, p.id`,
+		WHERE p.enabled = 1 GROUP BY p.id, p.repository, p.name,
+		p.description, p.homepage_url ORDER BY p.name, p.id`,
 		s.routableAssetReplicaArgs()...)
 	if err != nil {
 		return nil, err
@@ -25,7 +27,9 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 	for rows.Next() {
 		var item ProjectSummary
 		var available int
-		if err := rows.Scan(&item.ProjectID, &item.Repository, &item.DisplayName, &available, &item.LatestPublishedAt); err != nil {
+		if err := rows.Scan(&item.ProjectID, &item.Repository, &item.DisplayName,
+			&item.Description, &item.HomepageURL, &available,
+			&item.LatestPublishedAt); err != nil {
 			return nil, err
 		}
 		item.Available = available == 1

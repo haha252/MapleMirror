@@ -15,6 +15,7 @@
   function normalize(p) {
     return {
       ID: val(p, "ID", ""), Name: val(p, "Name", ""), Repository: val(p, "Repository", ""),
+      Description: val(p, "Description", ""), HomepageURL: val(p, "HomepageURL", ""),
       IconPath: val(p, "IconPath", ""), Enabled: !!val(p, "Enabled", true),
       RetainVersions: Number(val(p, "RetainVersions", 3)) || 3,
       IncludePrerelease: !!val(p, "IncludePrerelease", false),
@@ -32,7 +33,9 @@
   function render(p) {
     document.getElementById("project-editor").innerHTML =
       section("基础信息", input("ID", "项目 ID", p.ID) + input("Name", "显示名称", p.Name) +
-        input("Repository", "GitHub 仓库 owner/repo", p.Repository) + input("IconPath", "图标路径", p.IconPath)) +
+        input("Repository", "GitHub 仓库 owner/repo", p.Repository) +
+        input("HomepageURL", "项目官网 URL", p.HomepageURL) +
+        input("IconPath", "图标路径", p.IconPath) + area("Description", "项目描述", p.Description)) +
       section("运行策略", num("RetainVersions", "保留版本数", p.RetainVersions) +
         num("DownloadMultiplier", "下载倍率", p.DownloadMultiplier) + check("Enabled", "启用项目", p.Enabled) +
         check("IncludePrerelease", "包含预发布版本", p.IncludePrerelease)) +
@@ -53,6 +56,9 @@
   }
   function num(name, label, value) {
     return '<label class="admin-field"><span>' + label + '</span><input data-field="' + name + '" type="number" min="1" value="' + a.esc(value) + '"></label>';
+  }
+  function area(name, label, value) {
+    return '<label class="admin-field admin-field--wide"><span>' + label + '</span><textarea data-field="' + name + '" rows="4">' + a.esc(value) + '</textarea></label>';
   }
   function check(name, label, checked) {
     return '<label class="admin-check"><input data-field="' + name + '" type="checkbox"' + (checked ? " checked" : "") + "> " + label + "</label>";

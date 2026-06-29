@@ -98,16 +98,20 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 
 	now := nowText()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO projects
-		(id, name, repository, enabled, retain_versions, include_prerelease,
+		(id, name, repository, description, homepage_url, enabled, retain_versions, include_prerelease,
 		download_multiplier, config_hash, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET name = excluded.name,
-		repository = excluded.repository, enabled = excluded.enabled,
+		repository = excluded.repository,
+		description = excluded.description,
+		homepage_url = excluded.homepage_url,
+		enabled = excluded.enabled,
 		retain_versions = excluded.retain_versions,
 		include_prerelease = excluded.include_prerelease,
 		download_multiplier = excluded.download_multiplier,
 		config_hash = excluded.config_hash, updated_at = excluded.updated_at`,
-		project.ID, project.Name, project.Repository, boolInt(project.Enabled),
+		project.ID, project.Name, project.Repository, project.Description,
+		project.HomepageURL, boolInt(project.Enabled),
 		project.RetainVersions, boolInt(project.IncludePrerelease),
 		project.DownloadMultiplier, projectHash(project), now); err != nil {
 		return ScanSummary{}, err

@@ -11,7 +11,7 @@ import (
 )
 
 var expectedSchemaFiles = map[string]string{
-	"migrations/master/000001_core.sql":                     "1193b652888a9136c0936f959f454165dcd55a2ee9d2e15a3db4a816e76ab598",
+	"migrations/master/000001_core.sql":                     "17801e5c80bc8446393d034147d934b92c79faa631d2ac1eb702ef704f91bc1f",
 	"migrations/master/000002_inventory.sql":                "d479f4ec2f04ba52fe374f7153d3d37dfbf3195adaade650b6c47622e681b43d",
 	"migrations/master/000003_operations.sql":               "a27660821da8487bd0bc8c2614ab8ffca35f8e0cb5b745e679492d2c74e7679b",
 	"migrations/master/000004_accounting.sql":               "33517fd69e0b057e84bd8edeae9d2889a0991adca9c2550b59d2e4f568c2d148",

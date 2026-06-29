@@ -52,8 +52,17 @@
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
     const versions = uniqueVersions(project.assets);
     const defaultVersion = project.default_version || (versions[0] || "");
-    card.querySelector(".project-card__icon").src = project.icon_url;
-    card.querySelector(".project-card__icon").alt = project.display_name + " 图标";
+    const projectHref = "/" + encodeURIComponent(project.project_id || "") + "/";
+    const icon = card.querySelector(".project-card__icon");
+    const link = card.querySelector(".project-link");
+    icon.src = project.icon_url;
+    icon.alt = project.display_name + " 图标";
+    icon.addEventListener("click", function () { window.location.href = projectHref; });
+    icon.tabIndex = 0;
+    icon.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") window.location.href = projectHref;
+    });
+    link.href = projectHref;
     card.querySelector(".project-name").textContent = project.display_name;
     card.querySelector(".project-repository").textContent = project.repository;
     card.querySelector(".project-updated").textContent = "最近更新：" + (project.latest_published_at || "暂无");

@@ -1,0 +1,90 @@
+package public
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestProjectPageRendersOptionalHomepageAndDescription(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	mustExec(t, db, `UPDATE projects SET description = '项目描述正文',
+		homepage_url = 'https://project.example.test' WHERE id = 'p1'`)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/p1/", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("project page status=%d body=%s", rec.Code, body)
+	}
+	for _, want := range []string{
+		`<title>项目一 - 枫源镜像</title>`,
+		`class="site-header"`,
+		`class="project-back"`,
+		`<path d="M15 5 8 12l7 7">`,
+		`href="https://project.example.test"`,
+		`项目描述正文`,
+		`/static/public/project.css?v=`,
+		`/static/public/project-responsive.css?v=`,
+		`/static/public/project.js?v=`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected project page to contain %q: %s", want, body)
+		}
+	}
+}
+
+func TestProjectPageHidesEmptyOptionalSections(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/p1/", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("project page status=%d body=%s", rec.Code, body)
+	}
+	if strings.Contains(body, `class="project-homepage"`) ||
+		strings.Contains(body, `class="project-description`) {
+		t.Fatalf("empty homepage/description should not render optional components: %s", body)
+	}
+}
+
+func TestProjectPageDoesNotInterceptDownloadPath(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/p1/v1/a.zip?from=home", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `<title>下载验证 - 枫源镜像</title>`) {
+		t.Fatalf("download path should render pow page, code=%d body=%s", rec.Code, body)
+	}
+	if strings.Contains(body, `class="project-page"`) {
+		t.Fatalf("download path should not render project page: %s", body)
+	}
+}
+
+func TestProjectPageReturnsNotFoundForUnknownProject(t *testing.T) {
+	db := openMaster(t)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/missing/", nil)
+	rec := httptest.NewRecorder()
+	srv.downloadPage(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown project should be 404, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}

@@ -23,6 +23,7 @@ type webAssets struct {
 	pageTemplate    *template.Template
 	downloadTmpl    *template.Template
 	downloadPowTmpl *template.Template
+	projectTmpl     *template.Template
 	placeholder     []byte
 	staticManifest  map[string]string
 	staticJSON      template.JS
@@ -63,6 +64,10 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	projectTmpl, err := template.New("project.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/project.html")
+	if err != nil {
+		return nil, err
+	}
 	placeholder, err := fs.ReadFile(staticFS, "placeholder-project.svg")
 	if err != nil {
 		return nil, err
@@ -72,6 +77,7 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 		pageTemplate:    pageTemplate,
 		downloadTmpl:    downloadTmpl,
 		downloadPowTmpl: downloadPowTmpl,
+		projectTmpl:     projectTmpl,
 		placeholder:     placeholder,
 		staticManifest:  manifest,
 		staticJSON:      staticJSON,
@@ -107,6 +113,10 @@ func loadWebAssets(root string) (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	projectTmpl, err := template.New("project.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "project.html"))
+	if err != nil {
+		return nil, err
+	}
 	placeholder, err := os.ReadFile(filepath.Join(staticDir, "placeholder-project.svg"))
 	if err != nil {
 		return nil, err
@@ -117,6 +127,7 @@ func loadWebAssets(root string) (*webAssets, error) {
 		pageTemplate:    pageTemplate,
 		downloadTmpl:    downloadTmpl,
 		downloadPowTmpl: downloadPowTmpl,
+		projectTmpl:     projectTmpl,
 		placeholder:     placeholder,
 		staticManifest:  manifest,
 		staticJSON:      staticJSON,

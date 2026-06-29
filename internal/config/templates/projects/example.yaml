@@ -5,6 +5,10 @@ id: "example"
 name: "示例项目"
 # GitHub 仓库，必须使用 owner/repository 格式，不允许 URL。
 repository: "owner/repository"
+# 项目专属页描述；留空时不展示描述组件。
+description: ""
+# 项目官网地址；仅支持 http/https，留空时不展示“转到官网”按钮。
+homepage_url: ""
 # 项目图标相对当前项目配置文件所在目录；留空表示使用内置占位图标。
 icon_path: ""
 # 是否启用该项目；禁用后不会参与扫描和公共展示。

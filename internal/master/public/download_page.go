@@ -13,6 +13,8 @@ type downloadProjectView struct {
 	ProjectID                string            `json:"project_id"`
 	DisplayName              string            `json:"display_name"`
 	Repository               string            `json:"repository"`
+	Description              string            `json:"description"`
+	HomepageURL              string            `json:"homepage_url"`
 	Available                bool              `json:"available"`
 	UnavailableReason        string            `json:"unavailable_reason"`
 	IconURL                  string            `json:"icon_url"`
@@ -40,6 +42,9 @@ type downloadAssetUI struct {
 
 func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
+		if s.maybeProjectPage(w, r) {
+			return
+		}
 		s.downloadReadablePowPage(w, r)
 		return
 	}
@@ -112,6 +117,8 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 		ProjectID:                project.ProjectID,
 		DisplayName:              project.DisplayName,
 		Repository:               project.Repository,
+		Description:              project.Description,
+		HomepageURL:              project.HomepageURL,
 		Available:                project.Available,
 		UnavailableReason:        project.UnavailableReason,
 		IconURL:                  "/static/project-icons/" + project.ProjectID,

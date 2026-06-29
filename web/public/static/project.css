@@ -1,0 +1,216 @@
+.page-project .page-title-row {
+  display: none;
+}
+.project-page {
+  display: grid;
+  gap: 24px;
+}
+.project-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--text);
+  font-weight: 700;
+}
+.project-back:hover {
+  color: var(--accent-hover);
+}
+.project-back__icon {
+  width: 36px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+.project-back:hover .project-back__icon {
+  background: var(--panel-muted);
+  color: var(--accent-hover);
+}
+.project-back__icon svg,
+.project-homepage svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.project-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 31%) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+  padding: 12px 52px 0;
+}
+.project-art {
+  display: flex;
+  justify-content: center;
+  padding-top: 58px;
+}
+.project-hero__icon {
+  width: 150px;
+  height: 150px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  object-fit: contain;
+}
+.project-main {
+  display: grid;
+  gap: 12px;
+}
+.project-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  min-width: 0;
+}
+.project-title-wrap {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.project-title-wrap h2 {
+  margin-bottom: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.project-title-wrap p {
+  margin-bottom: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.project-homepage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 148px;
+  min-height: 44px;
+  padding: 9px 15px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-muted);
+  color: var(--text);
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+.project-download,
+.project-description {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+.project-download {
+  min-height: 150px;
+  display: grid;
+  gap: 14px;
+  padding: 28px 32px;
+  align-content: center;
+}
+.project-download__summary {
+  text-align: center;
+}
+.project-download__summary:empty {
+  display: none;
+}
+.project-download__summary:has(#project-download-status:empty) {
+  display: none;
+}
+.project-download__summary p,
+.project-download__asset p {
+  margin-bottom: 0;
+}
+#project-download-status {
+  font-size: 25px;
+  font-weight: 700;
+}
+#project-download-status:empty {
+  display: none;
+}
+.project-availability {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.project-download__controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.field span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.field select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.field[hidden] {
+  display: none;
+}
+.project-download__asset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.project-download__asset > div:first-child {
+  min-width: 0;
+}
+.project-download__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+#project-file-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+#project-file-meta {
+  color: var(--text);
+  opacity: .78;
+}
+.project-download .download-button {
+  min-width: 116px;
+  border-radius: 8px;
+}
+.project-description {
+  width: 100%;
+  justify-self: stretch;
+  min-height: 212px;
+  padding: 24px;
+  text-align: left;
+}
+.project-description h2 {
+  margin-bottom: 14px;
+  font-size: 27px;
+  line-height: 1.2;
+}
+.project-description p {
+  margin-bottom: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.5;
+}
