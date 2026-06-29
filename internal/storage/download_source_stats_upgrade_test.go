@@ -77,7 +77,7 @@ func TestOpenMasterBackfillsDownloadSourceStatsForExistingV9Database(t *testing.
 	assertColumn(t, opened, "daily_project_stats", "api_authorization_count")
 	assertColumn(t, opened, "daily_asset_stats", "web_authorization_count")
 	assertColumn(t, opened, "daily_asset_stats", "api_authorization_count")
-	assertDBVersion(t, opened, "master", 10)
+	assertDBVersion(t, opened, "master", masterDBVersion)
 
 	var web, api int64
 	if err := opened.QueryRow(`SELECT web_authorization_count, api_authorization_count

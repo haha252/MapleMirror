@@ -13,12 +13,13 @@ func (s *Server) statsOverviewAPI(w http.ResponseWriter, r *http.Request) {
 	day := queryDay(r)
 	var auth, started, daily, total int64
 	_ = s.repo.DB.QueryRowContext(r.Context(), `SELECT
-		COALESCE(SUM(authorization_count), 0),
-		COALESCE(SUM(transfer_started_count), 0),
-		COALESCE(SUM(sent_bytes), 0) FROM daily_project_stats
+		COALESCE(authorization_count, 0),
+		COALESCE(transfer_started_count, 0),
+		COALESCE(sent_bytes, 0) FROM daily_public_stats
 		WHERE stat_day = ?`, day).Scan(&auth, &started, &daily)
-	_ = s.repo.DB.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(sent_bytes), 0)
-		FROM daily_project_stats`).Scan(&total)
+	_ = s.repo.DB.QueryRowContext(r.Context(), `SELECT COALESCE(t.sent_bytes, 0)
+		FROM (SELECT 1) seed
+		LEFT JOIN public_stat_totals t ON t.id = 'global'`).Scan(&total)
 	writeJSON(w, http.StatusOK, map[string]any{"stat_day": day,
 		"authorization_count": auth, "transfer_started_count": started,
 		"daily_sent_bytes": daily, "total_sent_bytes": total})

@@ -73,6 +73,7 @@ func TestIssueAuthorizationConsumesChallengeAndBindsRoutableNode(t *testing.T) {
 		t.Fatalf("资源下载授权次数未按 API 来源入账：total=%d web=%d api=%d err=%v",
 			authCount, webAuthCount, apiAuthCount, err)
 	}
+	assertAuthorizationStateCounters(t, db)
 	var reserved int64
 	err = db.QueryRow(`SELECT address_reserved_bytes FROM traffic_reservations
 		WHERE authorization_id = ?`, auth.Claims.AuthorizationID).Scan(&reserved)

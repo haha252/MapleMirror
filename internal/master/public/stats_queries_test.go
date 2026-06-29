@@ -114,6 +114,12 @@ func seedRankAsset(t *testing.T, db execDB, releaseID string, githubReleaseID in
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = db.Exec(`INSERT INTO asset_stat_totals
+		(asset_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES (?, ?, 0, 0, 'now')`, assetID, downloads)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 type execDB interface {

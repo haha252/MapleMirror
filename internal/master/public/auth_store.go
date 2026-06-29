@@ -128,7 +128,13 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	if err := upsertProjectStats(ctx, tx, day, asset.ProjectID, 1, webAuth, apiAuth, 0, 0); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
-	if err := upsertAssetStats(ctx, tx, day, c.AssetID, 1, webAuth, apiAuth, 0, 0, nowText()); err != nil {
+	if err := upsertAssetStats(ctx, tx, day, c.AssetID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
+		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+	}
+	if err := addPublicStatCounters(ctx, tx, day, 0, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
+		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+	}
+	if err := addAssetStatCounters(ctx, tx, c.AssetID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
 	requestRemaining, trafficRemaining, err := quota.snapshot(ctx, tx, day, scopes)
@@ -177,17 +183,6 @@ func trafficLimitBytes(limit int64, exempt bool) int64 {
 		return 0
 	}
 	return limit
-}
-
-func (s Store) Authorization(ctx context.Context, id string) (AuthorizationStatus, error) {
-	var out AuthorizationStatus
-	err := s.DB.QueryRowContext(ctx, `SELECT da.id, da.asset_id, da.node_id,
-		COALESCE(NULLIF(n.public_name, ''), '节点不可用'), da.client_prefix_key,
-		da.status, da.expires_at, da.token_hash FROM download_authorizations da
-		LEFT JOIN nodes n ON n.id = da.node_id WHERE da.id = ?`, id).
-		Scan(&out.AuthorizationID, &out.AssetID, &out.NodeID, &out.NodeName,
-			&out.ClientPrefixKey, &out.State, &out.ExpiresAt, &out.TokenHash)
-	return out, err
 }
 
 type routableAssetInfo struct {

@@ -47,6 +47,7 @@ func deleteNodeData(ctx context.Context, tx *sql.Tx, nodeID string) error {
 		)`,
 		`DELETE FROM download_authorizations WHERE node_id = ?`,
 		`DELETE FROM daily_node_traffic_stats WHERE node_id = ?`,
+		`DELETE FROM node_traffic_totals WHERE node_id = ?`,
 		`DELETE FROM node_availability_samples WHERE node_id = ?`,
 		`DELETE FROM node_pressure_reports WHERE node_id = ?`,
 		`DELETE FROM node_inventory_reports WHERE node_id = ?`,

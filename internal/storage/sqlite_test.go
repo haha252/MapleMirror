@@ -47,16 +47,23 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertColumn(t, db, "daily_project_stats", "api_authorization_count")
 	assertColumn(t, db, "daily_asset_stats", "web_authorization_count")
 	assertColumn(t, db, "daily_asset_stats", "api_authorization_count")
+	assertTable(t, db, "public_stat_totals")
+	assertTable(t, db, "daily_public_stats")
+	assertTable(t, db, "asset_stat_totals")
+	assertTable(t, db, "node_traffic_totals")
 	assertIndex(t, db, "idx_node_availability_samples_window")
 	assertIndex(t, db, "idx_daily_node_traffic_stats_node")
 	assertIndex(t, db, "idx_traffic_event_dedupe_authorization")
+	assertIndex(t, db, "idx_asset_stat_totals_downloads")
+	assertIndex(t, db, "idx_traffic_event_dedupe_accounted")
+	assertIndex(t, db, "idx_traffic_event_dedupe_authorization_accounted")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	assertDBVersion(t, db, "master", 10)
+	assertDBVersion(t, db, "master", masterDBVersion)
 	var legacyCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&legacyCount); err != nil {
 		t.Fatal(err)

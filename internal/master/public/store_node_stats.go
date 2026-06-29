@@ -143,7 +143,7 @@ func (s Store) loadNodeTrafficTotals(ctx context.Context, nodeIDs []string) (map
 		return out, nil
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT node_id, COALESCE(SUM(sent_bytes), 0)
-		FROM daily_node_traffic_stats WHERE node_id IN (`+placeholders(len(nodeIDs))+`)
+		FROM node_traffic_totals WHERE node_id IN (`+placeholders(len(nodeIDs))+`)
 		GROUP BY node_id`, stringArgs(nodeIDs)...)
 	if err != nil {
 		return nil, err

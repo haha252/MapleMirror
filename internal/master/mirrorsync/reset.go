@@ -1,6 +1,9 @@
 package mirrorsync
 
-import "context"
+import (
+	"context"
+	"database/sql"
+)
 
 func (s Store) ResetProject(ctx context.Context, projectID string) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -31,6 +34,9 @@ func (s Store) ResetProject(ctx context.Context, projectID string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM traffic_reservations WHERE authorization_id IN (`+projectAuthorizations+`)`, projectID); err != nil {
 		return err
 	}
+	if err := subtractProjectPublicStats(ctx, tx, projectID); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM download_authorizations WHERE asset_id IN (`+projectAssets+`)`, projectID); err != nil {
 		return err
 	}
@@ -38,6 +44,9 @@ func (s Store) ResetProject(ctx context.Context, projectID string) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM daily_asset_stats WHERE asset_id IN (`+projectAssets+`)`, projectID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM asset_stat_totals WHERE asset_id IN (`+projectAssets+`)`, projectID); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM node_tasks WHERE asset_id IN (`+projectAssets+`)`, projectID); err != nil {
@@ -66,4 +75,51 @@ func (s Store) ResetProject(ctx context.Context, projectID string) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func subtractProjectPublicStats(ctx context.Context, tx *sql.Tx, projectID string) error {
+	if _, err := tx.ExecContext(ctx, `UPDATE daily_public_stats SET
+		authorization_count = MAX(authorization_count - COALESCE((
+			SELECT SUM(authorization_count) FROM daily_project_stats dps
+			WHERE dps.project_id = ? AND dps.stat_day = daily_public_stats.stat_day
+		), 0), 0),
+		web_authorization_count = MAX(web_authorization_count - COALESCE((
+			SELECT SUM(web_authorization_count) FROM daily_project_stats dps
+			WHERE dps.project_id = ? AND dps.stat_day = daily_public_stats.stat_day
+		), 0), 0),
+		api_authorization_count = MAX(api_authorization_count - COALESCE((
+			SELECT SUM(api_authorization_count) FROM daily_project_stats dps
+			WHERE dps.project_id = ? AND dps.stat_day = daily_public_stats.stat_day
+		), 0), 0),
+		transfer_started_count = MAX(transfer_started_count - COALESCE((
+			SELECT SUM(transfer_started_count) FROM daily_project_stats dps
+			WHERE dps.project_id = ? AND dps.stat_day = daily_public_stats.stat_day
+		), 0), 0),
+		sent_bytes = MAX(sent_bytes - COALESCE((
+			SELECT SUM(sent_bytes) FROM daily_project_stats dps
+			WHERE dps.project_id = ? AND dps.stat_day = daily_public_stats.stat_day
+		), 0), 0)
+		WHERE stat_day IN (
+			SELECT stat_day FROM daily_project_stats WHERE project_id = ?
+		)`, projectID, projectID, projectID, projectID, projectID, projectID); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE public_stat_totals SET
+		authorization_count = MAX(authorization_count - COALESCE((
+			SELECT SUM(authorization_count) FROM daily_project_stats WHERE project_id = ?
+		), 0), 0),
+		web_authorization_count = MAX(web_authorization_count - COALESCE((
+			SELECT SUM(web_authorization_count) FROM daily_project_stats WHERE project_id = ?
+		), 0), 0),
+		api_authorization_count = MAX(api_authorization_count - COALESCE((
+			SELECT SUM(api_authorization_count) FROM daily_project_stats WHERE project_id = ?
+		), 0), 0),
+		transfer_started_count = MAX(transfer_started_count - COALESCE((
+			SELECT SUM(transfer_started_count) FROM daily_project_stats WHERE project_id = ?
+		), 0), 0),
+		sent_bytes = MAX(sent_bytes - COALESCE((
+			SELECT SUM(sent_bytes) FROM daily_project_stats WHERE project_id = ?
+		), 0), 0)
+		WHERE id = 'global'`, projectID, projectID, projectID, projectID, projectID)
+	return err
 }

@@ -53,7 +53,7 @@ func TestOpenMasterLogsVersionUpgradeSteps(t *testing.T) {
 	defer opened.Close()
 
 	want := []versionLogEvent{
-		{Message: "数据库需要升级", Kind: "master", Current: 3, Target: 10},
+		{Message: "数据库需要升级", Kind: "master", Current: 3, Target: masterDBVersion},
 		{Message: "数据库升级器开始执行", Kind: "master", From: 3, To: 4},
 		{Message: "数据库升级器执行完成", Kind: "master", From: 3, To: 4},
 		{Message: "数据库升级器开始执行", Kind: "master", From: 4, To: 5},
@@ -68,6 +68,8 @@ func TestOpenMasterLogsVersionUpgradeSteps(t *testing.T) {
 		{Message: "数据库升级器执行完成", Kind: "master", From: 8, To: 9},
 		{Message: "数据库升级器开始执行", Kind: "master", From: 9, To: 10},
 		{Message: "数据库升级器执行完成", Kind: "master", From: 9, To: 10},
+		{Message: "数据库升级器开始执行", Kind: "master", From: 10, To: 11},
+		{Message: "数据库升级器执行完成", Kind: "master", From: 10, To: 11},
 	}
 	assertVersionLogEvents(t, events, want)
 }

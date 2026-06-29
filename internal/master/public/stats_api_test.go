@@ -115,6 +115,27 @@ func seedStatsSnapshot(t *testing.T, db *sql.DB) {
 		VALUES ('`+day+`', 'asset-1', 3, 2, 1, 2, 4096, 'now')`)
 	mustExec(t, db, `INSERT INTO daily_node_traffic_stats
 		(stat_day, node_id, sent_bytes, updated_at) VALUES ('`+day+`', 'node-1', 8192, 'now')`)
+	mustExec(t, db, `INSERT INTO daily_public_stats
+		(stat_day, page_views, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('`+day+`', 7, 3, 2, 1, 2, 4096, 'now')`)
+	mustExec(t, db, `INSERT INTO public_stat_totals
+		(id, page_views, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('global', 7, 3, 2, 1, 2, 4096, 'now')
+		ON CONFLICT(id) DO UPDATE SET page_views = excluded.page_views,
+		authorization_count = excluded.authorization_count,
+		web_authorization_count = excluded.web_authorization_count,
+		api_authorization_count = excluded.api_authorization_count,
+		transfer_started_count = excluded.transfer_started_count,
+		sent_bytes = excluded.sent_bytes,
+		updated_at = excluded.updated_at`)
+	mustExec(t, db, `INSERT INTO asset_stat_totals
+		(asset_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('asset-1', 3, 2, 1, 2, 4096, 'now')`)
+	mustExec(t, db, `INSERT INTO node_traffic_totals
+		(node_id, sent_bytes, updated_at) VALUES ('node-1', 8192, 'now')`)
 }
 
 func decodeStatsResponse(t *testing.T, rec *httptest.ResponseRecorder, out any) {

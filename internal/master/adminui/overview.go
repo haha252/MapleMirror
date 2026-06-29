@@ -25,12 +25,13 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 	var auth, started, daily, total int64
 	day := timeNowDay()
 	_ = s.repo.DB.QueryRowContext(ctx, `SELECT
-		COALESCE(SUM(authorization_count), 0),
-		COALESCE(SUM(transfer_started_count), 0),
-		COALESCE(SUM(sent_bytes), 0) FROM daily_project_stats
+		COALESCE(authorization_count, 0),
+		COALESCE(transfer_started_count, 0),
+		COALESCE(sent_bytes, 0) FROM daily_public_stats
 		WHERE stat_day = ?`, day).Scan(&auth, &started, &daily)
-	_ = s.repo.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(sent_bytes), 0)
-		FROM daily_project_stats`).Scan(&total)
+	_ = s.repo.DB.QueryRowContext(ctx, `SELECT COALESCE(t.sent_bytes, 0)
+		FROM (SELECT 1) seed
+		LEFT JOIN public_stat_totals t ON t.id = 'global'`).Scan(&total)
 	out := overviewResponse{
 		Stats: map[string]any{"stat_day": day, "authorization_count": auth,
 			"transfer_started_count": started, "daily_sent_bytes": daily,

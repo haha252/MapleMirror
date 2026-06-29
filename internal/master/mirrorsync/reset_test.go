@@ -62,6 +62,20 @@ func TestResetProjectClearsProjectDerivedData(t *testing.T) {
 	mustExecReset(t, db, `INSERT INTO daily_asset_stats
 		(stat_day, asset_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
 		VALUES ('2026-06-03', 'p1:1:1', 2, 1, 100, ?)`, now)
+	mustExecReset(t, db, `INSERT INTO daily_public_stats
+		(stat_day, page_views, authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('2026-06-03', 9, 2, 1, 100, ?)`, now)
+	mustExecReset(t, db, `INSERT INTO public_stat_totals
+		(id, page_views, authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('global', 20, 2, 1, 100, ?)
+		ON CONFLICT(id) DO UPDATE SET page_views = excluded.page_views,
+		authorization_count = excluded.authorization_count,
+		transfer_started_count = excluded.transfer_started_count,
+		sent_bytes = excluded.sent_bytes,
+		updated_at = excluded.updated_at`, now)
+	mustExecReset(t, db, `INSERT INTO asset_stat_totals
+		(asset_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('p1:1:1', 2, 1, 100, ?)`, now)
 	mustExecReset(t, db, `INSERT INTO download_authorizations
 		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at, max_bytes, range_limit, status, request_id, first_transfer_at)
 		VALUES ('auth-1', 'p1:1:1', 'node-1', 'prefix', ?, ?, 10, 1, 'active', 'req-auth', ?)`, now, now, now)
@@ -93,12 +107,14 @@ func TestResetProjectClearsProjectDerivedData(t *testing.T) {
 	assertCount(t, db, "project_scan_state", 0)
 	assertCount(t, db, "daily_project_stats", 0)
 	assertCount(t, db, "daily_asset_stats", 0)
+	assertCount(t, db, "asset_stat_totals", 0)
 	assertCount(t, db, "download_authorizations", 0)
 	assertCount(t, db, "traffic_reservations", 0)
 	assertCount(t, db, "traffic_events", 0)
 	assertCount(t, db, "challenges", 0)
 	assertCount(t, db, "daily_traffic_stats", 1)
 	assertCount(t, db, "nodes", 1)
+	assertPublicStatsAfterReset(t, db)
 }
 
 func mustExecReset(t *testing.T, db interface {
@@ -107,5 +123,28 @@ func mustExecReset(t *testing.T, db interface {
 	t.Helper()
 	if _, err := db.Exec(query, args...); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertPublicStatsAfterReset(t *testing.T, db *sql.DB) {
+	t.Helper()
+	var views, auth, started, sent int64
+	if err := db.QueryRow(`SELECT page_views, authorization_count,
+		transfer_started_count, sent_bytes FROM daily_public_stats
+		WHERE stat_day = '2026-06-03'`).Scan(&views, &auth, &started, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if views != 9 || auth != 0 || started != 0 || sent != 0 {
+		t.Fatalf("项目重置后每日公开状态错误：views=%d auth=%d started=%d sent=%d",
+			views, auth, started, sent)
+	}
+	if err := db.QueryRow(`SELECT page_views, authorization_count,
+		transfer_started_count, sent_bytes FROM public_stat_totals
+		WHERE id = 'global'`).Scan(&views, &auth, &started, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if views != 20 || auth != 0 || started != 0 || sent != 0 {
+		t.Fatalf("项目重置后公开累计状态错误：views=%d auth=%d started=%d sent=%d",
+			views, auth, started, sent)
 	}
 }

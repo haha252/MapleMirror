@@ -45,6 +45,7 @@ func TestAcceptTrafficEventAccountsOnceAndStartsTransfer(t *testing.T) {
 	if err != nil || sent != 5 {
 		t.Fatalf("节点流量入账不符合预期：sent=%d err=%v", sent, err)
 	}
+	assertTrafficStateCounters(t, repo)
 }
 
 func TestAcceptTrafficEventRejectsConflictingConfirmedReplay(t *testing.T) {

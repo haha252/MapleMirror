@@ -78,12 +78,23 @@ func (s Store) StatsDashboard(ctx context.Context) (StatsDashboard, error) {
 func (s Store) IncrementPageView(ctx context.Context) error {
 	now := timeNow()
 	day := statDay(now, s.Location)
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO daily_site_stats
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	nowText := now.Format(time.RFC3339Nano)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO daily_site_stats
 		(stat_day, page_views, updated_at) VALUES (?, 1, ?)
 		ON CONFLICT(stat_day) DO UPDATE SET
 		page_views = page_views + 1, updated_at = excluded.updated_at`,
-		day, now.Format(time.RFC3339Nano))
-	return err
+		day, nowText); err != nil {
+		return err
+	}
+	if err := addPublicStatCounters(ctx, tx, day, 1, 0, 0, 0, 0, 0, nowText); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s Store) AuthorizationBytes(ctx context.Context, id string) (int64, string, error) {

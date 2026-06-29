@@ -146,28 +146,16 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 		return out, err
 	}
 	out.RoutingReady = ready == 1
-	out.RequiredAssets = count(ctx, s.DB, `SELECT COUNT(*) FROM target_inventory
-		WHERE node_id = ? AND desired_state = 'required'`, nodeID)
-	out.VerifiedAssets = count(ctx, s.DB, `SELECT COUNT(*) FROM node_inventory
-		WHERE node_id = ? AND state = 'verified'`, nodeID)
-	out.MissingAssets = count(ctx, s.DB, `SELECT COUNT(*) FROM target_inventory ti
-		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
-		WHERE ti.node_id = ? AND ti.desired_state = 'required'
-		AND (ni.asset_id IS NULL OR ni.state != 'verified')`, nodeID)
-	out.MismatchedAssets = count(ctx, s.DB, `SELECT COUNT(*) FROM node_inventory
-		WHERE node_id = ? AND state = 'mismatch'`, nodeID)
-	out.PendingTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
-		WHERE node_id = ? AND state = 'pending'`, nodeID)
-	out.SentTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
-		WHERE node_id = ? AND state = 'sent'`, nodeID)
-	out.RunningTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
-		WHERE node_id = ? AND state = 'running'`, nodeID)
-	out.RetryWaitTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
-		WHERE node_id = ? AND state = 'retry_wait'`, nodeID)
-	out.OutstandingTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
-		WHERE node_id = ? AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`, nodeID)
-	out.FailedTasks = count(ctx, s.DB, `SELECT COUNT(*) FROM node_tasks
-		WHERE node_id = ? AND state = 'failed'`, nodeID)
+	out.RequiredAssets, out.MissingAssets = targetInventoryCounts(ctx, s.DB, nodeID)
+	out.VerifiedAssets, out.MismatchedAssets = nodeInventoryCounts(ctx, s.DB, nodeID)
+	taskCounts := syncTaskCounts(ctx, s.DB, nodeID)
+	out.PendingTasks = taskCounts["pending"]
+	out.SentTasks = taskCounts["sent"]
+	out.RunningTasks = taskCounts["running"]
+	out.RetryWaitTasks = taskCounts["retry_wait"]
+	out.FailedTasks = taskCounts["failed"]
+	out.OutstandingTasks = out.PendingTasks + out.SentTasks + out.RunningTasks +
+		out.RetryWaitTasks + out.FailedTasks
 	if s.Runtime != nil {
 		out.LatestInventoryRevision, out.LatestInventoryComplete, out.HasInventoryReport =
 			s.Runtime.LatestInventoryState(nodeID)
@@ -206,12 +194,6 @@ func updateTask(ctx context.Context, db *sql.DB, nodeID, taskID, state, msg stri
 		return sql.ErrNoRows
 	}
 	return nil
-}
-
-func count(ctx context.Context, db *sql.DB, query string, arg any) int {
-	var n int
-	_ = db.QueryRowContext(ctx, query, arg).Scan(&n)
-	return n
 }
 
 func exists(ctx context.Context, db *sql.DB, query string, arg any) bool {

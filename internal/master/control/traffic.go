@@ -223,5 +223,14 @@ func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, by
 		info.StartedIncrement, bytes, now); err != nil {
 		return err
 	}
-	return upsertNodeTraffic(ctx, tx, info.Day, info.NodeID, bytes, now)
+	if err := upsertNodeTraffic(ctx, tx, info.Day, info.NodeID, bytes, now); err != nil {
+		return err
+	}
+	if err := addPublicTrafficCounters(ctx, tx, info.Day, info.StartedIncrement, bytes, now); err != nil {
+		return err
+	}
+	if err := addAssetTrafficCounters(ctx, tx, info.AssetID, info.StartedIncrement, bytes, now); err != nil {
+		return err
+	}
+	return addNodeTrafficCounters(ctx, tx, info.NodeID, bytes, now)
 }

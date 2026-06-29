@@ -35,6 +35,14 @@ func TestPageViewCookieCountsVisitorOncePerDay(t *testing.T) {
 	if err != nil || views != 1 {
 		t.Fatalf("同一访客同日只应计一次访问：views=%d err=%v", views, err)
 	}
+	err = db.QueryRow(`SELECT page_views FROM public_stat_totals WHERE id = 'global'`).Scan(&views)
+	if err != nil || views != 1 {
+		t.Fatalf("访问状态累计未更新：views=%d err=%v", views, err)
+	}
+	err = db.QueryRow(`SELECT page_views FROM daily_public_stats`).Scan(&views)
+	if err != nil || views != 1 {
+		t.Fatalf("访问日状态未更新：views=%d err=%v", views, err)
+	}
 }
 
 func TestPageViewTrackerResetsWhenDayChanges(t *testing.T) {
