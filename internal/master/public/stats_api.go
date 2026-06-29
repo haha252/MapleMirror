@@ -88,10 +88,9 @@ func (s Store) StatsRealtime(ctx context.Context) (statsFastSnapshot, error) {
 
 func compactStatsDetails(stats StatsDashboard, nodes []NodeSummary) statsDetailsSnapshot {
 	var out statsDetailsSnapshot
-	for _, item := range stats.Resources {
+	for _, item := range stats.Projects {
 		out.Ranks = append(out.Ranks, []any{
-			item.ProjectName, item.Version, item.Architecture, item.DownloadCount,
-			item.WebDownloadCount, item.APIDownloadCount,
+			item.ProjectName, item.DownloadCount, item.WebDownloadCount, item.APIDownloadCount,
 		})
 	}
 	for _, item := range nodes {

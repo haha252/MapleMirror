@@ -11,7 +11,7 @@ import (
 func statsShellBody() template.HTML {
 	body := `<section class="stats-section"><h2>总计信息</h2><div id="stats-metrics" class="metric-grid">` +
 		metricPlaceholder("总访问量") + metricPlaceholder("总下载量") + metricPlaceholder("总流量") + `</div>`
-	body += `<div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目版本</p><div id="stats-ranks" class="rank-list"><p class="muted empty">正在加载统计数据...</p></div></section>` +
+	body += `<div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目</p><div id="stats-ranks" class="rank-list"><p class="muted empty">正在加载统计数据...</p></div></section>` +
 		`<section class="panel-card chart-card"><div class="chart-card__head"><h3>下载趋势</h3><p class="muted">最近 30 天访问量与 Web/API 下载量变化</p></div><div id="stats-chart" class="stats-chart" data-trends="[]"></div><div id="stats-tooltip" class="stats-tooltip" hidden></div></section></div></section>`
 	body += `<section class="stats-section"><h2>节点信息</h2><div id="stats-nodes"><p class="muted empty">正在加载节点状态...</p></div></section>`
 	return template.HTML(body)
@@ -24,8 +24,8 @@ func metricPlaceholder(title string) string {
 
 func statsBody(stats StatsDashboard, nodes []NodeSummary) template.HTML {
 	body := `<section class="stats-section"><h2>总计信息</h2>` + metricsGrid(stats)
-	body += `<div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目版本</p>` +
-		rankList(stats.Resources) + `</section>` + trendChart(stats.Trend) + `</div></section>`
+	body += `<div class="stats-layout"><section class="panel-card rank-card"><h3>热门资源排行</h3><p class="muted">下载量最高的项目</p>` +
+		rankList(stats.Projects) + `</section>` + trendChart(stats.Trend) + `</div></section>`
 	body += `<section class="stats-section"><h2>节点信息</h2><div id="stats-nodes">` + nodesTable(nodes) + `</div></section>`
 	return template.HTML(body)
 }
@@ -40,7 +40,7 @@ func metricsGrid(stats StatsDashboard) string {
 	return body + `</div>`
 }
 
-func rankList(items []ResourceRank) string {
+func rankList(items []ProjectRank) string {
 	body := `<div id="stats-ranks" class="rank-list">`
 	for i, item := range items {
 		body += rankItem(i+1, item)
@@ -69,15 +69,14 @@ func metricCardWithBreakdown(title string, metric MetricStat, value, sub string,
 	return strings.Replace(body, `</article>`, breakdown+`</article>`, 1)
 }
 
-func rankItem(rank int, item ResourceRank) string {
+func rankItem(rank int, item ProjectRank) string {
 	badge := "rank-badge"
 	if rank > 3 {
 		badge += " rank-badge--muted"
 	}
 	return `<div class="rank-item"><span class="` + badge + `"><span>` + numComma(int64(rank)) +
-		`</span></span><div><strong>` + esc(item.ProjectName) + `</strong><span>` +
-		esc(item.Version+" "+item.Architecture) + `</span><span class="rank-source">Web ` +
-		numComma(item.WebDownloadCount) + ` / API ` + numComma(item.APIDownloadCount) +
+		`</span></span><div><strong>` + esc(item.ProjectName) + `</strong><span class="rank-source">` +
+		`Web ` + numComma(item.WebDownloadCount) + ` / API ` + numComma(item.APIDownloadCount) +
 		`</span></div><b>` + numComma(item.DownloadCount) + `</b></div>`
 }
 

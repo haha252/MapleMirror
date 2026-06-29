@@ -174,10 +174,9 @@
     ranks.innerHTML = items.map((row, i) => {
       const badge = i < 3 ? "rank-badge" : "rank-badge rank-badge--muted";
       return '<div class="rank-item"><span class="' + badge + '"><span>' + (i + 1) +
-        '</span></span><div><strong>' + esc(row[0]) + '</strong><span>' +
-        esc((row[1] || "") + " " + (row[2] || "")) + '</span><span class="rank-source">Web ' +
-        fmt(row[4] || 0) + " / API " + fmt(row[5] || 0) +
-        '</span></div><b>' + fmt(row[3]) + '</b></div>';
+        '</span></span><div><strong>' + esc(row[0]) + '</strong><span class="rank-source">' +
+        "Web " + fmt(row[2] || 0) + " / API " + fmt(row[3] || 0) +
+        '</span></div><b>' + fmt(row[1] || 0) + '</b></div>';
     }).join("");
   }
 

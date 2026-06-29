@@ -38,8 +38,8 @@ func TestStatsAPIsSplitFastAndDetailsSnapshots(t *testing.T) {
 	srv.Handler().ServeHTTP(detailsRec, req)
 	var details statsDetailsSnapshot
 	decodeStatsResponse(t, detailsRec, &details)
-	if len(details.Ranks) != 1 || details.Ranks[0][3].(float64) != 3 ||
-		details.Ranks[0][4].(float64) != 2 || details.Ranks[0][5].(float64) != 1 {
+	if len(details.Ranks) != 1 || details.Ranks[0][1].(float64) != 3 ||
+		details.Ranks[0][2].(float64) != 2 || details.Ranks[0][3].(float64) != 1 {
 		t.Fatalf("expected compact rank rows: %+v", details.Ranks)
 	}
 	if len(details.Nodes) != 1 || details.Nodes[0][3].(float64) != 1 ||
@@ -134,6 +134,10 @@ func seedStatsSnapshot(t *testing.T, db *sql.DB) {
 		(asset_id, authorization_count, web_authorization_count,
 		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
 		VALUES ('asset-1', 3, 2, 1, 2, 4096, 'now')`)
+	mustExec(t, db, `INSERT INTO project_stat_totals
+		(project_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('p1', 3, 2, 1, 2, 4096, 'now')`)
 	mustExec(t, db, `INSERT INTO node_traffic_totals
 		(node_id, sent_bytes, updated_at) VALUES ('node-1', 8192, 'now')`)
 }

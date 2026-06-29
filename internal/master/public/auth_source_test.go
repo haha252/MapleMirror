@@ -36,4 +36,11 @@ func TestIssueAuthorizationAccountsWebSource(t *testing.T) {
 	if total != 1 || web != 1 || api != 0 {
 		t.Fatalf("web source project stats mismatch: total=%d web=%d api=%d", total, web, api)
 	}
+	if err := db.QueryRow(`SELECT authorization_count, web_authorization_count, api_authorization_count
+		FROM project_stat_totals WHERE project_id = 'p1'`).Scan(&total, &web, &api); err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || web != 1 || api != 0 {
+		t.Fatalf("web source project total mismatch: total=%d web=%d api=%d", total, web, api)
+	}
 }

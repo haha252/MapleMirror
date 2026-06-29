@@ -137,6 +137,9 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	if err := addAssetStatCounters(ctx, tx, c.AssetID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
+	if err := addProjectStatCounters(ctx, tx, asset.ProjectID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
+		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+	}
 	requestRemaining, trafficRemaining, err := quota.snapshot(ctx, tx, day, scopes)
 	if err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err

@@ -12,7 +12,7 @@ type StatsDashboard struct {
 	TotalDownloads  MetricStat
 	DownloadSources DownloadSourceStats
 	TotalTraffic    MetricStat
-	Resources       []ResourceRank
+	Projects        []ProjectRank
 	Trend           []DailyTrend
 }
 
@@ -24,12 +24,9 @@ type MetricStat struct {
 	TrendLabel string
 }
 
-type ResourceRank struct {
+type ProjectRank struct {
+	ProjectID        string
 	ProjectName      string
-	Version          string
-	FileName         string
-	Architecture     string
-	System           string
 	DownloadCount    int64
 	WebDownloadCount int64
 	APIDownloadCount int64
@@ -62,11 +59,11 @@ func (s Store) StatsDashboard(ctx context.Context) (StatsDashboard, error) {
 		&out.DownloadSources.Web, &out.DownloadSources.API); err != nil {
 		return out, err
 	}
-	resources, err := s.TopResources(ctx, start, today, 8)
+	projects, err := s.TopProjects(ctx)
 	if err != nil {
 		return out, err
 	}
-	out.Resources = resources
+	out.Projects = projects
 	trend, err := s.DailyTrends(ctx, start, today)
 	if err != nil {
 		return out, err

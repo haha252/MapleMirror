@@ -69,3 +69,20 @@ func addAssetStatCounters(ctx context.Context, exec statsCounterExec, assetID st
 		assetID, auth, webAuth, apiAuth, started, bytes, now)
 	return err
 }
+
+func addProjectStatCounters(ctx context.Context, exec statsCounterExec, projectID string,
+	auth, webAuth, apiAuth, started, bytes int64, now string) error {
+	_, err := exec.ExecContext(ctx, `INSERT INTO project_stat_totals
+		(project_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(project_id) DO UPDATE SET
+		authorization_count = authorization_count + excluded.authorization_count,
+		web_authorization_count = web_authorization_count + excluded.web_authorization_count,
+		api_authorization_count = api_authorization_count + excluded.api_authorization_count,
+		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
+		sent_bytes = sent_bytes + excluded.sent_bytes,
+		updated_at = excluded.updated_at`,
+		projectID, auth, webAuth, apiAuth, started, bytes, now)
+	return err
+}

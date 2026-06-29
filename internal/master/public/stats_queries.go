@@ -64,27 +64,23 @@ func (s Store) loadDownloadSourceSummaries(ctx context.Context, previousStart, s
 	return nil
 }
 
-func (s Store) TopResources(ctx context.Context, start, end string, limit int) ([]ResourceRank, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT p.name, r.tag_name, a.file_name, a.architecture,
-		COALESCE(a.system, '') AS system,
-		COALESCE(SUM(ast.authorization_count), 0) AS downloads,
-		COALESCE(SUM(ast.web_authorization_count), 0) AS web_downloads,
-		COALESCE(SUM(ast.api_authorization_count), 0) AS api_downloads
-		FROM asset_stat_totals ast
-		JOIN assets a ON a.id = ast.asset_id
-		JOIN releases r ON r.id = a.release_id
-		JOIN projects p ON p.id = r.project_id
-		GROUP BY p.id, p.name, r.tag_name, a.file_name, a.architecture, COALESCE(a.system, '')
-		ORDER BY downloads DESC, p.name, r.tag_name, a.architecture, a.file_name LIMIT ?`, limit)
+func (s Store) TopProjects(ctx context.Context) ([]ProjectRank, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.name,
+		COALESCE(pst.authorization_count, 0) AS downloads,
+		COALESCE(pst.web_authorization_count, 0) AS web_downloads,
+		COALESCE(pst.api_authorization_count, 0) AS api_downloads
+		FROM projects p
+		LEFT JOIN project_stat_totals pst ON pst.project_id = p.id
+		WHERE p.enabled = 1
+		ORDER BY downloads DESC, p.name, p.id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ResourceRank
+	var out []ProjectRank
 	for rows.Next() {
-		var item ResourceRank
-		if err := rows.Scan(&item.ProjectName, &item.Version, &item.FileName,
-			&item.Architecture, &item.System, &item.DownloadCount,
+		var item ProjectRank
+		if err := rows.Scan(&item.ProjectID, &item.ProjectName, &item.DownloadCount,
 			&item.WebDownloadCount, &item.APIDownloadCount); err != nil {
 			return nil, err
 		}

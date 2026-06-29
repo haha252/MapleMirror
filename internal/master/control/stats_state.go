@@ -50,6 +50,20 @@ func addAssetTrafficCounters(ctx context.Context, tx *sql.Tx, assetID string,
 	return err
 }
 
+func addProjectTrafficCounters(ctx context.Context, tx *sql.Tx, projectID string,
+	started, bytes int64, now string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO project_stat_totals
+		(project_id, authorization_count, web_authorization_count,
+		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES (?, 0, 0, 0, ?, ?, ?)
+		ON CONFLICT(project_id) DO UPDATE SET
+		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
+		sent_bytes = sent_bytes + excluded.sent_bytes,
+		updated_at = excluded.updated_at`,
+		projectID, started, bytes, now)
+	return err
+}
+
 func addNodeTrafficCounters(ctx context.Context, tx *sql.Tx, nodeID string,
 	bytes int64, now string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO node_traffic_totals

@@ -49,6 +49,9 @@ func (s Store) ResetProject(ctx context.Context, projectID string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM asset_stat_totals WHERE asset_id IN (`+projectAssets+`)`, projectID); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM project_stat_totals WHERE project_id = ?`, projectID); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM node_tasks WHERE asset_id IN (`+projectAssets+`)`, projectID); err != nil {
 		return err
 	}

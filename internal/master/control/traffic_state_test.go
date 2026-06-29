@@ -20,6 +20,11 @@ func assertTrafficStateCounters(t *testing.T, repo Repository) {
 	if err != nil || sent != 5 || started != 1 {
 		t.Fatalf("资源流量状态不符合预期：sent=%d started=%d err=%v", sent, started, err)
 	}
+	err = repo.DB.QueryRow(`SELECT sent_bytes, transfer_started_count
+		FROM project_stat_totals WHERE project_id = 'p1'`).Scan(&sent, &started)
+	if err != nil || sent != 5 || started != 1 {
+		t.Fatalf("项目流量状态不符合预期：sent=%d started=%d err=%v", sent, started, err)
+	}
 	err = repo.DB.QueryRow(`SELECT sent_bytes FROM node_traffic_totals
 		WHERE node_id = 'node-1'`).Scan(&sent)
 	if err != nil || sent != 5 {

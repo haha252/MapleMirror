@@ -232,5 +232,8 @@ func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, by
 	if err := addAssetTrafficCounters(ctx, tx, info.AssetID, info.StartedIncrement, bytes, now); err != nil {
 		return err
 	}
+	if err := addProjectTrafficCounters(ctx, tx, info.ProjectID, info.StartedIncrement, bytes, now); err != nil {
+		return err
+	}
 	return addNodeTrafficCounters(ctx, tx, info.NodeID, bytes, now)
 }

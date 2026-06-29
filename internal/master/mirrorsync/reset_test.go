@@ -76,6 +76,9 @@ func TestResetProjectClearsProjectDerivedData(t *testing.T) {
 	mustExecReset(t, db, `INSERT INTO asset_stat_totals
 		(asset_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
 		VALUES ('p1:1:1', 2, 1, 100, ?)`, now)
+	mustExecReset(t, db, `INSERT INTO project_stat_totals
+		(project_id, authorization_count, transfer_started_count, sent_bytes, updated_at)
+		VALUES ('p1', 2, 1, 100, ?)`, now)
 	mustExecReset(t, db, `INSERT INTO download_authorizations
 		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at, max_bytes, range_limit, status, request_id, first_transfer_at)
 		VALUES ('auth-1', 'p1:1:1', 'node-1', 'prefix', ?, ?, 10, 1, 'active', 'req-auth', ?)`, now, now, now)
@@ -108,6 +111,7 @@ func TestResetProjectClearsProjectDerivedData(t *testing.T) {
 	assertCount(t, db, "daily_project_stats", 0)
 	assertCount(t, db, "daily_asset_stats", 0)
 	assertCount(t, db, "asset_stat_totals", 0)
+	assertCount(t, db, "project_stat_totals", 0)
 	assertCount(t, db, "download_authorizations", 0)
 	assertCount(t, db, "traffic_reservations", 0)
 	assertCount(t, db, "traffic_events", 0)

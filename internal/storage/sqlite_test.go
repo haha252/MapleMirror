@@ -50,11 +50,13 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertTable(t, db, "public_stat_totals")
 	assertTable(t, db, "daily_public_stats")
 	assertTable(t, db, "asset_stat_totals")
+	assertTable(t, db, "project_stat_totals")
 	assertTable(t, db, "node_traffic_totals")
 	assertIndex(t, db, "idx_node_availability_samples_window")
 	assertIndex(t, db, "idx_daily_node_traffic_stats_node")
 	assertIndex(t, db, "idx_traffic_event_dedupe_authorization")
 	assertIndex(t, db, "idx_asset_stat_totals_downloads")
+	assertIndex(t, db, "idx_project_stat_totals_downloads")
 	assertIndex(t, db, "idx_traffic_event_dedupe_accounted")
 	assertIndex(t, db, "idx_traffic_event_dedupe_authorization_accounted")
 	_ = db.Close()
@@ -170,81 +172,5 @@ func TestCheckpointWALTruncatesLargeWAL(t *testing.T) {
 	}
 	if !hasCheckpointMode(events, "TRUNCATE") {
 		t.Fatalf("expected truncate checkpoint log, got %+v", events)
-	}
-}
-
-func assertTable(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, table string) {
-	t.Helper()
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&count)
-	if err != nil || count != 1 {
-		t.Fatalf("缺少数据表 %s：%v", table, err)
-	}
-}
-
-func assertIndex(t *testing.T, db interface{ QueryRow(string, ...any) *sql.Row }, index string) {
-	t.Helper()
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", index).Scan(&count)
-	if err != nil || count != 1 {
-		t.Fatalf("缺少索引 %s：%v", index, err)
-	}
-}
-
-func assertColumn(t *testing.T, db *sql.DB, table, column string) {
-	t.Helper()
-	rows, err := db.Query("PRAGMA table_info(" + table + ")")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cid int
-		var name, dataType string
-		var notNull, pk int
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			t.Fatal(err)
-		}
-		if name == column {
-			return
-		}
-	}
-	t.Fatalf("缺少数据列 %s.%s", table, column)
-}
-
-func assertColumnDefault(t *testing.T, db *sql.DB, table, column, want string) {
-	t.Helper()
-	rows, err := db.Query("PRAGMA table_info(" + table + ")")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cid int
-		var name, dataType string
-		var notNull, pk int
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			t.Fatal(err)
-		}
-		if name == column {
-			if defaultValue != want {
-				t.Fatalf("%s.%s default=%v want %s", table, column, defaultValue, want)
-			}
-			return
-		}
-	}
-	t.Fatalf("缺少数据列 %s.%s", table, column)
-}
-
-func assertDBVersion(t *testing.T, db *sql.DB, kind string, want int) {
-	t.Helper()
-	var got int
-	if err := db.QueryRow(`SELECT version FROM database_version WHERE kind = ?`, kind).Scan(&got); err != nil {
-		t.Fatal(err)
-	}
-	if got != want {
-		t.Fatalf("%s database version=%d want=%d", kind, got, want)
 	}
 }

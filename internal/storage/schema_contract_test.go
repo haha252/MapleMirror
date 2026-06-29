@@ -37,6 +37,7 @@ var expectedSchemaFiles = map[string]string{
 	"migrations/master/000024_public_stats_indexes.sql":     "3e336a71d7e4833e78635e32477a6b64bd2a5bf19cfe6449a227a122d4671e18",
 	"migrations/master/000025_download_source_stats.sql":    "32017e1724a47cf70d982e933aa5443c962385969eec4df4d3fec3b77cf51f8c",
 	"migrations/master/000026_public_stats_state.sql":       "b2e6188912068338b9565ce7e1a26651a8d30cdb132856a2f592b28a751ad990",
+	"migrations/master/000027_project_stats_state.sql":      "41f9bb8369a38929a6a02c8761de90f251c3cd6dbac6bdb6fb70c76f31ffad61",
 	"migrations/node/000001_state.sql":                      "3501b8a94e3fac8eb0807afd32183effd81874e2001ff7b69cb43b0a25b3a0c2",
 	"migrations/node/000002_identity.sql":                   "dab9fe79b6b455ce7109c7eac041e17732ad5d0c2eb7f9c89bf3f793dd30b88e",
 	"migrations/node/000003_sync_state.sql":                 "973fb3190ee2a212b883e3d6686db18afdcb3bb1fdd59d719353ec0cf99d77e7",
