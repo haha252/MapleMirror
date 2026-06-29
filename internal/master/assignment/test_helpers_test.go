@@ -78,6 +78,15 @@ func assertTaskCount(t *testing.T, db *sql.DB, taskType, state string, want int)
 	}
 }
 
+func assertTimestamp(t *testing.T, db *sql.DB, table, want, where string) {
+	t.Helper()
+	var got string
+	err := db.QueryRow(`SELECT updated_at FROM ` + table + ` WHERE ` + where).Scan(&got)
+	if err != nil || got != want {
+		t.Fatalf("%s updated_at=%q want %q err=%v", table, got, want, err)
+	}
+}
+
 func mustExec(t *testing.T, db *sql.DB, query string, args ...any) {
 	t.Helper()
 	if _, err := db.Exec(query, args...); err != nil {

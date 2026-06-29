@@ -15,19 +15,25 @@ func persistAssignments(ctx context.Context, tx *sql.Tx, nodeID, mode string, pr
 		if _, err := tx.ExecContext(ctx, `INSERT INTO node_project_assignments
 			(node_id, project_id, mode, assigned, score, pinned, last_changed_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(node_id, project_id) DO UPDATE SET
-			mode = excluded.mode, assigned = excluded.assigned,
-			score = excluded.score, pinned = excluded.pinned,
-			last_changed_at = excluded.last_changed_at,
-			updated_at = excluded.updated_at`,
+				ON CONFLICT(node_id, project_id) DO UPDATE SET
+				mode = excluded.mode, assigned = excluded.assigned,
+				score = excluded.score, pinned = excluded.pinned,
+				last_changed_at = excluded.last_changed_at,
+				updated_at = excluded.updated_at
+				WHERE node_project_assignments.mode != excluded.mode
+				OR node_project_assignments.assigned != excluded.assigned
+				OR node_project_assignments.score != excluded.score
+				OR node_project_assignments.pinned != excluded.pinned
+				OR node_project_assignments.last_changed_at != excluded.last_changed_at`,
 			nodeID, p.id, mode, boolInt(next), p.score, boolInt(p.pinned), changed, now); err != nil {
 			return err
 		}
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE node_project_assignments
-		SET assigned = 0, mode = ?, updated_at = ? WHERE node_id = ?
-		AND project_id NOT IN (SELECT id FROM projects WHERE enabled = 1)`,
-		mode, now, nodeID)
+			SET assigned = 0, mode = ?, updated_at = ? WHERE node_id = ?
+			AND project_id NOT IN (SELECT id FROM projects WHERE enabled = 1)
+			AND (assigned != 0 OR mode != ?)`,
+		mode, now, nodeID, mode)
 	return err
 }
 

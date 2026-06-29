@@ -41,6 +41,7 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 	}
 	reported := make(map[string]bool, len(report.Items))
 	quarantined := false
+	verifiedProjects := map[string]struct{}{}
 	var pendingTaskNodes []string
 	for _, item := range report.Items {
 		reported[item.AssetID] = true
@@ -56,15 +57,18 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 			break
 		}
 		if result.TargetRequired && result.State == "verified" {
-			nodes, err := publishVerifiedAsset(ctx, tx, result.AssetID, now)
-			if err != nil {
+			if err := recordVerifiedAssetProject(ctx, tx, result.AssetID, verifiedProjects); err != nil {
 				return HeartbeatResult{}, err
 			}
-			if len(nodes) > 0 {
-				pendingTaskNodes = append(pendingTaskNodes, nodes...)
-				syncTasksChanged = true
-			}
 		}
+	}
+	nodes, err := publishVerifiedProjects(ctx, tx, verifiedProjects, now)
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
+	if len(nodes) > 0 {
+		pendingTaskNodes = append(pendingTaskNodes, nodes...)
+		syncTasksChanged = true
 	}
 	if report.Complete && !quarantined {
 		markedRemovals, err := markNonRequiredVerifiedInventoryRemoved(ctx, tx, session.NodeID, now)

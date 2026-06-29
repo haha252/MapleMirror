@@ -32,8 +32,11 @@ func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, 
 		missing == 0 && running == 0 {
 		ready = 1
 	}
-	_, err := tx.ExecContext(ctx, `UPDATE nodes SET routing_ready = ?,
-		updated_at = ? WHERE id = ?`, ready, now, nodeID)
+	var err error
+	if previousReady != ready {
+		_, err = tx.ExecContext(ctx, `UPDATE nodes SET routing_ready = ?,
+			updated_at = ? WHERE id = ?`, ready, now, nodeID)
+	}
 	if err == nil && r.Logger != nil && previousReady != ready {
 		r.Logger.Debug(ctx, "节点同步就绪状态已更新",
 			slog.String("node_id", nodeID),

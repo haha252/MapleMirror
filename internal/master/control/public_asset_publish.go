@@ -3,31 +3,74 @@ package control
 import (
 	"context"
 	"database/sql"
+	"sort"
 
 	"mirror-server/internal/master/assetstate"
 	"mirror-server/internal/master/assignment"
 )
 
 func publishVerifiedAsset(ctx context.Context, tx *sql.Tx, assetID, now string) ([]string, error) {
-	projectID, err := assetstate.ReconcileAssetProject(ctx, tx, assetID)
+	projectID, err := assetstate.SelectedAssetProject(ctx, tx, assetID)
 	if err != nil || projectID == "" {
 		return nil, err
 	}
-	if err := assetstate.RebuildTargetInventory(ctx, tx, projectID, now); err != nil {
-		return nil, err
+	projects := map[string]struct{}{projectID: {}}
+	return publishVerifiedProjects(ctx, tx, projects, now)
+}
+
+func publishVerifiedProjects(ctx context.Context, tx *sql.Tx, projects map[string]struct{}, now string) ([]string, error) {
+	if len(projects) == 0 {
+		return nil, nil
 	}
-	if err := assetstate.CancelObsoleteDownloadTasks(ctx, tx, projectID, now); err != nil {
-		return nil, err
+	ids := sortedKeys(projects)
+	nodeSet := map[string]struct{}{}
+	for _, projectID := range ids {
+		if err := assetstate.ReconcilePublicPaths(ctx, tx, projectID); err != nil {
+			return nil, err
+		}
+		if err := assignment.ReconcileProjectNodes(ctx, tx, projectID, now); err != nil {
+			return nil, err
+		}
+		if err := assignment.RebuildProjectTargets(ctx, tx, projectID, now); err != nil {
+			return nil, err
+		}
+		if err := assetstate.CancelObsoleteDownloadTasks(ctx, tx, projectID, now); err != nil {
+			return nil, err
+		}
+		generated, err := assignment.GenerateProjectDeleteTasks(ctx, tx, projectID, now)
+		if err != nil {
+			return nil, err
+		}
+		if generated == 0 {
+			continue
+		}
+		nodes, err := pendingDeleteTaskNodes(ctx, tx, projectID)
+		if err != nil {
+			return nil, err
+		}
+		for _, nodeID := range nodes {
+			nodeSet[nodeID] = struct{}{}
+		}
 	}
-	generated, err := assignment.GenerateProjectDeleteTasks(ctx, tx, projectID, now)
-	if err != nil || generated == 0 {
-		return nil, err
+	return sortedKeys(nodeSet), nil
+}
+
+func recordVerifiedAssetProject(ctx context.Context, tx *sql.Tx, assetID string, projects map[string]struct{}) error {
+	projectID, err := assetstate.SelectedAssetProject(ctx, tx, assetID)
+	if err != nil || projectID == "" {
+		return err
 	}
-	nodes, err := pendingDeleteTaskNodes(ctx, tx, projectID)
-	if err != nil {
-		return nil, err
+	projects[projectID] = struct{}{}
+	return nil
+}
+
+func sortedKeys(values map[string]struct{}) []string {
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
 	}
-	return nodes, nil
+	sort.Strings(out)
+	return out
 }
 
 func pendingDeleteTaskNodes(ctx context.Context, tx *sql.Tx, projectID string) ([]string, error) {

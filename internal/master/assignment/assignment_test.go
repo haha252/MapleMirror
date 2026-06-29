@@ -74,6 +74,24 @@ func TestAutoAssignmentKeepsRecentProject(t *testing.T) {
 	assertAssigned(t, db, "p3", false)
 }
 
+func TestReconcileNodeDoesNotRefreshUnchangedAssignmentTargets(t *testing.T) {
+	db := testDB(t)
+	seedAssignmentNode(t, db, 1)
+	seedProject(t, db, "p1", "项目一", 30)
+	reconcile(t, db)
+	mustExec(t, db, `UPDATE node_project_assignments SET updated_at = 'stable'
+		WHERE node_id = 'node-1' AND project_id = 'p1'`)
+	mustExec(t, db, `UPDATE target_inventory SET updated_at = 'stable'
+		WHERE node_id = 'node-1' AND asset_id = 'asset-p1'`)
+
+	reconcile(t, db)
+
+	assertTimestamp(t, db, "node_project_assignments", "stable",
+		"node_id = 'node-1' AND project_id = 'p1'")
+	assertTimestamp(t, db, "target_inventory", "stable",
+		"node_id = 'node-1' AND asset_id = 'asset-p1'")
+}
+
 func TestManualAssignmentRejectsOverLimit(t *testing.T) {
 	db := testDB(t)
 	seedAssignmentNode(t, db, 1)

@@ -54,12 +54,19 @@ func upsertProjectConfig(ctx context.Context, tx *sql.Tx, project config.Project
 		(id, name, repository, enabled, retain_versions, include_prerelease,
 		download_multiplier, config_hash, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name = excluded.name,
-		repository = excluded.repository, enabled = excluded.enabled,
-		retain_versions = excluded.retain_versions,
-		include_prerelease = excluded.include_prerelease,
-		download_multiplier = excluded.download_multiplier,
-		config_hash = excluded.config_hash, updated_at = excluded.updated_at`,
+			ON CONFLICT(id) DO UPDATE SET name = excluded.name,
+			repository = excluded.repository, enabled = excluded.enabled,
+			retain_versions = excluded.retain_versions,
+			include_prerelease = excluded.include_prerelease,
+			download_multiplier = excluded.download_multiplier,
+			config_hash = excluded.config_hash, updated_at = excluded.updated_at
+			WHERE projects.name != excluded.name
+			OR projects.repository != excluded.repository
+			OR projects.enabled != excluded.enabled
+			OR projects.retain_versions != excluded.retain_versions
+			OR projects.include_prerelease != excluded.include_prerelease
+			OR projects.download_multiplier != excluded.download_multiplier
+			OR projects.config_hash != excluded.config_hash`,
 		project.ID, project.Name, project.Repository, boolInt(project.Enabled),
 		project.RetainVersions, boolInt(project.IncludePrerelease),
 		project.DownloadMultiplier, projectHash(project), now)
@@ -67,14 +74,15 @@ func upsertProjectConfig(ctx context.Context, tx *sql.Tx, project config.Project
 }
 
 func disableProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now string) error {
-	_, err := tx.ExecContext(ctx, `UPDATE releases SET selected = 0 WHERE project_id = ?`, projectID)
+	_, err := tx.ExecContext(ctx, `UPDATE releases SET selected = 0
+		WHERE project_id = ? AND selected != 0`, projectID)
 	if err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
 		updated_at = ? WHERE asset_id IN (
 		SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-		WHERE r.project_id = ?)`, now, projectID)
+		WHERE r.project_id = ?) AND desired_state != 'remove'`, now, projectID)
 	if err != nil {
 		return err
 	}
@@ -111,11 +119,11 @@ func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now 
 	}
 	for _, id := range missing {
 		if _, err := tx.ExecContext(ctx, `UPDATE projects SET enabled = 0,
-			updated_at = ? WHERE id = ?`, now, id); err != nil {
+			updated_at = ? WHERE id = ? AND enabled != 0`, now, id); err != nil {
 			return nil, err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE project_scan_state SET enabled = 0,
-			updated_at = ? WHERE project_id = ?`, now, id); err != nil {
+			updated_at = ? WHERE project_id = ? AND enabled != 0`, now, id); err != nil {
 			return nil, err
 		}
 		if err := disableProjectTargets(ctx, tx, id, now); err != nil {
@@ -146,7 +154,14 @@ func upsertProjectScanState(ctx context.Context, tx *sql.Tx, project config.Proj
 			WHEN project_scan_state.config_hash != excluded.config_hash THEN excluded.next_scan_at
 			ELSE project_scan_state.next_scan_at
 		END,
-		updated_at = excluded.updated_at`,
+		updated_at = excluded.updated_at
+		WHERE project_scan_state.enabled != excluded.enabled
+		OR project_scan_state.config_hash != excluded.config_hash
+		OR COALESCE(project_scan_state.next_scan_at, '') != COALESCE(CASE
+			WHEN excluded.enabled = 0 THEN NULL
+			WHEN project_scan_state.config_hash != excluded.config_hash THEN excluded.next_scan_at
+			ELSE project_scan_state.next_scan_at
+		END, '')`,
 		project.ID, boolInt(project.Enabled), hash, nextScan, now)
 	return err
 }

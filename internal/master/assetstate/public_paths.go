@@ -19,6 +19,14 @@ type publicPathAsset struct {
 }
 
 func ReconcileAssetProject(ctx context.Context, tx *sql.Tx, assetID string) (string, error) {
+	projectID, err := SelectedAssetProject(ctx, tx, assetID)
+	if err != nil || projectID == "" {
+		return projectID, err
+	}
+	return projectID, ReconcilePublicPaths(ctx, tx, projectID)
+}
+
+func SelectedAssetProject(ctx context.Context, tx *sql.Tx, assetID string) (string, error) {
 	var projectID string
 	err := tx.QueryRowContext(ctx, `SELECT r.project_id FROM assets a
 		JOIN releases r ON r.id = a.release_id
@@ -29,7 +37,7 @@ func ReconcileAssetProject(ctx context.Context, tx *sql.Tx, assetID string) (str
 	if err != nil {
 		return "", err
 	}
-	return projectID, ReconcilePublicPaths(ctx, tx, projectID)
+	return projectID, nil
 }
 
 func ReconcilePublicPaths(ctx context.Context, tx *sql.Tx, projectID string) error {

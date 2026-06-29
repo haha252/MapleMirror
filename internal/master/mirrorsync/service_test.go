@@ -151,6 +151,25 @@ func TestSyncProjectConfigMarksChangedProjectDue(t *testing.T) {
 	}
 }
 
+func TestSyncProjectConfigDoesNotRefreshUnchangedRows(t *testing.T) {
+	db, closeDB := testMirrorSyncDB(t)
+	defer closeDB()
+	store := Store{DB: db}
+	projects := config.Projects{Projects: []config.Project{testProject("p1", "owner/one", true)}}
+	if err := store.SyncProjectConfig(context.Background(), projects); err != nil {
+		t.Fatal(err)
+	}
+	mustExecMirrorSync(t, db, `UPDATE projects SET updated_at = 'stable' WHERE id = 'p1'`)
+	mustExecMirrorSync(t, db, `UPDATE project_scan_state SET updated_at = 'stable' WHERE project_id = 'p1'`)
+
+	if err := store.SyncProjectConfig(context.Background(), projects); err != nil {
+		t.Fatal(err)
+	}
+
+	assertMirrorSyncUpdatedAt(t, db, "projects", "id = 'p1'", "stable")
+	assertMirrorSyncUpdatedAt(t, db, "project_scan_state", "project_id = 'p1'", "stable")
+}
+
 func writeProjectConfig(t *testing.T, path, id, repo string) {
 	t.Helper()
 	body := `projects:

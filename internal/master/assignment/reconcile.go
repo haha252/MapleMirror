@@ -49,6 +49,55 @@ func ReconcileNode(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
 	return CancelObsoleteNodeTasks(ctx, tx, nodeID, now)
 }
 
+func ReconcileProjectNodes(ctx context.Context, tx *sql.Tx, projectID, now string) error {
+	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT node_id FROM (
+		SELECT node_id FROM target_inventory WHERE asset_id IN (
+			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+			WHERE r.project_id = ?
+		)
+		UNION
+		SELECT node_id FROM node_inventory WHERE asset_id IN (
+			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+			WHERE r.project_id = ?
+		)
+	)`, projectID, projectID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var nodeIDs []string
+	for rows.Next() {
+		var nodeID string
+		if err := rows.Scan(&nodeID); err != nil {
+			return err
+		}
+		nodeIDs = append(nodeIDs, nodeID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, nodeID := range nodeIDs {
+		if err := reconcileNodeProject(ctx, tx, nodeID, projectID, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func reconcileNodeProject(ctx context.Context, tx *sql.Tx, nodeID, projectID, now string) error {
+	projects, assigned, mode, err := calculateAssignments(ctx, tx, nodeID, now)
+	if err != nil {
+		return err
+	}
+	for _, project := range projects {
+		if project.id == projectID {
+			return persistAssignments(ctx, tx, nodeID, mode,
+				[]projectScore{project}, assigned, now)
+		}
+	}
+	return nil
+}
+
 func calculateAssignments(ctx context.Context, tx *sql.Tx, nodeID, now string) ([]projectScore, map[string]bool, string, error) {
 	max, mode, err := nodeAssignmentConfig(ctx, tx, nodeID)
 	if err != nil {

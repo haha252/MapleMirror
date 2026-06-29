@@ -12,10 +12,11 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 		FROM node_project_assignments npa
 		JOIN releases r ON r.project_id = npa.project_id AND r.selected = 1
 		JOIN assets a ON a.release_id = r.id
-		WHERE npa.node_id = ? AND npa.assigned = 1
-		AND a.service_state IN ('candidate', 'pending', 'active')
-		ON CONFLICT(node_id, asset_id) DO UPDATE SET
-		desired_state = 'required', updated_at = excluded.updated_at`,
+			WHERE npa.node_id = ? AND npa.assigned = 1
+			AND a.service_state IN ('candidate', 'pending', 'active')
+			ON CONFLICT(node_id, asset_id) DO UPDATE SET
+			desired_state = 'required', updated_at = excluded.updated_at
+			WHERE target_inventory.desired_state != 'required'`,
 		nodeID, now, nodeID)
 	if err != nil {
 		return err
@@ -25,11 +26,12 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 		SELECT ti.asset_id FROM target_inventory ti
 		JOIN assets a ON a.id = ti.asset_id
 		JOIN releases r ON r.id = a.release_id
-		JOIN projects p ON p.id = r.project_id
-		LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
-			AND npa.project_id = p.id AND npa.assigned = 1
-		WHERE ti.node_id = ? AND (p.enabled = 0 OR r.selected = 0
-			OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
+			JOIN projects p ON p.id = r.project_id
+			LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
+				AND npa.project_id = p.id AND npa.assigned = 1
+			WHERE ti.node_id = ? AND (p.enabled = 0 OR r.selected = 0
+				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))
+			AND desired_state != 'remove'`,
 		now, nodeID, nodeID)
 	return err
 }
@@ -41,10 +43,11 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 		FROM node_project_assignments npa
 		JOIN releases r ON r.project_id = npa.project_id AND r.selected = 1
 		JOIN assets a ON a.release_id = r.id
-		WHERE npa.project_id = ? AND npa.assigned = 1
-		AND a.service_state IN ('candidate', 'pending', 'active')
-		ON CONFLICT(node_id, asset_id) DO UPDATE SET
-		desired_state = 'required', updated_at = excluded.updated_at`,
+			WHERE npa.project_id = ? AND npa.assigned = 1
+			AND a.service_state IN ('candidate', 'pending', 'active')
+			ON CONFLICT(node_id, asset_id) DO UPDATE SET
+			desired_state = 'required', updated_at = excluded.updated_at
+			WHERE target_inventory.desired_state != 'required'`,
 		now, projectID)
 	if err != nil {
 		return err
@@ -52,10 +55,11 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
 		updated_at = ? WHERE asset_id IN (
 		SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-		LEFT JOIN node_project_assignments npa ON npa.node_id = target_inventory.node_id
-			AND npa.project_id = r.project_id AND npa.assigned = 1
-		WHERE r.project_id = ? AND (r.selected = 0
-			OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
+			LEFT JOIN node_project_assignments npa ON npa.node_id = target_inventory.node_id
+				AND npa.project_id = r.project_id AND npa.assigned = 1
+			WHERE r.project_id = ? AND (r.selected = 0
+				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))
+			AND desired_state != 'remove'`,
 		now, projectID)
 	return err
 }
