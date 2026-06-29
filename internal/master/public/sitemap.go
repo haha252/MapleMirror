@@ -55,6 +55,17 @@ func (s Server) sitemap(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("\n"))
 }
 
+func (s Server) robotsTXT(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("User-agent: *\nAllow: /\nSitemap: " + sitemapOrigin(r) + "/sitemap.xml\n"))
+}
+
 func sitemapOrigin(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil {

@@ -70,3 +70,45 @@ func TestSitemapRejectsNonGETWithoutPageView(t *testing.T) {
 		t.Fatalf("non-GET /sitemap.xml should not count page view: rows=%d err=%v", rows, err)
 	}
 }
+
+func TestRobotsTXTIncludesSitemap(t *testing.T) {
+	db := openMaster(t)
+	srv := Server{Store: Store{DB: db}}
+	req := httptest.NewRequest(http.MethodGet, "http://internal.example.test/robots.txt", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "mirror.example.test")
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("robots status=%d body=%s", rec.Code, body)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/plain") {
+		t.Fatalf("expected text content type, got %q", got)
+	}
+	want := "User-agent: *\nAllow: /\nSitemap: https://mirror.example.test/sitemap.xml\n"
+	if body != want {
+		t.Fatalf("robots body=%q want %q", body, want)
+	}
+}
+
+func TestRobotsTXTRejectsNonGETWithoutPageView(t *testing.T) {
+	db := openMaster(t)
+	srv := Server{Store: Store{DB: db}}
+	req := httptest.NewRequest(http.MethodPost, "/robots.txt", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"INVALID_REQUEST"`) {
+		t.Fatalf("expected JSON method error, body=%s", rec.Body.String())
+	}
+	var rows int
+	err := db.QueryRow(`SELECT COUNT(*) FROM daily_site_stats`).Scan(&rows)
+	if err != nil || rows != 0 {
+		t.Fatalf("non-GET /robots.txt should not count page view: rows=%d err=%v", rows, err)
+	}
+}
