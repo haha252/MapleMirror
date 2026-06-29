@@ -36,7 +36,7 @@ func open(path string, timeout time.Duration, wal bool, walSettings walSettings,
 	if wal {
 		logWALFile(opts.versionLogger, path, walSettings.TruncateThresholdBytes)
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open(sqliteDriverName(opts), path)
 	if err != nil {
 		return nil, fmt.Errorf("打开 SQLite 数据库失败：%w", err)
 	}

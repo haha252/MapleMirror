@@ -8,7 +8,8 @@ import (
 type versionLogFunc func(context.Context, string, ...slog.Attr)
 
 type openOptions struct {
-	versionLogger versionLogFunc
+	versionLogger  versionLogFunc
+	sqlDebugLogger versionLogFunc
 }
 
 type OpenOption func(*openOptions)
@@ -16,6 +17,12 @@ type OpenOption func(*openOptions)
 func WithVersionLogger(logger versionLogFunc) OpenOption {
 	return func(opts *openOptions) {
 		opts.versionLogger = logger
+	}
+}
+
+func WithSQLDebugLogger(logger versionLogFunc) OpenOption {
+	return func(opts *openOptions) {
+		opts.sqlDebugLogger = logger
 	}
 }
 
