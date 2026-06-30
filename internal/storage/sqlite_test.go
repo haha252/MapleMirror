@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"testing"
@@ -173,4 +174,62 @@ func TestCheckpointWALTruncatesLargeWAL(t *testing.T) {
 	if !hasCheckpointMode(events, "TRUNCATE") {
 		t.Fatalf("expected truncate checkpoint log, got %+v", events)
 	}
+}
+
+func TestCheckpointWALSkipsTruncateWhenPassiveIncomplete(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wal.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(2)
+	settings := walSettings{
+		AutocheckpointPages:    0,
+		JournalSizeLimitBytes:  0,
+		TruncateThresholdBytes: 1,
+	}
+	if err := configure(db, 5*time.Second, true, settings); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE items (id INTEGER PRIMARY KEY, value BLOB)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO items(value) VALUES (zeroblob(4096))`); err != nil {
+		t.Fatal(err)
+	}
+
+	readTx, err := db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readTx.Rollback()
+	var count int
+	if err := readTx.QueryRow(`SELECT COUNT(*) FROM items`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 200; i++ {
+		if _, err := db.Exec(`INSERT INTO items(value) VALUES (zeroblob(4096))`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var events []versionLogEvent
+	if err := CheckpointWAL(db, path, settings.TruncateThresholdBytes, collectVersionLogEvents(&events)); err != nil {
+		t.Fatal(err)
+	}
+	if hasCheckpointMode(events, "TRUNCATE") {
+		t.Fatalf("expected truncate checkpoint to be skipped, got %+v", events)
+	}
+	if !hasVersionLogMessage(events, "SQLite WAL checkpoint 未完全收敛") {
+		t.Fatalf("expected incomplete checkpoint log, got %+v", events)
+	}
+	for _, event := range events {
+		if event.Message == "SQLite WAL checkpoint 未完全收敛" &&
+			event.LogFrames > 0 && event.CheckedFrames < event.LogFrames {
+			return
+		}
+	}
+	t.Fatalf("expected incomplete checkpoint frame counts, got %+v", events)
 }

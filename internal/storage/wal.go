@@ -80,9 +80,14 @@ func CheckpointWAL(db *sql.DB, dbPath string, truncateThreshold int64, logger ve
 		return err
 	}
 	if shouldLogWALCheckpoint(passive, truncateThreshold) {
-		logWALCheckpoint(logger, "SQLite WAL checkpoint 完成", passive, truncateThreshold)
+		message := "SQLite WAL checkpoint 完成"
+		if incompleteWALCheckpoint(passive) {
+			message = "SQLite WAL checkpoint 未完全收敛"
+		}
+		logWALCheckpoint(logger, message, passive, truncateThreshold)
 	}
-	if passive.Busy != 0 || truncateThreshold <= 0 || passive.WALSizeBytes < truncateThreshold {
+	if passive.Busy != 0 || incompleteWALCheckpoint(passive) ||
+		truncateThreshold <= 0 || passive.WALSizeBytes < truncateThreshold {
 		return nil
 	}
 	truncated, err := runWALCheckpoint(db, dbPath, "TRUNCATE")
@@ -112,6 +117,10 @@ func runWALCheckpoint(db *sql.DB, dbPath, mode string) (WALCheckpointResult, err
 func shouldLogWALCheckpoint(result WALCheckpointResult, threshold int64) bool {
 	return result.Busy != 0 || result.LogFrames > 0 ||
 		(threshold > 0 && result.WALSizeBytes >= threshold)
+}
+
+func incompleteWALCheckpoint(result WALCheckpointResult) bool {
+	return result.LogFrames > 0 && result.CheckedFrames < result.LogFrames
 }
 
 func logWALCheckpoint(logger versionLogFunc, message string, result WALCheckpointResult, threshold int64) {

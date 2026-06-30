@@ -101,13 +101,15 @@ func TestOpenMasterDoesNotLogUpgradeStepsWhenCurrent(t *testing.T) {
 }
 
 type versionLogEvent struct {
-	Message string
-	Kind    string
-	Current int
-	Target  int
-	From    int
-	To      int
-	Mode    string
+	Message       string
+	Kind          string
+	Current       int
+	Target        int
+	From          int
+	To            int
+	Mode          string
+	LogFrames     int
+	CheckedFrames int
 }
 
 func collectVersionLogEvents(events *[]versionLogEvent) versionLogFunc {
@@ -127,6 +129,10 @@ func collectVersionLogEvents(events *[]versionLogEvent) versionLogFunc {
 				event.To = int(attr.Value.Int64())
 			case "checkpoint_mode":
 				event.Mode = attr.Value.String()
+			case "log_frames":
+				event.LogFrames = int(attr.Value.Int64())
+			case "checked_frames":
+				event.CheckedFrames = int(attr.Value.Int64())
 			}
 		}
 		*events = append(*events, event)
@@ -136,6 +142,15 @@ func collectVersionLogEvents(events *[]versionLogEvent) versionLogFunc {
 func hasCheckpointMode(events []versionLogEvent, mode string) bool {
 	for _, event := range events {
 		if event.Mode == mode {
+			return true
+		}
+	}
+	return false
+}
+
+func hasVersionLogMessage(events []versionLogEvent, message string) bool {
+	for _, event := range events {
+		if event.Message == message {
 			return true
 		}
 	}
