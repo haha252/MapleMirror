@@ -1,34 +1,12 @@
-package public
+package statbuffer
 
 import (
 	"context"
 	"database/sql"
-
-	"mirror-server/internal/master/statbuffer"
 )
 
-type statsCounterExec interface {
-	ExecContext(context.Context, string, ...any) (sql.Result, error)
-}
-
-func statCounter(views, auth, webAuth, apiAuth, started, bytes int64) statbuffer.Counter {
-	return statbuffer.Counter{
-		Views: views, Auth: auth, WebAuth: webAuth, APIAuth: apiAuth,
-		Started: started, Bytes: bytes,
-	}
-}
-
-func addPublicStatCounters(ctx context.Context, exec statsCounterExec, day string,
-	views, auth, webAuth, apiAuth, started, bytes int64, now string) error {
-	if err := addDailyPublicStatCounters(ctx, exec, day, views, auth, webAuth, apiAuth, started, bytes, now); err != nil {
-		return err
-	}
-	return addPublicStatTotals(ctx, exec, views, auth, webAuth, apiAuth, started, bytes, now)
-}
-
-func addDailyPublicStatCounters(ctx context.Context, exec statsCounterExec, day string,
-	views, auth, webAuth, apiAuth, started, bytes int64, now string) error {
-	_, err := exec.ExecContext(ctx, `INSERT INTO daily_public_stats
+func flushPublic(ctx context.Context, tx *sql.Tx, day string, c Counter, now string) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO daily_public_stats
 		(stat_day, page_views, authorization_count, web_authorization_count,
 		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -40,13 +18,10 @@ func addDailyPublicStatCounters(ctx context.Context, exec statsCounterExec, day 
 		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
 		sent_bytes = sent_bytes + excluded.sent_bytes,
 		updated_at = excluded.updated_at`,
-		day, views, auth, webAuth, apiAuth, started, bytes, now)
-	return err
-}
-
-func addPublicStatTotals(ctx context.Context, exec statsCounterExec,
-	views, auth, webAuth, apiAuth, started, bytes int64, now string) error {
-	_, err := exec.ExecContext(ctx, `INSERT INTO public_stat_totals
+		day, c.Views, c.Auth, c.WebAuth, c.APIAuth, c.Started, c.Bytes, now); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO public_stat_totals
 		(id, page_views, authorization_count, web_authorization_count,
 		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
 		VALUES ('global', ?, ?, ?, ?, ?, ?, ?)
@@ -58,13 +33,12 @@ func addPublicStatTotals(ctx context.Context, exec statsCounterExec,
 		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
 		sent_bytes = sent_bytes + excluded.sent_bytes,
 		updated_at = excluded.updated_at`,
-		views, auth, webAuth, apiAuth, started, bytes, now)
+		c.Views, c.Auth, c.WebAuth, c.APIAuth, c.Started, c.Bytes, now)
 	return err
 }
 
-func addAssetStatCounters(ctx context.Context, exec statsCounterExec, assetID string,
-	auth, webAuth, apiAuth, started, bytes int64, now string) error {
-	_, err := exec.ExecContext(ctx, `INSERT INTO asset_stat_totals
+func flushAsset(ctx context.Context, tx *sql.Tx, assetID string, c Counter, now string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO asset_stat_totals
 		(asset_id, authorization_count, web_authorization_count,
 		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -75,13 +49,12 @@ func addAssetStatCounters(ctx context.Context, exec statsCounterExec, assetID st
 		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
 		sent_bytes = sent_bytes + excluded.sent_bytes,
 		updated_at = excluded.updated_at`,
-		assetID, auth, webAuth, apiAuth, started, bytes, now)
+		assetID, c.Auth, c.WebAuth, c.APIAuth, c.Started, c.Bytes, now)
 	return err
 }
 
-func addProjectStatCounters(ctx context.Context, exec statsCounterExec, projectID string,
-	auth, webAuth, apiAuth, started, bytes int64, now string) error {
-	_, err := exec.ExecContext(ctx, `INSERT INTO project_stat_totals
+func flushProject(ctx context.Context, tx *sql.Tx, projectID string, c Counter, now string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO project_stat_totals
 		(project_id, authorization_count, web_authorization_count,
 		api_authorization_count, transfer_started_count, sent_bytes, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -92,6 +65,16 @@ func addProjectStatCounters(ctx context.Context, exec statsCounterExec, projectI
 		transfer_started_count = transfer_started_count + excluded.transfer_started_count,
 		sent_bytes = sent_bytes + excluded.sent_bytes,
 		updated_at = excluded.updated_at`,
-		projectID, auth, webAuth, apiAuth, started, bytes, now)
+		projectID, c.Auth, c.WebAuth, c.APIAuth, c.Started, c.Bytes, now)
+	return err
+}
+
+func flushNode(ctx context.Context, tx *sql.Tx, nodeID string, bytes int64, now string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO node_traffic_totals
+		(node_id, sent_bytes, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(node_id) DO UPDATE SET
+		sent_bytes = sent_bytes + excluded.sent_bytes,
+		updated_at = excluded.updated_at`,
+		nodeID, bytes, now)
 	return err
 }

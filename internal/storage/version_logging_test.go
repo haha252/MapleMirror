@@ -74,6 +74,8 @@ func TestOpenMasterLogsVersionUpgradeSteps(t *testing.T) {
 		{Message: "数据库升级器执行完成", Kind: "master", From: 11, To: 12},
 		{Message: "数据库升级器开始执行", Kind: "master", From: 12, To: 13},
 		{Message: "数据库升级器执行完成", Kind: "master", From: 12, To: 13},
+		{Message: "数据库升级器开始执行", Kind: "master", From: 13, To: 14},
+		{Message: "数据库升级器执行完成", Kind: "master", From: 13, To: 14},
 	}
 	assertVersionLogEvents(t, events, want)
 }

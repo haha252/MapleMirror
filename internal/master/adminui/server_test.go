@@ -16,7 +16,7 @@ import (
 )
 
 func TestLoginCreatesSecureSession(t *testing.T) {
-	server, db := newTestServer(t)
+	server, _ := newTestServer(t)
 	req := loginRequest("admin", "correct-password")
 	rec := httptest.NewRecorder()
 	server.Handler().ServeHTTP(rec, req)
@@ -27,12 +27,13 @@ func TestLoginCreatesSecureSession(t *testing.T) {
 	if cookie == nil || !cookie.HttpOnly || !cookie.Secure {
 		t.Fatalf("expected secure session cookie, got %#v", cookie)
 	}
-	var sessions int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM admin_web_sessions`).Scan(&sessions); err != nil {
-		t.Fatal(err)
-	}
-	if sessions != 1 {
-		t.Fatalf("sessions = %d, want 1", sessions)
+	check := httptest.NewRecorder()
+	next := httptest.NewRequest(http.MethodGet, "/admin/api/overview", nil)
+	next.RemoteAddr = "127.0.0.1:55000"
+	next.AddCookie(cookie)
+	server.Handler().ServeHTTP(check, next)
+	if check.Code != http.StatusOK {
+		t.Fatalf("session should authorize overview, code=%d body=%s", check.Code, check.Body.String())
 	}
 }
 
@@ -54,8 +55,8 @@ func TestLoginBlocksIPAfterThreeFailures(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM admin_ip_blocks`).Scan(&blocks); err != nil {
 		t.Fatal(err)
 	}
-	if blocks != 1 {
-		t.Fatalf("blocks = %d, want 1", blocks)
+	if blocks != 0 {
+		t.Fatalf("automatic login blocks should stay in memory, db blocks=%d", blocks)
 	}
 }
 

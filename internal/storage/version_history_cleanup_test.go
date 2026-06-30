@@ -46,6 +46,54 @@ func TestOpenMasterV9CleansBoundedHistory(t *testing.T) {
 	}
 }
 
+func TestOpenMasterV14BackfillsRollupsAndCleansRuntimeHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "master.db")
+	db, err := OpenMaster(config.Database{Path: path, BusyTimeout: "5s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := seedV14CleanupData(db); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE database_version SET version = 13 WHERE kind = 'master'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	opened, err := OpenMaster(config.Database{Path: path, BusyTimeout: "5s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	assertDBVersion(t, opened, "master", masterDBVersion)
+	assertCountAtMost(t, opened, "sync_scans", 50)
+
+	var rollupTotal, oldSamples int
+	if err := opened.QueryRow(`SELECT COALESCE(SUM(total_samples), 0)
+		FROM node_availability_rollups WHERE node_id = 'node-1'`).Scan(&rollupTotal); err != nil {
+		t.Fatal(err)
+	}
+	if rollupTotal != 3 {
+		t.Fatalf("rollup total=%d, want 3", rollupTotal)
+	}
+	if err := opened.QueryRow(`SELECT COUNT(*) FROM node_availability_samples`).Scan(&oldSamples); err != nil {
+		t.Fatal(err)
+	}
+	if oldSamples != 1 {
+		t.Fatalf("old availability samples=%d, want 1 recent sample", oldSamples)
+	}
+	var dedupe int
+	if err := opened.QueryRow(`SELECT COUNT(*) FROM traffic_event_dedupe
+		WHERE node_id = 'node-1'`).Scan(&dedupe); err != nil {
+		t.Fatal(err)
+	}
+	if dedupe != 10000 {
+		t.Fatalf("traffic_event_dedupe count=%d, want 10000", dedupe)
+	}
+}
+
 func seedV9CleanupData(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -109,6 +157,76 @@ func seedV9CleanupData(db *sql.DB) error {
 			VALUES (?, 'node-1', ?, 1, 1, 'accepted', 'req', ?)`,
 			fmt.Sprintf("report-%04d", i), i, old); err != nil {
 			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func seedV14CleanupData(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now().UTC()
+	old := now.AddDate(0, 0, -40).Format(time.RFC3339Nano)
+	recent := now.Add(-time.Hour).Format(time.RFC3339Nano)
+	if _, err := tx.Exec(`INSERT INTO projects
+		(id, name, repository, enabled, retain_versions, include_prerelease,
+		download_multiplier, config_hash, updated_at)
+		VALUES ('p1', '项目一', 'owner/repo', 1, 1, 0, 1, 'hash', ?)`, recent); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO releases
+		(id, project_id, github_release_id, tag_name, prerelease, published_at, selected, created_at)
+		VALUES ('rel-1', 'p1', 1, 'v1', 0, ?, 1, ?)`, recent, recent); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO assets
+		(id, release_id, github_asset_id, file_name, architecture, size_bytes,
+		source_url, digest_sha256, service_state, created_at)
+		VALUES ('asset-1', 'rel-1', 1, 'a.zip', 'amd64', 12,
+		'https://example.test/a.zip', 'sha256:aa', 'candidate', ?)`, recent); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO nodes
+		(id, public_name, state, target_bandwidth_bps, routing_ready, created_at, updated_at)
+		VALUES ('node-1', '节点一', 'online', 1, 1, ?, ?)`, recent, recent); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO download_authorizations
+		(id, asset_id, node_id, client_prefix_key, issued_at, expires_at, max_bytes,
+		range_limit, status, request_id)
+		VALUES ('auth-1', 'asset-1', 'node-1', '192.0.2.1/32', ?, ?, 1, 1, 'active', 'req')`,
+		recent, now.Add(time.Hour).Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO node_traffic_cursors
+		(node_id, last_event_sequence, updated_at) VALUES ('node-1', 12000, ?)`, recent); err != nil {
+		return err
+	}
+	for i := 1; i <= 12000; i++ {
+		if _, err := tx.Exec(`INSERT INTO traffic_event_dedupe
+			(node_id, event_sequence, authorization_id, event_hash, accounted_at)
+			VALUES ('node-1', ?, 'auth-1', ?, ?)`, i, fmt.Sprintf("hash-v14-%d", i), recent); err != nil {
+			return err
+		}
+	}
+	for i := 1; i <= 70; i++ {
+		if _, err := tx.Exec(`INSERT INTO sync_scans
+			(id, project_id, state, selected_releases, accepted_assets, rejected_assets,
+			request_id, started_at, completed_at)
+			VALUES (?, 'p1', 'succeeded', 0, 0, 0, 'req', ?, ?)`,
+			fmt.Sprintf("scan-v14-%04d", i), recent, recent); err != nil {
+			return err
+		}
+	}
+	old2 := now.AddDate(0, 0, -39).Format(time.RFC3339Nano)
+	for i, sampleTime := range []string{old, old2, recent} {
+		if _, err := tx.Exec(`INSERT INTO node_availability_samples
+			(node_id, sample_start, sample_end, routable, heartbeat_ok)
+			VALUES ('node-1', ?, ?, 1, 1)`, sampleTime, sampleTime); err != nil {
+			return fmt.Errorf("sample %d: %w", i, err)
 		}
 	}
 	return tx.Commit()

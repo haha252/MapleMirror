@@ -19,6 +19,11 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 	if err != nil {
 		return nil, 0, err
 	}
+	memoryBlocks := []memoryBlockItem{}
+	if s.store.memory != nil {
+		memoryBlocks = s.store.memory.activeBlocks(now)
+		total += len(memoryBlocks)
+	}
 	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT kind, block_key,
 		display_ip, reason, source, blocked_at, expires_at, attempts_after_block,
 		last_attempt_at FROM (
@@ -48,6 +53,20 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 			"display_ip": display, "masked_ip": display, "reason": reason, "source": source,
 			"blocked_at": s.displayTime(blocked), "expires_at": s.displayTime(expires),
 			"attempts_after_block": attempts, "last_attempt_at": s.displayTime(last)})
+	}
+	if page.Page == 1 {
+		for _, block := range memoryBlocks {
+			if len(items) >= page.PageSize {
+				break
+			}
+			items = append(items, map[string]any{"kind": "admin", "key": block.Key,
+				"display_ip": block.DisplayIP, "masked_ip": block.MaskedIP,
+				"reason": "admin_login_failed", "source": "管理登录",
+				"blocked_at":           s.displayTime(block.BlockedAt),
+				"expires_at":           s.displayTime(block.ExpiresAt),
+				"attempts_after_block": block.AttemptsAfterBlock,
+				"last_attempt_at":      s.displayTime(block.LastAttemptAt)})
+		}
 	}
 	return items, total, rows.Err()
 }

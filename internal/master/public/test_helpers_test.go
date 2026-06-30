@@ -70,10 +70,9 @@ func seedAvailabilitySamples(t *testing.T, db *sql.DB, nodeID string) {
 	t.Helper()
 	for i := 1; i <= 3; i++ {
 		start := timeNow().Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano)
-		end := timeNow().Add(-time.Duration(i)*time.Hour + time.Minute).Format(time.RFC3339Nano)
-		_, err := db.Exec(`INSERT INTO node_availability_samples
-			(node_id, sample_start, sample_end, routable, heartbeat_ok)
-			VALUES (?, ?, ?, 1, 1)`, nodeID, start, end)
+		_, err := db.Exec(`INSERT INTO node_availability_rollups
+			(node_id, bucket_start, bucket_minutes, total_samples, ok_samples, updated_at)
+			VALUES (?, ?, 1, 1, 1, ?)`, nodeID, start, start)
 		if err != nil {
 			t.Fatal(err)
 		}

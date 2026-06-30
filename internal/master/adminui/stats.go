@@ -10,9 +10,9 @@ import (
 func slaWindow(db *sql.DB, r *http.Request, nodeID, name string, hours int) map[string]any {
 	start := time.Now().UTC().Add(-time.Duration(hours) * time.Hour).Format(time.RFC3339Nano)
 	var total, ok int64
-	_ = db.QueryRowContext(r.Context(), `SELECT COUNT(*),
-		COALESCE(SUM(CASE WHEN routable = 1 AND heartbeat_ok = 1 THEN 1 ELSE 0 END), 0)
-		FROM node_availability_samples WHERE node_id = ? AND sample_start >= ?`,
+	_ = db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(total_samples), 0),
+		COALESCE(SUM(ok_samples), 0)
+		FROM node_availability_rollups WHERE node_id = ? AND bucket_start >= ?`,
 		nodeID, start).Scan(&total, &ok)
 	ratio := 0.0
 	if total > 0 {

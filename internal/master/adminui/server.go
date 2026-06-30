@@ -92,7 +92,8 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		timeLocation:         timeLocation,
 		resetResourceLimiter: opts.ResetResourceLimiter,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
-			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
+			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL,
+			memory: newLoginMemory()},
 	}, nil
 }
 

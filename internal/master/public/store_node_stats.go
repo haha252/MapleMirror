@@ -105,17 +105,14 @@ func (s Store) loadNodeSLATexts(ctx context.Context, nodeIDs []string) (map[stri
 	args = append(args, stringArgs(nodeIDs)...)
 	args = append(args, start30)
 	rows, err := s.DB.QueryContext(ctx, `SELECT node_id,
-		COUNT(CASE WHEN sample_start >= ? THEN 1 END),
-		COALESCE(SUM(CASE WHEN sample_start >= ?
-			AND routable = 1 AND heartbeat_ok = 1 THEN 1 ELSE 0 END), 0),
-		COUNT(CASE WHEN sample_start >= ? THEN 1 END),
-		COALESCE(SUM(CASE WHEN sample_start >= ?
-			AND routable = 1 AND heartbeat_ok = 1 THEN 1 ELSE 0 END), 0),
-		COUNT(CASE WHEN sample_start >= ? THEN 1 END),
-		COALESCE(SUM(CASE WHEN sample_start >= ?
-			AND routable = 1 AND heartbeat_ok = 1 THEN 1 ELSE 0 END), 0)
-		FROM node_availability_samples
-		WHERE node_id IN (`+placeholders(len(nodeIDs))+`) AND sample_start >= ?
+		COALESCE(SUM(CASE WHEN bucket_start >= ? THEN total_samples ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN bucket_start >= ? THEN ok_samples ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN bucket_start >= ? THEN total_samples ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN bucket_start >= ? THEN ok_samples ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN bucket_start >= ? THEN total_samples ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN bucket_start >= ? THEN ok_samples ELSE 0 END), 0)
+		FROM node_availability_rollups
+		WHERE node_id IN (`+placeholders(len(nodeIDs))+`) AND bucket_start >= ?
 		GROUP BY node_id`, args...)
 	if err != nil {
 		return nil, err

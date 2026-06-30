@@ -14,6 +14,7 @@ import (
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
+	"mirror-server/internal/master/statbuffer"
 )
 
 type Repository struct {
@@ -24,6 +25,7 @@ type Repository struct {
 	ReplicationSigner          downloadtoken.Signer
 	ReplicationTokenTTL        time.Duration
 	PublicProbeNetworkFailures int
+	StatsBuffer                *statbuffer.Buffer
 }
 
 var defaultRuntime = NewRuntimeStore()

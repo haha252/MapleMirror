@@ -131,14 +131,16 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	if err := upsertAssetStats(ctx, tx, day, c.AssetID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
-	if err := addPublicStatCounters(ctx, tx, day, 0, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
-		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
-	}
-	if err := addAssetStatCounters(ctx, tx, c.AssetID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
-		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
-	}
-	if err := addProjectStatCounters(ctx, tx, asset.ProjectID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
-		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+	if s.StatsBuffer == nil {
+		if err := addPublicStatCounters(ctx, tx, day, 0, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
+			return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+		}
+		if err := addAssetStatCounters(ctx, tx, c.AssetID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
+			return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+		}
+		if err := addProjectStatCounters(ctx, tx, asset.ProjectID, 1, webAuth, apiAuth, 0, 0, issued); err != nil {
+			return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+		}
 	}
 	requestRemaining, trafficRemaining, err := quota.snapshot(ctx, tx, day, scopes)
 	if err != nil {
@@ -177,15 +179,9 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	if tokenHash != "" {
 		s.notifyAuthorizationDelivery(asset.NodeID)
 	}
+	s.bufferAuthorizationStats(day, c.AssetID, asset.ProjectID, webAuth, apiAuth)
 	s.finishChallenge(c.ID)
 	return IssuedAuthorization{Claims: claims}, debug, token, nil
-}
-
-func trafficLimitBytes(limit int64, exempt bool) int64 {
-	if exempt {
-		return 0
-	}
-	return limit
 }
 
 type routableAssetInfo struct {

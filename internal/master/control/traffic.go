@@ -21,12 +21,8 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		return HeartbeatResult{}, err
 	}
 	if seq <= last {
-		dup, err := existingTraffic(ctx, tx, session.NodeID, event)
-		if err != nil {
+		if _, err := existingTraffic(ctx, tx, session.NodeID, event); err != nil {
 			return HeartbeatResult{}, err
-		}
-		if !dup {
-			return HeartbeatResult{}, fmt.Errorf("流量事件序号已确认但事件不存在")
 		}
 		ready := routingReady(ctx, tx, session.NodeID)
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
@@ -58,6 +54,9 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
+	if err := pruneTrafficDedupeWindow(ctx, tx, session.NodeID, event.EventSequence); err != nil {
+		return HeartbeatResult{}, err
+	}
 	archiveStarted := event.SentBytes > 0 && !info.Started && info.Status == "issued"
 	if event.SentBytes > 0 && !info.Started {
 		_, err = tx.ExecContext(ctx, `UPDATE download_authorizations
@@ -70,7 +69,7 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		}
 		info.StartedIncrement = 1
 	}
-	if err := updateTrafficStats(ctx, tx, info, event.SentBytes, now); err != nil {
+	if err := updateTrafficStats(ctx, tx, info, event.SentBytes, now, r.StatsBuffer == nil); err != nil {
 		return HeartbeatResult{}, err
 	}
 	if err := r.updateSequence(session, seq); err != nil {
@@ -83,6 +82,9 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 	result := HeartbeatResult{AcceptedSequence: seq, ManagedState: managedState(ready), RoutingReady: ready}
 	if err := tx.Commit(); err != nil {
 		return HeartbeatResult{}, err
+	}
+	if r.StatsBuffer != nil {
+		r.bufferTrafficStats(info, event.SentBytes)
 	}
 	r.archiveTrafficEvent(ctx, session.NodeID, event, now, time.Now().UTC())
 	if archiveStarted {
@@ -202,7 +204,7 @@ func loadLegacyAuthorization(ctx context.Context, tx *sql.Tx, nodeID string, eve
 	return info, err
 }
 
-func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, bytes int64, now string) error {
+func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, bytes int64, now string, writeState bool) error {
 	if _, err := tx.ExecContext(ctx, `UPDATE traffic_reservations
 		SET settled_bytes = settled_bytes + ? WHERE authorization_id = ? AND scope_day = ?
 		AND address_scope_kind = ? AND address_scope_key = ?
@@ -225,6 +227,9 @@ func updateTrafficStats(ctx context.Context, tx *sql.Tx, info authAccounting, by
 	}
 	if err := upsertNodeTraffic(ctx, tx, info.Day, info.NodeID, bytes, now); err != nil {
 		return err
+	}
+	if !writeState {
+		return nil
 	}
 	if err := addPublicTrafficCounters(ctx, tx, info.Day, info.StartedIncrement, bytes, now); err != nil {
 		return err

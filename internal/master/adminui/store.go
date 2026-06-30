@@ -17,6 +17,7 @@ type loginStore struct {
 	limit       int
 	banDuration time.Duration
 	sessionTTL  time.Duration
+	memory      *loginMemory
 }
 
 type blockStatus struct {
@@ -36,6 +37,11 @@ func (s loginStore) sessionKey(token string) string {
 func (s loginStore) blocked(ctx context.Context, ip string) (blockStatus, error) {
 	now := nowText()
 	key := s.ipKey(ip)
+	if s.memory != nil {
+		if status, ok := s.memory.blocked(key, now); ok {
+			return status, nil
+		}
+	}
 	var masked, expires string
 	err := s.db.QueryRowContext(ctx, `SELECT masked_ip, expires_at
 		FROM admin_ip_blocks WHERE ip_key = ? AND expires_at > ?`, key, now).
@@ -53,6 +59,10 @@ func (s loginStore) blocked(ctx context.Context, ip string) (blockStatus, error)
 }
 
 func (s loginStore) recordFailure(ctx context.Context, ip string) error {
+	if s.memory != nil {
+		s.memory.recordFailure(s.ipKey(ip), maskIP(ip), ip, s.window, s.limit, s.banDuration)
+		return nil
+	}
 	now := time.Now().UTC()
 	nowText := now.Format(time.RFC3339Nano)
 	key := s.ipKey(ip)
@@ -98,6 +108,10 @@ func (s loginStore) recordFailure(ctx context.Context, ip string) error {
 }
 
 func (s loginStore) clearFailures(ctx context.Context, ip string) {
+	if s.memory != nil {
+		s.memory.clearFailures(s.ipKey(ip))
+		return
+	}
 	_, _ = s.db.ExecContext(ctx, `DELETE FROM admin_login_failures WHERE ip_key = ?`, s.ipKey(ip))
 }
 
@@ -108,6 +122,10 @@ func (s loginStore) createSession(ctx context.Context, username, ip string) (str
 	}
 	now := time.Now().UTC()
 	expires := now.Add(s.sessionTTL).Format(time.RFC3339Nano)
+	if s.memory != nil {
+		s.memory.createSession(s.sessionKey(token), username, s.ipKey(ip), expires)
+		return token, expires, nil
+	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO admin_web_sessions
 		(id, username, ip_key, created_at, expires_at, last_seen_at)
 		VALUES (?, ?, ?, ?, ?, ?)`, s.sessionKey(token), username, s.ipKey(ip),
@@ -120,6 +138,9 @@ func (s loginStore) verifySession(ctx context.Context, token, ip string) (string
 		return "", false, nil
 	}
 	now := nowText()
+	if s.memory != nil {
+		return s.memory.verifySession(s.sessionKey(token), s.ipKey(ip), now)
+	}
 	var username, ipKey string
 	err := s.db.QueryRowContext(ctx, `SELECT username, ip_key FROM admin_web_sessions
 		WHERE id = ? AND expires_at > ?`, s.sessionKey(token), now).Scan(&username, &ipKey)
@@ -139,6 +160,10 @@ func (s loginStore) verifySession(ctx context.Context, token, ip string) (string
 
 func (s loginStore) deleteSession(ctx context.Context, token string) {
 	if token != "" {
+		if s.memory != nil {
+			s.memory.deleteSession(s.sessionKey(token))
+			return
+		}
 		_, _ = s.db.ExecContext(ctx, `DELETE FROM admin_web_sessions WHERE id = ?`, s.sessionKey(token))
 	}
 }

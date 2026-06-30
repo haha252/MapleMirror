@@ -88,10 +88,18 @@ func (s Store) IncrementPageView(ctx context.Context) error {
 		day, nowText); err != nil {
 		return err
 	}
-	if err := addPublicStatCounters(ctx, tx, day, 1, 0, 0, 0, 0, 0, nowText); err != nil {
+	if s.StatsBuffer == nil {
+		if err := addPublicStatCounters(ctx, tx, day, 1, 0, 0, 0, 0, 0, nowText); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if s.StatsBuffer != nil {
+		s.StatsBuffer.AddPublic(day, statCounter(1, 0, 0, 0, 0, 0))
+	}
+	return nil
 }
 
 func (s Store) AuthorizationBytes(ctx context.Context, id string) (int64, string, error) {

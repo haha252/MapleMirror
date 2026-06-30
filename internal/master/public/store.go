@@ -11,6 +11,7 @@ import (
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
+	"mirror-server/internal/master/statbuffer"
 	"mirror-server/internal/requestid"
 )
 
@@ -27,6 +28,7 @@ type Store struct {
 	PublicProbeNetworkFailures int
 	Archive                    *accountingarchive.Writer
 	Logger                     *logging.Logger
+	StatsBuffer                *statbuffer.Buffer
 }
 
 type ProjectSummary struct {

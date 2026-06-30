@@ -50,7 +50,7 @@ func TestAdminWebLoginUsesPanelSession(t *testing.T) {
 }
 
 func TestTrustedProxyIPDrivesLoginBlockAndSession(t *testing.T) {
-	server, db := newProxyTestServer(t, []string{"127.0.0.0/8"}, config.AdminWeb{})
+	server, _ := newProxyTestServer(t, []string{"127.0.0.0/8"}, config.AdminWeb{})
 	cookie := loginCookie(t, server, "127.0.0.1:55000", "203.0.113.45")
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/nodes", nil)
 	req.RemoteAddr = "127.0.0.1:55000"
@@ -72,10 +72,7 @@ func TestTrustedProxyIPDrivesLoginBlockAndSession(t *testing.T) {
 			t.Fatalf("failure status = %d", rec.Code)
 		}
 	}
-	var masked, display string
-	if err := db.QueryRow(`SELECT masked_ip, display_ip FROM admin_ip_blocks`).Scan(&masked, &display); err != nil {
-		t.Fatal(err)
-	}
+	masked, display := latestAdminBlockDisplay(t, server)
 	if masked != "203.0.113.*" {
 		t.Fatalf("masked ip = %s", masked)
 	}
@@ -85,7 +82,7 @@ func TestTrustedProxyIPDrivesLoginBlockAndSession(t *testing.T) {
 }
 
 func TestUntrustedProxyHeaderDoesNotChangeLoginIP(t *testing.T) {
-	server, db := newProxyTestServer(t, nil, config.AdminWeb{})
+	server, _ := newProxyTestServer(t, nil, config.AdminWeb{})
 	for i := 0; i < 3; i++ {
 		req := loginForm("admin", "wrong-password")
 		req.RemoteAddr = "127.0.0.1:55000"
@@ -96,16 +93,28 @@ func TestUntrustedProxyHeaderDoesNotChangeLoginIP(t *testing.T) {
 			t.Fatalf("failure status = %d", rec.Code)
 		}
 	}
-	var masked, display string
-	if err := db.QueryRow(`SELECT masked_ip, display_ip FROM admin_ip_blocks`).Scan(&masked, &display); err != nil {
-		t.Fatal(err)
-	}
+	masked, display := latestAdminBlockDisplay(t, server)
 	if masked != "127.0.0.*" {
 		t.Fatalf("masked ip = %s", masked)
 	}
 	if display != "127.0.0.1" {
 		t.Fatalf("display ip = %s", display)
 	}
+}
+
+func latestAdminBlockDisplay(t *testing.T, server *Server) (string, string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/security/blocks", nil)
+	items, total, err := server.listBlocks(req, pagination{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total == 0 || len(items) == 0 {
+		t.Fatalf("expected active admin block, total=%d items=%#v", total, items)
+	}
+	masked, _ := items[0]["masked_ip"].(string)
+	display, _ := items[0]["display_ip"].(string)
+	return masked, display
 }
 
 func TestHighRiskWebSessionAllowedForRemoteAdmin(t *testing.T) {

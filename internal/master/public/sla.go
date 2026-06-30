@@ -10,9 +10,9 @@ import (
 func (s Store) slaText(ctx context.Context, nodeID string, hours int) string {
 	start := timeNow().Add(-time.Duration(hours) * time.Hour).Format(time.RFC3339Nano)
 	var total, ok int64
-	err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*),
-		COALESCE(SUM(CASE WHEN routable = 1 AND heartbeat_ok = 1 THEN 1 ELSE 0 END), 0)
-		FROM node_availability_samples WHERE node_id = ? AND sample_start >= ?`,
+	err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(total_samples), 0),
+		COALESCE(SUM(ok_samples), 0)
+		FROM node_availability_rollups WHERE node_id = ? AND bucket_start >= ?`,
 		nodeID, start).Scan(&total, &ok)
 	if err != nil || total < 3 {
 		return "统计样本不足"
@@ -22,8 +22,7 @@ func (s Store) slaText(ctx context.Context, nodeID string, hours int) string {
 
 func (s Store) SampleNodeAvailability(ctx context.Context) error {
 	now := timeNow()
-	start := now.Truncate(time.Minute).Format(time.RFC3339Nano)
-	end := now.Truncate(time.Minute).Add(time.Minute).Format(time.RFC3339Nano)
+	start := now.Truncate(5 * time.Minute).Format(time.RFC3339Nano)
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, routing_ready,
 		CASE WHEN last_heartbeat_at IS NOT NULL AND last_heartbeat_at != '' THEN 1 ELSE 0 END
 		FROM nodes WHERE state != 'disabled'`)
@@ -50,20 +49,26 @@ func (s Store) SampleNodeAvailability(ctx context.Context) error {
 		return err
 	}
 	for _, target := range targets {
-		if err := s.insertSample(ctx, target.nodeID, start, end, target.ready, target.heartbeat); err != nil {
+		if err := s.insertSample(ctx, target.nodeID, start, target.ready, target.heartbeat); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s Store) insertSample(ctx context.Context, nodeID, start, end string, ready, heartbeat int) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO node_availability_samples
-		(node_id, sample_start, sample_end, routable, heartbeat_ok)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(node_id, sample_start) DO UPDATE SET
-		sample_end = excluded.sample_end, routable = excluded.routable,
-		heartbeat_ok = excluded.heartbeat_ok`, nodeID, start, end, ready, heartbeat)
+func (s Store) insertSample(ctx context.Context, nodeID, start string, ready, heartbeat int) error {
+	ok := 0
+	if ready == 1 && heartbeat == 1 {
+		ok = 1
+	}
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO node_availability_rollups
+		(node_id, bucket_start, bucket_minutes, total_samples, ok_samples, updated_at)
+		VALUES (?, ?, 5, 1, ?, ?)
+		ON CONFLICT(node_id, bucket_start, bucket_minutes) DO UPDATE SET
+		total_samples = total_samples + 1,
+		ok_samples = ok_samples + excluded.ok_samples,
+		updated_at = excluded.updated_at`,
+		nodeID, start, ok, timeNow().Format(time.RFC3339Nano))
 	if err == sql.ErrNoRows {
 		return nil
 	}

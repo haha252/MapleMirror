@@ -15,6 +15,8 @@ type Store struct {
 	Runtime *mastercontrol.RuntimeStore
 }
 
+const syncScanRetainPerProject = 50
+
 type ScanSummary struct {
 	ScanID              string `json:"scan_id"`
 	ProjectID           string `json:"project_id,omitempty"`
@@ -85,6 +87,24 @@ func (s Store) FinishScan(ctx context.Context, scanID string, summary ScanSummar
 	if err == nil && summary.ProjectID != "" {
 		err = s.MarkProjectScanFinished(ctx, summary.ProjectID, scanID, state, completed, errText)
 	}
+	if err == nil {
+		err = s.PruneScanHistory(ctx, summary.ProjectID, syncScanRetainPerProject)
+	}
+	return err
+}
+
+func (s Store) PruneScanHistory(ctx context.Context, projectID string, retain int) error {
+	if retain <= 0 {
+		retain = syncScanRetainPerProject
+	}
+	key := projectID
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM sync_scans
+		WHERE COALESCE(project_id, '') = ? AND state != 'running'
+		AND id NOT IN (
+			SELECT id FROM sync_scans
+			WHERE COALESCE(project_id, '') = ? AND state != 'running'
+			ORDER BY started_at DESC, id DESC LIMIT ?
+		)`, key, key, retain)
 	return err
 }
 

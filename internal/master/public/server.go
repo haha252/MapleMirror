@@ -15,6 +15,7 @@ import (
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
+	"mirror-server/internal/master/statbuffer"
 )
 
 type Server struct {
@@ -52,7 +53,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	projects config.Projects, projectsPath, noticesPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
 	logger *logging.Logger, publicProbeNetworkFailures int,
-	archive *accountingarchive.Writer) (Server, error) {
+	archive *accountingarchive.Writer, statsBuffer *statbuffer.Buffer) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
@@ -67,7 +68,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime,
 			PublicProbeNetworkFailures: publicProbeNetworkFailures,
 			Archive:                    archive,
-			Logger:                     logger},
+			Logger:                     logger,
+			StatsBuffer:                statsBuffer},
 		Signer:           signer,
 		ALTCHATTL:        altchaTTL,
 		ALTCHADifficulty: altchaDifficulty,

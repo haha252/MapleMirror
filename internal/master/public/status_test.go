@@ -54,7 +54,7 @@ func TestSampleNodeAvailabilityWritesAfterClosingNodeRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM node_availability_samples
+	err := db.QueryRow(`SELECT COALESCE(SUM(total_samples), 0) FROM node_availability_rollups
 		WHERE node_id = 'node-1'`).Scan(&count)
 	if err != nil || count != 1 {
 		t.Fatalf("节点 SLA 采样未写入：count=%d err=%v", count, err)
