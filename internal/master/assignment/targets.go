@@ -22,17 +22,17 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
-		updated_at = ? WHERE node_id = ? AND asset_id IN (
-		SELECT ti.asset_id FROM target_inventory ti
+		updated_at = ? WHERE desired_state != 'remove'
+		AND (node_id, asset_id) IN (
+		SELECT ti.node_id, ti.asset_id FROM target_inventory ti
 		JOIN assets a ON a.id = ti.asset_id
 		JOIN releases r ON r.id = a.release_id
 			JOIN projects p ON p.id = r.project_id
 			LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
 				AND npa.project_id = p.id AND npa.assigned = 1
 			WHERE ti.node_id = ? AND (p.enabled = 0 OR r.selected = 0
-				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))
-			AND desired_state != 'remove'`,
-		now, nodeID, nodeID)
+				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
+		now, nodeID)
 	return err
 }
 
@@ -53,13 +53,15 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
-		updated_at = ? WHERE asset_id IN (
-		SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
-			LEFT JOIN node_project_assignments npa ON npa.node_id = target_inventory.node_id
+		updated_at = ? WHERE desired_state != 'remove'
+		AND (node_id, asset_id) IN (
+		SELECT ti.node_id, ti.asset_id FROM target_inventory ti
+			JOIN assets a ON a.id = ti.asset_id
+			JOIN releases r ON r.id = a.release_id
+			LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
 				AND npa.project_id = r.project_id AND npa.assigned = 1
 			WHERE r.project_id = ? AND (r.selected = 0
-				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))
-			AND desired_state != 'remove'`,
+				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
 		now, projectID)
 	return err
 }

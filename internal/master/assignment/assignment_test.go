@@ -92,6 +92,43 @@ func TestReconcileNodeDoesNotRefreshUnchangedAssignmentTargets(t *testing.T) {
 		"node_id = 'node-1' AND asset_id = 'asset-p1'")
 }
 
+func TestRebuildProjectTargetsMarksOnlyProjectTargets(t *testing.T) {
+	db := testDB(t)
+	seedAssignmentNode(t, db, 1)
+	mustExec(t, db, `INSERT INTO nodes
+		(id, public_name, state, target_bandwidth_bps, routing_ready,
+		max_mirror_projects, created_at, updated_at)
+		VALUES ('node-2', '节点二', 'online', 0, 0, 1, 'now', 'now')`)
+	seedProject(t, db, "p1", "项目一", 30)
+	seedProject(t, db, "p2", "项目二", 20)
+	mustExec(t, db, `INSERT INTO node_project_assignments
+		(node_id, project_id, mode, assigned, score, pinned, last_changed_at, updated_at)
+		VALUES ('node-1', 'p1', 'auto', 1, 30, 0, 'old', 'old')`)
+	mustExec(t, db, `INSERT INTO node_project_assignments
+		(node_id, project_id, mode, assigned, score, pinned, last_changed_at, updated_at)
+		VALUES ('node-2', 'p1', 'auto', 0, 30, 0, 'old', 'old')`)
+	mustExec(t, db, `INSERT INTO target_inventory
+		(node_id, asset_id, desired_state, updated_at)
+		VALUES ('node-1', 'asset-p1', 'required', 'stable'),
+			('node-2', 'asset-p1', 'required', 'old'),
+			('node-2', 'asset-p2', 'required', 'stable')`)
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RebuildProjectTargets(context.Background(), tx, "p1", "later"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertTargetState(t, db, "node-1", "asset-p1", "required", "stable")
+	assertTargetState(t, db, "node-2", "asset-p1", "remove", "later")
+	assertTargetState(t, db, "node-2", "asset-p2", "required", "stable")
+}
+
 func TestManualAssignmentRejectsOverLimit(t *testing.T) {
 	db := testDB(t)
 	seedAssignmentNode(t, db, 1)

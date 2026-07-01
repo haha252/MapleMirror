@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"mirror-server/internal/master/assignment"
 	"mirror-server/internal/protocol"
 )
 
@@ -31,9 +30,6 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 		return HeartbeatResult{AcceptedSequence: last, ManagedState: managedState(ready), RoutingReady: ready}, tx.Commit()
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := r.updateSequence(session, seq); err != nil {
-		return HeartbeatResult{}, err
-	}
 	var previousMax int
 	if err := tx.QueryRowContext(ctx, `SELECT max_mirror_projects FROM nodes
 		WHERE id = ?`, session.NodeID).Scan(&previousMax); err != nil {
@@ -50,16 +46,13 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
-	syncTasksChanged := false
-	if previousMax != nonNegative(report.MaxMirrorProjects) {
-		if err := assignment.ReconcileNode(ctx, tx, session.NodeID, now); err != nil {
-			return HeartbeatResult{}, err
-		}
-		generated, err := assignment.GenerateNodeTasks(ctx, tx, session.NodeID, now)
-		if err != nil {
-			return HeartbeatResult{}, err
-		}
-		syncTasksChanged = generated > 0
+	nextMax := nonNegative(report.MaxMirrorProjects)
+	generatedTasks, err := r.reconcileNodeLimitChange(ctx, tx, session.NodeID, "pressure_report", previousMax, nextMax, now)
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
+	if err := r.updateSequence(session, seq); err != nil {
+		return HeartbeatResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return HeartbeatResult{}, err
@@ -78,6 +71,6 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 	ready := r.nodeRoutingReady(ctx, session.NodeID)
 	return HeartbeatResult{
 		AcceptedSequence: seq, ManagedState: managedState(ready),
-		RoutingReady: ready, SyncTasksChanged: syncTasksChanged,
+		RoutingReady: ready, SyncTasksChanged: generatedTasks > 0,
 	}, nil
 }

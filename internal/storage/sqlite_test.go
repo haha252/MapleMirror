@@ -62,6 +62,8 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertIndex(t, db, "idx_project_stat_totals_downloads")
 	assertIndex(t, db, "idx_traffic_event_dedupe_accounted")
 	assertIndex(t, db, "idx_traffic_event_dedupe_authorization_accounted")
+	assertIndex(t, db, "idx_target_inventory_asset_state_node")
+	assertIndex(t, db, "idx_node_project_assignments_project_assigned_node")
 	_ = db.Close()
 	db, err = OpenMaster(cfg)
 	if err != nil {

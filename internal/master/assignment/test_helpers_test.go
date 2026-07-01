@@ -87,6 +87,17 @@ func assertTimestamp(t *testing.T, db *sql.DB, table, want, where string) {
 	}
 }
 
+func assertTargetState(t *testing.T, db *sql.DB, nodeID, assetID, wantState, wantUpdatedAt string) {
+	t.Helper()
+	var state, updatedAt string
+	err := db.QueryRow(`SELECT desired_state, updated_at FROM target_inventory
+		WHERE node_id = ? AND asset_id = ?`, nodeID, assetID).Scan(&state, &updatedAt)
+	if err != nil || state != wantState || updatedAt != wantUpdatedAt {
+		t.Fatalf("target %s/%s state=%q updated_at=%q want %q/%q err=%v",
+			nodeID, assetID, state, updatedAt, wantState, wantUpdatedAt, err)
+	}
+}
+
 func mustExec(t *testing.T, db *sql.DB, query string, args ...any) {
 	t.Helper()
 	if _, err := db.Exec(query, args...); err != nil {

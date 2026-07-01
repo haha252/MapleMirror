@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"mirror-server/internal/downloadurl"
-	"mirror-server/internal/master/assignment"
 	"mirror-server/internal/protocol"
 )
 
@@ -53,18 +52,17 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
+	nextMax := nonNegative(hb.MaxMirrorProjects)
 	generatedTasks := 0
-	if previousMax != nonNegative(hb.MaxMirrorProjects) {
-		if err := assignment.ReconcileNode(ctx, tx, session.NodeID, now); err != nil {
-			return HeartbeatResult{}, err
-		}
-		generated, err := assignment.GenerateNodeTasks(ctx, tx, session.NodeID, now)
+	if previousMax != nextMax {
+		generatedTasks, err = r.reconcileNodeLimitChange(ctx, tx, session.NodeID, "heartbeat", previousMax, nextMax, now)
 		if err != nil {
 			return HeartbeatResult{}, err
 		}
-		generatedTasks = generated
-	} else if _, err := createKnownMissingRepairTasks(ctx, tx, session.NodeID, now); err != nil {
-		return HeartbeatResult{}, err
+	} else {
+		if _, err := createKnownMissingRepairTasks(ctx, tx, session.NodeID, now); err != nil {
+			return HeartbeatResult{}, err
+		}
 	}
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
