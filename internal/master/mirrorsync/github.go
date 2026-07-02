@@ -3,8 +3,10 @@ package mirrorsync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -20,6 +22,8 @@ type HTTPGitHubClient struct {
 }
 
 const DefaultGitHubClientTimeout = 2 * time.Minute
+
+var errGitHubNotFound = errors.New("GitHub 资源不存在")
 
 type GitHubRelease struct {
 	ID          int64
@@ -39,6 +43,22 @@ type GitHubAsset struct {
 	BrowserURL string
 }
 
+type githubReleasePayload struct {
+	ID          int64     `json:"id"`
+	TagName     string    `json:"tag_name"`
+	Prerelease  bool      `json:"prerelease"`
+	Draft       bool      `json:"draft"`
+	PublishedAt time.Time `json:"published_at"`
+	Assets      []struct {
+		ID                 int64  `json:"id"`
+		Name               string `json:"name"`
+		Size               int64  `json:"size"`
+		URL                string `json:"url"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+		Digest             string `json:"digest"`
+	} `json:"assets"`
+}
+
 func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitHubRelease, error) {
 	timeout := c.requestTimeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -47,10 +67,115 @@ func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitH
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://api.github.com/repos/"+repo+"/releases?per_page=100", nil)
-	if err != nil {
+	probeTimeout := timeout / 2
+	if probeTimeout <= 0 {
+		probeTimeout = timeout
+	}
+	probeCtx, cancelProbes := context.WithTimeout(ctx, probeTimeout)
+	defer cancelProbes()
+	type listResult struct {
+		releases []GitHubRelease
+		err      error
+	}
+	type feedResult struct {
+		tags []string
+		err  error
+	}
+	listCh := make(chan listResult, 1)
+	feedCh := make(chan feedResult, 1)
+	go func() {
+		releases, err := c.listReleases(probeCtx, client, repo)
+		listCh <- listResult{releases: releases, err: err}
+	}()
+	go func() {
+		tags, err := c.listReleaseFeed(probeCtx, client, repo)
+		feedCh <- feedResult{tags: tags, err: err}
+	}()
+	listed, fed := <-listCh, <-feedCh
+	cancelProbes()
+	if fed.err != nil {
+		if listed.err != nil {
+			return nil, errors.Join(listed.err, fed.err)
+		}
+		return listed.releases, nil
+	}
+	releases, recovered, hydrateErr := c.appendFeedReleases(ctx, client, repo, listed.releases, fed.tags)
+	if listed.err != nil {
+		if recovered == 0 || hydrateErr != nil {
+			return nil, errors.Join(listed.err, hydrateErr)
+		}
+	}
+	return releases, nil
+}
+
+func (c HTTPGitHubClient) listReleases(ctx context.Context, client *http.Client, repo string) ([]GitHubRelease, error) {
+	var raw []githubReleasePayload
+	if err := c.getJSON(ctx, client, "https://api.github.com/repos/"+repo+"/releases?per_page=100", &raw); err != nil {
 		return nil, err
+	}
+	return convertGitHubReleases(raw), nil
+}
+
+func (c HTTPGitHubClient) appendFeedReleases(ctx context.Context, client *http.Client, repo string,
+	releases []GitHubRelease, tags []string) ([]GitHubRelease, int, error) {
+	seenTags := make(map[string]struct{}, len(releases))
+	seenIDs := make(map[int64]struct{}, len(releases))
+	for _, release := range releases {
+		seenTags[release.TagName] = struct{}{}
+		seenIDs[release.ID] = struct{}{}
+	}
+	recovered := 0
+	var hydrateErr error
+	for _, tag := range tags {
+		name := strings.TrimSpace(tag)
+		if name == "" {
+			continue
+		}
+		if _, ok := seenTags[name]; ok {
+			continue
+		}
+		seenTags[name] = struct{}{}
+		release, ok, err := c.releaseByTag(ctx, client, repo, name)
+		if err != nil {
+			hydrateErr = errors.Join(hydrateErr, fmt.Errorf("补取 GitHub Release %q 失败：%w", name, err))
+			continue
+		}
+		if !ok {
+			hydrateErr = errors.Join(hydrateErr, fmt.Errorf("Atom 中的 GitHub Release %q 不存在", name))
+			continue
+		}
+		if _, ok := seenIDs[release.ID]; ok {
+			continue
+		}
+		releases = append(releases, release)
+		recovered++
+		seenTags[release.TagName] = struct{}{}
+		seenIDs[release.ID] = struct{}{}
+	}
+	return releases, recovered, hydrateErr
+}
+
+func (c HTTPGitHubClient) releaseByTag(ctx context.Context, client *http.Client, repo, tag string) (GitHubRelease, bool, error) {
+	var raw githubReleasePayload
+	err := c.getJSON(ctx, client,
+		"https://api.github.com/repos/"+repo+"/releases/tags/"+url.PathEscape(tag), &raw)
+	if errors.Is(err, errGitHubNotFound) {
+		return GitHubRelease{}, false, nil
+	}
+	if err != nil {
+		return GitHubRelease{}, false, err
+	}
+	releases := convertGitHubReleases([]githubReleasePayload{raw})
+	if len(releases) == 0 {
+		return GitHubRelease{}, false, nil
+	}
+	return releases[0], true, nil
+}
+
+func (c HTTPGitHubClient) getJSON(ctx context.Context, client *http.Client, endpoint string, target any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if c.Token != "" {
@@ -58,33 +183,25 @@ func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitH
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("请求 GitHub Release 失败：%w", err)
+		return fmt.Errorf("请求 GitHub Release 失败：%w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-		return nil, fmt.Errorf("GitHub 限频或拒绝访问：%s", resp.Status)
+		return fmt.Errorf("GitHub 限频或拒绝访问：%s", resp.Status)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return errGitHubNotFound
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("GitHub Release 响应异常：%s", resp.Status)
+		return fmt.Errorf("GitHub Release 响应异常：%s", resp.Status)
 	}
-	var raw []struct {
-		ID          int64     `json:"id"`
-		TagName     string    `json:"tag_name"`
-		Prerelease  bool      `json:"prerelease"`
-		Draft       bool      `json:"draft"`
-		PublishedAt time.Time `json:"published_at"`
-		Assets      []struct {
-			ID                 int64  `json:"id"`
-			Name               string `json:"name"`
-			Size               int64  `json:"size"`
-			URL                string `json:"url"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-			Digest             string `json:"digest"`
-		} `json:"assets"`
+	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
+		return fmt.Errorf("解析 GitHub Release 失败：%w", err)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("解析 GitHub Release 失败：%w", err)
-	}
+	return nil
+}
+
+func convertGitHubReleases(raw []githubReleasePayload) []GitHubRelease {
 	items := make([]GitHubRelease, 0, len(raw))
 	for _, r := range raw {
 		rel := GitHubRelease{ID: r.ID, TagName: r.TagName, Prerelease: r.Prerelease,
@@ -99,7 +216,7 @@ func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitH
 		}
 		items = append(items, rel)
 	}
-	return items, nil
+	return items
 }
 
 func (c HTTPGitHubClient) requestTimeout() time.Duration {

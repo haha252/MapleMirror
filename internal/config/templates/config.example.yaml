@@ -67,7 +67,7 @@ archive:
 scan:
   # 单个启用项目的自动扫描间隔；项目配置变化后会尽快扫描。
   interval: "15m"
-  # 仅填写环境变量名称，不得填写 GitHub 凭据内容。
+  # 仅填写环境变量名称，不得填写 GitHub 凭据内容；生产环境建议注入只读 Fine-grained PAT。
   github_token_env: "MIRROR_GITHUB_TOKEN"
   # GitHub Release API 单次请求超时。
   github_timeout: "2m"

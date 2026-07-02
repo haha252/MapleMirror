@@ -38,6 +38,11 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader,
 	}
 	ctx := context.Background()
 	go service.Run(ctx)
-	logger.Info(ctx, "Release 扫描调度已启动", slog.String("interval", cfg.Scan.Interval))
+	authMode := "匿名"
+	if token != "" {
+		authMode = "Token 认证"
+	}
+	logger.Info(ctx, "Release 扫描调度已启动", slog.String("interval", cfg.Scan.Interval),
+		slog.String("github_api_auth", authMode))
 	return service
 }
