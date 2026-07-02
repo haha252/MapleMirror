@@ -64,6 +64,11 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 			return HeartbeatResult{}, err
 		}
 	}
+	deleteTasks, err := queueNodeInventoryCleanup(ctx, tx, session.NodeID, now)
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
+	generatedTasks += deleteTasks
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
 	}

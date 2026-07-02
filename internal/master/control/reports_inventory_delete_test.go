@@ -169,3 +169,47 @@ func TestCompleteInventoryReportKeepsRequiredAssetRequired(t *testing.T) {
 	assertTableCount(t, repo, "target_inventory",
 		"node_id = 'node-1' AND asset_id = 'asset-1' AND desired_state = 'remove'", 0)
 }
+
+func TestHeartbeatQueuesCleanupForKnownVerifiedNonTargetAsset(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedUnassignedPendingAsset(t, repo)
+	mustExecControl(t, repo.DB, `INSERT INTO node_inventory
+		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
+		VALUES (?, 'asset-new', 'sha256:new', 20, 'old', 'verified')`, session.NodeID)
+
+	result, err := repo.AcceptHeartbeat(context.Background(), session, 1, protocol.Heartbeat{Status: "online"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTableCount(t, repo, "target_inventory",
+		"node_id = 'node-1' AND asset_id = 'asset-new' AND desired_state = 'remove'", 1)
+	assertTableCount(t, repo, "node_tasks",
+		"node_id = 'node-1' AND asset_id = 'asset-new' AND task_type = 'asset_delete' AND state = 'pending'", 1)
+	if !result.SyncTasksChanged {
+		t.Fatal("heartbeat cleanup should wake task dispatch")
+	}
+}
+
+func TestSupersededInventoryIsNotCountedOrDeletedAsVerified(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	seedUnassignedPendingAsset(t, repo)
+
+	_, err := repo.AcceptInventoryReport(context.Background(), session, 1, protocol.InventoryReport{
+		ReportID: "r-superseded", Revision: 1, GeneratedAt: time.Now(), Complete: true,
+		Items: []protocol.InventoryItem{{
+			AssetID: "asset-new", DigestSHA256: "sha256:new", SizeBytes: 20,
+			LocalState: "superseded",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTableCount(t, repo, "node_inventory",
+		"node_id = 'node-1' AND asset_id = 'asset-new' AND state = 'removed'", 1)
+	assertTableCount(t, repo, "node_tasks",
+		"node_id = 'node-1' AND asset_id = 'asset-new' AND task_type = 'asset_delete'", 0)
+}

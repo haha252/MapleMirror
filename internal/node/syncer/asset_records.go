@@ -60,8 +60,8 @@ func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {
 			slog.String("task_id", task.TaskID),
 			slog.String("asset_id", task.Asset.AssetID))
 	}
-	var rel string
-	err := e.DB.QueryRow(`SELECT relative_path FROM local_assets WHERE asset_id = ?`, task.Asset.AssetID).Scan(&rel)
+	var rel, state string
+	err := e.DB.QueryRow(`SELECT relative_path, state FROM local_assets WHERE asset_id = ?`, task.Asset.AssetID).Scan(&rel, &state)
 	if err != nil {
 		if e.Logger != nil {
 			e.Logger.Debug(context.Background(), "节点删除任务对应资产不存在",
@@ -70,18 +70,32 @@ func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {
 		}
 		return taskResult(task, "succeeded", "", 0, "本地资产不存在")
 	}
+	if state != "verified" {
+		if _, err := e.DB.Exec(`UPDATE local_assets SET state = 'removed' WHERE asset_id = ?`, task.Asset.AssetID); err != nil {
+			return taskResult(task, "temporary_error", "", 0, "更新本地状态失败")
+		}
+		return taskResult(task, "succeeded", "", 0, "本地资产已被替换，无需删除共用文件")
+	}
 	clean := filepath.Clean(rel)
 	if filepath.IsAbs(clean) || clean == "." || relEscapes(clean) {
 		return taskResult(task, "temporary_error", "", 0, "本地资产路径不安全")
 	}
-	if err := os.Remove(filepath.Join(e.Storage, clean)); err != nil && !os.IsNotExist(err) {
-		if e.Logger != nil {
-			e.Logger.Warn(context.Background(), "节点删除本地资产文件失败",
-				slog.String("task_id", task.TaskID),
-				slog.String("asset_id", task.Asset.AssetID),
-				slog.String("error", err.Error()))
+	var shared int
+	if err := e.DB.QueryRow(`SELECT COUNT(*) FROM local_assets
+		WHERE relative_path = ? AND asset_id != ? AND state = 'verified'`,
+		rel, task.Asset.AssetID).Scan(&shared); err != nil {
+		return taskResult(task, "temporary_error", "", 0, "检查本地资产路径失败")
+	}
+	if shared == 0 {
+		if err := os.Remove(filepath.Join(e.Storage, clean)); err != nil && !os.IsNotExist(err) {
+			if e.Logger != nil {
+				e.Logger.Warn(context.Background(), "节点删除本地资产文件失败",
+					slog.String("task_id", task.TaskID),
+					slog.String("asset_id", task.Asset.AssetID),
+					slog.String("error", err.Error()))
+			}
+			return taskResult(task, "temporary_error", "", 0, "删除本地资产文件失败")
 		}
-		return taskResult(task, "temporary_error", "", 0, "删除本地资产文件失败")
 	}
 	_, err = e.DB.Exec(`UPDATE local_assets SET state = 'removed' WHERE asset_id = ?`, task.Asset.AssetID)
 	if err != nil {
@@ -92,6 +106,15 @@ func (e Executor) delete(task protocol.SyncTask) protocol.SyncTaskResult {
 				slog.String("error", err.Error()))
 		}
 		return taskResult(task, "temporary_error", "", 0, "更新本地状态失败")
+	}
+	if shared == 0 {
+		if err := removeEmptyAssetDirectories(e.Storage, clean); err != nil && e.Logger != nil {
+			e.Logger.Warn(context.Background(), "节点清理空资产目录失败",
+				slog.String("task_id", task.TaskID),
+				slog.String("asset_id", task.Asset.AssetID),
+				slog.String("relative_path", clean),
+				slog.String("error", err.Error()))
+		}
 	}
 	if e.Logger != nil {
 		e.Logger.Debug(context.Background(), "节点本地资产删除完成",

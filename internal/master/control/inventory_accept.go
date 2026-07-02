@@ -68,6 +68,11 @@ func normalizedInventoryState(localState string) string {
 	switch localState {
 	case "missing", "mismatch", "removed":
 		return localState
+	case "superseded":
+		// A superseded record no longer owns a file: the same relative path has
+		// already been replaced by a newer asset. Treat it as removed so it is
+		// neither counted as a verified replica nor handed an unsafe delete task.
+		return "removed"
 	default:
 		return "verified"
 	}

@@ -3,7 +3,19 @@ package control
 import (
 	"context"
 	"database/sql"
+
+	"mirror-server/internal/master/assignment"
 )
+
+// queueNodeInventoryCleanup makes stale files eligible for deletion without
+// waiting for the next complete inventory report. The master's accepted
+// inventory already identifies verified replicas outside the required set.
+func queueNodeInventoryCleanup(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
+	if _, err := markNonRequiredVerifiedInventoryRemoved(ctx, tx, nodeID, now); err != nil {
+		return 0, err
+	}
+	return assignment.GenerateNodeDeleteTasks(ctx, tx, nodeID, now)
+}
 
 func markNonRequiredVerifiedInventoryRemoved(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
 	result, err := tx.ExecContext(ctx, `INSERT INTO target_inventory
