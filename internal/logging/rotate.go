@@ -1,13 +1,17 @@
 package logging
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 )
+
+const logDateLayout = "2006-01-02"
 
 type dailyWriter struct {
 	mu        sync.Mutex
@@ -17,16 +21,20 @@ type dailyWriter struct {
 	location  *time.Location
 	date      string
 	file      *os.File
+	stop      chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func newDailyWriter(directory, component string, retention int, location *time.Location) (*dailyWriter, error) {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, fmt.Errorf("创建日志目录失败：%w", err)
 	}
-	w := &dailyWriter{directory: directory, component: component, retention: retention, location: location}
-	if err := w.cleanup(time.Now().In(location)); err != nil {
+	w := &dailyWriter{directory: directory, component: component, retention: retention, location: location, stop: make(chan struct{}), done: make(chan struct{})}
+	if err := w.maintain(time.Now().In(location)); err != nil {
 		return nil, err
 	}
+	go w.runMaintenanceLoop()
 	return w, nil
 }
 
@@ -34,7 +42,7 @@ func (w *dailyWriter) Write(data []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	now := time.Now().In(w.location)
-	date := now.Format("2006-01-02")
+	date := now.Format(logDateLayout)
 	if w.file == nil || date != w.date {
 		if err := w.rotate(date, now); err != nil {
 			return 0, err
@@ -44,12 +52,18 @@ func (w *dailyWriter) Write(data []byte) (int, error) {
 }
 
 func (w *dailyWriter) Close() error {
+	w.closeOnce.Do(func() {
+		close(w.stop)
+		<-w.done
+	})
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.file == nil {
 		return nil
 	}
-	return w.file.Close()
+	err := w.file.Close()
+	w.file = nil
+	return err
 }
 
 func (w *dailyWriter) rotate(date string, now time.Time) error {
@@ -62,7 +76,76 @@ func (w *dailyWriter) rotate(date string, now time.Time) error {
 		return fmt.Errorf("打开日志文件失败：%w", err)
 	}
 	w.file, w.date = file, date
+	return w.maintainLocked(now)
+}
+
+func (w *dailyWriter) runMaintenanceLoop() {
+	defer close(w.done)
+	for {
+		now := time.Now().In(w.location)
+		timer := time.NewTimer(nextDailyMaintenanceDelay(now))
+		select {
+		case <-timer.C:
+			_ = w.maintain(time.Now().In(w.location))
+		case <-w.stop:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return
+		}
+	}
+}
+
+func nextDailyMaintenanceDelay(now time.Time) time.Duration {
+	nextDay := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 1, 0, 0, now.Location())
+	return nextDay.Sub(now)
+}
+
+func (w *dailyWriter) maintain(now time.Time) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	date := now.Format(logDateLayout)
+	if w.file != nil && date != w.date {
+		_ = w.file.Close()
+		w.file = nil
+		w.date = ""
+	}
+	return w.maintainLocked(now)
+}
+
+func (w *dailyWriter) maintainLocked(now time.Time) error {
+	if err := w.compressClosedLogs(now); err != nil {
+		return err
+	}
 	return w.cleanup(now)
+}
+
+func (w *dailyWriter) compressClosedLogs(now time.Time) error {
+	entries, err := os.ReadDir(w.directory)
+	if err != nil {
+		return fmt.Errorf("读取日志目录失败：%w", err)
+	}
+	currentDate, err := time.ParseInLocation(logDateLayout, now.Format(logDateLayout), w.location)
+	if err != nil {
+		return fmt.Errorf("解析当前日志日期失败：%w", err)
+	}
+	for _, entry := range entries {
+		logFile, ok := w.parseLogFile(entry.Name())
+		if entry.IsDir() || !ok || logFile.compressed {
+			continue
+		}
+		if !logFile.date.Before(currentDate) {
+			continue
+		}
+		path := filepath.Join(w.directory, entry.Name())
+		if err := compressLogFile(path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *dailyWriter) cleanup(now time.Time) error {
@@ -71,19 +154,84 @@ func (w *dailyWriter) cleanup(now time.Time) error {
 		return fmt.Errorf("读取日志目录失败：%w", err)
 	}
 	cutoff := now.AddDate(0, 0, -w.retention)
-	prefix := w.component + "-"
 	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".log") {
+		logFile, ok := w.parseLogFile(entry.Name())
+		if entry.IsDir() || !ok {
 			continue
 		}
-		dateText := strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".log")
-		date, err := time.ParseInLocation("2006-01-02", dateText, w.location)
-		if err == nil && date.Before(cutoff) {
-			if err := os.Remove(filepath.Join(w.directory, name)); err != nil {
+		if logFile.date.Before(cutoff) {
+			if err := os.Remove(filepath.Join(w.directory, entry.Name())); err != nil {
 				return fmt.Errorf("清理过期日志失败：%w", err)
 			}
 		}
+	}
+	return nil
+}
+
+type parsedLogFile struct {
+	date       time.Time
+	compressed bool
+}
+
+func (w *dailyWriter) parseLogFile(name string) (parsedLogFile, bool) {
+	prefix := w.component + "-"
+	if !strings.HasPrefix(name, prefix) {
+		return parsedLogFile{}, false
+	}
+	compressed := false
+	dateText := strings.TrimPrefix(name, prefix)
+	if strings.HasSuffix(dateText, ".log.gz") {
+		compressed = true
+		dateText = strings.TrimSuffix(dateText, ".log.gz")
+	} else if strings.HasSuffix(dateText, ".log") {
+		dateText = strings.TrimSuffix(dateText, ".log")
+	} else {
+		return parsedLogFile{}, false
+	}
+	date, err := time.ParseInLocation(logDateLayout, dateText, w.location)
+	if err != nil {
+		return parsedLogFile{}, false
+	}
+	return parsedLogFile{date: date, compressed: compressed}, true
+}
+
+func compressLogFile(path string) error {
+	gzipPath := path + ".gz"
+	if _, err := os.Stat(gzipPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("检查压缩日志失败：%w", err)
+	}
+	tempPath := gzipPath + ".tmp"
+	input, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("打开待压缩日志失败：%w", err)
+	}
+	defer input.Close()
+	output, err := os.OpenFile(tempPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("创建压缩日志失败：%w", err)
+	}
+	gzipWriter := gzip.NewWriter(output)
+	_, copyErr := io.Copy(gzipWriter, input)
+	closeGzipErr := gzipWriter.Close()
+	closeOutputErr := output.Close()
+	if copyErr != nil || closeGzipErr != nil || closeOutputErr != nil {
+		_ = os.Remove(tempPath)
+		if copyErr != nil {
+			return fmt.Errorf("压缩日志失败：%w", copyErr)
+		}
+		if closeGzipErr != nil {
+			return fmt.Errorf("关闭压缩日志失败：%w", closeGzipErr)
+		}
+		return fmt.Errorf("写入压缩日志失败：%w", closeOutputErr)
+	}
+	if err := os.Rename(tempPath, gzipPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("保存压缩日志失败：%w", err)
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("删除原始日志失败：%w", err)
 	}
 	return nil
 }

@@ -34,9 +34,9 @@ logging:
   console_level: "info"
   # 文件日志等级，可选 debug、info、warn、error。
   file_level: "info"
-  # 日志文件目录；主节点按日期写入 master-YYYY-MM-DD.log。
+  # 日志文件目录；主节点按日期写入 master-YYYY-MM-DD.log，历史日志会自动压缩为 .log.gz。
   directory: "logs/master"
-  # 日志保留天数；早于该天数的主节点日志会在轮转时清理。
+  # 日志保留天数；早于该天数的主节点 .log 和 .log.gz 会在轮转时清理。
   retention_days: 30
 
 # 请求 ID 透传配置。

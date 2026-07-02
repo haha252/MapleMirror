@@ -69,9 +69,9 @@ logging:
   console_level: "info"
   # 文件日志等级，可选 debug、info、warn、error。
   file_level: "info"
-  # 日志文件目录；下载节点按日期写入 node-YYYY-MM-DD.log。
+  # 日志文件目录；下载节点按日期写入 node-YYYY-MM-DD.log，历史日志会自动压缩为 .log.gz。
   directory: "logs/node"
-  # 日志保留天数；早于该天数的下载节点日志会在轮转时清理。
+  # 日志保留天数；早于该天数的下载节点 .log 和 .log.gz 会在轮转时清理。
   retention_days: 30
 
 # 首次登记和重新登记配置。
