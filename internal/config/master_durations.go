@@ -5,6 +5,7 @@ func masterDurations(c Master) map[string]string {
 		"database.busy_timeout":                   c.Database.BusyTimeout,
 		"database.wal_checkpoint_interval":        c.Database.WALCheckpointInterval,
 		"scan.interval":                           c.Scan.Interval,
+		"scan.github_timeout":                     c.Scan.GitHubTimeout,
 		"altcha.challenge_ttl":                    c.ALTCHA.ChallengeTTL,
 		"api_pow.challenge_ttl":                   c.APIPoW.ChallengeTTL,
 		"download_token.first_connection_timeout": c.DownloadToken.FirstConnectionTimeout,

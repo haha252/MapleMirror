@@ -1,6 +1,7 @@
 package adminui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,12 +31,8 @@ func (s *Server) scanAPI(w http.ResponseWriter, r *http.Request) {
 			ProjectID string `json:"project_id"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		scanID, err := s.sync.Trigger(r.Context(), body.ProjectID, requestID(r))
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "创建扫描任务失败"})
-			return
-		}
-		writeJSON(w, http.StatusAccepted, map[string]any{"message": "Release 扫描任务已创建", "scan_id": scanID})
+		s.triggerScanAsync(r.Context(), body.ProjectID, requestID(r))
+		writeJSON(w, http.StatusAccepted, map[string]any{"message": "Release 扫描任务已创建"})
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
 	}
@@ -63,14 +60,16 @@ func (s *Server) projectActionAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "项目重置失败"})
 		return
 	}
-	scanID, err := s.sync.Trigger(r.Context(), projectID, requestID(r))
-	if err != nil {
-		_ = s.repo.Audit(r.Context(), "project.reset", "project", projectID, "failed", requestID(r), "项目数据已清空，重新扫描失败", admin)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "项目重置后重新扫描失败"})
-		return
-	}
-	_ = s.repo.Audit(r.Context(), "project.reset", "project", projectID, "success", requestID(r), "项目数据已重置并重新扫描", admin)
-	writeJSON(w, http.StatusOK, map[string]any{"message": "项目数据已重置并重新扫描", "scan_id": scanID})
+	s.triggerScanAsync(r.Context(), projectID, requestID(r))
+	_ = s.repo.Audit(r.Context(), "project.reset", "project", projectID, "success", requestID(r), "项目数据已重置并创建重新扫描任务", admin)
+	writeJSON(w, http.StatusOK, map[string]any{"message": "项目数据已重置并创建重新扫描任务"})
+}
+
+func (s *Server) triggerScanAsync(ctx context.Context, projectID, requestID string) {
+	scanCtx := context.WithoutCancel(ctx)
+	go func() {
+		_, _ = s.sync.Trigger(scanCtx, projectID, requestID)
+	}()
 }
 
 func (s *Server) projectEnabled(r *http.Request, projectID string) bool {

@@ -138,7 +138,9 @@ func (s Service) scheduleNextScan(ctx context.Context, projectID string, scanErr
 		}
 	}
 	next := time.Now().UTC().Add(delay).Format(time.RFC3339Nano)
-	if err := s.Scanner.Store.SetProjectNextScan(ctx, projectID, next); err != nil && s.Logger != nil {
+	stateCtx, cancel := scanStateContext(ctx)
+	defer cancel()
+	if err := s.Scanner.Store.SetProjectNextScan(stateCtx, projectID, next); err != nil && s.Logger != nil {
 		s.Logger.Warn(ctx, "更新项目下次扫描时间失败",
 			slog.String("project_id", projectID),
 			slog.String("next_scan_at", next),

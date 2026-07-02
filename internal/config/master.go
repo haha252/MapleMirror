@@ -44,8 +44,16 @@ type Archive struct {
 	Root    string `yaml:"root"`
 }
 type Scan struct {
-	Interval       string `yaml:"interval"`
-	GitHubTokenEnv string `yaml:"github_token_env"`
+	Interval       string      `yaml:"interval"`
+	GitHubTokenEnv string      `yaml:"github_token_env"`
+	GitHubTimeout  string      `yaml:"github_timeout"`
+	Socks5         Socks5Proxy `yaml:"socks5"`
+}
+type Socks5Proxy struct {
+	Enabled  bool   `yaml:"enabled"`
+	URL      string `yaml:"url"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 type ALTCHA struct {
 	Difficulty   int    `yaml:"difficulty"`
@@ -110,6 +118,7 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.Stats.Timezone, "Asia/Shanghai", "stats.timezone", warn)
 	applyArchiveDefaults(c, warn)
 	setString(&c.Scan.Interval, "15m", "scan.interval", warn)
+	setString(&c.Scan.GitHubTimeout, "2m", "scan.github_timeout", warn)
 	if c.ALTCHA.Difficulty == 0 {
 		c.ALTCHA.Difficulty = 22
 		warnDefault(warn, "altcha.difficulty", "22")
@@ -203,6 +212,9 @@ func validateMaster(c Master) error {
 		return fmt.Errorf("统计时区 stats.timezone 无效：%w", err)
 	}
 	if err := validateArchive(c.Archive); err != nil {
+		return err
+	}
+	if err := validateScanSocks5(c.Scan.Socks5); err != nil {
 		return err
 	}
 	if c.ALTCHA.Difficulty <= 0 {

@@ -29,7 +29,9 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 	if err != nil {
 		errText = err.Error()
 	}
-	_ = s.Store.FinishScan(ctx, scanID, summary, errText)
+	stateCtx, cancel := scanStateContext(ctx)
+	defer cancel()
+	_ = s.Store.FinishScan(stateCtx, scanID, summary, errText)
 	return summary, err
 }
 

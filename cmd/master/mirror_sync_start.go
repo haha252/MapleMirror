@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
-	"net/http"
 	"os"
 	"time"
 
@@ -21,12 +20,18 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader,
 	if cfg.Scan.GitHubTokenEnv != "" {
 		token = os.Getenv(cfg.Scan.GitHubTokenEnv)
 	}
+	githubClient, githubTimeout, err := newGitHubHTTPClient(cfg.Scan)
+	if err != nil {
+		logger.Error(context.Background(), "GitHub Release HTTP 客户端配置无效", slog.String("error", err.Error()))
+		githubTimeout = mirrorsync.DefaultGitHubClientTimeout
+	}
 	store := mirrorsync.Store{DB: db, Runtime: runtime}
 	service := mirrorsync.Service{
 		Scanner: mirrorsync.Scanner{
 			Store: store, GitHub: mirrorsync.HTTPGitHubClient{
-				Client: &http.Client{Timeout: mirrorsync.DefaultGitHubClientTimeout},
-				Token:  token,
+				Client:  githubClient,
+				Token:   token,
+				Timeout: githubTimeout,
 			}, Logger: logger,
 		},
 		Projects: projects, Interval: interval, Logger: logger,

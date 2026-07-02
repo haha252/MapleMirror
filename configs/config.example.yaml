@@ -69,6 +69,18 @@ scan:
   interval: "15m"
   # 仅填写环境变量名称，不得填写 GitHub 凭据内容。
   github_token_env: "MIRROR_GITHUB_TOKEN"
+  # GitHub Release API 单次请求超时。
+  github_timeout: "2m"
+  # 主节点扫描 GitHub Release API 使用的 SOCKS5 代理；只影响入库扫描，不影响下载节点同步资产。
+  socks5:
+    # 是否启用 GitHub Release 扫描出站 SOCKS5 代理。
+    enabled: false
+    # 可填 socks5://127.0.0.1:1080 或 socks5h://127.0.0.1:1080；socks5h 由代理端解析域名。
+    url: "socks5h://127.0.0.1:1080"
+    # SOCKS5 用户名；无认证时留空。
+    username: ""
+    # SOCKS5 密码；无认证时留空。
+    password: ""
 
 # 网页下载验证挑战配置。
 altcha:

@@ -25,7 +25,8 @@ func TestLoadMasterExample(t *testing.T) {
 	}
 	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "15s" ||
 		c.Node.HeartbeatTimeout != "90s" || c.Node.HeartbeatOfflineGrace != "5m" ||
-		c.Node.TLS.CAKeyFile == "" || c.Admin.Web.UsersFile == "" {
+		c.Node.TLS.CAKeyFile == "" || c.Admin.Web.UsersFile == "" ||
+		c.Scan.GitHubTimeout != "2m" {
 		t.Fatal("控制面配置默认值缺失")
 	}
 }
