@@ -140,7 +140,7 @@ func insertDeleteTask(ctx context.Context, tx *sql.Tx, nodeID, assetID, now stri
 	var exists int
 	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND asset_id = ? AND task_type = 'asset_delete'
-		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'succeeded')`,
+		AND state IN ('pending', 'sent', 'running', 'retry_wait')`,
 		nodeID, assetID).Scan(&exists)
 	if err != nil || exists > 0 {
 		return false, err
@@ -148,7 +148,8 @@ func insertDeleteTask(ctx context.Context, tx *sql.Tx, nodeID, assetID, now stri
 	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
 		error_message = NULL, attempts = 0, retry_after = NULL, completed_at = NULL,
 		lease_expires_at = NULL, updated_at = ? WHERE node_id = ? AND asset_id = ?
-		AND task_type = 'asset_delete' AND state IN ('failed', 'obsolete', 'cancelled')`,
+		AND task_type = 'asset_delete'
+		AND state IN ('failed', 'obsolete', 'cancelled', 'succeeded')`,
 		now, nodeID, assetID)
 	if err != nil {
 		return false, err

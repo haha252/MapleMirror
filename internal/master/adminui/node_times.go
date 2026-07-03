@@ -16,6 +16,7 @@ func (s *Server) nodeSummaries(ctx context.Context, items []mastercontrol.NodeSu
 			"routing_ready": item.RoutingReady, "target_bandwidth_bps": item.TargetBandwidthBPS,
 			"download_priority": item.DownloadPriority, "max_mirror_projects": item.MaxMirrorProjects,
 			"project_assignment_mode": item.AssignmentMode,
+			"software_version":        item.SoftwareVersion,
 			"last_heartbeat_at":       s.displayTime(item.LastHeartbeat),
 		}
 		if pressure, err := s.repo.LatestPressureReport(ctx, item.NodeID); err == nil {

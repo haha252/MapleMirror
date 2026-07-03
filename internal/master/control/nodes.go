@@ -19,6 +19,7 @@ type NodeSummary struct {
 	DownloadPriority   int    `json:"download_priority"`
 	MaxMirrorProjects  int    `json:"max_mirror_projects"`
 	AssignmentMode     string `json:"project_assignment_mode"`
+	SoftwareVersion    string `json:"software_version,omitempty"`
 	LastHeartbeat      string `json:"last_heartbeat_at,omitempty"`
 }
 
@@ -42,6 +43,7 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 		}
 		item.ConnectionState = item.State
 		item.RoutingReady = ready == 1
+		item.SoftwareVersion = r.runtime().SoftwareVersion(item.NodeID)
 		items = append(items, item)
 	}
 	return items, rows.Err()

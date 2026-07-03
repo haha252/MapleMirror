@@ -21,6 +21,7 @@ type controlSupervisor struct {
 	db        *sql.DB
 	logger    *logging.Logger
 	address   string
+	version   string
 	executor  syncer.Executor
 	limiter   *nodecontrol.TaskLimiter
 	bandwidth nodecontrol.BandwidthSampler
@@ -96,7 +97,8 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 		NodeID: nodeID, Address: s.address, PublicDownloadBaseURL: s.cfg.Server.PublicDownloadBaseURL,
 		TargetBandwidthBPS: s.cfg.Bandwidth.TargetBPS,
 		MaxMirrorProjects:  s.cfg.Sync.MaxMirrorProjects, TLSConfig: tlsCfg,
-		Storage: s.cfg.Storage.Directory, HeartbeatInterval: interval,
+		SoftwareVersion: s.version,
+		Storage:         s.cfg.Storage.Directory, HeartbeatInterval: interval,
 		Logger: s.logger, Executor: s.executor, DB: s.db, TaskLimiter: s.limiter,
 		TaskTimeout: syncer.DefaultHTTPClientTimeout,
 		Bandwidth:   s.bandwidth, ProbeStore: s.probes,

@@ -48,6 +48,30 @@ func TestClientRunUsesServerInterval(t *testing.T) {
 	}
 }
 
+func TestHelloReportsConfiguredSoftwareVersion(t *testing.T) {
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+	done := make(chan error, 1)
+	go func() {
+		done <- (Client{NodeID: "node-1", SoftwareVersion: "dev-65b3c04"}).hello(client, "req-1")
+	}()
+	msg, err := protocol.ReadFrame(server, protocol.MaxFrameBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hello protocol.Hello
+	if err := json.Unmarshal(msg.Payload, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if hello.SoftwareVersion != "dev-65b3c04" {
+		t.Fatalf("software version=%q", hello.SoftwareVersion)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestClientRunOnceReturnsProtocolError(t *testing.T) {
 	dialer := newPipeDialer(t, func(conn net.Conn) {
 		defer conn.Close()

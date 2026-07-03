@@ -87,6 +87,38 @@ func TestReadHelloRejectsUnexpectedControlMessage(t *testing.T) {
 	}
 }
 
+func TestReadHelloRecordsSoftwareVersion(t *testing.T) {
+	repo, closeDB := testRepo(t)
+	defer closeDB()
+	session := seedNodeAndSession(t, repo)
+	server := ControlServer{Repo: repo, HeartbeatTimeout: time.Second}
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+	done := make(chan error, 1)
+	go func() {
+		done <- server.readHello(serverConn, session, "req-master")
+		_ = serverConn.Close()
+	}()
+	body, _ := json.Marshal(protocol.Hello{SoftwareVersion: "dev-65b3c04"})
+	if err := protocol.WriteFrame(clientConn, protocol.Envelope{
+		ProtocolVersion: protocol.Version, MessageID: "hello-1",
+		MessageType: protocol.TypeHello, SentAt: time.Now().UTC(),
+		NodeID: session.NodeID, RequestID: "req-node", Payload: body,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := protocol.ReadFrame(clientConn, protocol.MaxFrameBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	items, err := repo.ListNodes(t.Context())
+	if err != nil || len(items) != 1 || items[0].SoftwareVersion != "dev-65b3c04" {
+		t.Fatalf("node version not exposed items=%+v err=%v", items, err)
+	}
+}
+
 func TestControlReadCloseReasonClassifiesTimeout(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 	defer clientConn.Close()

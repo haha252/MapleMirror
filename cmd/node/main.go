@@ -74,6 +74,20 @@ func main() {
 			slog.Int("removed_entries", removed),
 			slog.String("temp_directory", tempDir))
 	}
+	cleanup, err := syncer.CleanEmptyAssetDirectories(cfg.Storage.Directory)
+	if err != nil {
+		logger.Warn(context.Background(), "下载节点历史空资产目录清理未完成",
+			slog.String("asset_directory", cfg.Storage.Directory),
+			slog.String("error", err.Error()))
+	} else {
+		logger.Info(context.Background(), "下载节点历史空资产目录清理已完成",
+			slog.String("asset_directory", cfg.Storage.Directory),
+			slog.Int("projects_scanned", cleanup.ProjectsScanned),
+			slog.Int("removed_version_directories", cleanup.VersionDirectoriesRemoved),
+			slog.Int("removed_project_directories", cleanup.ProjectDirectoriesRemoved),
+			slog.Int("skipped_non_empty_directories", cleanup.NonEmptyDirectoriesSkipped),
+			slog.Int("skipped_symlinks", cleanup.SymlinksSkipped))
+	}
 	if err := interactiveEnrollIfNeeded(*path, &cfg, database); err != nil {
 		logger.Error(context.Background(), "下载节点首次交互登记失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -190,7 +204,7 @@ func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger,
 		return
 	}
 	supervisor := controlSupervisor{
-		cfg: cfg, db: db, logger: logger, address: address.Host,
+		cfg: cfg, db: db, logger: logger, address: address.Host, version: version,
 		executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
 			TempDir: cfg.Storage.TempDirectory, Logger: logger,
 			Client:                    &http.Client{Timeout: syncer.DefaultHTTPClientTimeout},

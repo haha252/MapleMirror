@@ -25,6 +25,7 @@ type runtimeNode struct {
 	Heartbeat              runtimeHeartbeat
 	Inventory              runtimeInventoryReport
 	Pressure               runtimePressureReport
+	SoftwareVersion        string
 	SyncTaskSlotsAvailable int
 	SyncTaskSlotsKnown     bool
 }

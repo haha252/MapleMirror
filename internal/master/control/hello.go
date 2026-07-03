@@ -32,6 +32,13 @@ func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) e
 			"CONTROL_PROTOCOL_ERROR", err.Error())
 		return err
 	}
+	var hello protocol.Hello
+	if err := json.Unmarshal(msg.Payload, &hello); err != nil {
+		s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
+			"CONTROL_PROTOCOL_ERROR", "hello 载荷无效: "+err.Error())
+		return err
+	}
+	s.Repo.runtime().SetSoftwareVersion(session.NodeID, normalizedSoftwareVersion(hello.SoftwareVersion))
 	ready := s.Repo.nodeRoutingReady(context.Background(), session.NodeID)
 	body, _ := json.Marshal(protocol.Welcome{
 		SessionID: session.ID, AcceptedSequence: session.AcceptedSequence,

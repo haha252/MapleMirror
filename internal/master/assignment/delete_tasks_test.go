@@ -82,6 +82,34 @@ func TestReconcileCancelsDeleteTaskWhenTargetRequiredAgain(t *testing.T) {
 	assertTaskCount(t, db, "asset_delete", "obsolete", 1)
 }
 
+func TestGenerateDeleteTaskRequeuesHistoricalSuccessForVerifiedAsset(t *testing.T) {
+	db := testDB(t)
+	seedAssignmentNode(t, db, 1)
+	seedProject(t, db, "p1", "项目一", 10)
+	reconcile(t, db)
+	mustExec(t, db, `INSERT INTO node_inventory
+		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
+		VALUES ('node-1', 'asset-p1', 'sha256', 64, 'again', 'verified')`)
+	mustExec(t, db, `UPDATE target_inventory SET desired_state = 'remove'
+		WHERE node_id = 'node-1' AND asset_id = 'asset-p1'`)
+	mustExec(t, db, `INSERT INTO node_tasks
+		(id, node_id, task_type, asset_id, state, request_id, created_at, updated_at, completed_at)
+		VALUES ('delete-old', 'node-1', 'asset_delete', 'asset-p1', 'succeeded',
+		'req-old', 'old', 'old', 'old')`)
+
+	generateNodeTasks(t, db, "node-1", "now")
+
+	assertTaskCount(t, db, "asset_delete", "pending", 1)
+	var completedAt sql.NullString
+	if err := db.QueryRow(`SELECT completed_at FROM node_tasks
+		WHERE id = 'delete-old'`).Scan(&completedAt); err != nil {
+		t.Fatal(err)
+	}
+	if completedAt.Valid {
+		t.Fatalf("requeued delete task retained completed_at=%q", completedAt.String)
+	}
+}
+
 func generateNodeTasks(t *testing.T, db *sql.DB, nodeID, now string) {
 	t.Helper()
 	tx, err := db.Begin()

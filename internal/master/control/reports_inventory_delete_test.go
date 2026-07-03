@@ -65,7 +65,7 @@ func TestCompleteInventoryReportCleansHistoricalVerifiedResidue(t *testing.T) {
 		"node_id = 'node-1' AND asset_id = 'asset-new' AND task_type = 'asset_delete' AND state = 'pending'", 1)
 }
 
-func TestCompleteInventoryReportDoesNotDuplicateSucceededDeleteTask(t *testing.T) {
+func TestCompleteInventoryReportRequeuesSucceededDeleteWhenAssetIsVerifiedAgain(t *testing.T) {
 	repo, closeDB := testRepo(t)
 	defer closeDB()
 	session := seedNodeAndSession(t, repo)
@@ -89,9 +89,9 @@ func TestCompleteInventoryReportDoesNotDuplicateSucceededDeleteTask(t *testing.T
 	assertTableCount(t, repo, "node_tasks",
 		"node_id = 'node-1' AND asset_id = 'asset-new' AND task_type = 'asset_delete'", 1)
 	assertTableCount(t, repo, "node_tasks",
-		"node_id = 'node-1' AND asset_id = 'asset-new' AND task_type = 'asset_delete' AND state = 'pending'", 0)
-	if result.SyncTasksChanged {
-		t.Fatal("existing succeeded delete task should not count as new task change")
+		"node_id = 'node-1' AND asset_id = 'asset-new' AND task_type = 'asset_delete' AND state = 'pending'", 1)
+	if !result.SyncTasksChanged {
+		t.Fatal("verified asset must requeue a historical succeeded delete task")
 	}
 }
 

@@ -28,6 +28,7 @@ type Client struct {
 	Storage               string
 	TargetBandwidthBPS    int64
 	MaxMirrorProjects     int
+	SoftwareVersion       string
 	TLSConfig             *tls.Config
 	HeartbeatInterval     time.Duration
 	Logger                *logging.Logger
@@ -133,10 +134,13 @@ func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
 }
 
 func (c Client) hello(conn net.Conn, reqID string) error {
-	body, _ := json.Marshal(map[string]any{
-		"last_ack_sequence": 0,
-		"capabilities":      []string{"heartbeat.v1", "inventory.report.v1", "pressure.report.v1"},
-		"software_version":  "dev",
+	softwareVersion := c.SoftwareVersion
+	if softwareVersion == "" {
+		softwareVersion = "dev"
+	}
+	body, _ := json.Marshal(protocol.Hello{
+		Capabilities:    []string{"heartbeat.v1", "inventory.report.v1", "pressure.report.v1"},
+		SoftwareVersion: softwareVersion,
 	})
 	return c.writeFrame(conn, protocol.Envelope{
 		ProtocolVersion: protocol.Version, MessageID: reqID,

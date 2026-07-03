@@ -35,6 +35,12 @@ type ProtocolError struct {
 	Message string `json:"message"`
 }
 
+type Hello struct {
+	LastAckSequence uint64   `json:"last_ack_sequence"`
+	Capabilities    []string `json:"capabilities"`
+	SoftwareVersion string   `json:"software_version"`
+}
+
 type Welcome struct {
 	SessionID               string `json:"session_id"`
 	AcceptedSequence        uint64 `json:"accepted_sequence"`
