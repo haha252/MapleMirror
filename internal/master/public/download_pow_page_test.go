@@ -59,6 +59,8 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`<p class="muted">下载验证</p>`,
 		`a.zip`,
 		`返回首页`,
+		`返回来源页`,
+		`download-pow__back`,
 	} {
 		if strings.Contains(body, unwanted) {
 			t.Fatalf("download verification page should not include %q: %s", unwanted, body)
@@ -66,7 +68,26 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 	}
 }
 
-func TestDownloadPowPageFromOtherPageIncludesForwardAndBackActions(t *testing.T) {
+func TestDownloadPowPageFromSiteHomeRefererUsesHomeAction(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	srv := Server{Store: Store{DB: db}}
+
+	req := httptest.NewRequest(http.MethodGet, "/download/asset-1", nil)
+	req.Header.Set("Referer", "http://example.com/")
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
+	}
+	if !strings.Contains(body, `返回枫源镜像`) || strings.Contains(body, `download-pow__back`) {
+		t.Fatalf("site-home referer should render only the home action: %s", body)
+	}
+}
+
+func TestDownloadPowPageFromOtherPageIncludesForwardAndSmartReturnActions(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	srv := Server{Store: Store{DB: db}}
@@ -81,7 +102,7 @@ func TestDownloadPowPageFromOtherPageIncludesForwardAndBackActions(t *testing.T)
 	}
 	for _, want := range []string{
 		`前往枫源镜像`,
-		`返回上一页`,
+		`返回来源页`,
 		`download-pow__back`,
 		`button-link button-link--primary download-pow__back`,
 	} {

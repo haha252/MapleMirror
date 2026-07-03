@@ -4,7 +4,7 @@
   const meta = document.getElementById("download-pow-meta");
   const statusBox = document.getElementById("download-pow-status");
   const retryButton = document.getElementById("download-pow-retry");
-  const backButton = document.querySelector(".download-pow__back");
+  const returnButton = document.querySelector(".download-pow__back");
   if (!source || !title || !meta || !statusBox || !retryButton) return;
 
   const asset = JSON.parse(source.textContent || "{}");
@@ -55,6 +55,51 @@
     const target = new URL(data.download_url, window.location.href);
     target.searchParams.set("token", data.download_token);
     return target.toString();
+  }
+
+  function safeReferrerURL() {
+    const raw = String(document.referrer || "").trim();
+    if (!raw) return "";
+    try {
+      const target = new URL(raw);
+      if (target.protocol !== "http:" && target.protocol !== "https:") return "";
+      if (target.href === window.location.href) return "";
+      return target.href;
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function fallbackTo(referrerURL) {
+    window.location.assign(referrerURL || "/");
+  }
+
+  function likelyOpenedInNewTab(referrerURL) {
+    return Boolean(window.opener) || Boolean(referrerURL && window.history.length <= 1);
+  }
+
+  function closeWithFallback(referrerURL) {
+    const timer = window.setTimeout(function () {
+      fallbackTo(referrerURL);
+    }, 300);
+    window.addEventListener("pagehide", function () {
+      window.clearTimeout(timer);
+    }, {once: true});
+    window.close();
+  }
+
+  function backWithFallback(referrerURL) {
+    if (window.history.length <= 1) {
+      fallbackTo(referrerURL);
+      return;
+    }
+    const timer = window.setTimeout(function () {
+      fallbackTo(referrerURL);
+    }, 700);
+    window.addEventListener("pagehide", function () {
+      window.clearTimeout(timer);
+    }, {once: true});
+    window.history.back();
   }
 
   async function start() {
@@ -110,10 +155,13 @@
     bytesText(asset.size_bytes)
   ].filter(Boolean).join(" / "));
   retryButton.addEventListener("click", start);
-  if (backButton) {
-    backButton.addEventListener("click", function () {
-      if (window.history.length > 1) window.history.back();
-      else window.location.href = "/";
+  if (returnButton) {
+    const referrerURL = safeReferrerURL();
+    const openedInNewTab = likelyOpenedInNewTab(referrerURL);
+    returnButton.textContent = openedInNewTab ? "关闭并返回来源页" : "返回上一页";
+    returnButton.addEventListener("click", function () {
+      if (openedInNewTab) closeWithFallback(referrerURL);
+      else backWithFallback(referrerURL);
     });
   }
   start();
