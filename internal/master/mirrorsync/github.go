@@ -17,10 +17,6 @@ type GitHubClient interface {
 	ListReleases(ctx context.Context, repo string) ([]GitHubRelease, error)
 }
 
-type GitHubReleaseVerifier interface {
-	ReleaseExists(ctx context.Context, repo string, releaseID int64) (bool, error)
-}
-
 type HTTPGitHubClient struct {
 	Client  *http.Client
 	Token   string

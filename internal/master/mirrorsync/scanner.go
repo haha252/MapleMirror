@@ -72,16 +72,16 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 				slog.Int("release_count", len(releases)))
 		}
 		selected := selectReleases(releases, project.IncludePrerelease, project.RetainVersions)
-		previous, err := s.Store.ReleaseRegression(ctx, project.ID, selected)
+		missing, err := s.Store.MissingSelectedReleases(ctx, project.ID, selected, project.RetainVersions)
 		if err != nil {
 			return err
 		}
-		if previous != nil {
-			err = s.confirmReleaseRegression(ctx, project, *previous)
+		if len(missing) > 0 {
+			err = fmt.Errorf("新快照缺少仍应保留的已知 Release %q，判定为不完整快照", missing[0].Version)
 		}
 		if err != nil {
 			if s.Logger != nil {
-				s.Logger.Warn(ctx, "拒绝回退到更旧的 Release 快照",
+				s.Logger.Warn(ctx, "拒绝不完整的 Release 快照",
 					slog.String("request_id", summary.RequestID),
 					slog.String("project_id", project.ID),
 					slog.String("error", err.Error()))
@@ -103,27 +103,6 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 		summary.SelectedReleases += projectSummary.SelectedReleases
 		summary.AcceptedAssets += projectSummary.AcceptedAssets
 		summary.RejectedAssets += projectSummary.RejectedAssets
-	}
-	return nil
-}
-
-func (s Scanner) confirmReleaseRegression(ctx context.Context, project config.Project, previous ResourceVersion) error {
-	verifier, ok := s.GitHub.(GitHubReleaseVerifier)
-	if !ok {
-		return fmt.Errorf("新快照早于已选 Release %q，且当前来源无法确认该 Release 是否已删除", previous.Version)
-	}
-	exists, err := verifier.ReleaseExists(ctx, project.Repository, previous.NumericID)
-	if err != nil {
-		return fmt.Errorf("新快照早于已选 Release %q，二次确认失败：%w", previous.Version, err)
-	}
-	if exists {
-		return fmt.Errorf("新快照早于仍存在的已选 Release %q，判定为陈旧快照", previous.Version)
-	}
-	if s.Logger != nil {
-		s.Logger.Info(ctx, "GitHub 已删除之前选中的 Release，允许版本回退",
-			slog.String("project_id", project.ID),
-			slog.String("release", previous.Version),
-			slog.Int64("github_release_id", previous.NumericID))
 	}
 	return nil
 }
