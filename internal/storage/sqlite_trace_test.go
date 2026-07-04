@@ -2,17 +2,83 @@ package storage
 
 import (
 	"context"
+	"database/sql/driver"
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"mirror-server/internal/config"
 )
 
+type lifecycleConn struct {
+	valid      bool
+	resetCalls int
+	resetErr   error
+}
+
+func (*lifecycleConn) Prepare(string) (driver.Stmt, error) { return nil, driver.ErrSkip }
+func (*lifecycleConn) Close() error                        { return nil }
+func (*lifecycleConn) Begin() (driver.Tx, error)           { return nil, driver.ErrSkip }
+func (c *lifecycleConn) IsValid() bool                     { return c.valid }
+func (c *lifecycleConn) ResetSession(context.Context) error {
+	c.resetCalls++
+	return c.resetErr
+}
+
 type recordedSQLLog struct {
 	message string
 	attrs   map[string]string
+}
+
+func TestSQLDebugConnectionRecoversAfterCanceledQuery(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trace-cancel.db")
+	db, err := OpenMaster(config.Database{Path: path, BusyTimeout: "5s"},
+		WithSQLDebugLogger(func(context.Context, string, ...slog.Attr) {}))
+	if err != nil {
+		t.Fatalf("OpenMaster failed: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	var sum int64
+	err = db.QueryRowContext(ctx, `
+		WITH RECURSIVE numbers(value) AS (
+			VALUES(0)
+			UNION ALL
+			SELECT value + 1 FROM numbers WHERE value < 100000000
+		)
+		SELECT sum(value) FROM numbers
+	`).Scan(&sum)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("long query error = %v, want context deadline exceeded", err)
+	}
+
+	if err := db.QueryRow(`SELECT 1`).Scan(&sum); err != nil {
+		t.Fatalf("query after canceled query failed: %v", err)
+	}
+	if sum != 1 {
+		t.Fatalf("query after canceled query returned %d, want 1", sum)
+	}
+}
+
+func TestTimedConnForwardsConnectionLifecycle(t *testing.T) {
+	wantErr := errors.New("reset failed")
+	inner := &lifecycleConn{resetErr: wantErr}
+	conn := &timedConn{inner: inner}
+
+	if conn.IsValid() {
+		t.Fatal("IsValid returned true for invalid inner connection")
+	}
+	if err := conn.ResetSession(context.Background()); !errors.Is(err, wantErr) {
+		t.Fatalf("ResetSession error = %v, want %v", err, wantErr)
+	}
+	if inner.resetCalls != 1 {
+		t.Fatalf("ResetSession calls = %d, want 1", inner.resetCalls)
+	}
 }
 
 type sqlLogRecorder struct {

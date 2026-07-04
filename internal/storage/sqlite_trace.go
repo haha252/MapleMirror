@@ -43,6 +43,11 @@ type timedConn struct {
 	logger versionLogFunc
 }
 
+var (
+	_ driver.SessionResetter = (*timedConn)(nil)
+	_ driver.Validator       = (*timedConn)(nil)
+)
+
 func (c *timedConn) Prepare(query string) (driver.Stmt, error) {
 	started := time.Now()
 	stmt, err := c.inner.Prepare(query)
@@ -55,6 +60,25 @@ func (c *timedConn) Prepare(query string) (driver.Stmt, error) {
 
 func (c *timedConn) Close() error {
 	return c.inner.Close()
+}
+
+// ResetSession and IsValid preserve the connection lifecycle hooks exposed by
+// the wrapped driver. In particular, modernc.org/sqlite uses IsValid to make
+// database/sql discard a connection left interrupted by context cancellation.
+func (c *timedConn) ResetSession(ctx context.Context) error {
+	resetter, ok := c.inner.(driver.SessionResetter)
+	if !ok {
+		return nil
+	}
+	return resetter.ResetSession(ctx)
+}
+
+func (c *timedConn) IsValid() bool {
+	validator, ok := c.inner.(driver.Validator)
+	if !ok {
+		return true
+	}
+	return validator.IsValid()
 }
 
 func (c *timedConn) Begin() (driver.Tx, error) {
