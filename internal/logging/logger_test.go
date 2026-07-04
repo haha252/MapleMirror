@@ -52,6 +52,7 @@ func TestLoggerRemovesExpiredDailyFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitForMissingPath(t, old)
 	_ = logger.Close()
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Fatal("过期日志未清理")

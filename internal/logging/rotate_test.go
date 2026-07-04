@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -21,6 +22,7 @@ func TestDailyWriterCompressesPreviousLogsOnStartup(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = writer.Close() })
+	waitForPath(t, oldPath+".gz")
 	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
 		t.Fatalf("原始日志应被删除，stat err = %v", err)
 	}
@@ -88,6 +90,7 @@ func TestDailyWriterRemovesExpiredCompressedLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = writer.Close() })
+	waitForMissingPath(t, oldPath)
 	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
 		t.Fatalf("过期 gzip 日志应被清理，stat err = %v", err)
 	}
@@ -126,6 +129,54 @@ func TestDailyWriterMaintenanceClosesAndCompressesStaleOpenLog(t *testing.T) {
 	got := readGzipFile(t, oldPath+".gz")
 	if string(got) != "跨日之前的日志\n" {
 		t.Fatalf("压缩日志内容 = %q", got)
+	}
+}
+
+func TestDailyWriterCompressionDoesNotBlockWrites(t *testing.T) {
+	dir := t.TempDir()
+	location := time.FixedZone("测试时区", 8*60*60)
+	oldPath := filepath.Join(dir, "master-2026-07-02.log")
+	if err := os.WriteFile(oldPath, []byte("旧日志"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	compressionStarted := make(chan struct{})
+	releaseCompression := make(chan struct{})
+	var once sync.Once
+	writer := &dailyWriter{
+		directory: dir,
+		component: "master",
+		retention: 30,
+		location:  location,
+		compress: func(string) error {
+			once.Do(func() { close(compressionStarted) })
+			<-releaseCompression
+			return nil
+		},
+	}
+	now := time.Date(2026, 7, 3, 0, 1, 0, 0, location)
+	maintenanceDone := make(chan error, 1)
+	go func() { maintenanceDone <- writer.maintain(now) }()
+	<-compressionStarted
+
+	writeDone := make(chan error, 1)
+	go func() {
+		_, err := writer.Write([]byte("新日志\n"))
+		writeDone <- err
+	}()
+	select {
+	case err := <-writeDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("压缩历史日志时不应阻塞当日日志写入")
+	}
+	close(releaseCompression)
+	if err := <-maintenanceDone; err != nil {
+		t.Fatal(err)
+	}
+	if writer.file != nil {
+		_ = writer.file.Close()
 	}
 }
 
@@ -171,4 +222,32 @@ func readGzipFile(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+func waitForPath(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("等待文件 %s 超时", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func waitForMissingPath(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("等待文件 %s 删除超时", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

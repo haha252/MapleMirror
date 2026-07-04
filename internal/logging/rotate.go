@@ -14,41 +14,57 @@ import (
 const logDateLayout = "2006-01-02"
 
 type dailyWriter struct {
-	mu        sync.Mutex
-	directory string
-	component string
-	retention int
-	location  *time.Location
-	date      string
-	file      *os.File
-	stop      chan struct{}
-	done      chan struct{}
-	closeOnce sync.Once
+	mu              sync.Mutex
+	directory       string
+	component       string
+	retention       int
+	location        *time.Location
+	date            string
+	file            *os.File
+	maintenanceWake chan struct{}
+	stop            chan struct{}
+	done            chan struct{}
+	closeOnce       sync.Once
+	compress        func(string) error
 }
 
 func newDailyWriter(directory, component string, retention int, location *time.Location) (*dailyWriter, error) {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, fmt.Errorf("创建日志目录失败：%w", err)
 	}
-	w := &dailyWriter{directory: directory, component: component, retention: retention, location: location, stop: make(chan struct{}), done: make(chan struct{})}
-	if err := w.maintain(time.Now().In(location)); err != nil {
-		return nil, err
+	w := &dailyWriter{
+		directory:       directory,
+		component:       component,
+		retention:       retention,
+		location:        location,
+		maintenanceWake: make(chan struct{}, 1),
+		stop:            make(chan struct{}),
+		done:            make(chan struct{}),
+		compress:        compressLogFile,
 	}
 	go w.runMaintenanceLoop()
+	w.requestMaintenance()
 	return w, nil
 }
 
 func (w *dailyWriter) Write(data []byte) (int, error) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	now := time.Now().In(w.location)
 	date := now.Format(logDateLayout)
+	rotated := false
 	if w.file == nil || date != w.date {
-		if err := w.rotate(date, now); err != nil {
+		if err := w.rotate(date); err != nil {
+			w.mu.Unlock()
 			return 0, err
 		}
+		rotated = true
 	}
-	return w.file.Write(data)
+	n, err := w.file.Write(data)
+	w.mu.Unlock()
+	if rotated {
+		w.requestMaintenance()
+	}
+	return n, err
 }
 
 func (w *dailyWriter) Close() error {
@@ -66,7 +82,7 @@ func (w *dailyWriter) Close() error {
 	return err
 }
 
-func (w *dailyWriter) rotate(date string, now time.Time) error {
+func (w *dailyWriter) rotate(date string) error {
 	if w.file != nil {
 		_ = w.file.Close()
 	}
@@ -76,7 +92,7 @@ func (w *dailyWriter) rotate(date string, now time.Time) error {
 		return fmt.Errorf("打开日志文件失败：%w", err)
 	}
 	w.file, w.date = file, date
-	return w.maintainLocked(now)
+	return nil
 }
 
 func (w *dailyWriter) runMaintenanceLoop() {
@@ -86,6 +102,14 @@ func (w *dailyWriter) runMaintenanceLoop() {
 		timer := time.NewTimer(nextDailyMaintenanceDelay(now))
 		select {
 		case <-timer.C:
+			_ = w.maintain(time.Now().In(w.location))
+		case <-w.maintenanceWake:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			_ = w.maintain(time.Now().In(w.location))
 		case <-w.stop:
 			if !timer.Stop() {
@@ -99,6 +123,13 @@ func (w *dailyWriter) runMaintenanceLoop() {
 	}
 }
 
+func (w *dailyWriter) requestMaintenance() {
+	select {
+	case w.maintenanceWake <- struct{}{}:
+	default:
+	}
+}
+
 func nextDailyMaintenanceDelay(now time.Time) time.Duration {
 	nextDay := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 1, 0, 0, now.Location())
 	return nextDay.Sub(now)
@@ -106,17 +137,13 @@ func nextDailyMaintenanceDelay(now time.Time) time.Duration {
 
 func (w *dailyWriter) maintain(now time.Time) error {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	date := now.Format(logDateLayout)
 	if w.file != nil && date != w.date {
 		_ = w.file.Close()
 		w.file = nil
 		w.date = ""
 	}
-	return w.maintainLocked(now)
-}
-
-func (w *dailyWriter) maintainLocked(now time.Time) error {
+	w.mu.Unlock()
 	if err := w.compressClosedLogs(now); err != nil {
 		return err
 	}
@@ -141,7 +168,11 @@ func (w *dailyWriter) compressClosedLogs(now time.Time) error {
 			continue
 		}
 		path := filepath.Join(w.directory, entry.Name())
-		if err := compressLogFile(path); err != nil {
+		compress := w.compress
+		if compress == nil {
+			compress = compressLogFile
+		}
+		if err := compress(path); err != nil {
 			return err
 		}
 	}
