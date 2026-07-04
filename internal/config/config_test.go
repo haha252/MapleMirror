@@ -23,11 +23,28 @@ func TestLoadMasterExample(t *testing.T) {
 	if c.ALTCHA.Difficulty != 22 {
 		t.Fatal("网页验证安全合同被修改")
 	}
+	if c.Logging.MaxFileSizeMB != DefaultLogMaxFileSizeMB {
+		t.Fatalf("日志文件大小上限 = %d MiB，want %d MiB",
+			c.Logging.MaxFileSizeMB, DefaultLogMaxFileSizeMB)
+	}
 	if c.Server.EnrollmentListen == "" || c.Node.HeartbeatInterval != "15s" ||
 		c.Node.HeartbeatTimeout != "90s" || c.Node.HeartbeatOfflineGrace != "5m" ||
 		c.Node.TLS.CAKeyFile == "" || c.Admin.Web.UsersFile == "" ||
 		c.Scan.GitHubTimeout != "2m" {
 		t.Fatal("控制面配置默认值缺失")
+	}
+}
+
+func TestLoggingRejectsInvalidMaxFileSize(t *testing.T) {
+	cfg := Logging{
+		ConsoleLevel:  "info",
+		FileLevel:     "info",
+		Directory:     "logs",
+		RetentionDays: 30,
+		MaxFileSizeMB: -1,
+	}
+	if err := validateLogging(cfg); err == nil || !strings.Contains(err.Error(), "logging.max_file_size_mb") {
+		t.Fatalf("应拒绝非法日志大小上限：%v", err)
 	}
 }
 

@@ -44,6 +44,8 @@ logging:
   directory: "logs/master"
   # 日志保留天数；早于该天数的主节点 .log 和 .log.gz 会在轮转时清理。
   retention_days: 30
+  # 单个日志文件上限（MiB）；达到后按序号封存并在后台压缩，默认 1 GiB。
+  max_file_size_mb: 1024
 
 # 请求 ID 透传配置。
 request_id:

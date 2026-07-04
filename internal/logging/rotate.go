@@ -2,10 +2,12 @@ package logging
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +25,8 @@ type dailyWriter struct {
 	location        *time.Location
 	date            string
 	file            *os.File
+	size            int64
+	maxFileSize     int64
 	maintenanceWake chan struct{}
 	stop            chan struct{}
 	done            chan struct{}
@@ -32,7 +36,8 @@ type dailyWriter struct {
 	retryDelay      time.Duration
 }
 
-func newDailyWriter(directory, component string, retention int, location *time.Location) (*dailyWriter, error) {
+func newDailyWriter(directory, component string, retention int, location *time.Location,
+	maxFileSize int64) (*dailyWriter, error) {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, fmt.Errorf("创建日志目录失败：%w", err)
 	}
@@ -41,6 +46,7 @@ func newDailyWriter(directory, component string, retention int, location *time.L
 		component:       component,
 		retention:       retention,
 		location:        location,
+		maxFileSize:     maxFileSize,
 		maintenanceWake: make(chan struct{}, 1),
 		stop:            make(chan struct{}),
 		done:            make(chan struct{}),
@@ -65,7 +71,15 @@ func (w *dailyWriter) Write(data []byte) (int, error) {
 		}
 		rotated = true
 	}
+	if w.exceedsSizeLimit(len(data)) {
+		if err := w.rotateBySize(date); err != nil {
+			w.mu.Unlock()
+			return 0, err
+		}
+		rotated = true
+	}
 	n, err := w.file.Write(data)
+	w.size += int64(n)
 	w.mu.Unlock()
 	if rotated {
 		w.requestMaintenance()
@@ -85,20 +99,87 @@ func (w *dailyWriter) Close() error {
 	}
 	err := w.file.Close()
 	w.file = nil
+	w.size = 0
 	return err
 }
 
 func (w *dailyWriter) rotate(date string) error {
 	if w.file != nil {
 		_ = w.file.Close()
+		w.file = nil
+		w.size = 0
 	}
 	path := filepath.Join(w.directory, w.component+"-"+date+".log")
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("打开日志文件失败：%w", err)
 	}
-	w.file, w.date = file, date
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return fmt.Errorf("读取日志文件大小失败：%w", err)
+	}
+	w.file, w.date, w.size = file, date, info.Size()
 	return nil
+}
+
+func (w *dailyWriter) exceedsSizeLimit(incoming int) bool {
+	if w.maxFileSize <= 0 || w.size == 0 {
+		return false
+	}
+	return w.size >= w.maxFileSize || int64(incoming) > w.maxFileSize-w.size
+}
+
+func (w *dailyWriter) rotateBySize(date string) error {
+	if w.file == nil {
+		return nil
+	}
+	if err := w.file.Close(); err != nil {
+		w.file = nil
+		return fmt.Errorf("关闭已满日志文件失败：%w", err)
+	}
+	w.file = nil
+	activePath := filepath.Join(w.directory, w.component+"-"+date+".log")
+	segmentPath, err := w.nextSegmentPath(date)
+	if err != nil {
+		_ = w.rotate(date)
+		return err
+	}
+	if err := os.Rename(activePath, segmentPath); err != nil {
+		_ = w.rotate(date)
+		return fmt.Errorf("封存已满日志文件失败：%w", err)
+	}
+	w.size = 0
+	if err := w.rotate(date); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *dailyWriter) nextSegmentPath(date string) (string, error) {
+	for sequence := 1; sequence <= 999_999; sequence++ {
+		name := fmt.Sprintf("%s-%s.%03d.log", w.component, date, sequence)
+		path := filepath.Join(w.directory, name)
+		available, err := logSegmentAvailable(path)
+		if err != nil {
+			return "", err
+		}
+		if available {
+			return path, nil
+		}
+	}
+	return "", errors.New("当日日志分片数量超过上限")
+}
+
+func logSegmentAvailable(path string) (bool, error) {
+	for _, candidate := range []string{path, path + ".gz", path + ".gz.tmp"} {
+		if _, err := os.Stat(candidate); err == nil {
+			return false, nil
+		} else if !os.IsNotExist(err) {
+			return false, fmt.Errorf("检查日志分片失败：%w", err)
+		}
+	}
+	return true, nil
 }
 
 func (w *dailyWriter) runMaintenanceLoop() {
@@ -172,6 +253,7 @@ func (w *dailyWriter) maintain(now time.Time) error {
 		_ = w.file.Close()
 		w.file = nil
 		w.date = ""
+		w.size = 0
 	}
 	w.mu.Unlock()
 	if err := w.compressClosedLogs(now); err != nil {
@@ -194,7 +276,7 @@ func (w *dailyWriter) compressClosedLogs(now time.Time) error {
 		if entry.IsDir() || !ok || logFile.compressed {
 			continue
 		}
-		if !logFile.date.Before(currentDate) {
+		if logFile.segment == 0 && !logFile.date.Before(currentDate) {
 			continue
 		}
 		path := filepath.Join(w.directory, entry.Name())
@@ -232,6 +314,7 @@ func (w *dailyWriter) cleanup(now time.Time) error {
 type parsedLogFile struct {
 	date       time.Time
 	compressed bool
+	segment    int
 }
 
 func (w *dailyWriter) parseLogFile(name string) (parsedLogFile, bool) {
@@ -249,11 +332,23 @@ func (w *dailyWriter) parseLogFile(name string) (parsedLogFile, bool) {
 	} else {
 		return parsedLogFile{}, false
 	}
-	date, err := time.ParseInLocation(logDateLayout, dateText, w.location)
+	parts := strings.Split(dateText, ".")
+	if len(parts) > 2 || len(parts) == 0 {
+		return parsedLogFile{}, false
+	}
+	segment := 0
+	if len(parts) == 2 {
+		parsedSegment, parseErr := strconv.Atoi(parts[1])
+		if parseErr != nil || parsedSegment <= 0 {
+			return parsedLogFile{}, false
+		}
+		segment = parsedSegment
+	}
+	date, err := time.ParseInLocation(logDateLayout, parts[0], w.location)
 	if err != nil {
 		return parsedLogFile{}, false
 	}
-	return parsedLogFile{date: date, compressed: compressed}, true
+	return parsedLogFile{date: date, compressed: compressed, segment: segment}, true
 }
 
 func compressLogFile(path string) error {

@@ -22,7 +22,10 @@ type Logging struct {
 	FileLevel     string `yaml:"file_level"`
 	Directory     string `yaml:"directory"`
 	RetentionDays int    `yaml:"retention_days"`
+	MaxFileSizeMB int64  `yaml:"max_file_size_mb"`
 }
+
+const DefaultLogMaxFileSizeMB int64 = 1024
 
 const deprecatedWarningPrefix = "deprecated:"
 
@@ -149,6 +152,10 @@ func applyLoggingDefaults(c *Logging, directory string, warn WarnFunc) {
 		c.RetentionDays = 30
 		warnDefault(warn, "logging.retention_days", "30")
 	}
+	if c.MaxFileSizeMB == 0 {
+		c.MaxFileSizeMB = DefaultLogMaxFileSizeMB
+		warnDefault(warn, "logging.max_file_size_mb", strconv.FormatInt(DefaultLogMaxFileSizeMB, 10))
+	}
 }
 
 func validateLogging(c Logging) error {
@@ -161,6 +168,12 @@ func validateLogging(c Logging) error {
 	}
 	if c.RetentionDays <= 0 {
 		return errors.New("日志字段 logging.retention_days 必须大于零")
+	}
+	if c.MaxFileSizeMB <= 0 {
+		return errors.New("日志字段 logging.max_file_size_mb 必须大于零")
+	}
+	if c.MaxFileSizeMB > int64(^uint64(0)>>1)/(1024*1024) {
+		return errors.New("日志字段 logging.max_file_size_mb 过大")
 	}
 	return nil
 }

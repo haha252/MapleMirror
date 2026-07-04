@@ -22,7 +22,12 @@ func New(component string, cfg config.Logging, location *time.Location, console 
 	if console == nil {
 		console = os.Stdout
 	}
-	writer, err := newDailyWriter(cfg.Directory, component, cfg.RetentionDays, location)
+	maxFileSizeMB := cfg.MaxFileSizeMB
+	if maxFileSizeMB <= 0 {
+		maxFileSizeMB = config.DefaultLogMaxFileSizeMB
+	}
+	writer, err := newDailyWriter(cfg.Directory, component, cfg.RetentionDays, location,
+		maxFileSizeMB*1024*1024)
 	if err != nil {
 		return nil, err
 	}

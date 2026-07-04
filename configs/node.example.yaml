@@ -73,6 +73,8 @@ logging:
   directory: "logs/node"
   # 日志保留天数；早于该天数的下载节点 .log 和 .log.gz 会在轮转时清理。
   retention_days: 30
+  # 单个日志文件上限（MiB）；达到后按序号封存并在后台压缩，默认 1 GiB。
+  max_file_size_mb: 1024
 
 # 首次登记和重新登记配置。
 pairing:

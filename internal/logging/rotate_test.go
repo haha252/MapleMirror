@@ -20,7 +20,7 @@ func TestDailyWriterCompressesPreviousLogsOnStartup(t *testing.T) {
 	if err := os.WriteFile(oldPath, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := newDailyWriter(dir, "master", 30_000, time.Local)
+	writer, err := newDailyWriter(dir, "master", 30_000, time.Local, 1<<30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestDailyWriterKeepsCurrentLogUncompressed(t *testing.T) {
 	if err := os.WriteFile(currentPath, []byte("当前日志"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := newDailyWriter(dir, "node", 30, time.Local)
+	writer, err := newDailyWriter(dir, "node", 30, time.Local, 1<<30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestDailyWriterSkipsExistingCompressedLog(t *testing.T) {
 	if err := os.WriteFile(gzipPath, []byte("已有压缩文件"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := newDailyWriter(dir, "master", 30_000, time.Local)
+	writer, err := newDailyWriter(dir, "master", 30_000, time.Local, 1<<30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestDailyWriterRemovesExpiredCompressedLog(t *testing.T) {
 	if err := os.WriteFile(oldPath, []byte("旧压缩日志"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := newDailyWriter(dir, "node", 2, time.Local)
+	writer, err := newDailyWriter(dir, "node", 2, time.Local, 1<<30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,6 +97,20 @@ func TestDailyWriterRemovesExpiredCompressedLog(t *testing.T) {
 	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
 		t.Fatalf("过期 gzip 日志应被清理，stat err = %v", err)
 	}
+}
+
+func TestDailyWriterRemovesExpiredSegmentedLog(t *testing.T) {
+	dir := t.TempDir()
+	oldPath := filepath.Join(dir, "node-2000-01-01.001.log.gz")
+	if err := os.WriteFile(oldPath, []byte("旧分片日志"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := newDailyWriter(dir, "node", 2, time.Local, 1<<30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = writer.Close() })
+	waitForMissingPath(t, oldPath)
 }
 
 func TestDailyWriterMaintenanceClosesAndCompressesStaleOpenLog(t *testing.T) {
@@ -234,8 +248,62 @@ func TestDailyWriterReportsFailureAndRetries(t *testing.T) {
 	}
 }
 
+func TestDailyWriterRotatesAndCompressesAtSizeLimit(t *testing.T) {
+	dir := t.TempDir()
+	writer, err := newDailyWriter(dir, "master", 30, time.Local, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = writer.Close() })
+	if _, err := writer.Write([]byte("12345678")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write([]byte("ABCD")); err != nil {
+		t.Fatal(err)
+	}
+	date := time.Now().In(time.Local).Format(logDateLayout)
+	segmentPath := filepath.Join(dir, "master-"+date+".001.log.gz")
+	waitForPath(t, segmentPath)
+	if got := string(readGzipFile(t, segmentPath)); got != "12345678" {
+		t.Fatalf("封存分片内容 = %q，want %q", got, "12345678")
+	}
+	activePath := filepath.Join(dir, "master-"+date+".log")
+	active, err := os.ReadFile(activePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(active) != "ABCD" {
+		t.Fatalf("活动日志内容 = %q，want %q", active, "ABCD")
+	}
+}
+
+func TestDailyWriterContinuesSegmentSequenceAfterRestart(t *testing.T) {
+	dir := t.TempDir()
+	date := time.Now().In(time.Local).Format(logDateLayout)
+	activePath := filepath.Join(dir, "node-"+date+".log")
+	if err := os.WriteFile(activePath, []byte("1234567890"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "node-"+date+".001.log.gz"), []byte("existing"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := newDailyWriter(dir, "node", 30, time.Local, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = writer.Close() })
+	if _, err := writer.Write([]byte("X")); err != nil {
+		t.Fatal(err)
+	}
+	secondSegment := filepath.Join(dir, "node-"+date+".002.log.gz")
+	waitForPath(t, secondSegment)
+	if got := string(readGzipFile(t, secondSegment)); got != "1234567890" {
+		t.Fatalf("重启后封存分片内容 = %q", got)
+	}
+}
+
 func TestDailyWriterCloseIsIdempotent(t *testing.T) {
-	writer, err := newDailyWriter(t.TempDir(), "node", 30, time.Local)
+	writer, err := newDailyWriter(t.TempDir(), "node", 30, time.Local, 1<<30)
 	if err != nil {
 		t.Fatal(err)
 	}
