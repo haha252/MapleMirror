@@ -13,6 +13,8 @@ import (
 
 const logDateLayout = "2006-01-02"
 
+const defaultMaintenanceRetryDelay = 5 * time.Minute
+
 type dailyWriter struct {
 	mu              sync.Mutex
 	directory       string
@@ -26,6 +28,8 @@ type dailyWriter struct {
 	done            chan struct{}
 	closeOnce       sync.Once
 	compress        func(string) error
+	errorOutput     io.Writer
+	retryDelay      time.Duration
 }
 
 func newDailyWriter(directory, component string, retention int, location *time.Location) (*dailyWriter, error) {
@@ -41,6 +45,8 @@ func newDailyWriter(directory, component string, retention int, location *time.L
 		stop:            make(chan struct{}),
 		done:            make(chan struct{}),
 		compress:        compressLogFile,
+		errorOutput:     os.Stderr,
+		retryDelay:      defaultMaintenanceRetryDelay,
 	}
 	go w.runMaintenanceLoop()
 	w.requestMaintenance()
@@ -97,12 +103,16 @@ func (w *dailyWriter) rotate(date string) error {
 
 func (w *dailyWriter) runMaintenanceLoop() {
 	defer close(w.done)
+	retryPending := false
 	for {
 		now := time.Now().In(w.location)
-		timer := time.NewTimer(nextDailyMaintenanceDelay(now))
+		delay := nextDailyMaintenanceDelay(now)
+		if retryPending && w.maintenanceRetryDelay() < delay {
+			delay = w.maintenanceRetryDelay()
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-timer.C:
-			_ = w.maintain(time.Now().In(w.location))
 		case <-w.maintenanceWake:
 			if !timer.Stop() {
 				select {
@@ -110,7 +120,6 @@ func (w *dailyWriter) runMaintenanceLoop() {
 				default:
 				}
 			}
-			_ = w.maintain(time.Now().In(w.location))
 		case <-w.stop:
 			if !timer.Stop() {
 				select {
@@ -120,7 +129,28 @@ func (w *dailyWriter) runMaintenanceLoop() {
 			}
 			return
 		}
+		if err := w.maintain(time.Now().In(w.location)); err != nil {
+			retryPending = true
+			w.reportMaintenanceError(err)
+		} else {
+			retryPending = false
+		}
 	}
+}
+
+func (w *dailyWriter) maintenanceRetryDelay() time.Duration {
+	if w.retryDelay > 0 {
+		return w.retryDelay
+	}
+	return defaultMaintenanceRetryDelay
+}
+
+func (w *dailyWriter) reportMaintenanceError(err error) {
+	output := w.errorOutput
+	if output == nil {
+		output = os.Stderr
+	}
+	fmt.Fprintf(output, "日志后台维护失败，将在 %s 后重试：%v\n", w.maintenanceRetryDelay(), err)
 }
 
 func (w *dailyWriter) requestMaintenance() {
@@ -243,7 +273,12 @@ func compressLogFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("创建压缩日志失败：%w", err)
 	}
-	gzipWriter := gzip.NewWriter(output)
+	gzipWriter, err := gzip.NewWriterLevel(output, gzip.BestSpeed)
+	if err != nil {
+		_ = output.Close()
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("创建 gzip 压缩器失败：%w", err)
+	}
 	_, copyErr := io.Copy(gzipWriter, input)
 	closeGzipErr := gzipWriter.Close()
 	closeOutputErr := output.Close()

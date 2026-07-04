@@ -1,10 +1,13 @@
 package logging
 
 import (
+	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -180,6 +183,57 @@ func TestDailyWriterCompressionDoesNotBlockWrites(t *testing.T) {
 	}
 }
 
+func TestDailyWriterReportsFailureAndRetries(t *testing.T) {
+	dir := t.TempDir()
+	oldPath := filepath.Join(dir, "master-2000-01-02.log")
+	if err := os.WriteFile(oldPath, []byte("需要重试的日志"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var errorOutput bytes.Buffer
+	succeeded := make(chan struct{})
+	attempts := 0
+	writer := &dailyWriter{
+		directory:       dir,
+		component:       "master",
+		retention:       30_000,
+		location:        time.Local,
+		maintenanceWake: make(chan struct{}, 1),
+		stop:            make(chan struct{}),
+		done:            make(chan struct{}),
+		errorOutput:     &errorOutput,
+		retryDelay:      10 * time.Millisecond,
+		compress: func(path string) error {
+			attempts++
+			if attempts == 1 {
+				return errors.New("测试压缩故障")
+			}
+			err := compressLogFile(path)
+			if err == nil {
+				close(succeeded)
+			}
+			return err
+		},
+	}
+	go writer.runMaintenanceLoop()
+	writer.requestMaintenance()
+	select {
+	case <-succeeded:
+	case <-time.After(2 * time.Second):
+		t.Fatal("日志压缩失败后未按期重试")
+	}
+	close(writer.stop)
+	<-writer.done
+	if attempts < 2 {
+		t.Fatalf("压缩尝试次数 = %d，want >= 2", attempts)
+	}
+	message := errorOutput.String()
+	if !strings.Contains(message, "日志后台维护失败") ||
+		!strings.Contains(message, "测试压缩故障") ||
+		!strings.Contains(message, "10ms 后重试") {
+		t.Fatalf("维护错误输出不完整：%s", message)
+	}
+}
+
 func TestDailyWriterCloseIsIdempotent(t *testing.T) {
 	writer, err := newDailyWriter(t.TempDir(), "node", 30, time.Local)
 	if err != nil {
@@ -198,6 +252,23 @@ func TestNextDailyMaintenanceDelayUsesLocalDateBoundary(t *testing.T) {
 	now := time.Date(2026, 7, 2, 23, 59, 30, 0, location)
 	if got := nextDailyMaintenanceDelay(now); got != 90*time.Second {
 		t.Fatalf("maintenance delay = %v，want %v", got, 90*time.Second)
+	}
+}
+
+func TestCompressLogFileUsesBestSpeed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "master-2000-01-02.log")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("debug log line\n"), 100), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := compressLogFile(path); err != nil {
+		t.Fatal(err)
+	}
+	compressed, err := os.ReadFile(path + ".gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(compressed) < 10 || compressed[8] != 4 {
+		t.Fatalf("gzip XFL = %d，want 4（BestSpeed）", compressed[8])
 	}
 }
 
