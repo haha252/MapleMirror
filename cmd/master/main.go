@@ -86,6 +86,12 @@ func main() {
 		logging.StartupError("主节点", err)
 		os.Exit(1)
 	}
+	exitCode := 0
+	defer func() {
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+	}()
 	defer logger.Close()
 	for _, item := range warnings {
 		logger.ConfigWarning(item[0], item[1])
@@ -103,7 +109,13 @@ func main() {
 		logger.Error(context.Background(), "数据库 WAL 配置无效", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	defer closeDatabaseWithCheckpoint(cfg, database, walTruncateThreshold, logger)
+	databaseFailed := false
+	defer func() {
+		if databaseFailed {
+			return
+		}
+		closeDatabaseWithCheckpoint(cfg, database, walTruncateThreshold, logger)
+	}()
 	logger.Info(context.Background(), "主节点数据库迁移已完成")
 	if *archiveAccounting {
 		runAccountingArchiveMigration(cfg, database, walTruncateThreshold, logger)
@@ -118,6 +130,7 @@ func main() {
 		logger.Warn(context.Background(), "旧流量明细归档未完成", slog.String("detail", warning))
 	}
 	startDatabaseMaintenance(cfg, database, walTruncateThreshold, logger)
+	databaseWatchdog := startDatabaseWatchdog(cfg.Database, database, logger)
 	archive := newAccountingArchive(cfg, logger)
 	statsBuffer := statbuffer.New(database, 2*time.Second)
 	statsBuffer.Start(context.Background())
@@ -149,10 +162,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
-		Logger: logger, Ready: func() bool { return true }, Version: version,
+		Logger: logger, Ready: databaseWatchdog.Ready, Version: version,
 	}, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
 	mux.Handle("/", requestid.Middleware(publicServer.Handler(), cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
-	runServer(cfg.Server.PublicListen, mux, logger)
+	if err := runServer(cfg.Server.PublicListen, mux, databaseWatchdog.Fatal(), logger); err != nil {
+		logger.Error(context.Background(), "主节点运行时致命错误，即将退出", slog.String("error", err.Error()))
+		databaseFailed = !databaseWatchdog.Ready()
+		exitCode = 1
+	}
 }
 
 func handleLoad(err error, name string, created *bool) bool {
@@ -229,18 +246,4 @@ func startControlServices(cfg config.Master, repo mastercontrol.Repository, logg
 		}.Handle)
 	}
 	startHeartbeatSweep(repo, timeout, grace, logger)
-}
-
-func publicProbeService(cfg config.Master, repo mastercontrol.Repository,
-	logger *logging.Logger) *mastercontrol.PublicProbeService {
-	if cfg.Node.PublicProbeEnabled == nil || !*cfg.Node.PublicProbeEnabled {
-		return nil
-	}
-	interval, _ := time.ParseDuration(cfg.Node.PublicProbeInterval)
-	timeout, _ := time.ParseDuration(cfg.Node.PublicProbeTimeout)
-	ttl, _ := time.ParseDuration(cfg.Node.PublicProbeTTL)
-	return &mastercontrol.PublicProbeService{Repo: repo, Logger: logger,
-		Config: mastercontrol.PublicProbeConfig{Enabled: true,
-			Interval: interval, Timeout: timeout, TTL: ttl,
-			NetworkFailures: cfg.Node.PublicProbeNetworkFailures}}
 }

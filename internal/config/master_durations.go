@@ -3,6 +3,8 @@ package config
 func masterDurations(c Master) map[string]string {
 	return map[string]string{
 		"database.busy_timeout":                   c.Database.BusyTimeout,
+		"database.health_check_interval":          c.Database.HealthCheckInterval,
+		"database.health_check_timeout":           c.Database.HealthCheckTimeout,
 		"database.wal_checkpoint_interval":        c.Database.WALCheckpointInterval,
 		"scan.interval":                           c.Scan.Interval,
 		"scan.github_timeout":                     c.Scan.GitHubTimeout,

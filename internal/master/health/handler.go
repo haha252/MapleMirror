@@ -19,7 +19,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	id := requestid.FromContext(r.Context())
 	status, explanation, code := "正常", "基础服务已就绪", http.StatusOK
 	if !h.Ready() {
-		status, explanation, code = "未就绪", "数据库基础存储尚未完成初始化", http.StatusServiceUnavailable
+		status, explanation, code = "未就绪", "数据库不可用", http.StatusServiceUnavailable
 	}
 	h.Logger.Info(r.Context(), "收到主节点健康检查请求", slog.String("request_id", id))
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

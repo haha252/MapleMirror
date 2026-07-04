@@ -24,8 +24,8 @@ func TestHealthDoesNotClaimReadyBeforeStorage(t *testing.T) {
 	handler := requestid.Middleware(Handler{Logger: logger, Ready: func() bool { return false }, Version: "test"}, "X-Request-ID", "X-Request-ID")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
-	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "数据库基础存储尚未完成初始化") {
-		t.Fatal("主节点不得在数据库初始化前报告就绪")
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "数据库不可用") {
+		t.Fatal("主节点不得在数据库不可用时报告就绪")
 	}
 	if response.Header().Get("X-Request-ID") == "" {
 		t.Fatal("健康响应缺少请求 ID")

@@ -17,6 +17,12 @@ database:
   path: "data/master.db"
   # SQLite 写锁等待时间；并发写入繁忙时最多等待该时长。
   busy_timeout: "5s"
+  # 数据库健康检查间隔。
+  health_check_interval: "10s"
+  # 单次数据库健康检查的超时时间。
+  health_check_timeout: "3s"
+  # 连续检查失败达到该次数后主节点退出，由进程守护器重启。
+  health_failure_threshold: 3
   # 是否启用 SQLite WAL 日志模式；推荐保持 true 以减少读写互相阻塞。
   wal: true
   # SQLite 自动 checkpoint 的 WAL 页数阈值。

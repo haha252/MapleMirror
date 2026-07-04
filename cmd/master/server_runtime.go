@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -37,19 +38,29 @@ func startTLSListener(address string, tlsCfg *tls.Config, cfgErr error, logger *
 	}()
 }
 
-func runServer(address string, handler http.Handler, logger *logging.Logger) {
+func runServer(address string, handler http.Handler, fatal <-chan error, logger *logging.Logger) error {
 	server := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go func() {
-		<-ctx.Done()
+	shutdown := func() {
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = server.Shutdown(shutdown)
-	}()
+	}
+	serveErr := make(chan error, 1)
 	logger.Info(context.Background(), "主节点健康服务已启动", slog.String("listen", address))
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Error(context.Background(), "主节点健康服务异常退出", slog.String("error", err.Error()))
-		os.Exit(1)
+	go func() { serveErr <- server.ListenAndServe() }()
+	select {
+	case <-ctx.Done():
+		shutdown()
+		return nil
+	case err := <-fatal:
+		shutdown()
+		return err
+	case err := <-serveErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return fmt.Errorf("主节点健康服务异常退出：%w", err)
 	}
 }
