@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -99,11 +101,31 @@ func CheckpointWAL(db *sql.DB, dbPath string, truncateThreshold int64, logger ve
 }
 
 func runWALCheckpoint(db *sql.DB, dbPath, mode string) (WALCheckpointResult, error) {
+	result, err := runWALCheckpointOnce(db, dbPath, mode)
+	if err == nil || !isSQLiteLocked(err) {
+		return result, err
+	}
+	return runWALCheckpointOnce(db, dbPath, mode)
+}
+
+func runWALCheckpointOnce(db *sql.DB, dbPath, mode string) (WALCheckpointResult, error) {
 	var result WALCheckpointResult
 	result.Mode = mode
-	err := db.QueryRow(fmt.Sprintf("PRAGMA wal_checkpoint(%s)", mode)).
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return result, fmt.Errorf("获取 SQLite checkpoint 连接失败：%w", err)
+	}
+	defer conn.Close()
+
+	err = conn.QueryRowContext(context.Background(), fmt.Sprintf("PRAGMA wal_checkpoint(%s)", mode)).
 		Scan(&result.Busy, &result.LogFrames, &result.CheckedFrames)
 	if err != nil {
+		if isSQLiteLocked(err) {
+			// SQLITE_LOCKED can persist on a pooled connection when a driver
+			// statement was not finalized. Mark this exact connection bad so
+			// database/sql replaces it before the retry.
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
 		return result, fmt.Errorf("执行 SQLite WAL checkpoint 失败：%w", err)
 	}
 	size, _, statErr := WALSize(dbPath)
@@ -112,6 +134,11 @@ func runWALCheckpoint(db *sql.DB, dbPath, mode string) (WALCheckpointResult, err
 	}
 	result.WALSizeBytes = size
 	return result, nil
+}
+
+func isSQLiteLocked(err error) bool {
+	var coded interface{ Code() int }
+	return errors.As(err, &coded) && coded.Code()&0xff == 6
 }
 
 func shouldLogWALCheckpoint(result WALCheckpointResult, threshold int64) bool {
