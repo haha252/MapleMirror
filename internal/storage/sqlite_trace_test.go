@@ -56,6 +56,9 @@ func TestSQLDebugConnectionRecoversAfterCanceledQuery(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("long query error = %v, want context deadline exceeded", err)
 	}
+	if err := CheckpointWAL(db, path, 0, nil); err != nil {
+		t.Fatalf("checkpoint after canceled query failed: %v", err)
+	}
 
 	if err := db.QueryRow(`SELECT 1`).Scan(&sum); err != nil {
 		t.Fatalf("query after canceled query failed: %v", err)

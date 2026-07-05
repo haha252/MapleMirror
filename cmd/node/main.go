@@ -16,6 +16,7 @@ import (
 	_ "time/tzdata"
 
 	"mirror-server/internal/bootstrap"
+	"mirror-server/internal/buildinfo"
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/logging"
@@ -52,6 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer logger.Close()
+	logger.Info(context.Background(), "下载节点程序启动", buildinfo.Attributes(version)...)
 	for _, item := range warnings {
 		logger.ConfigWarning(item[0], item[1])
 	}

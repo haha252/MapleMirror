@@ -13,6 +13,7 @@ import (
 	_ "time/tzdata"
 
 	"mirror-server/internal/bootstrap"
+	"mirror-server/internal/buildinfo"
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/downloadtoken"
@@ -36,7 +37,6 @@ func main() {
 	noticesPath := flag.String("notices", "notices.yaml", "公告配置文件路径")
 	archiveAccounting := flag.Bool("archive-accounting", false, "归档旧数据库明细并收缩在线状态")
 	flag.Parse()
-
 	var warnings [][2]string
 	warn := func(field, value string) { warnings = append(warnings, [2]string{field, value}) }
 	var created bool
@@ -93,6 +93,7 @@ func main() {
 		}
 	}()
 	defer logger.Close()
+	logger.Info(context.Background(), "主节点程序启动", buildinfo.Attributes(version)...)
 	for _, item := range warnings {
 		logger.ConfigWarning(item[0], item[1])
 	}

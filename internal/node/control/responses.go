@@ -20,12 +20,19 @@ func (c Client) writeFrame(conn net.Conn, envelope protocol.Envelope) error {
 	return err
 }
 
+func (c Client) readFrame(conn net.Conn) (protocol.Envelope, error) {
+	if c.frameReader != nil {
+		return c.frameReader.ReadFrame(conn)
+	}
+	return protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+}
+
 func (c Client) readExpectedResponse(conn net.Conn, reqID string,
 	sequence *uint64, expected ...string) (protocol.Envelope, error) {
 	deadline := time.Now().Add(controlAckTimeout)
 	for {
 		_ = conn.SetReadDeadline(deadline)
-		msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+		msg, err := c.readFrame(conn)
 		_ = conn.SetReadDeadline(time.Time{})
 		if err != nil {
 			return protocol.Envelope{}, err

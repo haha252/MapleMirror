@@ -65,7 +65,7 @@ func (c Client) readOptionalTaskWithTimeout(conn net.Conn, reqID string,
 		return sequence, false, nil
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	msg, err := c.readFrame(conn)
 	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil {
 		if timeoutErr, ok := err.(net.Error); ok && timeoutErr.Timeout() {

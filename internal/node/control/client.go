@@ -48,6 +48,7 @@ type Client struct {
 	controlWorkWake                chan struct{}
 	pendingPublicProbeReady        map[string]pendingPublicProbeReady
 	interruptedLocalTasksRecovered bool
+	frameReader                    *protocol.FrameReader
 }
 
 func (c Client) syncTaskTimeout() time.Duration {
@@ -81,6 +82,8 @@ func (c *Client) RunOnce() (time.Duration, error) {
 		return 0, err
 	}
 	defer conn.Close()
+	c.frameReader = protocol.NewFrameReader(protocol.MaxFrameBytes)
+	defer func() { c.frameReader = nil }()
 	reqID, _ := requestid.New()
 	if err := c.hello(conn, reqID); err != nil {
 		return 0, err
@@ -115,7 +118,7 @@ func (c *Client) recoverInterruptedLocalTasksOnce() error {
 
 func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
 	_ = conn.SetReadDeadline(time.Now().Add(controlIOTimeout))
-	msg, err := protocol.ReadFrame(conn, protocol.MaxFrameBytes)
+	msg, err := c.readFrame(conn)
 	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil {
 		return protocol.Welcome{}, err
