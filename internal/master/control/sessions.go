@@ -47,8 +47,16 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 	}
 	session.RequestID = requestID
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var replaced Session
+	_ = tx.QueryRowContext(ctx, `SELECT id, node_id, COALESCE(certificate_id, ''), request_id
+		FROM node_control_sessions WHERE node_id = ? AND disconnected_at IS NULL
+		ORDER BY connected_at DESC LIMIT 1`, session.NodeID).Scan(
+		&replaced.ID, &replaced.NodeID, &replaced.CertificateID, &replaced.RequestID)
 	_, _ = tx.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
 		close_reason = '新会话替换' WHERE node_id = ? AND disconnected_at IS NULL`, now, session.NodeID)
+	if _, err := tx.ExecContext(ctx, `DELETE FROM node_control_sessions WHERE node_id = ?`, session.NodeID); err != nil {
+		return Session{}, err
+	}
 	if err := resetInterruptedTasks(ctx, tx, session.NodeID, now); err != nil {
 		return Session{}, err
 	}
@@ -72,6 +80,11 @@ func (r Repository) StartSession(ctx context.Context, certFingerprint, requestID
 		return Session{}, err
 	}
 	r.runtime().StartSession(session)
+	if replaced.ID != "" {
+		r.archiveControlSession(ctx, "control_session_disconnected", replaced, now,
+			"新会话替换", time.Now().UTC())
+	}
+	r.archiveControlSession(ctx, "control_session_connected", session, now, "", time.Now().UTC())
 	return session, nil
 }
 
@@ -86,9 +99,18 @@ func resetInterruptedTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) 
 }
 
 func (r Repository) CloseSession(ctx context.Context, sessionID, reason string) error {
+	var session Session
+	_ = r.DB.QueryRowContext(ctx, `SELECT id, node_id, COALESCE(certificate_id, ''), request_id
+		FROM node_control_sessions WHERE id = ?`, sessionID).Scan(
+		&session.ID, &session.NodeID, &session.CertificateID, &session.RequestID)
+	now := time.Now().UTC()
 	_, err := r.DB.ExecContext(ctx, `UPDATE node_control_sessions SET disconnected_at = ?,
 		close_reason = ? WHERE id = ? AND disconnected_at IS NULL`,
-		time.Now().UTC().Format(time.RFC3339Nano), reason, sessionID)
+		now.Format(time.RFC3339Nano), reason, sessionID)
 	r.runtime().CloseSession(sessionID)
+	if err == nil && session.ID != "" {
+		r.archiveControlSession(ctx, "control_session_disconnected", session,
+			now.Format(time.RFC3339Nano), reason, now)
+	}
 	return err
 }

@@ -19,6 +19,11 @@ func acceptInventoryRevision(ctx context.Context, tx *sql.Tx, session Session,
 	if latest.Valid && uint64(latest.Int64) >= report.Revision {
 		return true, nil
 	}
+	// 库存报告只承担当前 revision 的恢复边界，不在在线数据库保留历史。
+	if _, err := tx.ExecContext(ctx, `DELETE FROM node_inventory_reports
+		WHERE node_id = ? AND revision != ?`, session.NodeID, report.Revision); err != nil {
+		return false, err
+	}
 	id := report.ReportID
 	if id == "" {
 		var err error

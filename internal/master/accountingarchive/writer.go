@@ -67,6 +67,15 @@ type AuthorizationStatusRecord struct {
 	OccurredAt      time.Time `json:"occurred_at"`
 }
 
+type ControlSessionRecord struct {
+	SessionID     string `json:"session_id"`
+	NodeID        string `json:"node_id"`
+	CertificateID string `json:"certificate_id,omitempty"`
+	RequestID     string `json:"request_id,omitempty"`
+	OccurredAt    string `json:"occurred_at"`
+	CloseReason   string `json:"close_reason,omitempty"`
+}
+
 func (w *Writer) WriteAuthorization(ctx context.Context, record AuthorizationRecord, committed time.Time) error {
 	return w.write(ctx, "authorization", record.IssuedAt, committed, "authorization_issued", record)
 }
@@ -78,6 +87,11 @@ func (w *Writer) WriteTraffic(ctx context.Context, record TrafficRecord, committ
 func (w *Writer) WriteAuthorizationStatus(ctx context.Context, record AuthorizationStatusRecord, committed time.Time) error {
 	return w.write(ctx, "authorization_status", record.OccurredAt.Format(time.RFC3339Nano),
 		committed, "authorization_status", record)
+}
+
+func (w *Writer) WriteControlSession(ctx context.Context, eventType string,
+	record ControlSessionRecord, committed time.Time) error {
+	return w.write(ctx, "control_session", record.OccurredAt, committed, eventType, record)
 }
 
 func (w *Writer) write(ctx context.Context, kind, eventTime string, committed time.Time, eventType string, payload any) error {

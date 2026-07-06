@@ -62,3 +62,18 @@ func parseArchiveTime(value string) time.Time {
 	}
 	return when.UTC()
 }
+
+func (r Repository) archiveControlSession(ctx context.Context, eventType string,
+	session Session, occurredAt, reason string, committed time.Time) {
+	if r.Archive == nil {
+		return
+	}
+	err := r.Archive.WriteControlSession(ctx, eventType, accountingarchive.ControlSessionRecord{
+		SessionID: session.ID, NodeID: session.NodeID, CertificateID: session.CertificateID,
+		RequestID: session.RequestID, OccurredAt: occurredAt, CloseReason: reason,
+	}, committed)
+	if err != nil && r.Logger != nil {
+		r.Logger.Warn(ctx, "控制会话归档写入失败", slog.String("session_id", session.ID),
+			slog.String("node_id", session.NodeID), slog.String("error", err.Error()))
+	}
+}

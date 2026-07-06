@@ -149,8 +149,8 @@ func applyLoggingDefaults(c *Logging, directory string, warn WarnFunc) {
 		warnDefault(warn, "logging.directory", directory)
 	}
 	if c.RetentionDays == 0 {
-		c.RetentionDays = 30
-		warnDefault(warn, "logging.retention_days", "30")
+		c.RetentionDays = 365
+		warnDefault(warn, "logging.retention_days", "365")
 	}
 	if c.MaxFileSizeMB == 0 {
 		c.MaxFileSizeMB = DefaultLogMaxFileSizeMB

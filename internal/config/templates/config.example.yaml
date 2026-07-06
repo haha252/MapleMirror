@@ -43,7 +43,7 @@ logging:
   # 日志文件目录；主节点按日期写入 master-YYYY-MM-DD.log，历史日志会自动压缩为 .log.gz。
   directory: "logs/master"
   # 日志保留天数；早于该天数的主节点 .log 和 .log.gz 会在轮转时清理。
-  retention_days: 30
+  retention_days: 365
   # 单个日志文件上限（MiB）；达到后按序号封存并在后台压缩，默认 1 GiB。
   max_file_size_mb: 1024
 
