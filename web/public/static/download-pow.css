@@ -91,6 +91,8 @@
   line-height: 1.35;
 }
 
+.button-link[hidden] { display: none; }
+
 .button-link:hover {
   color: var(--text);
 }

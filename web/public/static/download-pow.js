@@ -107,12 +107,10 @@
     retryButton.hidden = true;
     if (!asset.available) {
       setStatus(asset.unavailable_reason, "warn");
-      retryButton.hidden = false;
       return;
     }
     if (!window.crypto || !window.crypto.subtle || !window.PowSolver) {
       setStatus(powStartupMessage(), "warn status--strong");
-      retryButton.hidden = false;
       return;
     }
     running = true;
