@@ -11,6 +11,9 @@ func (s Server) Handler() http.Handler {
 	if s.StatsCache == nil {
 		s.StatsCache = &statsCache{}
 	}
+	if s.WebVerifications == nil {
+		s.WebVerifications = newWebVerificationTokenStore(webVerificationTokenCapacity, webVerificationTokenTTL)
+	}
 	mux := http.NewServeMux()
 	if s.WebAssets != nil && s.WebAssets.staticFS != nil {
 		mux.Handle("/static/public/", immutableCache(http.StripPrefix("/static/public/", http.FileServer(http.FS(s.WebAssets.staticFS)))))
@@ -37,6 +40,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
 	mux.HandleFunc("/api/public/v1/web/challenges", s.webChallenge)
 	mux.HandleFunc("/api/public/v1/web/authorizations", s.webAuthorize)
+	mux.HandleFunc("/api/public/v1/web/verifications", s.webVerification)
 	mux.HandleFunc("/api/public/v1/api/challenges", s.apiChallenge)
 	mux.HandleFunc("/api/public/v1/api/authorizations", s.apiAuthorize)
 	mux.HandleFunc("/api/public/v1/authorizations/", s.authorization)
@@ -53,6 +57,9 @@ func (s Server) Close() {
 	}
 	if s.AbuseTracker != nil {
 		s.AbuseTracker.close()
+	}
+	if s.WebVerifications != nil {
+		s.WebVerifications.closeCleanup()
 	}
 }
 

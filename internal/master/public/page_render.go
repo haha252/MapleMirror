@@ -18,6 +18,7 @@ type pageData struct {
 	Body          template.HTML
 	Styles        []string
 	Scripts       []string
+	StaticNames   []string
 	StaticJSON    template.JS
 	StatusCode    int
 }
@@ -37,7 +38,7 @@ func (s Server) renderPage(w http.ResponseWriter, data pageData) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	data.StaticJSON = assets.staticJSON
+	data.StaticJSON = assets.staticJSONFor(data.StaticNames)
 	if data.StatusCode == 0 {
 		data.StatusCode = http.StatusOK
 	}

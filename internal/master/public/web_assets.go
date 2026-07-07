@@ -209,6 +209,20 @@ func staticURLFunc(manifest map[string]string) func(string) string {
 	}
 }
 
+func (assets *webAssets) staticJSONFor(names []string) template.JS {
+	if len(names) == 0 {
+		return assets.staticJSON
+	}
+	manifest := make(map[string]string, len(names))
+	for _, name := range names {
+		if value, ok := assets.staticManifest[name]; ok {
+			manifest[name] = value
+		}
+	}
+	data, _ := json.Marshal(manifest)
+	return template.JS(data)
+}
+
 func findRepoResource(parts ...string) (string, error) {
 	candidates := []string{}
 	if cwd, err := os.Getwd(); err == nil {

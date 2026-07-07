@@ -1,0 +1,46 @@
+.download-pow-stack {
+  position: relative;
+  width: min(100%, 640px);
+}
+
+.download-pow {
+  z-index: 2;
+  width: 100%;
+  background: var(--panel);
+}
+
+.download-pow__verification-options {
+  position: absolute;
+  z-index: 1;
+  inset: 32px;
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  overflow: hidden;
+}
+
+.download-pow__verification-value {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+.download-pow__verification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 860px) {
+  .download-pow-stack {
+    width: min(100%, 600px);
+  }
+}
+
+@media (max-width: 680px) {
+  .download-pow-stack {
+    width: 100%;
+  }
+}

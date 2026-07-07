@@ -3,9 +3,11 @@ package public
 import (
 	"encoding/json"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"mirror-server/internal/assetpath"
 )
@@ -19,6 +21,12 @@ type downloadPowAssetUI struct {
 	SizeBytes         int64  `json:"size_bytes"`
 	Available         bool   `json:"available"`
 	UnavailableReason string `json:"unavailable_reason"`
+}
+
+type downloadPowVerificationUI struct {
+	Token   string
+	AssetID string
+	Buttons []webVerificationButton
 }
 
 func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
@@ -77,16 +85,22 @@ func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, as
 		HideHeader:   true,
 		AfterNotices: s.currentNotices(),
 		Body:         body,
-		Styles:       []string{"/static/public/download-pow.css"},
-		Scripts:      []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
+		Styles: []string{
+			"/static/public/download-pow.css",
+			"/static/public/download-verification.css",
+		},
+		Scripts:     []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
+		StaticNames: []string{"pow.wasm"},
 	})
 }
 
 func (s Server) renderDownloadPowBody(r *http.Request, asset DownloadAssetSummary, fromHome bool) (template.HTML, error) {
 	body := struct {
-		AssetJSON template.JS
-		FromHome  bool
-	}{AssetJSON: template.JS("{}"), FromHome: fromHome}
+		AssetJSON    template.JS
+		FromHome     bool
+		Verification *downloadPowVerificationUI
+	}{AssetJSON: template.JS("{}"), FromHome: fromHome,
+		Verification: s.downloadPowVerification(r, asset.AssetID)}
 	data, err := json.Marshal(downloadPowAssetUI{
 		AssetID:           asset.AssetID,
 		ProjectName:       asset.ProjectName,
@@ -102,6 +116,29 @@ func (s Server) renderDownloadPowBody(r *http.Request, asset DownloadAssetSummar
 	}
 	body.AssetJSON = template.JS(string(data))
 	return s.renderTemplateBody("download_pow", body)
+}
+
+func (s Server) downloadPowVerification(r *http.Request, assetID string) *downloadPowVerificationUI {
+	if s.webVerificationMode() == "off" || s.WebVerifications == nil {
+		return nil
+	}
+	prefix := s.clientPrefix(r)
+	if prefix == "" || prefix == "unknown" {
+		return nil
+	}
+	token, err := s.WebVerifications.issue(assetID, prefix, time.Now().UTC())
+	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warn(r.Context(), "网页验证临时令牌生成失败",
+				slog.String("request_id", requestID(r)),
+				slog.String("asset_id", assetID),
+				slog.String("error", err.Error()))
+		}
+		return nil
+	}
+	return &downloadPowVerificationUI{
+		Token: token, AssetID: assetID, Buttons: newWebVerificationButtons(),
+	}
 }
 
 func downloadPowFromHome(r *http.Request) bool {

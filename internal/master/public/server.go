@@ -41,6 +41,7 @@ type Server struct {
 	BlocklistExport  *blocklistExportCache
 	ResourceLimiter  *publicResourceLimiter
 	StatsCache       *statsCache
+	WebVerifications *webVerificationTokenStore
 }
 
 type TokenLifetime struct {
@@ -68,6 +69,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	abuseTracker.start()
 	clientBlocks := newClientBlockManager(db, quota.AbuseControl, logger)
 	clientBlocks.start()
+	webVerifications := newWebVerificationTokenStore(webVerificationTokenCapacity, webVerificationTokenTTL)
+	webVerifications.startCleanup()
 	return Server{
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
 			Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota),
@@ -97,6 +100,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 		BlocklistExport:  newBlocklistExportCache(time.Minute),
 		ResourceLimiter:  newPublicResourceLimiter(quota),
 		StatsCache:       &statsCache{},
+		WebVerifications: webVerifications,
 	}, nil
 }
 
