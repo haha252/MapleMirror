@@ -106,7 +106,7 @@
     if (running) return;
     retryButton.hidden = true;
     if (!asset.available) {
-      setStatus(asset.unavailable_reason || "该文件暂不可下载。", "warn");
+      setStatus(asset.unavailable_reason, "warn");
       retryButton.hidden = false;
       return;
     }

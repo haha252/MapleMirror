@@ -3,6 +3,7 @@ package public
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -44,7 +45,8 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 			slog.String("block_source", decision.Source),
 			slog.Int64("blocked_after_attempts", decision.Attempts))
 	}
-	writeError(w, r, http.StatusForbidden, "CLIENT_BLOCKED", "客户端已被封禁，无法领取下载授权")
+	writeError(w, r, http.StatusForbidden, "CLIENT_BLOCKED",
+		fmt.Sprintf("您的IP（%s）已被AI封禁！被误封了？请发送此页面截图至frostlynx@qq.com，并说明封禁前你干了什么。", s.clientIP(r)))
 	return true
 }
 

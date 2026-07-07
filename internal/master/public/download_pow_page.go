@@ -58,7 +58,7 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 
 func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, asset DownloadAssetSummary) {
 	s.trackPageView(w, r)
-	body, err := s.renderDownloadPowBody(asset, downloadPowFromHome(r))
+	body, err := s.renderDownloadPowBody(r, asset, downloadPowFromHome(r))
 	if err != nil {
 		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
 		return
@@ -76,7 +76,7 @@ func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, as
 	})
 }
 
-func (s Server) renderDownloadPowBody(asset DownloadAssetSummary, fromHome bool) (template.HTML, error) {
+func (s Server) renderDownloadPowBody(r *http.Request, asset DownloadAssetSummary, fromHome bool) (template.HTML, error) {
 	body := struct {
 		AssetJSON template.JS
 		FromHome  bool
