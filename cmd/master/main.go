@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -158,6 +157,7 @@ func main() {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	defer publicServer.Close()
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, projectLoader, &publicServer, logger)
 
@@ -171,18 +171,6 @@ func main() {
 		databaseFailed = !databaseWatchdog.Ready()
 		exitCode = 1
 	}
-}
-
-func handleLoad(err error, name string, created *bool) bool {
-	if errors.Is(err, config.ErrExampleCreated) {
-		*created = true
-		return false
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s加载失败：%v\n", name, err)
-		return true
-	}
-	return false
 }
 
 func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notices,

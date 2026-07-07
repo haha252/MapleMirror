@@ -67,7 +67,7 @@ func scanProjectScore(row rowScanner, item *projectScore) error {
 }
 
 func heatStart() string {
-	return time.Now().UTC().AddDate(0, 0, 1-heatWindowDays).Format("2006-01-02")
+	return time.Now().UTC().AddDate(0, 0, -heatWindowDays).Format("2006-01-02")
 }
 
 func heatEnd() string {

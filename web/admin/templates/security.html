@@ -13,7 +13,8 @@
     </article>
     <article class="panel-card admin-panel">
       <div class="admin-panel__head"><h2>封禁列表</h2><div class="admin-actions"><button id="blocks-delete-selected" class="admin-secondary" type="button">解除选中</button><button id="security-refresh" class="admin-secondary" type="button">刷新</button></div></div>
-      <div class="admin-table-wrap"><table><thead><tr><th><input id="blocks-check-all" type="checkbox" aria-label="全选封禁"></th><th>类型</th><th>来源</th><th>原因</th><th>过期时间</th><th>操作</th></tr></thead><tbody id="blocks-body"></tbody></table></div>
+      <div class="admin-table-wrap"><table><thead><tr><th><input id="blocks-check-all" type="checkbox" aria-label="全选封禁"></th><th>类型</th><th>来源</th><th>原因</th><th>尝试 / 等级</th><th>状态</th><th>过期时间</th><th>操作</th></tr></thead><tbody id="blocks-body"></tbody></table></div>
+      <p class="muted">封禁后尝试次数采用批量写入，最多可能延迟约 30 秒。</p>
       <div id="blocks-pager" class="admin-pager"></div>
     </article>
     <article class="panel-card admin-panel">

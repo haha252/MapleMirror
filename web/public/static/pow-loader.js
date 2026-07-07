@@ -25,9 +25,11 @@
     }
   }
 
-  function workerCount() {
+  function workerCount(limit) {
     const count = Math.max(1, Math.floor(navigator.hardwareConcurrency || 4));
-    return Math.min(count, 32);
+    const cap = Number(limit);
+    const workerCap = Number.isFinite(cap) && cap > 0 ? cap : 32;
+    return Math.max(1, Math.min(count, workerCap, 32));
   }
 
   function loadWASMBytes() {
@@ -86,11 +88,11 @@
     return workerURL;
   }
 
-  async function solveWithWorkers(challenge, difficulty) {
+  async function solveWithWorkers(challenge, difficulty, workerLimit) {
     if (!window.Worker) return Promise.reject(new Error("worker unavailable"));
     const wasmBytes = await loadWASMBytes();
     return new Promise((resolve, reject) => {
-      const total = workerCount();
+      const total = workerCount(workerLimit);
       const workers = [];
       let settled = false;
       let failures = 0;
@@ -129,9 +131,10 @@
 
   window.PowSolver = {
     threads: workerCount,
-    async solve(challenge, difficulty) {
+    async solve(challenge, difficulty, options) {
+      const workerLimit = typeof options === "number" ? options : options && options.workerLimit;
       try {
-        return await solveWithWorkers(challenge, difficulty);
+        return await solveWithWorkers(challenge, difficulty, workerLimit);
       } catch (err) {
         console.warn("PoW worker failed; falling back to single-threaded Web Crypto.", err);
         return solveWithSubtle(challenge, difficulty);

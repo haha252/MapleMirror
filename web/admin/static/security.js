@@ -20,12 +20,14 @@
       var body = document.getElementById("blocks-body");
       var rows = data.blocks || [];
       if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="6" class="muted">暂无封禁记录</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" class="muted">暂无封禁记录</td></tr>';
       } else {
         body.innerHTML = rows.map(function (item) {
           return '<tr><td><input type="checkbox" data-block-select data-kind="' + a.esc(item.kind) + '" data-key="' + a.esc(item.key) + '"></td><td>' +
             a.esc(item.kind === "admin" ? "管理登录" : "公开下载") + "</td><td>" +
             a.esc(item.display_ip || item.masked_ip || item.key) + "</td><td>" + a.esc(item.reason || item.source || "") +
+            "</td><td>" + a.esc(String(item.attempts_after_block || 0) + " / L" + String(item.escalation_level || 0)) +
+            "</td><td>" + a.esc(item.punishment_active ? "惩罚验证" : "普通封禁") +
             "</td><td>" + a.esc(item.expires_at || "") +
             '</td><td><button class="admin-secondary" data-block-kind="' + a.esc(item.kind) +
             '" data-block-key="' + a.esc(item.key) + '">解除</button></td></tr>';

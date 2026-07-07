@@ -18,6 +18,7 @@ type Quota struct {
 	RangeConcurrencyLimit           int            `yaml:"range_concurrency_limit"`
 	Blacklist                       []string       `yaml:"blacklist"`
 	Blocklist                       Blocklist      `yaml:"blocklist"`
+	AbuseControl                    AbuseControl   `yaml:"abuse_control"`
 	Exemptions                      []string       `yaml:"exemptions"`
 }
 
@@ -92,6 +93,7 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 		warnDefault(warn, "range_concurrency_limit", "32")
 	}
 	setString(&c.Blocklist.AutoBanDuration, "168h", "blocklist.auto_ban_duration", warn)
+	applyAbuseControlDefaults(&c.AbuseControl, warn)
 	if err := validateQuota(c); err != nil {
 		return c, err
 	}
@@ -159,6 +161,9 @@ func validateQuota(c Quota) error {
 		}
 	}
 	if err := validDuration("quota.blocklist.auto_ban_duration", c.Blocklist.AutoBanDuration); err != nil {
+		return err
+	}
+	if err := validateAbuseControl(c.AbuseControl); err != nil {
 		return err
 	}
 	return nil

@@ -17,16 +17,17 @@ import (
 )
 
 type webAssets struct {
-	templateDir     string
-	staticDir       string
-	staticFS        fs.FS
-	pageTemplate    *template.Template
-	downloadTmpl    *template.Template
-	downloadPowTmpl *template.Template
-	projectTmpl     *template.Template
-	placeholder     []byte
-	staticManifest  map[string]string
-	staticJSON      template.JS
+	templateDir       string
+	staticDir         string
+	staticFS          fs.FS
+	pageTemplate      *template.Template
+	downloadTmpl      *template.Template
+	downloadPowTmpl   *template.Template
+	punishmentPowTmpl *template.Template
+	projectTmpl       *template.Template
+	placeholder       []byte
+	staticManifest    map[string]string
+	staticJSON        template.JS
 }
 
 var (
@@ -64,6 +65,10 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	punishmentPowTmpl, err := template.New("punishment_pow.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/punishment_pow.html")
+	if err != nil {
+		return nil, err
+	}
 	projectTmpl, err := template.New("project.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/project.html")
 	if err != nil {
 		return nil, err
@@ -73,14 +78,15 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 		return nil, err
 	}
 	return &webAssets{
-		staticFS:        staticFS,
-		pageTemplate:    pageTemplate,
-		downloadTmpl:    downloadTmpl,
-		downloadPowTmpl: downloadPowTmpl,
-		projectTmpl:     projectTmpl,
-		placeholder:     placeholder,
-		staticManifest:  manifest,
-		staticJSON:      staticJSON,
+		staticFS:          staticFS,
+		pageTemplate:      pageTemplate,
+		downloadTmpl:      downloadTmpl,
+		downloadPowTmpl:   downloadPowTmpl,
+		punishmentPowTmpl: punishmentPowTmpl,
+		projectTmpl:       projectTmpl,
+		placeholder:       placeholder,
+		staticManifest:    manifest,
+		staticJSON:        staticJSON,
 	}, nil
 }
 
@@ -113,6 +119,10 @@ func loadWebAssets(root string) (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	punishmentPowTmpl, err := template.New("punishment_pow.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "punishment_pow.html"))
+	if err != nil {
+		return nil, err
+	}
 	projectTmpl, err := template.New("project.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "project.html"))
 	if err != nil {
 		return nil, err
@@ -122,15 +132,16 @@ func loadWebAssets(root string) (*webAssets, error) {
 		return nil, err
 	}
 	return &webAssets{
-		templateDir:     templateDir,
-		staticDir:       staticDir,
-		pageTemplate:    pageTemplate,
-		downloadTmpl:    downloadTmpl,
-		downloadPowTmpl: downloadPowTmpl,
-		projectTmpl:     projectTmpl,
-		placeholder:     placeholder,
-		staticManifest:  manifest,
-		staticJSON:      staticJSON,
+		templateDir:       templateDir,
+		staticDir:         staticDir,
+		pageTemplate:      pageTemplate,
+		downloadTmpl:      downloadTmpl,
+		downloadPowTmpl:   downloadPowTmpl,
+		punishmentPowTmpl: punishmentPowTmpl,
+		projectTmpl:       projectTmpl,
+		placeholder:       placeholder,
+		staticManifest:    manifest,
+		staticJSON:        staticJSON,
 	}, nil
 }
 

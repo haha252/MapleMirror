@@ -84,16 +84,19 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 	projectLoader *mirrorsync.ProjectLoader, publicServer *public.Server,
 	logger *logging.Logger, loaded mastercontrol.CertificateSigner) (http.Handler, error) {
 	var resetResourceLimiter func(string)
+	var resetClientBlockCache func(string)
 	if publicServer != nil {
 		resetResourceLimiter = publicServer.ResetResourceLimiter
+		resetClientBlockCache = publicServer.ResetClientBlockCache
 	}
 	ui, err := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
-		Projects:             projectLoader,
-		Signer:               loaded.Sign,
-		Sync:                 syncService,
-		TrustedCIDRs:         cfg.Proxy.TrustedCIDRs,
-		Timezone:             cfg.Stats.Timezone,
-		ResetResourceLimiter: resetResourceLimiter,
+		Projects:              projectLoader,
+		Signer:                loaded.Sign,
+		Sync:                  syncService,
+		TrustedCIDRs:          cfg.Proxy.TrustedCIDRs,
+		Timezone:              cfg.Stats.Timezone,
+		ResetResourceLimiter:  resetResourceLimiter,
+		ResetClientBlockCache: resetClientBlockCache,
 	})
 	if err != nil {
 		return nil, err

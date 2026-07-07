@@ -126,9 +126,6 @@ type AuthorizationStatus struct {
 }
 
 func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, _ string) (Challenge, error) {
-	if _, err := s.routableAsset(ctx, assetID); err != nil {
-		return Challenge{}, err
-	}
 	now := time.Now().UTC()
 	challenges := s.challengeMemory()
 	challenges.cleanup(now)
@@ -137,6 +134,9 @@ func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix strin
 	}
 	id, err := requestid.New()
 	if err != nil {
+		return Challenge{}, err
+	}
+	if _, err := s.routableAsset(ctx, assetID); err != nil {
 		return Challenge{}, err
 	}
 	challenge := Challenge{

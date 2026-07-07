@@ -26,6 +26,9 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
 		return
 	}
+	if s.rejectBlockedDownload(w, r, "", "download_page") {
+		return
+	}
 	assetID := strings.TrimPrefix(r.URL.Path, "/download/")
 	if assetID == "" || strings.Contains(assetID, "/") {
 		http.NotFound(w, r)
@@ -42,6 +45,9 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	if s.rejectBlockedDownload(w, r, "", "download_page") {
 		return
 	}
 	if _, err := assetpath.ParsePublicPath(r.URL.EscapedPath()); err != nil {

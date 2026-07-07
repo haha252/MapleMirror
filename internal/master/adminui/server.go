@@ -26,14 +26,15 @@ type Server struct {
 	sync      interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
-	users                map[string]userRecord
-	store                loginStore
-	trustedCIDRs         []string
-	timeLocation         *time.Location
-	templates            *template.Template
-	adminFS              fs.FS
-	publicFS             fs.FS
-	resetResourceLimiter func(string)
+	users                 map[string]userRecord
+	store                 loginStore
+	trustedCIDRs          []string
+	timeLocation          *time.Location
+	templates             *template.Template
+	adminFS               fs.FS
+	publicFS              fs.FS
+	resetResourceLimiter  func(string)
+	resetClientBlockCache func(string)
 }
 
 type Options struct {
@@ -42,9 +43,10 @@ type Options struct {
 	Sync     interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
-	TrustedCIDRs         []string
-	Timezone             string
-	ResetResourceLimiter func(string)
+	TrustedCIDRs          []string
+	Timezone              string
+	ResetResourceLimiter  func(string)
+	ResetClientBlockCache func(string)
 }
 
 func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mirrorsync.Store, opts Options) (*Server, error) {
@@ -88,9 +90,10 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		repo: repo, syncStore: syncStore, projects: opts.Projects,
 		signer: opts.Signer, sync: opts.Sync, users: users,
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
-		trustedCIDRs:         opts.TrustedCIDRs,
-		timeLocation:         timeLocation,
-		resetResourceLimiter: opts.ResetResourceLimiter,
+		trustedCIDRs:          opts.TrustedCIDRs,
+		timeLocation:          timeLocation,
+		resetResourceLimiter:  opts.ResetResourceLimiter,
+		resetClientBlockCache: opts.ResetClientBlockCache,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
 			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL,
 			memory: newLoginMemory()},

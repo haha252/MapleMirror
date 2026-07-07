@@ -73,6 +73,8 @@ func TestManualClientBlockNormalizesSingleIP(t *testing.T) {
 
 func TestManualClientBlockAcceptsIPv4Segment(t *testing.T) {
 	server, db := newTestServer(t)
+	var invalidated string
+	server.resetClientBlockCache = func(key string) { invalidated = key }
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/security/blocks", nil)
 	if err := server.createBlock(req, "client", "192.0.2.9/24", "人工预封禁", "168h"); err != nil {
 		t.Fatal(err)
@@ -84,6 +86,9 @@ func TestManualClientBlockAcceptsIPv4Segment(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("ipv4 segment client block count = %d, want 1", count)
+	}
+	if invalidated != "192.0.2.0/24" {
+		t.Fatalf("ipv4 segment cache invalidation = %q", invalidated)
 	}
 }
 

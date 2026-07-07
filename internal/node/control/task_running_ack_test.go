@@ -118,7 +118,8 @@ func TestSendNextRunningTaskAckSkipsRecentWindowAndReachesLaterTasks(t *testing.
 			return
 		}
 		if ack.TaskID != "task-51" {
-			t.Fatalf("expected task-51 ack, got %s", ack.TaskID)
+			t.Errorf("expected task-51 ack, got %s", ack.TaskID)
+			return
 		}
 		sendAck(server, msg)
 	}()

@@ -54,6 +54,7 @@
 | `409` | `NO_ROUTABLE_NODE` | 当前没有可用下载节点 |
 | `416` | `RANGE_NOT_SATISFIABLE` | Range 不合法或超出文件范围 |
 | `429` | `PUBLIC_RESOURCE_RATE_LIMITED` | 主节点公共资源请求过于频繁 |
+| `429` | `CLIENT_RATE_LIMITED` | 客户端挑战创建频率达到自适应拒绝等级 |
 | `429` | `REQUEST_QUOTA_EXHAUSTED` | 地址级或网段级请求额度不足 |
 | `429` | `TRAFFIC_LIMIT_EXCEEDED` | 地址级或网段级每日流量预算不足 |
 | `500` | `PUBLIC_INTERNAL_ERROR` | 服务端处理失败，使用请求 ID 排查 |
@@ -478,6 +479,8 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 若授权签发因为 `REQUEST_QUOTA_EXHAUSTED` 或 `TRAFFIC_LIMIT_EXCEEDED` 失败，主节点会把客户端前缀写入本站自动封禁表。默认封禁 7 天，时长由 `quota.yaml` 的 `blocklist.auto_ban_duration` 调整；过期后自动不再生效。订阅源黑名单不受该过期时间影响，只跟随订阅源当前快照。
 
+挑战创建还会应用 `abuse_control` 的精确地址与网段窗口。可疑来源收到的 `difficulty` 或 `leading_zero_bits` 是本次挑战的实际难度，客户端必须按响应值计算；拒绝等级返回 `429 CLIENT_RATE_LIMITED` 和 `Retry-After`。已封禁 API 客户端始终收到 `403 CLIENT_BLOCKED`，不会收到浏览器惩罚 PoW。
+
 ## 7. 授权查询
 
 `GET /api/public/v1/authorizations/{authorization_id}`
@@ -600,7 +603,7 @@ M4 可以不支持单个请求内的 multipart Range。若收到多段 Range，�
 
 - 公共 API 响应不得包含节点内部地址、控制端口、证书、磁盘路径、GitHub Token 或完整客户端 IP。
 - 日志不得记录完整 `download_token`、完整网页挑战 payload、完整 PoW 规范字符串或完整 URL 查询令牌。
-- 黑名单拒绝日志必须包含封禁原因和来源，并累计 `blocked_after_attempts` 表示该客户端前缀封禁后仍尝试下载的次数。
+- 黑名单拒绝日志使用脱敏来源，并按首次及 2 的幂次数采样；`blocked_after_attempts` 表示该客户端前缀封禁后仍尝试下载的累计次数。
 - JSON 字段新增必须保持向后兼容；删除或重命名字段前必须更新本文并经过阶段确认。
 - 所有中文错误、页面文案和文档使用 UTF-8。
 

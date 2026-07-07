@@ -30,8 +30,9 @@ func TestBlocklistRejectsChallengeAndCountsAttempts(t *testing.T) {
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("黑名单客户端应被拒绝：code=%d body=%s", rec.Code, rec.Body.String())
 		}
-		if !strings.Contains(rec.Body.String(), "您的IP（192.0.2.9）已被AI封禁") {
-			t.Fatalf("封禁提示应包含真实 IP：%s", rec.Body.String())
+		if !strings.Contains(rec.Body.String(), `"source":"192.0.2.*"`) ||
+			strings.Contains(rec.Body.String(), "被AI封禁") {
+			t.Fatalf("封禁提示应只包含脱敏来源：%s", rec.Body.String())
 		}
 	}
 

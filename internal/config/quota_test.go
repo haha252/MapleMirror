@@ -70,3 +70,21 @@ func TestQuotaRejectsInvalidBlocklistFeed(t *testing.T) {
 		t.Fatal("黑名单订阅源必须拒绝非 http/https URL")
 	}
 }
+
+func TestQuotaRejectsNonIncreasingEscalationDurations(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "quota.yaml")
+	body := []byte(`
+abuse_control:
+  blocked:
+    escalation:
+      level_1_duration: "720h"
+      level_2_duration: "700h"
+      level_3_duration: "8760h"
+`)
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadQuota(path, nil); err == nil {
+		t.Fatal("封禁升级期限必须严格递增")
+	}
+}

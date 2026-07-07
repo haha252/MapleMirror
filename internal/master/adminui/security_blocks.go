@@ -26,15 +26,15 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 	}
 	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT kind, block_key,
 		display_ip, reason, source, blocked_at, expires_at, attempts_after_block,
-		last_attempt_at FROM (
+		escalation_level, punishment_active, last_attempt_at FROM (
 		SELECT 'admin' AS kind, ip_key AS block_key,
 		COALESCE(NULLIF(display_ip, ''), masked_ip) AS display_ip, reason,
 		'管理登录' AS source, blocked_at, expires_at, attempts_after_block,
-		last_attempt_at FROM admin_ip_blocks WHERE expires_at > ?
+		0 AS escalation_level, 0 AS punishment_active, last_attempt_at FROM admin_ip_blocks WHERE expires_at > ?
 		UNION ALL
 		SELECT 'client' AS kind, client_prefix_key AS block_key,
 		client_prefix_key AS display_ip, reason, source, blocked_at, expires_at,
-		attempts_after_block, last_attempt_at FROM client_blocks WHERE expires_at > ?
+		attempts_after_block, escalation_level, punishment_active, last_attempt_at FROM client_blocks WHERE expires_at > ?
 		) ORDER BY blocked_at DESC LIMIT ? OFFSET ?`,
 		now, now, page.PageSize, page.offset())
 	if err != nil {
@@ -45,14 +45,17 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 	for rows.Next() {
 		var kind, key, display, reason, source, blocked, expires, last string
 		var attempts int
+		var escalation int
+		var punishment int
 		if err := rows.Scan(&kind, &key, &display, &reason, &source, &blocked,
-			&expires, &attempts, &last); err != nil {
+			&expires, &attempts, &escalation, &punishment, &last); err != nil {
 			return nil, 0, err
 		}
 		items = append(items, map[string]any{"kind": kind, "key": key,
 			"display_ip": display, "masked_ip": display, "reason": reason, "source": source,
 			"blocked_at": s.displayTime(blocked), "expires_at": s.displayTime(expires),
-			"attempts_after_block": attempts, "last_attempt_at": s.displayTime(last)})
+			"attempts_after_block": attempts, "escalation_level": escalation,
+			"punishment_active": punishment == 1, "last_attempt_at": s.displayTime(last)})
 	}
 	if page.Page == 1 {
 		for _, block := range memoryBlocks {
@@ -65,6 +68,8 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 				"blocked_at":           s.displayTime(block.BlockedAt),
 				"expires_at":           s.displayTime(block.ExpiresAt),
 				"attempts_after_block": block.AttemptsAfterBlock,
+				"escalation_level":     0,
+				"punishment_active":    false,
 				"last_attempt_at":      s.displayTime(block.LastAttemptAt)})
 		}
 	}
@@ -108,13 +113,19 @@ func (s *Server) createBlock(r *http.Request, kind, key, reason, duration string
 		}
 		_, err = s.repo.DB.ExecContext(r.Context(), `INSERT INTO client_blocks
 			(client_prefix_key, reason, source, blocked_at, expires_at,
-			attempts_after_block, last_attempt_at, updated_at)
-			VALUES (?, ?, 'manual', ?, ?, 0, ?, ?)
+			attempts_after_block, escalation_level, punishment_active,
+			last_attempt_at, updated_at)
+			VALUES (?, ?, 'manual', ?, ?, 0, 0, 0, ?, ?)
 			ON CONFLICT(client_prefix_key) DO UPDATE SET reason = excluded.reason,
-			source = excluded.source, expires_at = excluded.expires_at,
-			updated_at = excluded.updated_at`, key, reason, now, expires, now, now)
+			source = excluded.source, blocked_at = excluded.blocked_at,
+			expires_at = excluded.expires_at, attempts_after_block = 0,
+			escalation_level = 0, punishment_active = 0,
+			last_attempt_at = excluded.last_attempt_at, updated_at = excluded.updated_at`, key, reason, now, expires, now, now)
 	default:
 		return errors.New("封禁类型必须是 admin 或 client")
+	}
+	if err == nil && kind == "client" && s.resetClientBlockCache != nil {
+		s.resetClientBlockCache(key)
 	}
 	return err
 }
@@ -207,6 +218,9 @@ func (s *Server) deleteClientBlock(r *http.Request, key string) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	if s.resetClientBlockCache != nil {
+		s.resetClientBlockCache(key)
 	}
 	if s.resetResourceLimiter != nil {
 		s.resetResourceLimiter(key)

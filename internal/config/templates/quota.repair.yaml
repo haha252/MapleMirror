@@ -87,6 +87,89 @@ blocklist:
       # 单次拉取订阅源的超时时间；为空时运行时默认 10s。
       timeout: "10s"
 
+# 自适应防御与惩罚 PoW 配置。
+abuse_control:
+  # 策略模式：off 完全关闭新增策略，observe 只记录不拦截，enforce 正式启用。
+  mode: "enforce"
+  # 自适应挑战参数。
+  challenge:
+    # 统计突发请求时采用的时间窗口。
+    burst_window: "1m"
+    # 统计滚动请求时采用的时间窗口。
+    rolling_window: "10m"
+    # 答案错误时按此权重计数。
+    invalid_solution_weight: 4
+    # 可疑等级在基础难度上增加的位数。
+    elevated_bits: 2
+    # 严重等级在基础难度上增加的位数。
+    severe_bits: 4
+    # 普通自适应挑战允许的最高难度位数。
+    max_bits: 28
+    # 精确来源的阈值。
+    exact:
+      # 单 IP 可疑等级的 1 分钟阈值。
+      elevated_burst: 6
+      # 单 IP 可疑等级的 10 分钟阈值。
+      elevated_rolling: 15
+      # 单 IP 严重等级的 1 分钟阈值。
+      severe_burst: 12
+      # 单 IP 严重等级的 10 分钟阈值。
+      severe_rolling: 25
+      # 单 IP 拒绝等级的 1 分钟阈值。
+      reject_burst: 20
+      # 单 IP 拒绝等级的 10 分钟阈值。
+      reject_rolling: 30
+    # 网段来源的阈值。
+    network:
+      # 网段可疑等级的 1 分钟阈值。
+      elevated_burst: 60
+      # 网段可疑等级的 10 分钟阈值。
+      elevated_rolling: 150
+      # 网段严重等级的 1 分钟阈值。
+      severe_burst: 120
+      # 网段严重等级的 10 分钟阈值。
+      severe_rolling: 250
+      # 网段拒绝等级的 1 分钟阈值。
+      reject_burst: 200
+      # 网段拒绝等级的 10 分钟阈值。
+      reject_rolling: 300
+  # 封禁缓存、刷新和升级参数。
+  blocked:
+    # 封禁后增量计数的后台刷新间隔。
+    flush_interval: "30s"
+    # 单个封禁累计到该次数后立即刷新一次数据库。
+    flush_batch: 100
+    # 未命中封禁记录时的负缓存有效期。
+    cache_negative_ttl: "30s"
+    # 期限升级参数。
+    escalation:
+      # 封禁后总尝试达到该值时升级到第一级。
+      level_1_attempts: 10
+      # 第一级升级后的最短到期时长。
+      level_1_duration: "720h"
+      # 封禁后总尝试达到该值时升级到第二级。
+      level_2_attempts: 50
+      # 第二级升级后的最短到期时长。
+      level_2_duration: "2160h"
+      # 封禁后总尝试达到该值时升级到第三级。
+      level_3_attempts: 200
+      # 第三级升级后的最短到期时长。
+      level_3_duration: "8760h"
+  # 128 位惩罚 PoW 参数。
+  punishment:
+    # 是否启用 128 位惩罚 PoW。
+    enabled: true
+    # 惩罚页的固定 PoW 难度。
+    difficulty: 128
+    # 自动封禁后总尝试达到该值时进入惩罚状态。
+    total_attempts: 30
+    # 自动封禁后 1 分钟内尝试达到该值时进入惩罚状态。
+    burst_attempts: 20
+    # 自动封禁后 10 分钟内尝试达到该值时进入惩罚状态。
+    rolling_attempts: 30
+    # 惩罚页最多启动的 Worker 数量。
+    worker_limit: 32
+
 # 白名单 IP 或 CIDR 列表；命中后跳过请求额度、流量限额和黑名单。
 exemptions:
   # 本机 IPv4 地址默认豁免，便于健康检查和本地管理验证。

@@ -42,10 +42,15 @@ type blocklistFeed struct {
 }
 
 type blockDecision struct {
-	Blocked  bool
-	Reason   string
-	Source   string
-	Attempts int64
+	Blocked          bool
+	Reason           string
+	Source           string
+	Attempts         int64
+	Key              string
+	BlockedAt        string
+	ExpiresAt        string
+	EscalationLevel  int
+	PunishmentActive bool
 }
 
 func newBlocklistPolicy(q config.Quota, logger *logging.Logger) *blocklistPolicy {

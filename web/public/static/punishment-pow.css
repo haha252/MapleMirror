@@ -1,0 +1,107 @@
+.page-punishment-pow .site-main {
+  width: min(90vw, 1120px);
+  padding-top: clamp(32px, 5vh, 60px);
+  padding-bottom: clamp(34px, 6vh, 58px);
+}
+
+.page-punishment-pow .page-title-row {
+  margin-bottom: clamp(28px, 5vw, 56px);
+}
+
+.page-punishment-pow .page-notices--after {
+  width: min(100%, 640px);
+  margin: 12px auto 0;
+}
+
+.page-punishment-pow .page-notice {
+  overflow-wrap: anywhere;
+}
+
+.punishment-pow__eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.punishment-pow__lead {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.punishment-pow__body {
+  display: grid;
+  gap: 14px;
+}
+
+.punishment-pow__body p {
+  margin-bottom: 0;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.punishment-pow__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin: 0;
+}
+
+.punishment-pow__meta div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-muted);
+}
+
+.punishment-pow__meta dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.punishment-pow__meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .page-punishment-pow .page-notices--after {
+    width: min(100%, 600px);
+  }
+}
+
+@media (max-width: 680px) {
+  .page-punishment-pow .site-main {
+    width: min(90vw, 640px);
+    padding-top: 30px;
+    padding-bottom: 36px;
+  }
+  .page-punishment-pow .page-title-row {
+    margin-bottom: 28px;
+  }
+  .page-punishment-pow .page-notices--after {
+    width: 100%;
+    margin-top: 10px;
+  }
+  .page-punishment-pow .page-notice {
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .punishment-pow__meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 390px) {
+  .page-punishment-pow .site-main {
+    width: min(92vw, 640px);
+  }
+}

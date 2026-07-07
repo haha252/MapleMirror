@@ -19,6 +19,7 @@ type pageData struct {
 	Styles        []string
 	Scripts       []string
 	StaticJSON    template.JS
+	StatusCode    int
 }
 
 func (s Server) assets() (*webAssets, error) {
@@ -37,6 +38,10 @@ func (s Server) renderPage(w http.ResponseWriter, data pageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	data.StaticJSON = assets.staticJSON
+	if data.StatusCode == 0 {
+		data.StatusCode = http.StatusOK
+	}
+	w.WriteHeader(data.StatusCode)
 	_ = assets.pageTemplate.Execute(w, data)
 }
 
@@ -51,6 +56,8 @@ func (s Server) renderTemplateBody(name string, payload any) (template.HTML, err
 		err = assets.downloadTmpl.Execute(&buf, payload)
 	case "download_pow":
 		err = assets.downloadPowTmpl.Execute(&buf, payload)
+	case "punishment_pow":
+		err = assets.punishmentPowTmpl.Execute(&buf, payload)
 	case "project":
 		err = assets.projectTmpl.Execute(&buf, payload)
 	default:

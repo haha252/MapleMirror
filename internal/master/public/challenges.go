@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const publicJSONBodyLimit = 16 * 1024
@@ -21,17 +22,36 @@ type altchaPayload struct {
 }
 
 func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
+	if s.rejectBlockedDownload(w, r, "", "web_challenge") {
+		return
+	}
 	var in struct {
 		AssetID string `json:"asset_id"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	if s.rejectBlockedDownload(w, r, in.AssetID, "web_challenge") {
-		return
+	prefix := s.clientPrefix(r)
+	now := time.Now().UTC()
+	difficulty := s.ALTCHADifficulty
+	if s.AbuseTracker != nil {
+		decision := s.AbuseTracker.recordAndDecide("web", prefix, 1, now)
+		if s.AbuseTracker.mode == "enforce" && decision.Level == abuseLevelReject {
+			if decision.RetryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(decision.RetryAfter.Seconds())))
+			}
+			writeError(w, r, http.StatusTooManyRequests, "CLIENT_RATE_LIMITED", "请求过于频繁，请稍后再试")
+			return
+		}
+		if s.AbuseTracker.mode == "enforce" && decision.Bits > 0 {
+			difficulty = minInt(difficulty+decision.Bits, s.AbuseTracker.cfg.Challenge.MaxBits)
+		}
+	}
+	if difficulty <= 0 {
+		difficulty = s.ALTCHADifficulty
 	}
 	challenge, err := s.Store.CreateChallenge(r.Context(), "altcha", in.AssetID,
-		s.clientPrefix(r), s.ALTCHADifficulty, s.ALTCHATTL, requestID(r))
+		prefix, difficulty, s.ALTCHATTL, requestID(r))
 	if err != nil {
 		if err == errChallengeQuota {
 			writeError(w, r, http.StatusTooManyRequests, "CHALLENGE_RATE_LIMITED", "挑战创建过于频繁，请稍后再试")
@@ -48,17 +68,33 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
+	if s.rejectBlockedDownload(w, r, "", "api_challenge") {
+		return
+	}
 	var in struct {
 		AssetID string `json:"asset_id"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	if s.rejectBlockedDownload(w, r, in.AssetID, "api_challenge") {
-		return
+	prefix := s.clientPrefix(r)
+	now := time.Now().UTC()
+	difficulty := s.APIZeroBits
+	if s.AbuseTracker != nil {
+		decision := s.AbuseTracker.recordAndDecide("api", prefix, 1, now)
+		if s.AbuseTracker.mode == "enforce" && decision.Level == abuseLevelReject {
+			if decision.RetryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(decision.RetryAfter.Seconds())))
+			}
+			writeError(w, r, http.StatusTooManyRequests, "CLIENT_RATE_LIMITED", "请求过于频繁，请稍后再试")
+			return
+		}
+		if s.AbuseTracker.mode == "enforce" && decision.Bits > 0 {
+			difficulty = minInt(difficulty+decision.Bits, s.AbuseTracker.cfg.Challenge.MaxBits)
+		}
 	}
 	challenge, err := s.Store.CreateChallenge(r.Context(), "api_pow", in.AssetID,
-		s.clientPrefix(r), s.APIZeroBits, s.APITTL, requestID(r))
+		prefix, difficulty, s.APITTL, requestID(r))
 	if err != nil {
 		if err == errChallengeQuota {
 			writeError(w, r, http.StatusTooManyRequests, "CHALLENGE_RATE_LIMITED", "挑战创建过于频繁，请稍后再试")
@@ -69,13 +105,16 @@ func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	writeOK(w, r, http.StatusCreated, "挑战已创建", map[string]any{
 		"challenge_id": challenge.ID, "asset_id": in.AssetID, "nonce_seed": challenge.Nonce,
-		"algorithm": "sha256", "leading_zero_bits": s.APIZeroBits,
+		"algorithm": "sha256", "leading_zero_bits": challenge.Difficulty,
 		"expires_at":       challenge.ExpiresAt,
 		"canonical_format": "download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}",
 	})
 }
 
 func (s Server) webAuthorize(w http.ResponseWriter, r *http.Request) {
+	if s.rejectBlockedDownload(w, r, "", "web_authorization") {
+		return
+	}
 	var in struct {
 		ChallengeID   string          `json:"challenge_id"`
 		AssetID       string          `json:"asset_id"`
@@ -89,23 +128,20 @@ func (s Server) webAuthorize(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "INVALID_REQUEST", "网页挑战提交内容不合法")
 		return
 	}
-	if s.rejectBlockedDownload(w, r, in.AssetID, "web_authorization") {
-		return
-	}
 	s.authorize(w, r, challengeSubmit{Kind: "altcha", ChallengeID: in.ChallengeID,
 		AssetID: in.AssetID, Solution: strconv.Itoa(payload.Number)})
 }
 
 func (s Server) apiAuthorize(w http.ResponseWriter, r *http.Request) {
+	if s.rejectBlockedDownload(w, r, "", "api_authorization") {
+		return
+	}
 	var in struct {
 		ChallengeID string `json:"challenge_id"`
 		AssetID     string `json:"asset_id"`
 		Nonce       string `json:"nonce"`
 	}
 	if !decodeJSON(w, r, &in) {
-		return
-	}
-	if s.rejectBlockedDownload(w, r, in.AssetID, "api_authorization") {
 		return
 	}
 	s.authorize(w, r, challengeSubmit{Kind: "api_pow", ChallengeID: in.ChallengeID,
@@ -171,4 +207,11 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, out any) bool {
 
 func normalizeSolution(value string) string {
 	return strings.TrimSpace(value)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

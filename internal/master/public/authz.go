@@ -19,20 +19,35 @@ type challengeSubmit struct {
 }
 
 func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSubmit) {
+	prefix := s.clientPrefix(r)
+	sourceKind := authorizationSourceKind(in.Kind)
+	now := time.Now().UTC()
 	loaded, err := s.Store.LoadChallenge(r.Context(), in.ChallengeID)
 	if err != nil {
+		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
+			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+		}
 		writeError(w, r, http.StatusNotFound, "CHALLENGE_REQUIRED", "挑战不存在或已失效")
 		return
 	}
 	if loaded.Kind != in.Kind || loaded.AssetID != in.AssetID {
+		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
+			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+		}
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与资产不匹配")
 		return
 	}
-	if loaded.ClientPrefixKey != s.clientPrefix(r) {
+	if loaded.ClientPrefixKey != prefix {
+		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
+			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+		}
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与客户端不匹配")
 		return
 	}
 	if !s.validSolution(loaded, normalizeSolution(in.Solution)) {
+		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
+			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+		}
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战校验失败")
 		return
 	}
@@ -66,7 +81,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 				slog.String("request_id", requestID(r)),
 				slog.String("challenge_id", loaded.ID),
 				slog.String("asset_id", in.AssetID),
-				slog.String("client_prefix", loaded.ClientPrefixKey),
+				slog.String("client_source", maskPublicSource(loaded.ClientPrefixKey)),
 				slog.String("error", err.Error()))
 		}
 		writeError(w, r, code, stable, message)
@@ -105,13 +120,12 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 			slog.String("request_id", requestID(r)),
 			slog.String("authorization_id", auth.Claims.AuthorizationID),
 			slog.String("asset_id", in.AssetID),
-			slog.String("client_ip", s.clientIP(r)),
+			slog.String("client_source", maskPublicSource(s.clientIP(r))),
 			slog.String("node_id", debug.NodeID),
 			slog.String("node_name", debug.NodeName),
 			slog.String("project_id", debug.ProjectID),
 			slog.String("system", debug.System),
 			slog.String("architecture", debug.Architecture),
-			slog.String("client_prefix", debug.ClientPrefix),
 			slog.String("expires_at", debug.ExpiresAt),
 			slog.Int64("max_bytes", debug.MaxBytes),
 			slog.Int("range_limit", debug.RangeLimit),
@@ -127,6 +141,13 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		"range_concurrency_limit": auth.Claims.RangeConcurrencyLimit,
 		"max_bytes":               auth.Claims.MaxBytes,
 	})
+}
+
+func (s Server) invalidSolutionWeight() int64 {
+	if s.AbuseTracker == nil || s.AbuseTracker.cfg.Challenge.InvalidSolutionWeight <= 0 {
+		return 4
+	}
+	return int64(s.AbuseTracker.cfg.Challenge.InvalidSolutionWeight)
 }
 
 func (s Server) validSolution(c Challenge, solution string) bool {

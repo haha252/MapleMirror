@@ -1,0 +1,20 @@
+<section class="download-pow-page punishment-pow-page">
+  <div class="download-pow panel-card punishment-pow">
+    <div class="download-pow__head punishment-pow__head">
+      <p class="punishment-pow__eyebrow">访问受限验证</p>
+      <h2 id="punishment-pow-title">你是人类吗？</h2>
+      <p class="muted punishment-pow__lead">系统检测到当前来源在被限制后仍持续产生大量请求，正在进行访问验证。</p>
+    </div>
+    <div id="punishment-pow-status" class="status status--strong muted">正在计算验证答案……</div>
+    <div class="punishment-pow__body">
+      <p>如果你是正常用户并认为这是误判，请发送邮件至 <a href="mailto:frostlynx@qq.com">frostlynx@qq.com</a>，附上本页截图、出现时间和请求编号，并简要说明出现此页面前进行的操作。请勿提供密码或下载令牌。</p>
+      <dl class="punishment-pow__meta">
+        <div><dt>请求编号</dt><dd id="punishment-pow-request-id">-</dd></div>
+        <div><dt>服务器时间</dt><dd id="punishment-pow-server-time">-</dd></div>
+        <div><dt>来源地址</dt><dd id="punishment-pow-source">-</dd></div>
+        <div><dt>申诉邮箱</dt><dd id="punishment-pow-email">-</dd></div>
+      </dl>
+    </div>
+  </div>
+  <script id="punishment-pow-data" type="application/json">{{.Payload}}</script>
+</section>
