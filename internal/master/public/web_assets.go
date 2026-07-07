@@ -23,6 +23,7 @@ type webAssets struct {
 	pageTemplate      *template.Template
 	downloadTmpl      *template.Template
 	downloadPowTmpl   *template.Template
+	blockedTmpl       *template.Template
 	punishmentPowTmpl *template.Template
 	projectTmpl       *template.Template
 	placeholder       []byte
@@ -65,6 +66,10 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	blockedTmpl, err := template.New("blocked.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/blocked.html")
+	if err != nil {
+		return nil, err
+	}
 	punishmentPowTmpl, err := template.New("punishment_pow.html").Funcs(funcs).ParseFS(web.Assets, "public/templates/punishment_pow.html")
 	if err != nil {
 		return nil, err
@@ -82,6 +87,7 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 		pageTemplate:      pageTemplate,
 		downloadTmpl:      downloadTmpl,
 		downloadPowTmpl:   downloadPowTmpl,
+		blockedTmpl:       blockedTmpl,
 		punishmentPowTmpl: punishmentPowTmpl,
 		projectTmpl:       projectTmpl,
 		placeholder:       placeholder,
@@ -119,6 +125,10 @@ func loadWebAssets(root string) (*webAssets, error) {
 	if err != nil {
 		return nil, err
 	}
+	blockedTmpl, err := template.New("blocked.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "blocked.html"))
+	if err != nil {
+		return nil, err
+	}
 	punishmentPowTmpl, err := template.New("punishment_pow.html").Funcs(funcs).ParseFiles(filepath.Join(templateDir, "punishment_pow.html"))
 	if err != nil {
 		return nil, err
@@ -137,6 +147,7 @@ func loadWebAssets(root string) (*webAssets, error) {
 		pageTemplate:      pageTemplate,
 		downloadTmpl:      downloadTmpl,
 		downloadPowTmpl:   downloadPowTmpl,
+		blockedTmpl:       blockedTmpl,
 		punishmentPowTmpl: punishmentPowTmpl,
 		projectTmpl:       projectTmpl,
 		placeholder:       placeholder,

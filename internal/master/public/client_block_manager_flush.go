@@ -80,7 +80,7 @@ func (m *clientBlockManager) applyClaimedEntry(ctx context.Context, key string,
 		m.mergePending(key, entry)
 		if m.logger != nil && shouldLogAttempt(int64(entry.failCount)) {
 			m.logger.Warn(ctx, "封禁后计数刷新失败",
-				slog.String("client_source", maskPublicSource(key)),
+				slog.String("client_source", fullPublicSource(key)),
 				slog.Int("consecutive_failures", entry.failCount),
 				slog.String("error", err.Error()))
 		}
@@ -117,14 +117,14 @@ func (m *clientBlockManager) logStateTransition(ctx context.Context, key string,
 	}
 	if result.Record.EscalationLevel > result.PreviousEscalation {
 		m.logger.Warn(ctx, "自动封禁期限已升级",
-			slog.String("client_source", maskPublicSource(key)),
+			slog.String("client_source", fullPublicSource(key)),
 			slog.Int64("blocked_after_attempts", result.Record.AttemptsAfterBlock),
 			slog.Int("escalation_level", result.Record.EscalationLevel),
 			slog.String("expires_at", result.Record.ExpiresAt))
 	}
 	if result.Record.PunishmentActive && !result.PreviousPunishment {
 		m.logger.Warn(ctx, "客户端已进入惩罚验证模式",
-			slog.String("client_source", maskPublicSource(key)),
+			slog.String("client_source", fullPublicSource(key)),
 			slog.Int64("blocked_after_attempts", result.Record.AttemptsAfterBlock))
 	}
 }

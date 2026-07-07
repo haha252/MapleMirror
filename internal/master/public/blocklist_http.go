@@ -19,17 +19,18 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 	var stored clientBlockDecision
 	exempt := s.Blocklist != nil && s.Blocklist.exempt(clientPrefix)
 	if !decision.Blocked && s.ClientBlocks != nil && !exempt {
-		stored, err := s.ClientBlocks.resolve(r.Context(), clientPrefix, now)
+		var err error
+		stored, err = s.ClientBlocks.resolve(r.Context(), clientPrefix, now)
 		if err != nil && s.Logger != nil {
 			if requestContextDone(err) {
 				s.Logger.Debug(r.Context(), "请求已取消，客户端封禁查询终止",
 					slog.String("request_id", requestID(r)),
-					slog.String("client_source", maskPublicSource(clientPrefix)),
+					slog.String("client_source", fullPublicSource(clientPrefix)),
 					slog.String("error", err.Error()))
 			} else {
 				s.Logger.Warn(r.Context(), "客户端封禁状态查询失败，继续处理请求",
 					slog.String("request_id", requestID(r)),
-					slog.String("client_source", maskPublicSource(clientPrefix)),
+					slog.String("client_source", fullPublicSource(clientPrefix)),
 					slog.String("error", err.Error()))
 			}
 		}
@@ -41,12 +42,12 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 			if requestContextDone(err) {
 				s.Logger.Debug(r.Context(), "请求已取消，自动封禁状态查询终止",
 					slog.String("request_id", requestID(r)),
-					slog.String("client_source", maskPublicSource(clientPrefix)),
+					slog.String("client_source", fullPublicSource(clientPrefix)),
 					slog.String("error", err.Error()))
 			} else {
 				s.Logger.Warn(r.Context(), "自动封禁状态查询失败，继续处理请求",
 					slog.String("request_id", requestID(r)),
-					slog.String("client_source", maskPublicSource(clientPrefix)),
+					slog.String("client_source", fullPublicSource(clientPrefix)),
 					slog.String("error", err.Error()))
 			}
 		}
@@ -68,7 +69,7 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 		s.Logger.Warn(r.Context(), "黑名单客户端被拒绝，封禁后仍尝试下载",
 			slog.String("request_id", requestID(r)),
 			slog.String("asset_id", assetID),
-			slog.String("client_source", maskPublicSource(s.clientIP(r))),
+			slog.String("client_source", fullPublicSource(s.clientIP(r))),
 			slog.String("stage", stage),
 			slog.String("block_reason", decision.Reason),
 			slog.String("block_source", decision.Source),
@@ -83,7 +84,7 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 			Message:   "当前来源已被限制访问",
 			RequestID: requestID(r),
 			Data: map[string]string{
-				"source": maskPublicSource(s.clientIP(r)),
+				"source": fullPublicSource(s.clientIP(r)),
 			},
 		})
 		return true
@@ -92,8 +93,7 @@ func (s Server) rejectBlockedDownload(w http.ResponseWriter, r *http.Request, as
 		s.renderPunishmentPage(w, r, decision)
 		return true
 	}
-	writeError(w, r, http.StatusForbidden, "CLIENT_BLOCKED",
-		"您的来源已被限制访问；如有疑问，请发送页面截图、出现时间和请求编号至 frostlynx@qq.com。")
+	s.renderBlockedPage(w, r, decision)
 	return true
 }
 
@@ -121,7 +121,7 @@ func (s Server) autoBlockAfterQuotaError(r *http.Request, clientPrefix, assetID 
 			s.Logger.Warn(r.Context(), "自动封禁写入失败",
 				slog.String("request_id", requestID(r)),
 				slog.String("asset_id", assetID),
-				slog.String("client_source", maskPublicSource(clientPrefix)),
+				slog.String("client_source", fullPublicSource(clientPrefix)),
 				slog.String("block_reason", reason),
 				slog.String("error", blockErr.Error()))
 		}
@@ -134,7 +134,7 @@ func (s Server) autoBlockAfterQuotaError(r *http.Request, clientPrefix, assetID 
 		s.Logger.Warn(r.Context(), "客户端超过额度，已写入自动封禁",
 			slog.String("request_id", requestID(r)),
 			slog.String("asset_id", assetID),
-			slog.String("client_source", maskPublicSource(s.clientIP(r))),
+			slog.String("client_source", fullPublicSource(s.clientIP(r))),
 			slog.String("block_reason", reason),
 			slog.String("block_source", "local_auto_ban"),
 			slog.Duration("block_duration", s.blocklistAutoBanDuration()))

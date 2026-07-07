@@ -122,7 +122,7 @@ func (m *clientBlockManager) enforcing() bool {
 
 func (m *clientBlockManager) punishmentActive(record clientBlockRecord, key string) bool {
 	if m == nil || !m.enforcing() || !m.punishmentEnabled ||
-		record.Source != "local_auto_ban" || !validPunishmentClientBlockPrefix(key) {
+		!punishmentEligibleStoredSource(record.Source) || !validPunishmentClientBlockPrefix(key) {
 		return false
 	}
 	return record.PunishmentActive

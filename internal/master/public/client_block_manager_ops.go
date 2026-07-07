@@ -34,12 +34,15 @@ func (m *clientBlockManager) recordAttempt(ctx context.Context, decision clientB
 }
 
 func (m *clientBlockManager) shouldPersistState(decision clientBlockDecision, total, burst, rolling int64) bool {
-	if !decision.Blocked || !m.enforcing() || decision.Source != "local_auto_ban" || !validPunishmentClientBlockPrefix(decision.Key) {
+	if !decision.Blocked || !m.enforcing() || !validPunishmentClientBlockPrefix(decision.Key) {
 		return false
 	}
-	if m.punishmentEnabled && !decision.PunishmentActive &&
+	if punishmentEligibleStoredSource(decision.Source) && m.punishmentEnabled && !decision.PunishmentActive &&
 		(total >= m.punishmentTotal || burst >= m.punishmentBurst || rolling >= m.punishmentRolling) {
 		return true
+	}
+	if decision.Source != "local_auto_ban" {
+		return false
 	}
 	target := m.escalationLevel(total)
 	return target > decision.EscalationLevel

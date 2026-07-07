@@ -81,7 +81,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 				slog.String("request_id", requestID(r)),
 				slog.String("challenge_id", loaded.ID),
 				slog.String("asset_id", in.AssetID),
-				slog.String("client_source", maskPublicSource(loaded.ClientPrefixKey)),
+				slog.String("client_source", fullPublicSource(loaded.ClientPrefixKey)),
 				slog.String("error", err.Error()))
 		}
 		writeError(w, r, code, stable, message)
@@ -120,7 +120,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 			slog.String("request_id", requestID(r)),
 			slog.String("authorization_id", auth.Claims.AuthorizationID),
 			slog.String("asset_id", in.AssetID),
-			slog.String("client_source", maskPublicSource(s.clientIP(r))),
+			slog.String("client_source", fullPublicSource(s.clientIP(r))),
 			slog.String("node_id", debug.NodeID),
 			slog.String("node_name", debug.NodeName),
 			slog.String("project_id", debug.ProjectID),

@@ -99,21 +99,26 @@ func incrementBlockedAttempts(ctx context.Context, tx *sql.Tx, key string, delta
 
 func applyBlockPolicy(record *clientBlockRecord, key string, burst, rolling int64,
 	now time.Time, policy clientBlockApplyPolicy) {
-	eligible := policy.Enforce && record.Source == "local_auto_ban" &&
-		validPunishmentClientBlockPrefix(key)
-	if !eligible {
+	if !policy.Enforce || !validPunishmentClientBlockPrefix(key) {
 		return
 	}
-	targetLevel := applyEscalationLevel(record.AttemptsAfterBlock, policy)
-	if targetLevel > record.EscalationLevel {
-		record.EscalationLevel = targetLevel
-		record.ExpiresAt = extendedBlockExpiry(record.ExpiresAt, now,
-			applyEscalationDuration(targetLevel, policy))
+	if record.Source == "local_auto_ban" {
+		targetLevel := applyEscalationLevel(record.AttemptsAfterBlock, policy)
+		if targetLevel > record.EscalationLevel {
+			record.EscalationLevel = targetLevel
+			record.ExpiresAt = extendedBlockExpiry(record.ExpiresAt, now,
+				applyEscalationDuration(targetLevel, policy))
+		}
 	}
-	if policy.PunishmentEnabled && (record.AttemptsAfterBlock >= policy.PunishmentTotal ||
-		burst >= policy.PunishmentBurst || rolling >= policy.PunishmentRolling) {
+	if punishmentEligibleStoredSource(record.Source) && policy.PunishmentEnabled &&
+		(record.AttemptsAfterBlock >= policy.PunishmentTotal ||
+			burst >= policy.PunishmentBurst || rolling >= policy.PunishmentRolling) {
 		record.PunishmentActive = true
 	}
+}
+
+func punishmentEligibleStoredSource(source string) bool {
+	return source == "local_auto_ban" || source == "manual"
 }
 
 func applyEscalationLevel(total int64, policy clientBlockApplyPolicy) int {

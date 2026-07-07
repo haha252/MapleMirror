@@ -18,15 +18,21 @@ import (
 const maxBlocklistFeedBytes int64 = 4 << 20
 
 type blocklistPolicy struct {
-	mu         sync.Mutex
-	static     []blocklistEntry
-	feeds      []blocklistFeed
-	feedItems  map[string][]blocklistEntry
-	exemptions []netip.Prefix
-	attempts   map[string]int64
-	httpClient *http.Client
-	logger     *logging.Logger
-	autoBanTTL time.Duration
+	mu                sync.Mutex
+	static            []blocklistEntry
+	feeds             []blocklistFeed
+	feedItems         map[string][]blocklistEntry
+	exemptions        []netip.Prefix
+	attempts          map[string]int64
+	windows           map[string]*blockedAttemptWindow
+	httpClient        *http.Client
+	logger            *logging.Logger
+	autoBanTTL        time.Duration
+	mode              string
+	punishmentEnabled bool
+	punishmentTotal   int64
+	punishmentBurst   int64
+	punishmentRolling int64
 }
 
 type blocklistEntry struct {
@@ -57,8 +63,15 @@ func newBlocklistPolicy(q config.Quota, logger *logging.Logger) *blocklistPolicy
 	p := &blocklistPolicy{
 		feedItems:  map[string][]blocklistEntry{},
 		attempts:   map[string]int64{},
+		windows:    map[string]*blockedAttemptWindow{},
 		httpClient: &http.Client{},
 		logger:     logger,
+		mode:       strings.ToLower(strings.TrimSpace(q.AbuseControl.Mode)),
+		punishmentEnabled: q.AbuseControl.Punishment.Enabled != nil &&
+			*q.AbuseControl.Punishment.Enabled,
+		punishmentTotal:   int64(q.AbuseControl.Punishment.TotalAttempts),
+		punishmentBurst:   int64(q.AbuseControl.Punishment.BurstAttempts),
+		punishmentRolling: int64(q.AbuseControl.Punishment.RollingAttempts),
 	}
 	p.autoBanTTL, _ = time.ParseDuration(q.Blocklist.AutoBanDuration)
 	if p.autoBanTTL <= 0 {
@@ -109,13 +122,20 @@ func (p *blocklistPolicy) check(clientPrefix string) blockDecision {
 	if p.exemptAddr(addr) {
 		return blockDecision{}
 	}
-	if source, ok := matchBlocklist(p.static, addr); ok {
-		return p.blocked(clientPrefix, "static_blocklist", source)
-	}
+	matched, matchedOK := matchBlocklist(p.static, addr)
+	reason := "static_blocklist"
+	source := matched.source
 	for feedURL, entries := range p.feedItems {
-		if source, ok := matchBlocklist(entries, addr); ok {
-			return p.blocked(clientPrefix, "feed_blocklist", feedURL+" "+source)
+		entry, ok := matchBlocklist(entries, addr)
+		if !ok || (matchedOK && entry.prefix.Bits() <= matched.prefix.Bits()) {
+			continue
 		}
+		matched, matchedOK = entry, true
+		reason = "feed_blocklist"
+		source = feedURL + " " + entry.source
+	}
+	if matchedOK {
+		return p.blocked(clientPrefix, reason, source, matched.prefix)
 	}
 	return blockDecision{}
 }
@@ -144,9 +164,26 @@ func (p *blocklistPolicy) exemptAddr(addr netip.Addr) bool {
 	return containsPrefix(p.exemptions, addr)
 }
 
-func (p *blocklistPolicy) blocked(clientPrefix, reason, source string) blockDecision {
+func (p *blocklistPolicy) blocked(clientPrefix, reason, source string, matched netip.Prefix) blockDecision {
 	p.attempts[clientPrefix]++
-	return blockDecision{Blocked: true, Reason: reason, Source: source, Attempts: p.attempts[clientPrefix]}
+	decision := blockDecision{Blocked: true, Reason: reason, Source: source,
+		Attempts: p.attempts[clientPrefix], Key: matched.String()}
+	if p.mode != "enforce" || !p.punishmentEnabled ||
+		(matched.Addr().Is4() && matched.Bits() == 24) {
+		return decision
+	}
+	now := time.Now().UTC()
+	window := p.windows[clientPrefix]
+	if window == nil {
+		window = &blockedAttemptWindow{}
+		p.windows[clientPrefix] = window
+	}
+	window.add(now)
+	burst := window.countWindow(now, time.Minute)
+	rolling := window.countWindow(now, 10*time.Minute)
+	decision.PunishmentActive = decision.Attempts >= p.punishmentTotal ||
+		burst >= p.punishmentBurst || rolling >= p.punishmentRolling
+	return decision
 }
 
 func (p *blocklistPolicy) refreshLoop(feed blocklistFeed) {
@@ -179,39 +216,6 @@ func (p *blocklistPolicy) refreshFeed(feed blocklistFeed) {
 	p.mu.Lock()
 	p.feedItems[feed.url] = entries
 	p.mu.Unlock()
-}
-
-func parseBlockPrefix(raw string) (netip.Prefix, error) {
-	raw = strings.TrimSpace(raw)
-	if prefix, err := netip.ParsePrefix(raw); err == nil {
-		return prefix.Masked(), nil
-	}
-	addr, err := netip.ParseAddr(raw)
-	if err != nil {
-		return netip.Prefix{}, err
-	}
-	if addr.Is4() {
-		return netip.PrefixFrom(addr, 32), nil
-	}
-	return netip.PrefixFrom(addr, 128), nil
-}
-
-func matchBlocklist(entries []blocklistEntry, addr netip.Addr) (string, bool) {
-	for _, entry := range entries {
-		if entry.prefix.Contains(addr) {
-			return entry.source, true
-		}
-	}
-	return "", false
-}
-
-func containsPrefix(prefixes []netip.Prefix, addr netip.Addr) bool {
-	for _, prefix := range prefixes {
-		if prefix.Contains(addr) {
-			return true
-		}
-	}
-	return false
 }
 
 func (p *blocklistPolicy) logRefreshError(feedURL string, err error) {

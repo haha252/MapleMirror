@@ -73,6 +73,7 @@ func TestConsoleLoggerUsesHumanReadableChineseFields(t *testing.T) {
 		slog.String("authorization_id", "auth-1"),
 		slog.String("asset_id", "asset-1"),
 		slog.String("client_ip", "180.98.84.9"),
+		slog.String("client_source", "180.98.84.9"),
 		slog.String("node_id", "node-1"),
 		slog.String("node_name", "成都-02"),
 		slog.String("project_id", "FoldCraftLauncher"),
@@ -91,6 +92,7 @@ func TestConsoleLoggerUsesHumanReadableChineseFields(t *testing.T) {
 	for _, want := range []string{
 		"信息 master 下载令牌已签发",
 		"，客户端=180.98.84.9",
+		"，客户端来源=180.98.84.9",
 		"，节点=成都-02",
 		"，项目=FoldCraftLauncher",
 		"，系统=",

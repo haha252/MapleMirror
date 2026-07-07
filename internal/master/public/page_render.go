@@ -56,6 +56,8 @@ func (s Server) renderTemplateBody(name string, payload any) (template.HTML, err
 		err = assets.downloadTmpl.Execute(&buf, payload)
 	case "download_pow":
 		err = assets.downloadPowTmpl.Execute(&buf, payload)
+	case "blocked":
+		err = assets.blockedTmpl.Execute(&buf, payload)
 	case "punishment_pow":
 		err = assets.punishmentPowTmpl.Execute(&buf, payload)
 	case "project":

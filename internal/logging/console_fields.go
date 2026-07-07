@@ -19,6 +19,7 @@ var consoleFieldLabels = map[string]string{
 	"blocked_after_attempts":       "触发封禁次数",
 	"challenge_id":                 "挑战",
 	"cleared_satisfied_tasks":      "已清理满足任务",
+	"client_source":                "客户端来源",
 	"client_ip":                    "客户端",
 	"client_prefix":                "客户端前缀",
 	"code":                         "代码",

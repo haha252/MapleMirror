@@ -54,7 +54,7 @@ func (m *clientBlockManager) resolve(ctx context.Context, clientPrefix string, n
 		if decision, cached := m.cachedPositive(keys, now); cached {
 			if m.logger != nil {
 				m.logger.Warn(ctx, "客户端封禁缓存查询失败，继续使用正缓存",
-					slog.String("client_source", maskPublicSource(clientPrefix)),
+					slog.String("client_source", fullPublicSource(clientPrefix)),
 					slog.String("error", err.Error()))
 			}
 			return decision, nil
@@ -65,7 +65,7 @@ func (m *clientBlockManager) resolve(ctx context.Context, clientPrefix string, n
 			m.mu.Unlock()
 		} else if m.logger != nil {
 			m.logger.Warn(ctx, "客户端封禁查询失败，临时放行",
-				slog.String("client_source", maskPublicSource(clientPrefix)),
+				slog.String("client_source", fullPublicSource(clientPrefix)),
 				slog.String("error", err.Error()))
 		}
 		return clientBlockDecision{}, nil

@@ -32,12 +32,9 @@ func (s Server) renderPunishmentPage(w http.ResponseWriter, r *http.Request, dec
 		Difficulty:    s.punishmentDifficulty(),
 		RequestID:     requestID(r),
 		ServerTime:    time.Now().UTC().Format(time.RFC3339Nano),
-		Source:        maskPublicSource(s.clientIP(r)),
+		Source:        fullPublicSource(s.clientIP(r)),
 		Email:         "frostlynx@qq.com",
 		WorkerLimit:   s.punishmentWorkerLimit(),
-	}
-	if decision.Key != "" {
-		view.Source = maskPublicSource(strings.TrimSuffix(strings.TrimSuffix(decision.Key, "/32"), "/128"))
 	}
 	body, err := json.Marshal(view)
 	if err != nil {
@@ -83,13 +80,16 @@ func (s Server) punishmentWorkerLimit() int {
 	return s.AbuseTracker.cfg.Punishment.WorkerLimit
 }
 
-func maskPublicSource(value string) string {
+func fullPublicSource(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || value == "unknown" {
 		return "unknown"
 	}
 	var addr netip.Addr
 	if prefix, err := netip.ParsePrefix(value); err == nil {
+		if prefix.Bits() != prefix.Addr().BitLen() {
+			return prefix.Masked().String()
+		}
 		addr = prefix.Addr()
 	} else if parsed, err := netip.ParseAddr(value); err == nil {
 		addr = parsed
@@ -97,12 +97,5 @@ func maskPublicSource(value string) string {
 	if !addr.IsValid() {
 		return "unknown"
 	}
-	if !addr.Is4() {
-		return netip.PrefixFrom(addr, 32).Masked().String() + "*"
-	}
-	parts := strings.Split(addr.String(), ".")
-	if len(parts) != 4 {
-		return value
-	}
-	return strings.Join(parts[:3], ".") + ".*"
+	return addr.String()
 }

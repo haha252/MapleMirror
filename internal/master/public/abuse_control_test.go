@@ -136,7 +136,7 @@ func TestApplyBlockedAttemptsHonorsModesAndScope(t *testing.T) {
 		{name: "off", mode: "off", key: "192.0.2.9/32", source: "local_auto_ban", enabled: true},
 		{name: "observe", mode: "observe", key: "192.0.2.9/32", source: "local_auto_ban", enabled: true},
 		{name: "disabled", mode: "enforce", key: "192.0.2.9/32", source: "local_auto_ban", enabled: false, wantLevel: 1},
-		{name: "manual", mode: "enforce", key: "192.0.2.9/32", source: "manual", enabled: true},
+		{name: "manual", mode: "enforce", key: "192.0.2.9/32", source: "manual", enabled: true, wantPunishment: true},
 		{name: "network", mode: "enforce", key: "192.0.2.0/24", source: "local_auto_ban", enabled: true},
 		{name: "eligible", mode: "enforce", key: "192.0.2.9/32", source: "local_auto_ban", enabled: true, wantLevel: 1, wantPunishment: true},
 	}

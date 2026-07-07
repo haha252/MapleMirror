@@ -124,8 +124,8 @@ func showConsoleField(message, key string) bool {
 		return true
 	}
 	switch key {
-	case "client_ip", "node_name", "project_id", "system", "architecture",
-		"request_remaining_tokens", "traffic_remaining_bytes":
+	case "client_ip", "client_source", "node_name", "project_id", "system",
+		"architecture", "request_remaining_tokens", "traffic_remaining_bytes":
 		return true
 	default:
 		return false
