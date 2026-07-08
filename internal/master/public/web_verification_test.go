@@ -179,6 +179,15 @@ func assertNeutralVerificationMarkup(t *testing.T, body string) {
 		t.Fatalf("verification form is incomplete: %s", body)
 	}
 	formMarkup := body[form : form+end]
+	for _, want := range []string{
+		`download-pow__compatibility-warning`,
+		`如果你能看到下方这几个按钮，说明你的浏览器大概率不支持本站人机验证。`,
+		`请考虑使用最新版 Microsoft Edge 或 Firefox 浏览器。`,
+	} {
+		if !strings.Contains(formMarkup, want) {
+			t.Fatalf("verification form should contain %q: %s", want, formMarkup)
+		}
+	}
 	for _, forbidden := range []string{" hidden", "display:none", "visibility:hidden", " inert"} {
 		if strings.Contains(strings.ToLower(formMarkup), forbidden) {
 			t.Fatalf("verification form should not contain %q: %s", forbidden, formMarkup)

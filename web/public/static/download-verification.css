@@ -25,6 +25,24 @@
   font: inherit;
 }
 
+.download-pow__compatibility-warning {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #e07a7a;
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #9d1f1f;
+  box-shadow: var(--shadow);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+:root[data-theme="dark"] .download-pow__compatibility-warning {
+  border-color: #8d3939;
+  background: #3a0e0e;
+  color: #ffb4b4;
+}
+
 .download-pow__verification-actions {
   display: flex;
   flex-wrap: wrap;

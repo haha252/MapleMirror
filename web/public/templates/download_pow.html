@@ -27,6 +27,7 @@
     </div>
     {{with .Verification}}
     <form class="download-pow__verification-options" method="post" action="/api/public/v1/web/verifications">
+      <p class="download-pow__compatibility-warning" role="alert">如果你能看到下方这几个按钮，说明你的浏览器大概率不支持本站人机验证。也不要点击任何按钮，这很有可能导致AI误判从而被封禁。请考虑使用最新版 Microsoft Edge 或 Firefox 浏览器。</p>
       <input class="download-pow__verification-value" name="verification_token" value="{{.Token}}" readonly autocomplete="off">
       <input class="download-pow__verification-value" name="asset_id" value="{{.AssetID}}" readonly autocomplete="off">
       <div class="download-pow__verification-actions">
