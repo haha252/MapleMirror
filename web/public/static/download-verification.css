@@ -9,6 +9,26 @@
   z-index: 2;
   width: 100%;
   background: var(--panel);
+  overflow: hidden;
+}
+
+.download-pow::before {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  content: "";
+  background: var(--panel);
+  pointer-events: auto;
+}
+
+.download-pow__content {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  gap: 20px;
 }
 
 .download-pow__verification-options {
@@ -67,5 +87,9 @@
 @media (max-width: 680px) {
   .download-pow-stack {
     width: 100%;
+  }
+
+  .download-pow__content {
+    gap: 14px;
   }
 }
