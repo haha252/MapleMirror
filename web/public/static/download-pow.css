@@ -1,20 +1,25 @@
 .download-pow-page {
   display: grid;
   place-items: center;
+  min-height: 360px;
   min-height: clamp(360px, 58vh, 560px);
 }
 
 .page-download-pow .site-main {
+  width: 90vw; max-width: 1120px;
+  padding-top: 32px; padding-bottom: 34px;
   width: min(90vw, 1120px);
   padding-top: clamp(32px, 5vh, 60px);
   padding-bottom: clamp(34px, 6vh, 58px);
 }
 
 .page-download-pow .page-title-row {
+  margin-bottom: 28px;
   margin-bottom: clamp(28px, 5vw, 56px);
 }
 
 .page-download-pow .page-notices--after {
+  width: 100%; max-width: 640px;
   width: min(100%, 640px);
   margin: 12px auto 0;
 }
@@ -27,6 +32,8 @@
   position: relative;
   display: grid;
   gap: 20px;
+  width: 100%; max-width: 640px;
+  padding: 22px;
   width: min(100%, 640px);
   padding: clamp(22px, 3.4vw, 34px);
 }
@@ -110,6 +117,7 @@
 
 .download-pow__support {
   display: flex;
+  gap: 16px;
   gap: clamp(16px, 3vw, 28px);
   align-items: end;
   justify-content: space-between;
@@ -137,6 +145,7 @@
 }
 
 .download-pow__sponsors img {
+  width: 84px; height: 84px;
   width: clamp(84px, 8vw, 98px);
   height: clamp(84px, 8vw, 98px);
   border: 1px solid var(--border);
@@ -147,13 +156,14 @@
 
 @media (max-width: 860px) {
   .download-pow-page {
+    min-height: 340px;
     min-height: clamp(340px, 50vh, 480px);
   }
   .download-pow {
-    width: min(100%, 600px);
+    max-width: 600px; width: min(100%, 600px);
   }
   .page-download-pow .page-notices--after {
-    width: min(100%, 600px);
+    max-width: 600px; width: min(100%, 600px);
   }
   .download-pow__support {
     gap: 16px;

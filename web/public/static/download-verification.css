@@ -1,4 +1,6 @@
 .download-pow-stack {
+  width: 100%;
+  max-width: 640px;
   position: relative;
   width: min(100%, 640px);
 }
@@ -12,6 +14,10 @@
 .download-pow__verification-options {
   position: absolute;
   z-index: 1;
+  top: 32px;
+  right: 32px;
+  bottom: 32px;
+  left: 32px;
   inset: 32px;
   display: grid;
   gap: 12px;
@@ -53,6 +59,7 @@
 
 @media (max-width: 860px) {
   .download-pow-stack {
+    max-width: 600px;
     width: min(100%, 600px);
   }
 }

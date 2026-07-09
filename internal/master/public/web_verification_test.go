@@ -169,10 +169,10 @@ func assertNeutralVerificationMarkup(t *testing.T, body string) {
 			t.Fatalf("rendered page should not contain %q: %s", forbidden, body)
 		}
 	}
-	card := strings.Index(body, `class="download-pow panel-card"`)
 	form := strings.Index(body, `class="download-pow__verification-options"`)
-	if card < 0 || form < 0 || card >= form {
-		t.Fatalf("visible card should precede verification options: %s", body)
+	card := strings.Index(body, `class="download-pow panel-card"`)
+	if form < 0 || card < 0 || form >= card {
+		t.Fatalf("verification options should precede the visible card: %s", body)
 	}
 	end := strings.Index(body[form:], "</form>")
 	if end < 0 {
