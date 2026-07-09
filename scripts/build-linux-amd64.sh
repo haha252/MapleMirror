@@ -9,16 +9,21 @@ OUT="$ROOT/dist/linux-amd64"
 mkdir -p "$OUT"
 
 go test ./...
+printf '%s\n' "开始编译网页 PoW WASM：web/wasm/pow.c -> web/public/static/pow.wasm"
 if command -v clang >/dev/null 2>&1; then
+  printf '%s\n' "检测到 clang，使用 clang 编译网页 PoW WASM"
   clang --target=wasm32 -O3 -nostdlib \
     "-Wl,--no-entry" "-Wl,--export-memory" "-Wl,--export=get_buffer" \
     "-Wl,--export=solve_pow" "-Wl,--initial-memory=2097152" "-Wl,--max-memory=2097152" \
     -o "$ROOT/web/public/static/pow.wasm" "$ROOT/web/wasm/pow.c"
+  printf '%s\n' "网页 PoW WASM 编译完成：$ROOT/web/public/static/pow.wasm"
 elif command -v zig >/dev/null 2>&1; then
+  printf '%s\n' "未检测到 clang，检测到 zig，使用 zig cc 编译网页 PoW WASM"
   zig cc -target wasm32-freestanding -O3 -nostdlib \
     "-Wl,--no-entry" "-Wl,--export-memory" "-Wl,--export=get_buffer" \
     "-Wl,--export=solve_pow" "-Wl,--initial-memory=2097152" "-Wl,--max-memory=2097152" \
     -o "$ROOT/web/public/static/pow.wasm" "$ROOT/web/wasm/pow.c"
+  printf '%s\n' "网页 PoW WASM 编译完成：$ROOT/web/public/static/pow.wasm"
 else
   printf '%s\n' "未找到 clang 或 zig，跳过网页 PoW WASM 重新编译，继续使用现有文件或浏览器 JS 回退。"
 fi

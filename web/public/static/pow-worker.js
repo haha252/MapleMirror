@@ -26,6 +26,14 @@ function readCString(memory, ptr) {
   return new TextDecoder().decode(bytes.slice(0, end));
 }
 
+function advanceNonce(startLo, startHi, stepLo, stepHi, batch) {
+  const low = startLo + stepLo * batch;
+  return {
+    lo: low >>> 0,
+    hi: (startHi + stepHi * batch + Math.floor(low / 4294967296)) >>> 0
+  };
+}
+
 self.onmessage = async (event) => {
   const data = event.data || {};
   try {
@@ -33,17 +41,22 @@ self.onmessage = async (event) => {
     const exports = loaded.instance.exports;
     const ptr = exports.get_buffer();
     const inputLen = writeInput(exports.memory, ptr, data.challenge + ":");
-    let start = BigInt(data.start || 0);
-    const step = BigInt(data.step || 1);
+    let startLo = Number(data.start || 0) >>> 0;
+    let startHi = Number(data.startHi || 0) >>> 0;
+    const stepLo = Number(data.step || 1) >>> 0;
+    const stepHi = Number(data.stepHi || 0) >>> 0;
     const batch = Number(data.batch) || 32768;
     for (;;) {
-      const tried = exports.solve_pow(inputLen, data.difficulty, start, step, batch);
+      const tried = exports.solve_pow(inputLen, data.difficulty,
+        startLo, startHi, stepLo, stepHi, batch);
       if (tried < 0) throw new Error("invalid pow input");
       if (tried > 0) {
         self.postMessage({type: "found", nonce: readCString(exports.memory, ptr)});
         return;
       }
-      start += step * BigInt(batch);
+      const next = advanceNonce(startLo, startHi, stepLo, stepHi, batch);
+      startLo = next.lo;
+      startHi = next.hi;
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   } catch (err) {

@@ -72,7 +72,12 @@ static int leading_zero_match(uint32_t state[8], int difficulty) {
 }
 
 __attribute__((visibility("default")))
-int solve_pow(int data_len, int difficulty, uint64_t start_nonce, uint64_t step, int max_iterations) {
+int solve_pow(int data_len, int difficulty,
+              uint32_t start_nonce_lo, uint32_t start_nonce_hi,
+              uint32_t step_lo, uint32_t step_hi,
+              int max_iterations) {
+    uint64_t start_nonce = ((uint64_t)start_nonce_hi << 32) | start_nonce_lo;
+    uint64_t step = ((uint64_t)step_hi << 32) | step_lo;
     if (data_len < 0 || data_len > 120 || difficulty > 255 || max_iterations <= 0 || step == 0) return -1;
     uint8_t block[128];
     memset(block, 0, 128);
