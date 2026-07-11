@@ -33,6 +33,7 @@ func TestApproveEnrollmentDeletesSameNameQuarantinedNode(t *testing.T) {
 	assertTableCount(t, repo, "node_tasks", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "daily_node_traffic_stats", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_traffic_totals", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "node_availability_rollups", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_project_assignments", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "nodes", "id = 'new-node'", 1)
 }
@@ -78,6 +79,7 @@ func TestDeleteNodeRemovesRuntimeData(t *testing.T) {
 	assertTableCount(t, repo, "node_tasks", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "daily_node_traffic_stats", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_traffic_totals", "node_id = 'old-node'", 0)
+	assertTableCount(t, repo, "node_availability_rollups", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_project_assignments", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "admin_audit_events", "operation = 'node.delete'", 1)
 }
@@ -101,6 +103,9 @@ func seedQuarantinedNode(t *testing.T, repo Repository, nodeID, name string) {
 		(stat_day, node_id, sent_bytes, updated_at) VALUES ('2026-06-05', ?, 10, 'now')`, nodeID)
 	execApprovalCleanup(t, repo, `INSERT INTO node_traffic_totals
 		(node_id, sent_bytes, updated_at) VALUES (?, 10, 'now')`, nodeID)
+	execApprovalCleanup(t, repo, `INSERT INTO node_availability_rollups
+		(node_id, bucket_start, bucket_minutes, total_samples, ok_samples, updated_at)
+		VALUES (?, '2026-06-05T00:00:00Z', 60, 1, 1, 'now')`, nodeID)
 	execApprovalCleanup(t, repo, `INSERT INTO node_project_assignments
 		(node_id, project_id, mode, assigned, score, pinned, last_changed_at, updated_at)
 		VALUES (?, 'p1', 'manual', 1, 10, 0, 'now', 'now')`, nodeID)
