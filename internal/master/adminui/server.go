@@ -17,6 +17,7 @@ import (
 )
 
 const sessionCookie = "mirror_admin_session"
+const adminAPIWriteBodyLimit int64 = 1 << 20
 
 type Server struct {
 	repo      mastercontrol.Repository
@@ -95,8 +96,7 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		resetResourceLimiter:  opts.ResetResourceLimiter,
 		resetClientBlockCache: opts.ResetClientBlockCache,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
-			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL,
-			memory: newLoginMemory()},
+			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
 	}, nil
 }
 
@@ -114,7 +114,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/static/public/", http.StripPrefix("/static/public/", http.FileServer(http.FS(s.publicFS))))
 	mux.HandleFunc("/static/project-icons/", s.projectIcon)
 	mux.HandleFunc("/admin/login", s.login)
-	mux.HandleFunc("/admin/logout", s.logout)
+	mux.HandleFunc("/admin/logout", s.requireSession(s.logout))
 	mux.HandleFunc("/admin/api/overview", s.requireSession(s.overview))
 	mux.HandleFunc("/admin/api/projects", s.requireSession(s.projectsAPI))
 	mux.HandleFunc("/admin/api/projects/", s.requireSession(s.projectActionAPI))
@@ -134,51 +134,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/api/security/blocks/", s.requireSession(s.securityBlockActionAPI))
 	mux.HandleFunc("/admin/api/security/audit-events", s.requireSession(s.auditEventsAPI))
 	mux.HandleFunc("/admin/", s.requireSession(s.shell))
-	return mux
-}
-
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	ip := s.clientIP(r)
-	blocked, err := s.store.blocked(r.Context(), ip)
-	if err != nil {
-		http.Error(w, "管理面板暂不可用", http.StatusInternalServerError)
-		return
-	}
-	if blocked.Blocked {
-		s.renderLogin(w, "登录失败或当前来源暂不可用")
-		return
-	}
-	if r.Method == http.MethodGet {
-		s.renderLogin(w, "")
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "接口不存在", http.StatusNotFound)
-		return
-	}
-	_ = r.ParseForm()
-	user, ok := s.users[r.Form.Get("username")]
-	if !ok || !verifyPassword(user.PasswordHash, r.Form.Get("password")) {
-		_ = s.store.recordFailure(r.Context(), ip)
-		s.renderLogin(w, "登录失败或当前来源暂不可用")
-		return
-	}
-	token, expires, err := s.store.createSession(r.Context(), user.Username, ip)
-	if err != nil {
-		http.Error(w, "会话创建失败", http.StatusInternalServerError)
-		return
-	}
-	s.store.clearFailures(r.Context(), ip)
-	setSessionCookie(w, token, expires)
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
-}
-
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie(sessionCookie); err == nil {
-		s.store.deleteSession(r.Context(), cookie.Value)
-	}
-	clearSessionCookie(w)
-	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+	return adminSecurityHeaders(mux)
 }
 
 func (s *Server) requireSession(next http.HandlerFunc) http.HandlerFunc {
@@ -194,6 +150,9 @@ func (s *Server) requireSession(next http.HandlerFunc) http.HandlerFunc {
 			clearSessionCookie(w)
 			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 			return
+		}
+		if adminAPIWrite(r) {
+			r.Body = http.MaxBytesReader(w, r.Body, adminAPIWriteBodyLimit)
 		}
 		if !s.requireCSRF(w, r, sessionToken) {
 			return

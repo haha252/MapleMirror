@@ -23,7 +23,9 @@ func Address(r *http.Request, trustedCIDRs []string) string {
 		return "unknown"
 	}
 	if trusted(ip, trustedCIDRs) {
-		if forwarded := forwardedIP(r, ip, trustedCIDRs); forwarded != nil {
+		if forwarded, present, valid := forwardedIP(r, ip, trustedCIDRs); present && !valid {
+			return "unknown"
+		} else if forwarded != nil {
 			ip = forwarded
 		}
 	}
@@ -41,22 +43,27 @@ func remoteIP(addr string) net.IP {
 	return net.ParseIP(strings.TrimSpace(host))
 }
 
-func forwardedIP(r *http.Request, remote net.IP, trustedCIDRs []string) net.IP {
+func forwardedIP(r *http.Request, remote net.IP, trustedCIDRs []string) (net.IP, bool, bool) {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		chain := forwardedChain(xff)
 		if len(chain) == 0 {
-			return nil
+			return nil, true, false
 		}
 		current := remote
 		for i := len(chain) - 1; i >= 0; i-- {
 			if !trusted(current, trustedCIDRs) {
-				return current
+				return current, true, true
 			}
 			current = chain[i]
 		}
-		return current
+		return current, true, true
 	}
-	return net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP")))
+	realIP := strings.TrimSpace(r.Header.Get("X-Real-IP"))
+	if realIP == "" {
+		return nil, false, true
+	}
+	parsed := net.ParseIP(realIP)
+	return parsed, true, parsed != nil
 }
 
 func forwardedChain(value string) []net.IP {

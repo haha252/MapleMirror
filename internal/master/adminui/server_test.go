@@ -55,8 +55,8 @@ func TestLoginBlocksIPAfterThreeFailures(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM admin_ip_blocks`).Scan(&blocks); err != nil {
 		t.Fatal(err)
 	}
-	if blocks != 0 {
-		t.Fatalf("automatic login blocks should stay in memory, db blocks=%d", blocks)
+	if blocks != 1 {
+		t.Fatalf("automatic login blocks must persist in database, db blocks=%d", blocks)
 	}
 }
 

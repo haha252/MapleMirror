@@ -32,6 +32,10 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prefix := s.clientPrefix(r)
+	if prefix == "unknown" {
+		writeError(w, r, http.StatusBadRequest, "INVALID_CLIENT_SOURCE", "无法识别客户端来源")
+		return
+	}
 	now := time.Now().UTC()
 	difficulty := s.ALTCHADifficulty
 	if s.AbuseTracker != nil {
@@ -78,6 +82,10 @@ func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prefix := s.clientPrefix(r)
+	if prefix == "unknown" {
+		writeError(w, r, http.StatusBadRequest, "INVALID_CLIENT_SOURCE", "无法识别客户端来源")
+		return
+	}
 	now := time.Now().UTC()
 	difficulty := s.APIZeroBits
 	if s.AbuseTracker != nil {

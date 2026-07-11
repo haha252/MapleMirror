@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"mirror-server/internal/assetpath"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
 	"mirror-server/internal/protocol"
@@ -69,6 +68,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpError(w, r, http.StatusUnauthorized, "下载令牌无效")
 		return
 	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	asset, err := h.requestedAsset(requested, claims.AssetID)
 	if err != nil {
 		httpError(w, r, http.StatusNotFound, "本地资产不可用")
@@ -161,28 +162,6 @@ func (h *Handler) servePublicProbe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(response)
-}
-
-func parseAssetRequest(r *http.Request) (assetRequest, error) {
-	if strings.HasPrefix(r.URL.Path, "/downloads/") {
-		assetID := strings.TrimPrefix(r.URL.Path, "/downloads/")
-		if assetID == "" || strings.Contains(assetID, "/") {
-			return assetRequest{}, errors.New("资产路径不合法")
-		}
-		return assetRequest{LegacyAssetID: assetID}, nil
-	}
-	parts, err := assetpath.ParsePublicPath(r.URL.EscapedPath())
-	if err != nil {
-		return assetRequest{}, err
-	}
-	return assetRequest{RelativePath: assetpath.SafeRelativePath(parts.ProjectID, parts.Version, parts.FileName)}, nil
-}
-
-func (h *Handler) requestedAsset(requested assetRequest, claimAssetID string) (localAsset, error) {
-	if requested.LegacyAssetID != "" {
-		return h.localAsset(requested.LegacyAssetID)
-	}
-	return h.localAssetByPath(requested.RelativePath, claimAssetID)
 }
 
 func (h *Handler) authorizationBytes(id string) (int64, error) {

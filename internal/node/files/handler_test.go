@@ -177,7 +177,7 @@ func TestHandlerAllowsDifferentClientPrefix(t *testing.T) {
 	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer,
 		TrustedCIDRs: []string{"127.0.0.0/8"}}).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("下载节点不应要求请求来源前缀与令牌一致：%d", rec.Code)
+		t.Fatalf("下载节点应允许客户端出口变化：%d", rec.Code)
 	}
 }
 
@@ -196,6 +196,6 @@ func TestHandlerUsesForwardedHeaderFromTrustedRemote(t *testing.T) {
 	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer,
 		TrustedCIDRs: []string{"127.0.0.0/8"}}).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("可信代理头应通过客户端前缀校验：%d", rec.Code)
+		t.Fatalf("可信代理转发请求应可正常下载：%d", rec.Code)
 	}
 }

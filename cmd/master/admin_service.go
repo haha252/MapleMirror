@@ -52,6 +52,9 @@ func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncSer
 	server := &http.Server{
 		Addr: cfg.Server.ManagementListen, Handler: handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	if httpsEnabled {
 		server.TLSConfig = tlsCfg

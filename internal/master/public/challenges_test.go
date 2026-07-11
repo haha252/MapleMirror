@@ -34,3 +34,17 @@ func TestChallengeHandlersRejectOversizedJSONBody(t *testing.T) {
 		})
 	}
 }
+
+func TestChallengeRejectsMalformedForwardedSource(t *testing.T) {
+	server := Server{TrustedCIDRs: []string{"127.0.0.0/8"}}
+	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/challenges",
+		strings.NewReader(`{"asset_id":"asset-1"}`))
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "invalid, 192.0.2.1")
+	rec := httptest.NewRecorder()
+	server.apiChallenge(rec, req)
+	if rec.Code != http.StatusBadRequest ||
+		!strings.Contains(rec.Body.String(), `"code":"INVALID_CLIENT_SOURCE"`) {
+		t.Fatalf("malformed forwarded source status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}

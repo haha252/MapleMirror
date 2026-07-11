@@ -25,15 +25,15 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 		total += len(memoryBlocks)
 	}
 	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT kind, block_key,
-		display_ip, reason, source, blocked_at, expires_at, attempts_after_block,
+		display_ip, masked_ip, reason, source, blocked_at, expires_at, attempts_after_block,
 		escalation_level, punishment_active, last_attempt_at FROM (
 		SELECT 'admin' AS kind, ip_key AS block_key,
-		COALESCE(NULLIF(display_ip, ''), masked_ip) AS display_ip, reason,
+		COALESCE(NULLIF(display_ip, ''), masked_ip) AS display_ip, masked_ip, reason,
 		'管理登录' AS source, blocked_at, expires_at, attempts_after_block,
 		0 AS escalation_level, 0 AS punishment_active, last_attempt_at FROM admin_ip_blocks WHERE expires_at > ?
 		UNION ALL
 		SELECT 'client' AS kind, client_prefix_key AS block_key,
-		client_prefix_key AS display_ip, reason, source, blocked_at, expires_at,
+		client_prefix_key AS display_ip, client_prefix_key AS masked_ip, reason, source, blocked_at, expires_at,
 		attempts_after_block, escalation_level, punishment_active, last_attempt_at FROM client_blocks WHERE expires_at > ?
 		) ORDER BY blocked_at DESC LIMIT ? OFFSET ?`,
 		now, now, page.PageSize, page.offset())
@@ -43,16 +43,16 @@ func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any,
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var kind, key, display, reason, source, blocked, expires, last string
+		var kind, key, display, masked, reason, source, blocked, expires, last string
 		var attempts int
 		var escalation int
 		var punishment int
-		if err := rows.Scan(&kind, &key, &display, &reason, &source, &blocked,
+		if err := rows.Scan(&kind, &key, &display, &masked, &reason, &source, &blocked,
 			&expires, &attempts, &escalation, &punishment, &last); err != nil {
 			return nil, 0, err
 		}
 		items = append(items, map[string]any{"kind": kind, "key": key,
-			"display_ip": display, "masked_ip": display, "reason": reason, "source": source,
+			"display_ip": display, "masked_ip": masked, "reason": reason, "source": source,
 			"blocked_at": s.displayTime(blocked), "expires_at": s.displayTime(expires),
 			"attempts_after_block": attempts, "escalation_level": escalation,
 			"punishment_active": punishment == 1, "last_attempt_at": s.displayTime(last)})

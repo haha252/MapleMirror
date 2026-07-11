@@ -32,4 +32,7 @@ func TestHandlerSetsNoReferrerPolicyForQueryTokenDownload(t *testing.T) {
 	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
 		t.Fatalf("Referrer-Policy = %q, want no-referrer", got)
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("Cache-Control = %q, want private, no-store", got)
+	}
 }

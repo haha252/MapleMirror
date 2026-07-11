@@ -51,7 +51,10 @@
   <div class="theme-tools">
     <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"></button>
     <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 1.4-3.4l-.3-.3a1.8 1.8 0 0 1 1.3-3.1H18a6 6 0 0 0 0-12h-6Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="14" cy="7.5" r="1"/></svg></button>
-    <a class="admin-logout" href="/admin/logout">退出</a>
+    <form method="post" action="/admin/logout">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button class="admin-logout" type="submit">退出</button>
+    </form>
     <div id="palette-menu" class="palette-menu" hidden></div>
   </div>
 </header>

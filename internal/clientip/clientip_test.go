@@ -46,8 +46,17 @@ func TestPrefixDoesNotSkipInvalidForwardedClient(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "unknown, 192.0.2.55")
-	if got := Prefix(req, []string{"127.0.0.0/8"}); got != "127.0.0.1/32" {
-		t.Fatalf("畸形 X-Forwarded-For 首项不得跳过后继续采信：%s", got)
+	if got := Prefix(req, []string{"127.0.0.0/8"}); got != "unknown" {
+		t.Fatalf("畸形 X-Forwarded-For 不得回退成可信代理自身地址：%s", got)
+	}
+}
+
+func TestPrefixRejectsInvalidRealIPFromTrustedRemote(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Real-IP", "invalid")
+	if got := Prefix(req, []string{"127.0.0.0/8"}); got != "unknown" {
+		t.Fatalf("畸形 X-Real-IP 不得回退成可信代理自身地址：%s", got)
 	}
 }
 

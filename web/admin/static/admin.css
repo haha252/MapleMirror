@@ -56,7 +56,10 @@
   color: var(--warn);
 }
 .admin-logout {
-  padding: 7px 10px;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+	padding: 7px 10px;
   border-radius: 8px;
   color: var(--muted);
   font-size: 14px;

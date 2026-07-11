@@ -67,9 +67,14 @@ func (s loginStore) recordFailure(ctx context.Context, ip string) error {
 	nowText := now.Format(time.RFC3339Nano)
 	key := s.ipKey(ip)
 	masked := maskIP(ip)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	var count int
 	var windowStarted string
-	err := s.db.QueryRowContext(ctx, `SELECT failed_count, window_started_at
+	err = tx.QueryRowContext(ctx, `SELECT failed_count, window_started_at
 		FROM admin_login_failures WHERE ip_key = ?`, key).Scan(&count, &windowStarted)
 	if err != nil && err != sql.ErrNoRows {
 		return err
@@ -85,18 +90,21 @@ func (s loginStore) recordFailure(ctx context.Context, ip string) error {
 	} else {
 		count++
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO admin_login_failures
+	_, err = tx.ExecContext(ctx, `INSERT INTO admin_login_failures
 		(ip_key, masked_ip, failed_count, window_started_at, last_failed_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(ip_key) DO UPDATE SET masked_ip = excluded.masked_ip,
 		failed_count = excluded.failed_count, window_started_at = excluded.window_started_at,
 		last_failed_at = excluded.last_failed_at, updated_at = excluded.updated_at`,
 		key, masked, count, windowStarted, nowText, nowText)
-	if err != nil || count < s.limit {
+	if err != nil {
 		return err
 	}
+	if count < s.limit {
+		return tx.Commit()
+	}
 	expires := now.Add(s.banDuration).Format(time.RFC3339Nano)
-	_, err = s.db.ExecContext(ctx, `INSERT INTO admin_ip_blocks
+	_, err = tx.ExecContext(ctx, `INSERT INTO admin_ip_blocks
 		(ip_key, masked_ip, display_ip, reason, blocked_at, expires_at, last_attempt_at, updated_at)
 		VALUES (?, ?, ?, 'admin_login_failed', ?, ?, ?, ?)
 		ON CONFLICT(ip_key) DO UPDATE SET reason = excluded.reason,
@@ -104,7 +112,10 @@ func (s loginStore) recordFailure(ctx context.Context, ip string) error {
 		blocked_at = excluded.blocked_at, expires_at = excluded.expires_at,
 		last_attempt_at = excluded.last_attempt_at, updated_at = excluded.updated_at`,
 		key, masked, ip, nowText, expires, nowText, nowText)
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s loginStore) clearFailures(ctx context.Context, ip string) {

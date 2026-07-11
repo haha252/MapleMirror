@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 )
 
 func seedProject(t *testing.T, db *sql.DB, id, name string, downloads int) {
@@ -22,7 +23,7 @@ func seedProject(t *testing.T, db *sql.DB, id, name string, downloads int) {
 		'sha256', 'candidate', 'now')`, "asset-"+id, "rel-"+id)
 	mustExec(t, db, `INSERT INTO daily_project_stats
 		(stat_day, project_id, authorization_count, transfer_started_count, sent_bytes)
-		VALUES ('2026-06-07', ?, ?, 0, 0)`, id, downloads)
+		VALUES (?, ?, ?, 0, 0)`, time.Now().UTC().Format("2006-01-02"), id, downloads)
 }
 
 func reconcile(t *testing.T, db *sql.DB) {
