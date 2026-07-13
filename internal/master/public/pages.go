@@ -16,9 +16,10 @@ func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
+	sponsors := buildSponsorPage(loadSponsors(), requestedSponsorPage(r.URL.Query().Get("sponsor_page")), sponsorPageSize)
 	s.renderPage(w, pageData{Title: "关于本项目", BrowserTitle: "关于本项目 - 枫源镜像", BodyClass: "page-about",
 		Subtitle: "关于枫源镜像，和为本站做出贡献的朋友们",
-		Body:     aboutBody(loadSponsors(), s.staticURL), Styles: []string{"/static/public/about.css"}})
+		Body:     aboutBody(sponsors, s.staticURL), Styles: []string{"/static/public/about.css"}})
 }
 
 func (s Server) nodesPage(w http.ResponseWriter, r *http.Request) {

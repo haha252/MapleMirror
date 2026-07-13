@@ -17,11 +17,12 @@ const (
 )
 
 type Sponsor struct {
-	Name   string `json:"name"`
-	Date   string `json:"date"`
-	Amount string `json:"amount"`
-	Pinned bool   `json:"pinned"`
-	Method string `json:"method"`
+	SponsorID string `json:"sponsor_id"`
+	Name      string `json:"name"`
+	Date      string `json:"date"`
+	Amount    string `json:"amount"`
+	Pinned    bool   `json:"pinned"`
+	Method    string `json:"method"`
 }
 
 func loadSponsors() []Sponsor {
@@ -87,7 +88,7 @@ func sponsorFileCandidates() []string {
 
 const mirrorDescription = "枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供高速且稳定的下载服务，获取到软件的最新版本。"
 
-func aboutBody(sponsors []Sponsor, staticURL func(string) string) template.HTML {
+func aboutBody(sponsors sponsorPage, staticURL func(string) string) template.HTML {
 	if staticURL == nil {
 		staticURL = func(name string) string { return "/static/public/" + strings.TrimPrefix(name, "/static/public/") }
 	}
@@ -103,47 +104,6 @@ func aboutBody(sponsors []Sponsor, staticURL func(string) string) template.HTML 
 
 func aboutCard(icon, title, text string) string {
 	return `<section class="panel-card about-card"><div class="about-card__title">` + aboutIcon(icon) + `<h2>` + esc(title) + `</h2></div><p>` + text + `</p></section>`
-}
-
-func sponsorsCard(sponsors []Sponsor) string {
-	body := `<section class="panel-card sponsor-card"><div class="sponsor-card__head"><div class="about-card__title">` + aboutIcon("heart") + `<h2>赞助者列表</h2></div><span>` + num(int64(len(sponsors))) + ` 位</span></div><div class="sponsor-list">`
-	if len(sponsors) == 0 {
-		body += `<p class="muted empty">暂无赞助者记录</p>`
-	}
-	for _, sponsor := range sponsors {
-		body += sponsorRow(sponsor)
-	}
-	return body + `</div></section>`
-}
-
-func sponsorRow(s Sponsor) string {
-	initial := strings.TrimSpace(s.Name)
-	if initial == "" {
-		initial = "赞"
-	}
-	badges := sponsorBadge(s.Method)
-	if s.Pinned {
-		badges += `<span class="sponsor-badge sponsor-badge--pinned">置顶</span>`
-	}
-	return `<article class="sponsor-row"><span class="sponsor-avatar">` + esc(firstRune(initial)) + `</span><div><strong>` + esc(s.Name) + `</strong>` + badges + `<time>` + esc(s.Date) + `</time></div><b>` + esc(s.Amount) + `</b></article>`
-}
-
-func firstRune(value string) string {
-	for _, r := range value {
-		return string(r)
-	}
-	return "赞"
-}
-
-func sponsorBadge(method string) string {
-	switch strings.ToLower(strings.TrimSpace(method)) {
-	case "alipay":
-		return `<span class="sponsor-badge sponsor-badge--alipay">Alipay</span>`
-	case "wechat", "weixin":
-		return `<span class="sponsor-badge sponsor-badge--wechat">WeChat</span>`
-	default:
-		return ""
-	}
 }
 
 func aboutIcon(name string) string {
