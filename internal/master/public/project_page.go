@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const projectPageServiceDescription = "枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供，免费、纯净、高速且稳定的下载服务，获取到软件的最新版本。"
+
 type projectPageBody struct {
 	ProjectID         string
 	DisplayName       string
@@ -42,14 +44,22 @@ func (s Server) maybeProjectPage(w http.ResponseWriter, r *http.Request) bool {
 	s.trackPageView(w, r)
 	s.renderPage(w, pageData{
 		Title:        project.DisplayName,
-		BrowserTitle: project.DisplayName + " - 枫源镜像",
-		Description:  project.Description,
+		BrowserTitle: project.DisplayName + "下载 - 枫源镜像",
+		Description:  projectPageDescription(project.Description),
 		BodyClass:    "page-project",
 		Body:         body,
 		Styles:       []string{"/static/public/project.css", "/static/public/project-responsive.css"},
 		Scripts:      []string{"/static/public/download-selectors.js", "/static/public/project.js"},
 	})
 	return true
+}
+
+func projectPageDescription(description string) string {
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return projectPageServiceDescription
+	}
+	return description + " " + projectPageServiceDescription
 }
 
 func (s Server) projectForPage(r *http.Request, projectID string) (projectPageBody, error) {
