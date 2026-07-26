@@ -8,7 +8,9 @@ import (
 )
 
 func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.repository, p.name,
+	readCtx, cancel := stableDatabaseReadContext(ctx)
+	defer cancel()
+	rows, err := s.DB.QueryContext(readCtx, `SELECT p.id, p.repository, p.name,
 		COALESCE(p.description, ''), COALESCE(p.homepage_url, ''),
 		EXISTS(SELECT 1 FROM releases r JOIN assets a ON a.release_id = r.id`+routableAssetReplicaSQL+`
 			WHERE r.project_id = p.id AND p.enabled = 1 AND r.selected = 1
@@ -43,10 +45,10 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 	}
 	for i := range out {
 		if out[i].Available {
-			out[i].Available = s.projectHasRoutableAsset(ctx, out[i].ProjectID)
+			out[i].Available = s.projectHasRoutableAsset(readCtx, out[i].ProjectID)
 		}
 		if !out[i].Available {
-			info := s.projectUnavailableInfo(ctx, out[i].ProjectID)
+			info := s.projectUnavailableInfo(readCtx, out[i].ProjectID)
 			out[i].UnavailableReason = info.Summary
 			out[i].UnavailableDetails = info.Detail
 		}
@@ -55,8 +57,10 @@ func (s Store) Projects(ctx context.Context) ([]ProjectSummary, error) {
 }
 
 func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, error) {
+	readCtx, cancel := stableDatabaseReadContext(ctx)
+	defer cancel()
 	args := append(s.routableAssetReplicaArgs(), projectID)
-	rows, err := s.DB.QueryContext(ctx, `SELECT a.id, r.tag_name, r.prerelease,
+	rows, err := s.DB.QueryContext(readCtx, `SELECT a.id, r.tag_name, r.prerelease,
 		a.file_name, a.architecture, a.system, a.variant, a.display_label,
 		a.priority, a.size_bytes, a.digest_sha256,
 		EXISTS(SELECT 1 FROM node_inventory ni
@@ -104,10 +108,10 @@ func (s Store) Assets(ctx context.Context, projectID string) ([]AssetSummary, er
 	}
 	for i := range out {
 		if out[i].Available {
-			out[i].Available = s.assetHasRoutableReplica(ctx, out[i].AssetID)
+			out[i].Available = s.assetHasRoutableReplica(readCtx, out[i].AssetID)
 		}
 		if !out[i].Available {
-			info := s.assetUnavailableInfo(ctx, out[i].AssetID)
+			info := s.assetUnavailableInfo(readCtx, out[i].AssetID)
 			out[i].UnavailableReason = info.Summary
 			out[i].UnavailableDetails = info.Detail
 		}

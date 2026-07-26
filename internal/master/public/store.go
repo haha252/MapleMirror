@@ -190,8 +190,10 @@ func (s *Store) challengeMemory() *challengeMemory {
 }
 
 func (s Store) routableAsset(ctx context.Context, assetID string) (int64, error) {
+	readCtx, cancel := stableDatabaseReadContext(ctx)
+	defer cancel()
 	args := append(s.routableAssetReplicaArgs(), assetID)
-	rows, err := s.DB.QueryContext(ctx, `SELECT a.size_bytes, n.public_download_base_url
+	rows, err := s.DB.QueryContext(readCtx, `SELECT a.size_bytes, n.public_download_base_url
 		FROM assets a
 		JOIN releases r ON r.id = a.release_id
 		JOIN projects p ON p.id = r.project_id`+routableAssetReplicaSQL+`

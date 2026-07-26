@@ -52,3 +52,23 @@ func TestDatabaseWatchdogRequiresConsecutiveFailures(t *testing.T) {
 		t.Fatal("watchdog marked database unready after recovered failures")
 	}
 }
+
+func TestDatabaseWatchdogFailIsIdempotent(t *testing.T) {
+	w := &databaseWatchdog{fatal: make(chan error, 1)}
+	w.ready.Store(true)
+	first := errors.New("first")
+	w.Fail(first)
+	w.Fail(errors.New("second"))
+
+	if w.Ready() {
+		t.Fatal("watchdog remained ready after Fail")
+	}
+	select {
+	case err := <-w.Fatal():
+		if !errors.Is(err, first) {
+			t.Fatalf("fatal error = %v, want first error", err)
+		}
+	default:
+		t.Fatal("watchdog did not report fatal error")
+	}
+}

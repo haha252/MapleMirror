@@ -129,8 +129,8 @@ func main() {
 	if warning != "" {
 		logger.Warn(context.Background(), "旧流量明细归档未完成", slog.String("detail", warning))
 	}
-	startDatabaseMaintenance(cfg, database, walTruncateThreshold, logger)
 	databaseWatchdog := startDatabaseWatchdog(cfg.Database, database, logger)
+	startDatabaseMaintenance(cfg, database, walTruncateThreshold, databaseWatchdog, logger)
 	archive := newAccountingArchive(cfg, logger)
 	statsBuffer := statbuffer.New(database, 2*time.Second)
 	statsBuffer.Start(context.Background())

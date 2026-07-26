@@ -35,12 +35,35 @@ type recordedSQLLog struct {
 
 func TestSQLDebugConnectionRecoversAfterCanceledQuery(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "trace-cancel.db")
-	db, err := OpenMaster(config.Database{Path: path, BusyTimeout: "5s"},
+	wal := true
+	db, err := OpenMaster(config.Database{
+		Path: path, BusyTimeout: "5s", WAL: &wal,
+		WALAutocheckpointPages: 1_000_000,
+	},
 		WithSQLDebugLogger(func(context.Context, string, ...slog.Attr) {}))
 	if err != nil {
 		t.Fatalf("OpenMaster failed: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.Exec(`CREATE TABLE cancel_query_values (value INTEGER NOT NULL)`); err != nil {
+		t.Fatalf("create cancellation fixture: %v", err)
+	}
+	if _, err := db.Exec(`
+		WITH RECURSIVE numbers(value) AS (
+			VALUES(0)
+			UNION ALL
+			SELECT value + 1 FROM numbers WHERE value < 10000
+		)
+		INSERT INTO cancel_query_values(value) SELECT value FROM numbers
+	`); err != nil {
+		t.Fatalf("seed cancellation fixture: %v", err)
+	}
+	if result, err := runWALCheckpoint(db, path, "TRUNCATE"); err != nil {
+		t.Fatalf("truncate WAL before canceled query: %v", err)
+	} else if result.Busy != 0 || incompleteWALCheckpoint(result) {
+		t.Fatalf("initial checkpoint incomplete: %+v", result)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
@@ -51,13 +74,22 @@ func TestSQLDebugConnectionRecoversAfterCanceledQuery(t *testing.T) {
 			UNION ALL
 			SELECT value + 1 FROM numbers WHERE value < 100000000
 		)
-		SELECT sum(value) FROM numbers
+		SELECT sum(numbers.value * cancel_query_values.value)
+		FROM numbers CROSS JOIN cancel_query_values
 	`).Scan(&sum)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("long query error = %v, want context deadline exceeded", err)
 	}
-	if err := CheckpointWAL(db, path, 0, nil); err != nil {
+
+	if _, err := db.Exec(`INSERT INTO cancel_query_values(value) VALUES (10001)`); err != nil {
+		t.Fatalf("write after canceled query: %v", err)
+	}
+	result, err := runWALCheckpoint(db, path, "PASSIVE")
+	if err != nil {
 		t.Fatalf("checkpoint after canceled query failed: %v", err)
+	}
+	if result.Busy != 0 || incompleteWALCheckpoint(result) {
+		t.Fatalf("canceled query pinned WAL snapshot: %+v", result)
 	}
 
 	if err := db.QueryRow(`SELECT 1`).Scan(&sum); err != nil {

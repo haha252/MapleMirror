@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -12,7 +13,15 @@ import (
 	"mirror-server/internal/storage"
 )
 
-func startDatabaseMaintenance(cfg config.Master, db *sql.DB, walTruncateThreshold int64, logger *logging.Logger) {
+const walStallObservationsBeforeFatal = 2
+
+type walCheckpointMonitor struct {
+	checkedFrames           int
+	consecutiveObservations int
+}
+
+func startDatabaseMaintenance(cfg config.Master, db *sql.DB, walTruncateThreshold int64,
+	watchdog *databaseWatchdog, logger *logging.Logger) {
 	go runDailyDataMaintenance(cfg, db, logger)
 	if cfg.Database.WAL == nil || !*cfg.Database.WAL {
 		return
@@ -26,14 +35,48 @@ func startDatabaseMaintenance(cfg config.Master, db *sql.DB, walTruncateThreshol
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		var monitor walCheckpointMonitor
 		for range ticker.C {
-			if err := storage.CheckpointWAL(db, cfg.Database.Path, walTruncateThreshold, logger.Info); err != nil {
+			result, err := storage.CheckpointWALResult(
+				db, cfg.Database.Path, walTruncateThreshold, logger.Info)
+			if err != nil {
 				logger.Warn(context.Background(), "数据库 WAL checkpoint 失败", slog.String("error", err.Error()))
+				continue
+			}
+			if err := monitor.Observe(result, walTruncateThreshold); err != nil {
+				logger.Error(context.Background(), "数据库 WAL 长时间无法收敛，即将退出以释放陈旧读快照",
+					slog.String("error", err.Error()),
+					slog.Int("log_frames", result.LogFrames),
+					slog.Int("checked_frames", result.CheckedFrames),
+					slog.Int64("wal_size_bytes", result.WALSizeBytes))
+				watchdog.Fail(err)
+				return
 			}
 		}
 	}()
 	logger.Info(context.Background(), "数据库 WAL checkpoint 后台维护已启动",
 		slog.String("interval", cfg.Database.WALCheckpointInterval))
+}
+
+func (m *walCheckpointMonitor) Observe(result storage.WALCheckpointResult, truncateThreshold int64) error {
+	incomplete := result.LogFrames > 0 && result.CheckedFrames < result.LogFrames
+	if !incomplete {
+		m.checkedFrames = 0
+		m.consecutiveObservations = 0
+		return nil
+	}
+	if result.CheckedFrames != m.checkedFrames {
+		m.checkedFrames = result.CheckedFrames
+		m.consecutiveObservations = 1
+		return nil
+	}
+	m.consecutiveObservations++
+	if truncateThreshold <= 0 || result.WALSizeBytes < truncateThreshold ||
+		m.consecutiveObservations < walStallObservationsBeforeFatal {
+		return nil
+	}
+	return fmt.Errorf("SQLite WAL 连续 %d 次停留在第 %d 帧且已增长至 %d 字节",
+		m.consecutiveObservations, result.CheckedFrames, result.WALSizeBytes)
 }
 
 func runDailyDataMaintenance(cfg config.Master, db *sql.DB, logger *logging.Logger) {

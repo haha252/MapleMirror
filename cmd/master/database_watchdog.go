@@ -44,6 +44,19 @@ func (w *databaseWatchdog) Fatal() <-chan error {
 	return w.fatal
 }
 
+func (w *databaseWatchdog) Fail(err error) {
+	if w == nil || err == nil {
+		return
+	}
+	if !w.ready.CompareAndSwap(true, false) {
+		return
+	}
+	select {
+	case w.fatal <- err:
+	default:
+	}
+}
+
 type watchdogLogger interface {
 	Warn(context.Context, string, ...slog.Attr)
 }
@@ -75,8 +88,7 @@ func (w *databaseWatchdog) run(ctx context.Context, interval, timeout time.Durat
 			if consecutiveFailures < threshold {
 				continue
 			}
-			w.ready.Store(false)
-			w.fatal <- fmt.Errorf("数据库连续 %d 次健康检查失败：%w", consecutiveFailures, err)
+			w.Fail(fmt.Errorf("数据库连续 %d 次健康检查失败：%w", consecutiveFailures, err))
 			return
 		}
 	}
