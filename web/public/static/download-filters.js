@@ -4,6 +4,7 @@
     const panel = document.getElementById("catalog-filters");
     const backdrop = document.getElementById("catalog-filter-backdrop");
     const openButton = document.getElementById("catalog-filter-button");
+    const clearButton = document.getElementById("catalog-filter-clear");
     const closeButton = document.getElementById("catalog-filter-close");
     const count = document.getElementById("catalog-filter-count");
     const desktopSearch = document.getElementById("catalog-search-desktop");
@@ -24,6 +25,9 @@
     }));
 
     openButton.addEventListener("click", openPanel);
+    clearButton.addEventListener("click", () => {
+      if (clearSelections()) options.onChange();
+    });
     closeButton.addEventListener("click", () => closePanel(true));
     backdrop.addEventListener("click", () => closePanel(true));
     window.addEventListener("popstate", () => {
@@ -119,8 +123,9 @@
     function updateCount() {
       count.textContent = String(selected.size);
       count.hidden = selected.size === 0;
+      clearButton.disabled = selected.size === 0;
       openButton.setAttribute("aria-label",
-        selected.size ? "筛选，已选择 " + selected.size + " 项" : "筛选");
+        selected.size ? "筛选器，已选择 " + selected.size + " 项" : "筛选器");
     }
 
     function openPanel() {

@@ -1,0 +1,100 @@
+@media (max-width: 1100px) {
+  .site-header__catalog { display: none; }
+  .catalog-left-rail { display: contents; }
+  .catalog-mobile-toolbar {
+    display: flex;
+    gap: 9px;
+    margin-bottom: 16px;
+  }
+  .download-layout { display: block; }
+
+  .catalog-filters {
+    position: fixed;
+    top: max(16px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    z-index: 41;
+    width: min(390px, calc(100vw - 32px));
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 0 22px 60px rgba(0, 0, 0, .38);
+    opacity: 0;
+    pointer-events: none;
+    touch-action: pan-y;
+    transform: translateX(calc(100% + 24px));
+    transition: opacity .18s ease, transform .2s ease;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .catalog-filters[data-open="true"] {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+
+  .catalog-filters__mobile-head {
+    position: sticky;
+    top: -18px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: -18px -18px 12px;
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .catalog-filters__mobile-head h2 {
+    margin: 0;
+    font-size: 21px;
+  }
+
+  .catalog-filters__mobile-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  #catalog-filter-clear {
+    padding: 0 10px;
+    font-size: 14px;
+  }
+
+  #catalog-filter-clear:disabled {
+    opacity: .48;
+    cursor: default;
+  }
+
+  #catalog-filter-close {
+    width: 44px;
+    padding: 0;
+  }
+
+  body.catalog-filter-open {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .page-download .site-main,
+  .page-download .site-footer {
+    width: calc(100vw - 24px);
+  }
+
+  .catalog-search { flex: 1 1 auto; }
+
+  .catalog-filter-button {
+    width: auto;
+    flex: 0 0 auto;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  .catalog-suggestions > h2 { font-size: 14px; }
+}

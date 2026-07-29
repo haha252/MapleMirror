@@ -8,9 +8,15 @@
       <aside id="catalog-filters" class="catalog-filters" aria-label="项目筛选器">
         <div class="catalog-filters__mobile-head">
           <h2>筛选器</h2>
-          <button id="catalog-filter-close" type="button" aria-label="关闭筛选器">
-            <svg aria-hidden="true"><use href="{{staticURL "icons.svg#close"}}"></use></svg>
-          </button>
+          <div class="catalog-filters__mobile-actions">
+            <button id="catalog-filter-clear" type="button" disabled>
+              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#broom"}}"></use></svg>
+              <span>取消全部</span>
+            </button>
+            <button id="catalog-filter-close" type="button" aria-label="关闭筛选器">
+              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#close"}}"></use></svg>
+            </button>
+          </div>
         </div>
         <div id="catalog-filter-groups" class="catalog-filter-groups">
           <p class="muted">正在加载筛选器...</p>
@@ -26,7 +32,7 @@
       <button id="catalog-filter-button" class="catalog-filter-button" type="button"
         aria-controls="catalog-filters" aria-expanded="false">
         <svg aria-hidden="true"><use href="{{staticURL "icons.svg#filter"}}"></use></svg>
-        <span>筛选</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
+        <span>筛选器</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
       </button>
     </div>
     <section class="catalog-results" aria-live="polite">

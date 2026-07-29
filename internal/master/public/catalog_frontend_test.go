@@ -21,7 +21,11 @@ func TestCatalogPageIncludesDesktopAndMobileFilterSurfaces(t *testing.T) {
 		`class="catalog-mobile-toolbar"`,
 		`id="catalog-search-mobile"`,
 		`id="catalog-filter-button"`,
+		`<span>筛选器</span>`,
 		`id="catalog-filters"`,
+		`id="catalog-filter-clear"`,
+		`#broom`,
+		`<span>取消全部</span>`,
 		`id="catalog-filter-backdrop"`,
 		`id="catalog-suggestions"`,
 		`id="catalog-suggestions-title"`,
@@ -29,6 +33,7 @@ func TestCatalogPageIncludesDesktopAndMobileFilterSurfaces(t *testing.T) {
 		`id="suggested-project-cards"`,
 		`class="project-tags"`,
 		`/static/public/download-filters.css?v=`,
+		`/static/public/download-filters-mobile.css?v=`,
 		`/static/public/download-card.js?v=`,
 		`/static/public/download-filters.js?v=`,
 	} {
@@ -81,6 +86,8 @@ func TestCatalogFilterDrawerSupportsAccessibilityAndHistory(t *testing.T) {
 		`document.body.classList.add("catalog-filter-open")`,
 		`panel.setAttribute("aria-hidden", "true")`,
 		`previousFocus.focus()`,
+		`clearButton.disabled = selected.size === 0`,
+		`if (clearSelections()) options.onChange()`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("移动筛选抽屉缺少行为 %q：%s", want, body)
@@ -102,7 +109,7 @@ func TestCatalogCardRendersOnlySelectedMatchingTags(t *testing.T) {
 	}
 }
 
-func TestCatalogStylesUseWideDesktopAndMobileDrawer(t *testing.T) {
+func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 	body := publicStaticBody(t, "download-filters.css")
 	for _, want := range []string{
 		`max-width: 1840px`,
@@ -110,10 +117,27 @@ func TestCatalogStylesUseWideDesktopAndMobileDrawer(t *testing.T) {
 		`.catalog-left-rail`,
 		`.catalog-page-notices`,
 		`position: sticky`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("桌面搜索筛选样式缺少规则 %q：%s", want, body)
+		}
+	}
+}
+
+func TestCatalogMobileStylesKeepDrawerScrollableAndHeaderSticky(t *testing.T) {
+	body := publicStaticBody(t, "download-filters-mobile.css")
+	for _, want := range []string{
 		`@media (max-width: 1100px)`,
 		`display: contents`,
 		`position: fixed`,
+		`overflow-y: auto`,
+		`overscroll-behavior: contain`,
+		`touch-action: pan-y`,
+		`env(safe-area-inset-bottom)`,
+		`position: sticky`,
+		`top: -18px`,
 		`body.catalog-filter-open`,
+		`white-space: nowrap`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("搜索筛选样式缺少规则 %q：%s", want, body)
