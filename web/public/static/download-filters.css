@@ -132,6 +132,16 @@
 
 .catalog-results { min-width: 0; }
 .catalog-suggestions { margin-top: 28px; }
+.catalog-load-more {
+  min-height: 44px;
+  padding: 12px 0;
+  text-align: center;
+}
+.catalog-load-more button { min-height: 36px; }
+.catalog-load-more span:not(:empty) {
+  display: block;
+  margin-top: 8px;
+}
 .catalog-suggestions > h2 {
   display: flex;
   align-items: center;

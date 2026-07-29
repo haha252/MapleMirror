@@ -10,6 +10,10 @@ server:
   control_listen: ":9443"
   # 首次领证登记入口，独立于正式 mTLS 控制通道。
   enrollment_listen: ":9444"
+  # 首页项目瀑布流每一批加载的行数；实际卡片数为当前列数乘以该值。
+  catalog_batch_rows: 4
+  # 本批剩余多少行尚未滚到时预加载下一批；0 表示进入最后一行时加载。
+  catalog_prefetch_remaining_rows: 1
 
 # 主节点 SQLite 数据库配置。
 database:

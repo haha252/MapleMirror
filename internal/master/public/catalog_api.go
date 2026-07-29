@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -11,9 +12,11 @@ import (
 )
 
 type catalogResponse struct {
-	FilterGroups      []config.FilterSelector `json:"filter_groups"`
-	Projects          []downloadProjectView   `json:"projects"`
-	SuggestedProjects []downloadProjectView   `json:"suggested_projects"`
+	FilterGroups        []config.FilterSelector `json:"filter_groups"`
+	Projects            []downloadProjectView   `json:"projects"`
+	SuggestedProjects   []downloadProjectView   `json:"suggested_projects"`
+	NextProjectsCursor  string                  `json:"next_projects_cursor,omitempty"`
+	NextSuggestedCursor string                  `json:"next_suggested_projects_cursor,omitempty"`
 }
 
 func (s Server) catalog(w http.ResponseWriter, r *http.Request) {
@@ -23,8 +26,10 @@ func (s Server) catalog(w http.ResponseWriter, r *http.Request) {
 	}
 	payload, err := s.catalogPayload(r)
 	if err != nil {
-		if err == errInvalidCatalogQuery {
-			writeError(w, r, http.StatusBadRequest, "INVALID_REQUEST", "搜索或筛选条件无效")
+		if errors.Is(err, errCatalogChanged) {
+			writeError(w, r, http.StatusConflict, "CATALOG_CHANGED", "项目目录已经更新，请重新加载")
+		} else if errors.Is(err, errInvalidCatalogQuery) {
+			writeError(w, r, http.StatusBadRequest, "INVALID_REQUEST", "搜索、筛选或分页条件无效")
 		} else {
 			writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "项目列表读取失败")
 		}
@@ -49,25 +54,80 @@ func (s Server) catalogPayload(r *http.Request) (catalogPayload, error) {
 	if err != nil {
 		return catalogPayload{}, err
 	}
-	key := fmt.Sprintf("%d\x00%s", result.Snapshot.Generation, result.Query.CacheKey)
+	page, err := s.parseCatalogPage(r.URL.Query(), result)
+	if err != nil {
+		return catalogPayload{}, err
+	}
+	key := fmt.Sprintf("%d\x00%s\x00%s", result.Snapshot.Generation,
+		result.Query.CacheKey, page.cacheKey())
 	load := func(ctx context.Context) (catalogPayload, error) {
-		projects, err := s.catalogViewsForIDs(ctx, result.Snapshot, result.Projects)
-		if err != nil {
-			return catalogPayload{}, err
-		}
-		suggestions, err := s.catalogViewsForIDs(ctx, result.Snapshot, result.Suggestions)
-		if err != nil {
-			return catalogPayload{}, err
-		}
-		return encodeCatalogResponse(catalogResponse{
+		projectIDs, suggestionIDs := result.Projects, result.Suggestions
+		response := catalogResponse{
 			FilterGroups: append([]config.FilterSelector(nil), result.Snapshot.Filters.Selectors...),
-			Projects:     projects, SuggestedProjects: suggestions,
-		})
+		}
+		if page.Enabled {
+			projectIDs, suggestionIDs, err = pagedCatalogIDs(result, page, &response)
+			if err != nil {
+				return catalogPayload{}, err
+			}
+		}
+		projects, err := s.catalogViewsForIDs(ctx, result.Snapshot, projectIDs)
+		if err != nil {
+			return catalogPayload{}, err
+		}
+		suggestions, err := s.catalogViewsForIDs(ctx, result.Snapshot, suggestionIDs)
+		if err != nil {
+			return catalogPayload{}, err
+		}
+		response.Projects, response.SuggestedProjects = projects, suggestions
+		return encodeCatalogResponse(response)
 	}
 	if s.CatalogCache == nil {
 		return load(r.Context())
 	}
 	return s.CatalogCache.getOrLoad(r.Context(), key, load)
+}
+
+func pagedCatalogIDs(result catalogQueryResult, page catalogPageRequest,
+	response *catalogResponse) ([]string, []string, error) {
+	if page.Section == catalogSectionProjects {
+		projects, end, err := catalogPageIDs(result.Projects, page)
+		if err != nil {
+			return nil, nil, err
+		}
+		if end < len(result.Projects) {
+			response.NextProjectsCursor = encodeCatalogCursor(result.Snapshot.Generation,
+				result.Query, catalogSectionProjects, end, page.PageSize)
+		}
+		return projects, nil, nil
+	}
+	if page.Section == catalogSectionSuggested {
+		suggestions, end, err := catalogPageIDs(result.Suggestions, page)
+		if err != nil {
+			return nil, nil, err
+		}
+		if end < len(result.Suggestions) {
+			response.NextSuggestedCursor = encodeCatalogCursor(result.Snapshot.Generation,
+				result.Query, catalogSectionSuggested, end, page.PageSize)
+		}
+		return nil, suggestions, nil
+	}
+	projects, projectEnd := firstCatalogPage(result.Projects, page.PageSize)
+	suggestions, suggestionEnd := firstCatalogPage(result.Suggestions, page.PageSize)
+	if projectEnd < len(result.Projects) {
+		response.NextProjectsCursor = encodeCatalogCursor(result.Snapshot.Generation,
+			result.Query, catalogSectionProjects, projectEnd, page.PageSize)
+	}
+	if suggestionEnd < len(result.Suggestions) {
+		response.NextSuggestedCursor = encodeCatalogCursor(result.Snapshot.Generation,
+			result.Query, catalogSectionSuggested, suggestionEnd, page.PageSize)
+	}
+	return projects, suggestions, nil
+}
+
+func firstCatalogPage(ids []string, pageSize int) ([]string, int) {
+	end := min(pageSize, len(ids))
+	return ids[:end], end
 }
 
 func (s Server) legacyCatalogPayload(ctx context.Context) (catalogPayload, error) {

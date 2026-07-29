@@ -31,11 +31,16 @@ func TestCatalogPageIncludesDesktopAndMobileFilterSurfaces(t *testing.T) {
 		`id="catalog-suggestions-title"`,
 		`没有严格匹配的项，但你可能在找：`,
 		`id="suggested-project-cards"`,
+		`data-catalog-batch-rows="4"`,
+		`data-catalog-prefetch-remaining-rows="1"`,
+		`id="project-load-more"`,
+		`id="suggested-project-load-more"`,
 		`class="project-tags"`,
 		`/static/public/download-filters.css?v=`,
 		`/static/public/download-filters-mobile.css?v=`,
 		`/static/public/download-card.js?v=`,
 		`/static/public/download-filters.js?v=`,
+		`/static/public/download-lazy.js?v=`,
 	} {
 		if rec.Code != http.StatusOK || !strings.Contains(body, want) {
 			t.Fatalf("首页缺少搜索筛选结构 %q：status=%d body=%s", want, rec.Code, body)
@@ -62,7 +67,7 @@ func TestCatalogControllerDebouncesCanonicalCachedRequests(t *testing.T) {
 		`filters.selectedFilters().forEach`,
 		`cache: "default"`,
 		`new AbortController()`,
-		`requestController.abort()`,
+		`initialController.abort()`,
 		`error.status === 429`,
 		`response.headers.get("Retry-After")`,
 		`catalog.suggested_projects`,
@@ -71,6 +76,39 @@ func TestCatalogControllerDebouncesCanonicalCachedRequests(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("目录控制器缺少行为 %q：%s", want, body)
+		}
+	}
+}
+
+func TestCatalogControllerLoadsBothWaterfallsIncrementally(t *testing.T) {
+	body := publicStaticBody(t, "download.js")
+	for _, want := range []string{
+		`params.set("page_size", String(pageSize))`,
+		`params.set("cursor", cursor)`,
+		`catalog.next_projects_cursor`,
+		`catalog.next_suggested_projects_cursor`,
+		`if (append) container.appendChild(fragment)`,
+		`section.loading || !section.cursor`,
+		`section.controller.abort()`,
+		`error.code === "CATALOG_CHANGED"`,
+		`section.button.hidden = lazyLoader.supported && !section.failed`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("目录控制器缺少懒加载行为 %q：%s", want, body)
+		}
+	}
+	lazy := publicStaticBody(t, "download-lazy.js")
+	for _, want := range []string{
+		`new IntersectionObserver`,
+		`columns(container) * batchRows`,
+		`batchRows - remainingRows - 1`,
+		`columns(section.container) * triggerRow`,
+		`getBoundingClientRect().bottom <= 0`,
+		`observer.observe(section.trigger)`,
+		`window.addEventListener("resize"`,
+	} {
+		if !strings.Contains(lazy, want) {
+			t.Fatalf("目录懒加载器缺少按列触发行为 %q：%s", want, lazy)
 		}
 	}
 }

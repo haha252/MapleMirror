@@ -44,7 +44,9 @@ type downloadAssetUI struct {
 }
 
 type downloadPageData struct {
-	Notices []noticeView
+	Notices                      []noticeView
+	CatalogBatchRows             int
+	CatalogPrefetchRemainingRows int
 }
 
 func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +59,8 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.trackPageView(w, r)
 	notices := s.currentNotices()
-	body, err := s.renderDownloadBody(notices)
+	body, err := s.renderDownloadBody(notices, s.catalogBatchRows(),
+		s.catalogPrefetchRemainingRows())
 	if err != nil {
 		http.Error(w, "下载页面渲染失败", http.StatusInternalServerError)
 		return
@@ -76,7 +79,7 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		Scripts: []string{"/static/public/download-selectors.js",
 			"/static/public/download-file-browser.js", "/static/public/download-masonry.js",
 			"/static/public/download-card.js", "/static/public/download-filters.js",
-			"/static/public/download.js"},
+			"/static/public/download-lazy.js", "/static/public/download.js"},
 	})
 }
 
@@ -127,8 +130,31 @@ func normalizedDefaultSelectionMode(value string) string {
 	return config.ProjectSelectionModeSelectors
 }
 
-func (s Server) renderDownloadBody(notices []noticeView) (template.HTML, error) {
-	return s.renderTemplateBody("download", downloadPageData{Notices: notices})
+func (s Server) renderDownloadBody(notices []noticeView, catalogBatchRows,
+	catalogPrefetchRemainingRows int) (template.HTML, error) {
+	return s.renderTemplateBody("download", downloadPageData{
+		Notices: notices, CatalogBatchRows: catalogBatchRows,
+		CatalogPrefetchRemainingRows: catalogPrefetchRemainingRows,
+	})
+}
+
+func (s Server) catalogBatchRows() int {
+	if s.CatalogBatchRows > 0 {
+		return s.CatalogBatchRows
+	}
+	return defaultCatalogBatchRows
+}
+
+func (s Server) catalogPrefetchRemainingRows() int {
+	if s.CatalogPrefetchRemainingRows != nil &&
+		*s.CatalogPrefetchRemainingRows >= 0 &&
+		*s.CatalogPrefetchRemainingRows < s.catalogBatchRows() {
+		return *s.CatalogPrefetchRemainingRows
+	}
+	if s.catalogBatchRows() == 1 {
+		return 0
+	}
+	return 1
 }
 
 func displayDate(value string) string {

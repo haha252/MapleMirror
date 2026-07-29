@@ -136,6 +136,8 @@ GET /api/public/v1/catalog?q=ffmpeg&filter=software_type:launcher&filter=support
 
 - `q` 可选，去除首尾空格后最长 100 个 Unicode 字符，搜索不区分大小写。
 - `filter` 可重复，格式为 `{selector_id}:{option_id}`；重复项会去重。
+- `page_size` 可选；设置后启用分页，必须大于零且不得超过主节点的 `server.catalog_batch_rows × 3`。
+- `cursor` 可选；使用响应返回的不透明游标继续读取对应的主结果或建议结果，不得解析、修改或跨查询复用。
 - 未知筛选器、未知公开选项或非法格式返回 `400 INVALID_REQUEST`。
 - 客户端应对筛选项排序后生成稳定 URL，便于浏览器复用同一条件的缓存。
 
@@ -170,9 +172,19 @@ GET /api/public/v1/catalog?q=ffmpeg&filter=software_type:launcher&filter=support
       "assets": []
     }
   ],
-  "suggested_projects": []
+  "suggested_projects": [],
+  "next_projects_cursor": "不透明游标"
 }
 ```
+
+首次携带 `page_size` 时，`projects` 和 `suggested_projects` 分别最多返回该数量，并分别通过
+`next_projects_cursor`、`next_suggested_projects_cursor` 表示是否还有下一批。续页请求继续携带相同的
+`q`、`filter` 和 `page_size`，并增加其中一个 `cursor`；响应只填充该游标所属的结果数组。没有下一批时省略对应游标。
+响应式布局跨断点后可以在续页请求中调整 `page_size`，游标中的绝对偏移量保证不会因此重复或漏掉项目。
+
+游标绑定目录版本、规范化查询、结果区域和绝对偏移量，并记录上一批大小作为未传 `page_size` 时的回退值。目录配置在翻页期间发生热重载时，旧游标返回
+`409 CATALOG_CHANGED`，客户端应丢弃当前两组结果并从首批重新请求。不带 `page_size` 和 `cursor` 的请求继续返回完整结果，
+用于兼容旧客户端。
 
 `architecture_selector_enabled` 和 `system_selector_enabled` 是分类方式无关的下载页展示开关。旧的 `architecture_match_enabled`、`system_match_enabled` 暂时保留兼容，其值与对应新开关一致。
 
@@ -182,7 +194,7 @@ GET /api/public/v1/catalog?q=ffmpeg&filter=software_type:launcher&filter=support
 
 搜索词是硬条件：存在直接搜索结果时，只在这些项目中应用标签条件。所有已选标签按 AND 完全匹配，全部命中的项目进入 `projects`；未全部命中但至少命中一个的项目进入 `suggested_projects`；一个标签都未命中的项目不返回。部分匹配推荐先按命中标签数量降序，再按搜索相关度、项目名称和项目 ID 稳定排序。
 
-搜索和标签匹配只读取主节点内存索引；项目资产、版本和实时可用性仍在缓存未命中时从数据库读取。服务端以规范化搜索词、排序去重后的筛选项和索引版本为键缓存已编码响应与 ETag，TTL 固定 1 分钟；响应带 `Cache-Control: private, max-age=60`。客户端带 `If-None-Match` 命中时返回 `304 Not Modified`。公共资源限流位于目录缓存之前，因此任何到达服务器的请求，包括服务端缓存命中和 304，均计一次请求；浏览器在 `max-age` 新鲜期直接使用私有缓存时不会访问服务器。
+搜索和标签匹配只读取主节点内存索引；项目资产、版本和实时可用性仍在缓存未命中时从数据库读取。服务端以规范化搜索词、排序去重后的筛选项、索引版本和分页位置为键缓存已编码响应与 ETag，TTL 固定 1 分钟；每一页使用独立 ETag。响应带 `Cache-Control: private, max-age=60`。客户端带 `If-None-Match` 命中时返回 `304 Not Modified`。公共资源限流位于目录缓存之前，因此任何到达服务器的请求，包括服务端缓存命中和 304，均计一次请求；浏览器在 `max-age` 新鲜期直接使用私有缓存时不会访问服务器。
 
 ## 4. 下载接入方式
 

@@ -35,12 +35,22 @@
         <span>筛选器</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
       </button>
     </div>
-    <section class="catalog-results" aria-live="polite">
+    <section class="catalog-results" aria-live="polite"
+      data-catalog-batch-rows="{{.CatalogBatchRows}}"
+      data-catalog-prefetch-remaining-rows="{{.CatalogPrefetchRemainingRows}}">
       <div id="download-status" class="status muted">正在加载项目列表...</div>
       <div id="project-cards" class="project-grid" data-project-grid></div>
+      <div id="project-load-more" class="catalog-load-more" hidden>
+        <button type="button">加载更多项目</button>
+        <span role="status" aria-live="polite"></span>
+      </div>
       <section id="catalog-suggestions" class="catalog-suggestions" hidden>
         <h2><span id="catalog-suggestions-title">没有严格匹配的项，但你可能在找：</span></h2>
         <div id="suggested-project-cards" class="project-grid" data-project-grid></div>
+        <div id="suggested-project-load-more" class="catalog-load-more" hidden>
+          <button type="button">加载更多建议</button>
+          <span role="status" aria-live="polite"></span>
+        </div>
       </section>
     </section>
   </div>

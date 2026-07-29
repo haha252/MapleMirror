@@ -24,10 +24,12 @@ type Master struct {
 }
 
 type MasterServer struct {
-	PublicListen     string `yaml:"public_listen"`
-	ManagementListen string `yaml:"management_listen"`
-	ControlListen    string `yaml:"control_listen"`
-	EnrollmentListen string `yaml:"enrollment_listen"`
+	PublicListen                 string `yaml:"public_listen"`
+	ManagementListen             string `yaml:"management_listen"`
+	ControlListen                string `yaml:"control_listen"`
+	EnrollmentListen             string `yaml:"enrollment_listen"`
+	CatalogBatchRows             *int   `yaml:"catalog_batch_rows"`
+	CatalogPrefetchRemainingRows *int   `yaml:"catalog_prefetch_remaining_rows"`
 }
 type RequestID struct {
 	ResponseHeader string `yaml:"response_header"`
@@ -112,6 +114,7 @@ func LoadMaster(path string, warn WarnFunc) (Master, error) {
 func applyMasterDefaults(c *Master, warn WarnFunc) {
 	applyLoggingDefaults(&c.Logging, "logs/master", warn)
 	setString(&c.Server.ManagementListen, "127.0.0.1:9080", "server.management_listen", warn)
+	applyCatalogDefaults(&c.Server, warn)
 	applyDatabaseDefaults(c, warn)
 	setString(&c.RequestID.ResponseHeader, "X-Request-ID", "request_id.response_header", warn)
 	setString(&c.RequestID.ParentHeader, "X-Request-ID", "request_id.parent_header", warn)
@@ -183,6 +186,9 @@ func validateMaster(c Master) error {
 	}
 	if c.Server.EnrollmentListen != "" && !validListen(c.Server.EnrollmentListen) {
 		return errors.New("配置字段 server.enrollment_listen 必须为合法监听地址")
+	}
+	if err := validateCatalog(c.Server); err != nil {
+		return err
 	}
 	if err := validateLogging(c.Logging); err != nil {
 		return err

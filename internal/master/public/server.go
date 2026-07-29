@@ -19,31 +19,33 @@ import (
 )
 
 type Server struct {
-	Store            Store
-	Signer           downloadtoken.Signer
-	ALTCHATTL        time.Duration
-	ALTCHADifficulty int
-	APITTL           time.Duration
-	TokenLifetime    TokenLifetime
-	APIZeroBits      int
-	TrustedCIDRs     []string
-	Logger           *logging.Logger
-	WebAssets        *webAssets
-	ProjectAssets    map[string]projectAssetConfig
-	ProjectsPath     string
-	NoticesPath      string
-	Notices          []config.PublicNotice
-	NoticeStore      *noticeStore
-	PageViews        *pageViewTracker
-	Blocklist        *blocklistPolicy
-	ClientBlocks     *clientBlockManager
-	AbuseTracker     *abuseTracker
-	BlocklistExport  *blocklistExportCache
-	ResourceLimiter  *publicResourceLimiter
-	StatsCache       *statsCache
-	WebVerifications *webVerificationTokenStore
-	CatalogIndex     *catalogIndex
-	CatalogCache     *catalogResultCache
+	Store                        Store
+	Signer                       downloadtoken.Signer
+	ALTCHATTL                    time.Duration
+	ALTCHADifficulty             int
+	APITTL                       time.Duration
+	TokenLifetime                TokenLifetime
+	APIZeroBits                  int
+	TrustedCIDRs                 []string
+	Logger                       *logging.Logger
+	WebAssets                    *webAssets
+	ProjectAssets                map[string]projectAssetConfig
+	ProjectsPath                 string
+	NoticesPath                  string
+	Notices                      []config.PublicNotice
+	NoticeStore                  *noticeStore
+	PageViews                    *pageViewTracker
+	Blocklist                    *blocklistPolicy
+	ClientBlocks                 *clientBlockManager
+	AbuseTracker                 *abuseTracker
+	BlocklistExport              *blocklistExportCache
+	ResourceLimiter              *publicResourceLimiter
+	StatsCache                   *statsCache
+	WebVerifications             *webVerificationTokenStore
+	CatalogIndex                 *catalogIndex
+	CatalogCache                 *catalogResultCache
+	CatalogBatchRows             int
+	CatalogPrefetchRemainingRows *int
 }
 
 type TokenLifetime struct {
@@ -59,7 +61,9 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	projectsPath, filtersPath, noticesPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
 	logger *logging.Logger, publicProbeNetworkFailures int,
-	archive *accountingarchive.Writer, statsBuffer *statbuffer.Buffer) (Server, error) {
+	catalogBatchRows, catalogPrefetchRemainingRows int,
+	archive *accountingarchive.Writer,
+	statsBuffer *statbuffer.Buffer) (Server, error) {
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
@@ -84,30 +88,32 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 			Archive:                    archive,
 			Logger:                     logger,
 			StatsBuffer:                statsBuffer},
-		Signer:           signer,
-		ALTCHATTL:        altchaTTL,
-		ALTCHADifficulty: altchaDifficulty,
-		APITTL:           apiTTL,
-		TokenLifetime:    tokenLifetime,
-		APIZeroBits:      apiBits,
-		TrustedCIDRs:     trusted,
-		Logger:           logger,
-		WebAssets:        assets,
-		ProjectAssets:    projectAssetMap(projects),
-		ProjectsPath:     projectsPath,
-		NoticesPath:      noticesPath,
-		Notices:          clonePublicNotices(notices),
-		NoticeStore:      newNoticeStore(notices),
-		PageViews:        newPageViewTracker(),
-		Blocklist:        blocklist,
-		ClientBlocks:     clientBlocks,
-		AbuseTracker:     abuseTracker,
-		BlocklistExport:  newBlocklistExportCache(time.Minute),
-		ResourceLimiter:  newPublicResourceLimiter(quota),
-		StatsCache:       &statsCache{},
-		WebVerifications: webVerifications,
-		CatalogIndex:     catalogIndex,
-		CatalogCache:     catalogCache,
+		Signer:                       signer,
+		ALTCHATTL:                    altchaTTL,
+		ALTCHADifficulty:             altchaDifficulty,
+		APITTL:                       apiTTL,
+		TokenLifetime:                tokenLifetime,
+		APIZeroBits:                  apiBits,
+		TrustedCIDRs:                 trusted,
+		Logger:                       logger,
+		WebAssets:                    assets,
+		ProjectAssets:                projectAssetMap(projects),
+		ProjectsPath:                 projectsPath,
+		NoticesPath:                  noticesPath,
+		Notices:                      clonePublicNotices(notices),
+		NoticeStore:                  newNoticeStore(notices),
+		PageViews:                    newPageViewTracker(),
+		Blocklist:                    blocklist,
+		ClientBlocks:                 clientBlocks,
+		AbuseTracker:                 abuseTracker,
+		BlocklistExport:              newBlocklistExportCache(time.Minute),
+		ResourceLimiter:              newPublicResourceLimiter(quota),
+		StatsCache:                   &statsCache{},
+		WebVerifications:             webVerifications,
+		CatalogIndex:                 catalogIndex,
+		CatalogCache:                 catalogCache,
+		CatalogBatchRows:             catalogBatchRows,
+		CatalogPrefetchRemainingRows: &catalogPrefetchRemainingRows,
 	}, nil
 }
 

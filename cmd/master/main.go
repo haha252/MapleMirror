@@ -200,7 +200,8 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
 		cfg.Proxy.TrustedCIDRs, projects, filters, projectsPath, filtersPath,
 		noticesPath, notices.Notices, runtime, logger,
-		cfg.Node.PublicProbeNetworkFailures, archive, statsBuffer)
+		cfg.Node.PublicProbeNetworkFailures, *cfg.Server.CatalogBatchRows,
+		*cfg.Server.CatalogPrefetchRemainingRows, archive, statsBuffer)
 	if err != nil {
 		return public.Server{}, err
 	}
