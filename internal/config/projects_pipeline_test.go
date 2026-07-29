@@ -180,6 +180,15 @@ func TestNormalizeAssetArchitectureKeepsAndroidABI(t *testing.T) {
 	}
 }
 
+func TestNormalizeAssetSystemSupportsHarmony(t *testing.T) {
+	for _, value := range []string{"harmony", "HarmonyOS", "OpenHarmony", "OHOS"} {
+		got, ok := NormalizeAssetSystem(value)
+		if !ok || got != "harmony" {
+			t.Fatalf("鸿蒙系统别名应规范化为 harmony value=%q got=%q ok=%v", value, got, ok)
+		}
+	}
+}
+
 func TestProjectsRejectInvalidAssetPipeline(t *testing.T) {
 	cases := []string{
 		"asset_pipeline:\n      classify:\n        mode: mixed\n",

@@ -7,6 +7,7 @@
 
   function userSystem() {
     const values = browserText();
+    if (/\bharmony(?:os)?\b|openharmony|\bohos\b/.test(values)) return "harmony";
     if (/windows|win32|win64|wow64/.test(values)) return "win";
     if (/linux/.test(values)) return "linux";
     if (/darwin|mac|os x/.test(values)) return "darwin";
@@ -49,9 +50,21 @@
       preferredAsset(systemMatched);
   }
 
+  function systemLabel(value) {
+    const labels = {
+      win: "Windows",
+      linux: "Linux",
+      darwin: "macOS",
+      harmony: "鸿蒙",
+      None: "未识别"
+    };
+    return labels[value] || String(value || "");
+  }
+
   window.DownloadSelectors = {
     preferredAsset: preferredAsset,
     preferredAssetForUser: preferredAssetForUser,
-    userSystem: userSystem
+    userSystem: userSystem,
+    systemLabel: systemLabel
   };
 })();

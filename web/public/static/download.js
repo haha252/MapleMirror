@@ -137,7 +137,7 @@
       systems.forEach((system) => {
         const option = document.createElement("option");
         option.value = system;
-        option.textContent = system;
+        option.textContent = selectors.systemLabel ? selectors.systemLabel(system) : system;
         if (system === choice) option.selected = true;
         systemSelect.appendChild(option);
       });

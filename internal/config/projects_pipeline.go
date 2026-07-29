@@ -208,6 +208,8 @@ func NormalizeAssetSystem(value string) (string, bool) {
 		return "linux", true
 	case "darwin", "mac", "macos", "osx":
 		return "darwin", true
+	case "harmony", "harmonyos", "openharmony", "ohos":
+		return "harmony", true
 	case "none":
 		return "None", true
 	default:

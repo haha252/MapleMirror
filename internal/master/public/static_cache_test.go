@@ -44,6 +44,19 @@ func TestPublicStaticUsesImmutableCache(t *testing.T) {
 	}
 }
 
+func TestDownloadSelectorStaticSupportsHarmony(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/static/public/download-selectors.js", nil))
+	body := rec.Body.String()
+	harmony := strings.Index(body, `return "harmony"`)
+	linux := strings.Index(body, `return "linux"`)
+	if rec.Code != http.StatusOK || harmony < 0 || linux < 0 || harmony >= linux ||
+		!strings.Contains(body, `harmony: "鸿蒙"`) {
+		t.Fatalf("鸿蒙识别应早于 Linux 且提供中文标签：status=%d body=%s", rec.Code, body)
+	}
+}
+
 func TestCatalogETag(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)

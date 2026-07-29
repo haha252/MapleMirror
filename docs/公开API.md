@@ -118,7 +118,7 @@
 }
 ```
 
-`architecture` 为空字符串表示该项目未启用架构区分；启用后返回提取值，未命中时返回 `None`。`system` 为空字符串表示该项目未启用系统区分；启用后只返回规范化值 `win`、`linux`、`darwin` 或未命中占位 `None`。
+`architecture` 为空字符串表示该项目未启用架构区分；启用后返回提取值，未命中时返回 `None`。`system` 为空字符串表示该项目未启用系统区分；启用后只返回规范化值 `win`、`linux`、`darwin`、`harmony` 或未命中占位 `None`。
 
 `variant`、`display_label` 和 `priority` 为资产分类规则生成的可选展示字段；未配置分类规则时可能为空或为零，旧客户端可以忽略。
 

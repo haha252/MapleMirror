@@ -67,10 +67,10 @@ asset_pipeline:
       architecture_match_enabled: false
       # 仅在 architecture_match_enabled=true 时编译和使用。
       architecture_regex: "(?i)(amd64|arm64|x86_64)"
-      # 启用后 system_regex 从文件名提取并规范化为 win/linux/darwin。
+      # 启用后 system_regex 从文件名提取并规范化为 win/linux/darwin/harmony。
       system_match_enabled: false
       # 仅在 system_match_enabled=true 时编译和使用。
-      system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
+      system_regex: "(?i)(windows|win|linux|darwin|macos|osx|harmonyos|openharmony|ohos)"
     # rules 按顺序应用；后命中的赋值可以覆盖前面规则的赋值。
     rules:
       -
@@ -80,7 +80,7 @@ asset_pipeline:
           regex: "^7z\\d+\\.exe$"
         # assign 定义命中后写入资产展示和选择字段的值。
         assign:
-          # system 可写 win、linux、darwin 或 None。
+          # system 可写 win、linux、darwin、harmony 或 None。
           system: "win"
           # architecture 可写 amd64、arm64、arm、x86、x86_64、arm64-v8a、armeabi-v7a、all 或 None。
           architecture: "amd64"

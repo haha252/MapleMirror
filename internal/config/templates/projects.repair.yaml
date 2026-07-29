@@ -62,10 +62,10 @@ projects:
           architecture_match_enabled: false
           # 仅在 architecture_match_enabled=true 时编译和使用。
           architecture_regex: "(?i)(amd64|arm64|x86_64)"
-          # 启用后 system_regex 从文件名提取并规范化为 win/linux/darwin。
+          # 启用后 system_regex 从文件名提取并规范化为 win/linux/darwin/harmony。
           system_match_enabled: false
           # 仅在 system_match_enabled=true 时编译和使用。
-          system_regex: "(?i)(windows|win|linux|darwin|macos|osx)"
+          system_regex: "(?i)(windows|win|linux|darwin|macos|osx|harmonyos|openharmony|ohos)"
         # rules 按顺序应用；后命中的赋值可以覆盖前面规则的赋值。
         rules: []
         # script 可选；用于通过 Starlark 脚本执行高级分类。

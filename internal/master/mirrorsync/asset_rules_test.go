@@ -84,29 +84,31 @@ func TestScanExtractsNormalizedSystemWhenEnabled(t *testing.T) {
 			{ID: 3, Name: "app-darwin-amd64.zip", Size: 10, URL: "https://example.invalid/c", Digest: good},
 			{ID: 4, Name: "app-freebsd-amd64.zip", Size: 10, URL: "https://example.invalid/d", Digest: good},
 			{ID: 5, Name: "app-amd64.zip", Size: 10, URL: "https://example.invalid/e", Digest: good},
+			{ID: 6, Name: "app-harmonyos-arm64.zip", Size: 10, URL: "https://example.invalid/f", Digest: good},
 		},
 	}}}}
 	projects := config.Projects{Projects: []config.Project{{
 		ID: "p1", Name: "项目", Repository: "owner/repo", Enabled: true,
 		RetainVersions: 1, AssetInclude: config.AssetRules{{Pattern: "*.zip", Type: "glob"}},
 		ArchitectureMatchEnabled: true, ArchitectureRegex: "(amd64|arm64)",
-		SystemMatchEnabled: true, SystemRegex: "(windows|linux|darwin|freebsd)",
+		SystemMatchEnabled: true, SystemRegex: "(windows|linux|darwin|freebsd|harmonyos)",
 	}}}
 	summary, err := scanner.Scan(context.Background(), projects, "", "req-scan")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary.AcceptedAssets != 5 || summary.RejectedAssets != 0 {
+	if summary.AcceptedAssets != 6 || summary.RejectedAssets != 0 {
 		t.Fatalf("系统匹配统计错误 accepted=%d rejected=%d", summary.AcceptedAssets, summary.RejectedAssets)
 	}
-	assertCount(t, db, "assets", 5)
-	assertCount(t, db, "target_inventory", 5)
-	assertCount(t, db, "node_tasks", 5)
+	assertCount(t, db, "assets", 6)
+	assertCount(t, db, "target_inventory", 6)
+	assertCount(t, db, "node_tasks", 6)
 	assertAssetSystem(t, db, "p1:1:1", "win")
 	assertAssetSystem(t, db, "p1:1:2", "linux")
 	assertAssetSystem(t, db, "p1:1:3", "darwin")
 	assertAssetSystem(t, db, "p1:1:4", "None")
 	assertAssetSystem(t, db, "p1:1:5", "None")
+	assertAssetSystem(t, db, "p1:1:6", "harmony")
 }
 
 func TestScanAssetRuleIncludeExcludeSemantics(t *testing.T) {
