@@ -26,6 +26,9 @@ func validateProject(p Project, known map[string]bool) error {
 	if !validProjectSelectionMode(p.DefaultSelectionMode) {
 		return fmt.Errorf("项目 %s 的 default_selection_mode 必须为 selectors 或 file", p.ID)
 	}
+	if err := validateProjectTags(p.ID, p.Tags); err != nil {
+		return err
+	}
 	if p.RegexClassificationEnabled() && p.ClassifyArchitectureEnabled() {
 		if strings.TrimSpace(p.ClassifyArchitectureRegex()) == "" {
 			return fmt.Errorf("项目 %s 启用架构匹配时必须配置 architecture_regex", p.ID)
@@ -49,6 +52,26 @@ func validateProject(p Project, known map[string]bool) error {
 		}
 		if _, err := regexp.Compile(p.ClassifySystemRegex()); err != nil {
 			return fmt.Errorf("项目 %s 的系统提取正则无效：%w", p.ID, err)
+		}
+	}
+	return nil
+}
+
+func validateProjectTags(projectID string, tags map[string][]string) error {
+	for group, values := range tags {
+		if strings.TrimSpace(group) == "" {
+			return fmt.Errorf("项目 %s 的 tags 分组名不能为空", projectID)
+		}
+		seen := map[string]bool{}
+		for _, value := range values {
+			normalized := strings.ToLower(strings.TrimSpace(value))
+			if normalized == "" {
+				return fmt.Errorf("项目 %s 的 tags.%s 标签不能为空", projectID, group)
+			}
+			if seen[normalized] {
+				return fmt.Errorf("项目 %s 的 tags.%s 标签不得重复：%s", projectID, group, value)
+			}
+			seen[normalized] = true
 		}
 	}
 	return nil

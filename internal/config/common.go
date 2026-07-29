@@ -222,7 +222,7 @@ func ParseBytes(field, value string, allowZero bool) (int64, error) {
 		return 0, fmt.Errorf("配置字段 %s 必须使用 B、KiB、MiB 或 GiB 格式", field)
 	}
 	count, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil || count <= 0 {
+	if err != nil || count < 0 || (!allowZero && count == 0) {
 		return 0, fmt.Errorf("配置字段 %s 必须为正容量", field)
 	}
 	factor, ok := byteUnitFactor(parts[1])

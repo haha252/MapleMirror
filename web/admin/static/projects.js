@@ -11,6 +11,7 @@
     return {
       ID: val(p, "ID", ""), Name: val(p, "Name", ""),
       Repository: val(p, "Repository", ""), IconPath: val(p, "IconPath", ""),
+      Tags: val(p, "Tags", {}) || {},
       Enabled: !!val(p, "Enabled", false),
       RetainVersions: Number(val(p, "RetainVersions", 3)) || 3,
       IncludePrerelease: !!val(p, "IncludePrerelease", false),

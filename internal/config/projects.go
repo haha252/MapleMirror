@@ -14,27 +14,28 @@ type Projects struct {
 }
 
 type Project struct {
-	ID                         string        `yaml:"id"`
-	Name                       string        `yaml:"name"`
-	Repository                 string        `yaml:"repository"`
-	Description                string        `yaml:"description"`
-	HomepageURL                string        `yaml:"homepage_url"`
-	IconPath                   string        `yaml:"icon_path"`
-	Enabled                    bool          `yaml:"enabled"`
-	RetainVersions             int           `yaml:"retain_versions"`
-	IncludePrerelease          bool          `yaml:"include_prerelease"`
-	DownloadMultiplier         int           `yaml:"download_multiplier"`
-	DefaultSelectionMode       string        `yaml:"default_selection_mode"`
-	AssetInclude               AssetRules    `yaml:"asset_include"`
-	AssetExclude               AssetRules    `yaml:"asset_exclude"`
-	AssetPipeline              AssetPipeline `yaml:"asset_pipeline"`
-	ArchitectureMatchEnabled   bool          `yaml:"architecture_match_enabled"`
-	ArchitectureRegex          string        `yaml:"architecture_regex"`
-	ArchitectureDefaultEnabled bool          `yaml:"-" json:"-"`
-	SystemMatchEnabled         bool          `yaml:"system_match_enabled"`
-	SystemRegex                string        `yaml:"system_regex"`
-	ResolvedIconPath           string        `yaml:"-"`
-	ResolvedClassifyScriptPath string        `yaml:"-"`
+	ID                         string              `yaml:"id"`
+	Name                       string              `yaml:"name"`
+	Repository                 string              `yaml:"repository"`
+	Description                string              `yaml:"description"`
+	HomepageURL                string              `yaml:"homepage_url"`
+	IconPath                   string              `yaml:"icon_path"`
+	Tags                       map[string][]string `yaml:"tags,omitempty"`
+	Enabled                    bool                `yaml:"enabled"`
+	RetainVersions             int                 `yaml:"retain_versions"`
+	IncludePrerelease          bool                `yaml:"include_prerelease"`
+	DownloadMultiplier         int                 `yaml:"download_multiplier"`
+	DefaultSelectionMode       string              `yaml:"default_selection_mode"`
+	AssetInclude               AssetRules          `yaml:"asset_include"`
+	AssetExclude               AssetRules          `yaml:"asset_exclude"`
+	AssetPipeline              AssetPipeline       `yaml:"asset_pipeline"`
+	ArchitectureMatchEnabled   bool                `yaml:"architecture_match_enabled"`
+	ArchitectureRegex          string              `yaml:"architecture_regex"`
+	ArchitectureDefaultEnabled bool                `yaml:"-" json:"-"`
+	SystemMatchEnabled         bool                `yaml:"system_match_enabled"`
+	SystemRegex                string              `yaml:"system_regex"`
+	ResolvedIconPath           string              `yaml:"-"`
+	ResolvedClassifyScriptPath string              `yaml:"-"`
 }
 
 type AssetRule struct {
@@ -47,25 +48,26 @@ type AssetRules []AssetRule
 
 func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 	type projectYAML struct {
-		ID                         string        `yaml:"id"`
-		Name                       string        `yaml:"name"`
-		Repository                 string        `yaml:"repository"`
-		Description                string        `yaml:"description"`
-		HomepageURL                string        `yaml:"homepage_url"`
-		IconPath                   string        `yaml:"icon_path"`
-		Enabled                    bool          `yaml:"enabled"`
-		RetainVersions             int           `yaml:"retain_versions"`
-		IncludePrerelease          bool          `yaml:"include_prerelease"`
-		DownloadMultiplier         int           `yaml:"download_multiplier"`
-		DefaultSelectionMode       string        `yaml:"default_selection_mode"`
-		AssetInclude               AssetRules    `yaml:"asset_include"`
-		AssetExclude               AssetRules    `yaml:"asset_exclude"`
-		AssetPipeline              AssetPipeline `yaml:"asset_pipeline"`
-		ArchitectureMatchEnabled   bool          `yaml:"architecture_match_enabled"`
-		ArchitectureRegex          string        `yaml:"architecture_regex"`
-		ArchitectureDefaultEnabled bool          `yaml:"architecture_default_enabled"`
-		SystemMatchEnabled         bool          `yaml:"system_match_enabled"`
-		SystemRegex                string        `yaml:"system_regex"`
+		ID                         string              `yaml:"id"`
+		Name                       string              `yaml:"name"`
+		Repository                 string              `yaml:"repository"`
+		Description                string              `yaml:"description"`
+		HomepageURL                string              `yaml:"homepage_url"`
+		IconPath                   string              `yaml:"icon_path"`
+		Tags                       map[string][]string `yaml:"tags,omitempty"`
+		Enabled                    bool                `yaml:"enabled"`
+		RetainVersions             int                 `yaml:"retain_versions"`
+		IncludePrerelease          bool                `yaml:"include_prerelease"`
+		DownloadMultiplier         int                 `yaml:"download_multiplier"`
+		DefaultSelectionMode       string              `yaml:"default_selection_mode"`
+		AssetInclude               AssetRules          `yaml:"asset_include"`
+		AssetExclude               AssetRules          `yaml:"asset_exclude"`
+		AssetPipeline              AssetPipeline       `yaml:"asset_pipeline"`
+		ArchitectureMatchEnabled   bool                `yaml:"architecture_match_enabled"`
+		ArchitectureRegex          string              `yaml:"architecture_regex"`
+		ArchitectureDefaultEnabled bool                `yaml:"architecture_default_enabled"`
+		SystemMatchEnabled         bool                `yaml:"system_match_enabled"`
+		SystemRegex                string              `yaml:"system_regex"`
 	}
 	var raw projectYAML
 	if err := value.Decode(&raw); err != nil {
@@ -74,7 +76,7 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 	*p = Project{
 		ID: raw.ID, Name: raw.Name, Repository: raw.Repository,
 		Description: raw.Description, HomepageURL: raw.HomepageURL,
-		IconPath: raw.IconPath, Enabled: raw.Enabled,
+		IconPath: raw.IconPath, Tags: raw.Tags, Enabled: raw.Enabled,
 		RetainVersions:       raw.RetainVersions,
 		IncludePrerelease:    raw.IncludePrerelease,
 		DownloadMultiplier:   raw.DownloadMultiplier,

@@ -31,7 +31,8 @@
     return {
       ID: val(p, "ID", ""), Name: val(p, "Name", ""), Repository: val(p, "Repository", ""),
       Description: val(p, "Description", ""), HomepageURL: val(p, "HomepageURL", ""),
-      IconPath: val(p, "IconPath", ""), Enabled: !!val(p, "Enabled", true),
+      IconPath: val(p, "IconPath", ""), Tags: val(p, "Tags", {}) || {},
+      Enabled: !!val(p, "Enabled", true),
       RetainVersions: Number(val(p, "RetainVersions", 3)) || 3,
       IncludePrerelease: !!val(p, "IncludePrerelease", false),
       DownloadMultiplier: Number(val(p, "DownloadMultiplier", 1)) || 1,

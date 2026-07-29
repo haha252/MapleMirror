@@ -1,0 +1,28 @@
+# 公共首页搜索与筛选配置。
+cache:
+  # 服务端查询结果缓存的最大内存；写 0 B 可关闭，默认 8 MiB。
+  max_size: "8 MiB"
+
+# 选择器及选项按这里的顺序显示；项目可以拥有未在此声明的额外标签。
+selectors:
+  -
+    # 选择器 ID，用于项目 tags 分组和公开 API 查询。
+    id: software_type
+    # 左侧栏和移动端筛选抽屉显示的名称。
+    name: 软件类型
+    options:
+      -
+        # 选项 ID，对应项目 tags.software_type 中的值。
+        id: launcher
+        # 标签徽章和筛选项显示名称。
+        name: 启动器
+  -
+    id: supported_system
+    name: 支持系统
+    options:
+      -
+        id: windows
+        name: Windows
+      -
+        id: linux
+        name: Linux

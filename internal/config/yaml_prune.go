@@ -26,6 +26,9 @@ func pruneUnknownYAML(current, template *yaml.Node) bool {
 }
 
 func pruneUnknownMap(current, template *yaml.Node) bool {
+	if len(template.Content) == 0 {
+		return false
+	}
 	changed := false
 	for i := 0; i+1 < len(current.Content); {
 		key := current.Content[i]
