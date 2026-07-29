@@ -127,6 +127,13 @@
     else refreshSystems(selectedAsset);
   }
 
+  function openDownload(path) {
+    if (!path) return;
+    const target = new URL(path, window.location.href);
+    target.searchParams.set("from", "project");
+    window.location.href = target.pathname + target.search + target.hash;
+  }
+
   function bindProject(nextProject) {
     project = nextProject;
     systemEnabled = selectorEnabled(project,
@@ -145,9 +152,11 @@
     browser = window.DownloadFileBrowser.create(fileBrowser, project.assets, {
       asset: selectedAsset,
       bytesText: selectors.bytesText,
-      onSelect: refreshDetails,
+      onDownload: function (item) { openDownload(item.download_path); },
       onVersion: function (version) { versionSelect.value = version; },
-      preferredAsset: selectors.preferredAsset,
+      recommendedAsset: function (items) {
+        return selectors.preferredAssetForUser(items, architectureEnabled);
+      },
       uniqueVersions: selectors.uniqueVersions,
       version: versionSelect.value
     });
@@ -177,11 +186,7 @@
     setMode(item.dataset.selectionMode);
   }));
   button.addEventListener("click", function () {
-    const path = button.dataset.downloadPath;
-    if (!path) return;
-    const target = new URL(path, window.location.href);
-    target.searchParams.set("from", "project");
-    window.location.href = target.pathname + target.search + target.hash;
+    openDownload(button.dataset.downloadPath);
   });
   loadProject();
 })();

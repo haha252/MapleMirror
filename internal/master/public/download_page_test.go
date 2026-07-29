@@ -49,8 +49,8 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 		!strings.Contains(body, `class="file-browser__level file-browser__level--versions"`) ||
 		!strings.Contains(body, `class="file-browser__level file-browser__level--files" hidden`) ||
 		!strings.Contains(body, `class="file-browser__back"`) ||
-		!strings.Contains(body, `class="file-browser__versions"`) ||
-		!strings.Contains(body, `class="file-browser__files"`) ||
+		!strings.Contains(body, `class="file-browser__versions" role="group"`) ||
+		!strings.Contains(body, `class="file-browser__files" role="group"`) ||
 		!strings.Contains(body, `data-selection-mode="selectors"`) ||
 		!strings.Contains(body, `data-selection-mode="file"`) ||
 		!strings.Contains(body, `#selection-conditions`) ||

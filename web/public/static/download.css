@@ -86,6 +86,8 @@
   min-width: 0;
 }
 
+.project-card__actions[hidden] { display: none; }
+
 .project-card__size { font-size: 13px; overflow-wrap: anywhere; }
 .download-button { min-width: 112px; padding: 10px 16px; }
 

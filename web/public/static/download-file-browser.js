@@ -1,10 +1,8 @@
 (function () {
-  function optionButton(className, label, selected) {
+  function actionButton(className, label) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = className;
-    button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", String(selected));
     if (label) button.textContent = label;
     return button;
   }
@@ -28,12 +26,11 @@
     const pathText = root.querySelector(".file-browser__path");
     const versions = options.uniqueVersions(items);
     let currentVersion = "";
-    let currentAsset = null;
 
     function renderVersions() {
       versionsBox.innerHTML = "";
       versions.forEach((version) => {
-        const button = optionButton("file-browser__version", "", version === currentVersion);
+        const button = actionButton("file-browser__version", "");
         const label = document.createElement("span");
         label.textContent = version;
         button.appendChild(folderIcon(root.dataset.folderIcon));
@@ -44,25 +41,38 @@
     }
 
     function fileMeta(item) {
-      const status = item.available ? "可下载" : "暂不可下载";
-      return options.bytesText(item.size_bytes) + " · " + status;
+      const status = item.available ? "" : " · 暂不可下载";
+      return options.bytesText(item.size_bytes) + status;
     }
 
-    function renderFiles(preferred) {
+    function renderFiles() {
       const files = items.filter((item) => item.version === currentVersion);
-      const choice = files.includes(preferred) ? preferred : options.preferredAsset(files);
+      const candidate = options.recommendedAsset(files);
+      const recommendation = candidate && candidate.available ? candidate : null;
       filesBox.innerHTML = "";
       files.forEach((item) => {
-        const button = optionButton("file-browser__file", "", item === choice);
+        const recommended = item === recommendation;
+        const className = "file-browser__file" +
+          (recommended ? " file-browser__file--recommended" : "");
+        const button = actionButton(className, "");
         const name = document.createElement("span");
         name.className = "file-browser__file-name";
         name.textContent = item.file_name || "未命名文件";
+        if (recommended) {
+          const tag = document.createElement("span");
+          tag.className = "file-browser__recommendation";
+          tag.textContent = "推荐下载";
+          button.appendChild(tag);
+        }
         const meta = document.createElement("span");
         meta.className = "file-browser__file-meta " + (item.available ? "muted" : "warn");
         meta.textContent = fileMeta(item);
-        button.appendChild(name);
+        button.insertBefore(name, button.firstChild);
         button.appendChild(meta);
-        button.addEventListener("click", function () { selectFile(item); });
+        button.disabled = !item.available;
+        if (item.available) {
+          button.addEventListener("click", function () { options.onDownload(item); });
+        }
         filesBox.appendChild(button);
       });
       if (!files.length) {
@@ -71,36 +81,27 @@
         empty.textContent = "该版本暂无文件";
         filesBox.appendChild(empty);
       }
-      currentAsset = choice;
-      options.onSelect(choice);
     }
 
     function openVersion(version) {
       currentVersion = versions.includes(version) ? version : versions[0] || "";
-      const preferred = currentAsset && currentAsset.version === currentVersion ? currentAsset : null;
       renderVersions();
       versionsView.hidden = true;
       filesView.hidden = false;
       pathText.textContent = "版本 / " + currentVersion;
       options.onVersion(currentVersion);
-      renderFiles(preferred);
+      renderFiles();
     }
 
     function showVersions(asset, version) {
-      currentAsset = asset || currentAsset;
       currentVersion = asset ? asset.version : version || currentVersion;
       renderVersions();
       versionsView.hidden = false;
       filesView.hidden = true;
     }
 
-    function selectFile(item) {
-      if (!item || item.version !== currentVersion) return;
-      renderFiles(item);
-    }
-
     backButton.addEventListener("click", function () {
-      showVersions(currentAsset, currentVersion);
+      showVersions(null, currentVersion);
     });
     showVersions(options.asset || null, options.version || "");
     return {

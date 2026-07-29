@@ -165,15 +165,26 @@
   stroke-linejoin: round;
 }
 
-.file-browser__version[aria-selected="true"],
-.file-browser__file[aria-selected="true"] {
+.file-browser__file--recommended {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, var(--panel));
 }
 
 .file-browser__file {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px;
+}
+
+.file-browser__file:disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.file-browser__recommendation {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .file-browser__toolbar {
@@ -215,6 +226,10 @@
 .file-browser__empty {
   margin-bottom: 0;
   font-size: 11px;
+}
+
+.file-browser__file-meta {
+  grid-column: 1 / -1;
 }
 
 @media (max-width: 720px) {

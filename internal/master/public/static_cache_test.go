@@ -69,8 +69,12 @@ func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 		!strings.Contains(body, `versionsView.hidden = true`) ||
 		!strings.Contains(body, `filesView.hidden = false`) ||
 		!strings.Contains(body, `showVersions: showVersions`) ||
+		!strings.Contains(body, `file-browser__file--recommended`) ||
+		!strings.Contains(body, `tag.textContent = "推荐下载"`) ||
+		!strings.Contains(body, `button.disabled = !item.available`) ||
+		!strings.Contains(body, `options.onDownload(item)`) ||
 		!strings.Contains(body, `item.file_name`) {
-		t.Fatalf("文件浏览器应先展示版本文件夹，再进入完整文件名列表：status=%d body=%s",
+		t.Fatalf("文件浏览器应逐级展示文件、标记推荐项并直接下载：status=%d body=%s",
 			rec.Code, body)
 	}
 }
@@ -82,6 +86,7 @@ func TestDownloadCardButtonRepresentsAvailability(t *testing.T) {
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK ||
 		!strings.Contains(body, `button.disabled = !selected.available`) ||
+		!strings.Contains(body, `actions.hidden = mode === "file"`) ||
 		!strings.Contains(body, `selected.available ? "下载" : "暂不可下载"`) {
 		t.Fatalf("下载按钮应同时表达资产可用状态：status=%d body=%s", rec.Code, body)
 	}

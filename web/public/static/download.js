@@ -65,6 +65,7 @@
     const fileBrowser = card.querySelector(".file-browser");
     const modeButtons = Array.from(card.querySelectorAll("[data-selection-mode]"));
     const sizeText = card.querySelector(".project-card__size");
+    const actions = card.querySelector(".project-card__actions");
     const button = card.querySelector(".download-button");
     const systemEnabled = selectorEnabled(project,
       "system_selector_enabled", "system_match_enabled");
@@ -163,6 +164,7 @@
       versionField.hidden = mode === "file";
       systemField.hidden = mode !== "selectors" || !systemEnabled;
       archField.hidden = mode !== "selectors" || !architectureEnabled;
+      actions.hidden = mode === "file";
       if (mode === "file") browser.showVersions(selectedAsset, versionSelect.value);
       else refreshSystems(selectedAsset);
     }
@@ -170,9 +172,11 @@
     browser = window.DownloadFileBrowser.create(fileBrowser, project.assets, {
       asset: selectedAsset,
       bytesText: selectors.bytesText,
-      onSelect: refreshDetails,
+      onDownload: startAssetDownload,
       onVersion: function (version) { versionSelect.value = version; },
-      preferredAsset: preferredAsset,
+      recommendedAsset: function (items) {
+        return preferredAssetForUser(items, architectureEnabled);
+      },
       uniqueVersions: selectors.uniqueVersions,
       version: versionSelect.value
     });
@@ -195,6 +199,14 @@
       return;
     }
     window.location.href = homeDownloadHref(downloadPath);
+  }
+
+  function startAssetDownload(asset) {
+    if (!asset || !asset.available || !asset.asset_id || !asset.download_path) {
+      setStatus("下载资产缺失，请刷新后重试。", "warn");
+      return;
+    }
+    window.location.href = homeDownloadHref(asset.download_path);
   }
 
   function homeDownloadHref(downloadPath) {
