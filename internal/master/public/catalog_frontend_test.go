@@ -85,11 +85,11 @@ func TestCatalogFilterDrawerSupportsAccessibilityAndHistory(t *testing.T) {
 	}
 }
 
-func TestCatalogCardRendersConfiguredAndActiveTags(t *testing.T) {
+func TestCatalogCardRendersOnlySelectedMatchingTags(t *testing.T) {
 	body := publicStaticBody(t, "download-card.js")
 	for _, want := range []string{
-		`options.selectedTags.has(key)`,
-		`" project-tag--active"`,
+		`if (!options.selectedTags.has(key)) return`,
+		`tag.className = "project-tag project-tag--active"`,
 		`options.tagLabels.get(key) || value`,
 		`tag.title = group + ": " + value`,
 	} {

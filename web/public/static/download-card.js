@@ -186,9 +186,9 @@
     Object.keys(tags || {}).sort().forEach((group) => {
       (tags[group] || []).forEach((value) => {
         const key = String(group).toLowerCase() + "\u0000" + String(value).toLowerCase();
+        if (!options.selectedTags.has(key)) return;
         const tag = document.createElement("span");
-        tag.className = "project-tag" +
-          (options.selectedTags.has(key) ? " project-tag--active" : "");
+        tag.className = "project-tag project-tag--active";
         tag.textContent = options.tagLabels.get(key) || value;
         tag.title = group + ": " + value;
         container.appendChild(tag);
