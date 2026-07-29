@@ -14,6 +14,7 @@ func TestCatalogQuerySearchesIDNameTagsAndLabels(t *testing.T) {
 		"ALPHA":   {"alpha"},
 		"启动":      {"alpha"},
 		"FFMPEG":  {"alpha"},
+		"3F":      {"alpha"},
 		"Windows": {"beta", "alpha"},
 	}
 	for query, want := range cases {
@@ -128,7 +129,7 @@ func testCatalogIndex() *catalogIndex {
 	projects := config.Projects{Projects: []config.Project{
 		{ID: "alpha", Name: "FFmpeg 启动器", Enabled: true, Tags: map[string][]string{
 			"software_type": {"launcher"}, "supported_system": {"windows", "linux"},
-			"keywords": {"ffmpeg"},
+			"keywords": {"ffmpeg", "3fui"},
 		}},
 		{ID: "beta", Name: "Beta 工具", Enabled: true, Tags: map[string][]string{
 			"software_type": {"launcher"}, "supported_system": {"windows"},

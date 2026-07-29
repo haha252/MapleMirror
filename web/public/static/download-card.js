@@ -183,13 +183,21 @@
   }
 
   function renderTags(container, tags, options) {
+    const search = String(options.search || "").trim().toLowerCase();
     Object.keys(tags || {}).sort().forEach((group) => {
       (tags[group] || []).forEach((value) => {
         const key = String(group).toLowerCase() + "\u0000" + String(value).toLowerCase();
-        if (!options.selectedTags.has(key)) return;
+        const label = options.tagLabels.get(key) || value;
+        const selected = options.selectedTags.has(key);
+        const searchMatched = !!search && (
+          String(value).toLowerCase().includes(search) ||
+          String(label).toLowerCase() === search
+        );
+        if (!selected && !searchMatched) return;
         const tag = document.createElement("span");
-        tag.className = "project-tag project-tag--active";
-        tag.textContent = options.tagLabels.get(key) || value;
+        tag.className = "project-tag " +
+          (selected ? "project-tag--active" : "project-tag--search-match");
+        tag.textContent = label;
         tag.title = group + ": " + value;
         container.appendChild(tag);
       });

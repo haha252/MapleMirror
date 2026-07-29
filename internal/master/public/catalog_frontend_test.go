@@ -95,17 +95,23 @@ func TestCatalogFilterDrawerSupportsAccessibilityAndHistory(t *testing.T) {
 	}
 }
 
-func TestCatalogCardRendersOnlySelectedMatchingTags(t *testing.T) {
+func TestCatalogCardRendersSelectedAndSearchMatchingTags(t *testing.T) {
 	body := publicStaticBody(t, "download-card.js")
 	for _, want := range []string{
-		`if (!options.selectedTags.has(key)) return`,
-		`tag.className = "project-tag project-tag--active"`,
-		`options.tagLabels.get(key) || value`,
+		`const search = String(options.search || "").trim().toLowerCase()`,
+		`String(value).toLowerCase().includes(search)`,
+		`String(label).toLowerCase() === search`,
+		`if (!selected && !searchMatched) return`,
+		`"project-tag--active" : "project-tag--search-match"`,
 		`tag.title = group + ": " + value`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("项目卡片缺少标签行为 %q：%s", want, body)
 		}
+	}
+	controller := publicStaticBody(t, "download.js")
+	if !strings.Contains(controller, `search: filters.search()`) {
+		t.Fatalf("目录控制器没有把当前搜索词传给卡片：%s", controller)
 	}
 }
 

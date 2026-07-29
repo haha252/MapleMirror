@@ -156,8 +156,13 @@ func directCatalogSearchRank(project catalogProject, search string) (int, bool) 
 			return 2, true
 		}
 	}
+	for _, term := range project.TagTerms {
+		if strings.Contains(term, search) {
+			return 3, true
+		}
+	}
 	if strings.Contains(project.Normalized, search) {
-		return 3, true
+		return 4, true
 	}
 	return 0, false
 }
@@ -168,7 +173,7 @@ func fuzzyCatalogCandidates(snapshot *catalogSnapshot, query catalogQuery) []cat
 	for _, project := range snapshot.Projects {
 		if distance, ok := fuzzyCatalogDistance(search, project); ok {
 			out = append(out, catalogCandidate{
-				Project: project, SearchRank: 4, Fuzzy: true, Distance: distance,
+				Project: project, SearchRank: 5, Fuzzy: true, Distance: distance,
 			})
 		}
 	}

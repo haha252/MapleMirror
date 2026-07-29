@@ -95,6 +95,7 @@
       template: cardTemplate,
       selectedTags: filters.selectedTags(),
       tagLabels: filters.tagLabels(),
+      search: filters.search(),
       status: setStatus
     };
     renderCards(projectsContainer, projects, options);
