@@ -34,10 +34,13 @@ func TestProjectPageRendersOptionalHomepageAndDescription(t *testing.T) {
 		`data-selection-mode="file"`,
 		`#selection-conditions`,
 		`#selection-files`,
-		`id="project-file"`,
+		`id="project-file-browser"`,
+		`class="file-browser__versions"`,
+		`class="file-browser__files"`,
 		`/static/public/project.css?v=`,
 		`/static/public/project-responsive.css?v=`,
 		`/static/public/project.js?v=`,
+		`/static/public/download-file-browser.js?v=`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected project page to contain %q: %s", want, body)

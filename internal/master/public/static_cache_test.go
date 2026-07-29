@@ -57,6 +57,20 @@ func TestDownloadSelectorStaticSupportsHarmony(t *testing.T) {
 	}
 }
 
+func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/static/public/download-file-browser.js", nil))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK ||
+		!strings.Contains(body, `.file-browser__versions`) ||
+		!strings.Contains(body, `.file-browser__files`) ||
+		!strings.Contains(body, `item.file_name`) {
+		t.Fatalf("文件浏览器应按版本和完整文件名分两级渲染：status=%d body=%s",
+			rec.Code, body)
+	}
+}
+
 func TestCatalogETag(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)

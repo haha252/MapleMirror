@@ -38,9 +38,15 @@
           <label>架构</label>
           <select class="architecture-select"></select>
         </div>
-        <div class="field file-field" hidden>
-          <label>文件</label>
-          <select class="file-select"></select>
+        <div class="file-browser" hidden>
+          <section class="file-browser__level">
+            <p class="file-browser__title">版本</p>
+            <div class="file-browser__versions" role="listbox" aria-label="版本"></div>
+          </section>
+          <section class="file-browser__level">
+            <p class="file-browser__title">文件</p>
+            <div class="file-browser__files" role="listbox" aria-label="文件"></div>
+          </section>
         </div>
         <div class="project-card__actions">
           <span class="project-card__asset-meta">

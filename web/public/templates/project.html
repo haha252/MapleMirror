@@ -37,7 +37,7 @@
           <p id="project-download-status">正在加载下载组件...</p>
         </div>
         <div class="project-download__controls">
-          <label class="field">
+          <label class="field" id="project-version-field">
             <span>版本</span>
             <select id="project-version"></select>
           </label>
@@ -49,10 +49,16 @@
             <span>架构</span>
             <select id="project-architecture"></select>
           </label>
-          <label class="field" id="project-file-field" hidden>
-            <span>文件</span>
-            <select id="project-file"></select>
-          </label>
+          <div class="file-browser" id="project-file-browser" hidden>
+            <section class="file-browser__level">
+              <p class="file-browser__title">版本</p>
+              <div class="file-browser__versions" role="listbox" aria-label="版本"></div>
+            </section>
+            <section class="file-browser__level">
+              <p class="file-browser__title">文件</p>
+              <div class="file-browser__files" role="listbox" aria-label="文件"></div>
+            </section>
+          </div>
         </div>
         <div class="project-download__asset">
           <div>

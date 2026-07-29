@@ -55,13 +55,13 @@
     card.querySelector(".project-repository").textContent = project.repository;
     card.querySelector(".project-updated").textContent = "最近更新：" + (project.latest_published_at || "暂无");
     const availability = card.querySelector(".project-availability");
+    const versionField = card.querySelector(".version-field");
     const versionSelect = card.querySelector(".version-select");
     const systemField = card.querySelector(".system-field");
     const systemSelect = card.querySelector(".system-select");
     const archField = card.querySelector(".architecture-field");
     const archSelect = card.querySelector(".architecture-select");
-    const fileField = card.querySelector(".file-field");
-    const fileSelect = card.querySelector(".file-select");
+    const fileBrowser = card.querySelector(".file-browser");
     const modeButtons = Array.from(card.querySelectorAll("[data-selection-mode]"));
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
@@ -72,6 +72,7 @@
       "architecture_selector_enabled", "architecture_match_enabled");
     let mode = "selectors";
     let selectedAsset = null;
+    let browser = null;
 
     function architectureLabel(item) {
       return String(item.architecture || "").trim() || "None";
@@ -135,24 +136,9 @@
       refreshArchitectures(preferred);
     }
 
-    function refreshFiles(preferred) {
-      const list = project.assets.filter((item) => item.version === versionSelect.value);
-      const choice = list.includes(preferred) ? preferred : preferredAsset(list);
-      fileSelect.innerHTML = "";
-      list.forEach((item) => {
-        const option = document.createElement("option");
-        option.value = item.asset_id;
-        option.textContent = item.file_name || "未命名文件";
-        if (choice && choice.asset_id === item.asset_id) option.selected = true;
-        fileSelect.appendChild(option);
-      });
-      refreshDetails(choice);
-    }
-
     function refreshDetails(preferred) {
       const selected = preferred ||
-        project.assets.find((item) => item.asset_id ===
-          (mode === "file" ? fileSelect.value : archSelect.value)) ||
+        project.assets.find((item) => item.asset_id === archSelect.value) ||
         preferredAsset(project.assets.filter((item) => item.version === versionSelect.value));
       selectedAsset = selected;
       badge.textContent = selected ? " " + selected.version : "";
@@ -180,20 +166,26 @@
     function setMode(nextMode) {
       mode = nextMode === "file" ? "file" : "selectors";
       selectors.setModeButtons(modeButtons, mode);
-      fileField.hidden = mode !== "file";
+      fileBrowser.hidden = mode !== "file";
+      versionField.hidden = mode === "file";
       systemField.hidden = mode !== "selectors" || !systemEnabled;
       archField.hidden = mode !== "selectors" || !architectureEnabled;
-      if (mode === "file") refreshFiles(selectedAsset);
+      if (mode === "file") browser.select(selectedAsset, versionSelect.value);
       else refreshSystems(selectedAsset);
     }
 
-    versionSelect.addEventListener("change", function () {
-      if (mode === "file") refreshFiles();
-      else refreshSystems();
+    browser = window.DownloadFileBrowser.create(fileBrowser, project.assets, {
+      asset: selectedAsset,
+      bytesText: selectors.bytesText,
+      onSelect: refreshDetails,
+      onVersion: function (version) { versionSelect.value = version; },
+      preferredAsset: preferredAsset,
+      uniqueVersions: selectors.uniqueVersions,
+      version: versionSelect.value
     });
+    versionSelect.addEventListener("change", function () { refreshSystems(); });
     systemSelect.addEventListener("change", function () { refreshArchitectures(); });
     archSelect.addEventListener("change", function () { refreshDetails(); });
-    fileSelect.addEventListener("change", function () { refreshDetails(); });
     modeButtons.forEach((item) => item.addEventListener("click", function () {
       setMode(item.dataset.selectionMode);
     }));

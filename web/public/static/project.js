@@ -4,13 +4,13 @@
   const projectId = page.dataset.projectId || "";
   const statusBox = document.getElementById("project-download-status");
   const availability = document.getElementById("project-availability");
+  const versionField = document.getElementById("project-version-field");
   const versionSelect = document.getElementById("project-version");
   const systemField = document.getElementById("project-system-field");
   const systemSelect = document.getElementById("project-system");
   const archField = document.getElementById("project-architecture-field");
   const archSelect = document.getElementById("project-architecture");
-  const fileField = document.getElementById("project-file-field");
-  const fileSelect = document.getElementById("project-file");
+  const fileBrowser = document.getElementById("project-file-browser");
   const fileName = document.getElementById("project-file-name");
   const fileMeta = document.getElementById("project-file-meta");
   const button = document.getElementById("project-download-button");
@@ -28,6 +28,7 @@
   let architectureEnabled = false;
   let mode = "selectors";
   let selectedAsset = null;
+  let browser = null;
 
   function selectorEnabled(item, field, legacyField) {
     if (item[field] != null) return !!item[field];
@@ -87,24 +88,9 @@
     refreshDetails(choice);
   }
 
-  function refreshFiles(preferred) {
-    const list = project.assets.filter((item) => item.version === versionSelect.value);
-    const choice = list.includes(preferred) ? preferred : selectors.preferredAsset(list);
-    fileSelect.innerHTML = "";
-    list.forEach((item) => {
-      const option = document.createElement("option");
-      option.value = item.asset_id;
-      option.textContent = item.file_name || "未命名文件";
-      if (choice && choice.asset_id === item.asset_id) option.selected = true;
-      fileSelect.appendChild(option);
-    });
-    refreshDetails(choice);
-  }
-
   function refreshDetails(preferred) {
     const selected = preferred ||
-      project.assets.find((item) => item.asset_id ===
-        (mode === "file" ? fileSelect.value : archSelect.value)) ||
+      project.assets.find((item) => item.asset_id === archSelect.value) ||
       selectors.preferredAsset(project.assets.filter((item) => item.version === versionSelect.value));
     selectedAsset = selected;
     if (!selected) {
@@ -133,10 +119,11 @@
     if (!project) return;
     mode = nextMode === "file" ? "file" : "selectors";
     selectors.setModeButtons(modeButtons, mode);
-    fileField.hidden = mode !== "file";
+    fileBrowser.hidden = mode !== "file";
+    versionField.hidden = mode === "file";
     systemField.hidden = mode !== "selectors" || !systemEnabled;
     archField.hidden = mode !== "selectors" || !architectureEnabled;
-    if (mode === "file") refreshFiles(selectedAsset);
+    if (mode === "file") browser.select(selectedAsset, versionSelect.value);
     else refreshSystems(selectedAsset);
   }
 
@@ -154,6 +141,15 @@
       option.textContent = version;
       if (version === project.default_version) option.selected = true;
       versionSelect.appendChild(option);
+    });
+    browser = window.DownloadFileBrowser.create(fileBrowser, project.assets, {
+      asset: selectedAsset,
+      bytesText: selectors.bytesText,
+      onSelect: refreshDetails,
+      onVersion: function (version) { versionSelect.value = version; },
+      preferredAsset: selectors.preferredAsset,
+      uniqueVersions: selectors.uniqueVersions,
+      version: versionSelect.value
     });
     setStatus(versions.length ? "" : "暂无可展示文件。", versions.length ? "muted" : "warn");
     setMode("selectors");
@@ -174,13 +170,9 @@
     }
   }
 
-  versionSelect.addEventListener("change", function () {
-    if (mode === "file") refreshFiles();
-    else refreshSystems();
-  });
+  versionSelect.addEventListener("change", function () { refreshSystems(); });
   systemSelect.addEventListener("change", function () { refreshArchitectures(); });
   archSelect.addEventListener("change", function () { refreshDetails(); });
-  fileSelect.addEventListener("change", function () { refreshDetails(); });
   modeButtons.forEach((item) => item.addEventListener("click", function () {
     setMode(item.dataset.selectionMode);
   }));

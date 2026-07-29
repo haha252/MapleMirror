@@ -44,7 +44,9 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	}
 	if !strings.Contains(body, `class="version-select"`) ||
 		!strings.Contains(body, `class="architecture-select"`) ||
-		!strings.Contains(body, `class="file-select"`) ||
+		!strings.Contains(body, `class="file-browser"`) ||
+		!strings.Contains(body, `class="file-browser__versions"`) ||
+		!strings.Contains(body, `class="file-browser__files"`) ||
 		!strings.Contains(body, `data-selection-mode="selectors"`) ||
 		!strings.Contains(body, `data-selection-mode="file"`) ||
 		!strings.Contains(body, `#selection-conditions`) ||
@@ -63,6 +65,9 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	}
 	if !strings.Contains(body, `/static/public/download-selectors.js?v=`) {
 		t.Fatalf("expected selector helper in page: %s", body)
+	}
+	if !strings.Contains(body, `/static/public/download-file-browser.js?v=`) {
+		t.Fatalf("expected file browser helper in page: %s", body)
 	}
 	if strings.Contains(body, `<script src="/static/public/pow-loader.js`) || strings.Contains(body, `challenge-overlay`) {
 		t.Fatalf("home page should link to standalone download verification page: %s", body)

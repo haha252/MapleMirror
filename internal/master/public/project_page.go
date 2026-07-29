@@ -49,7 +49,8 @@ func (s Server) maybeProjectPage(w http.ResponseWriter, r *http.Request) bool {
 		BodyClass:    "page-project",
 		Body:         body,
 		Styles:       []string{"/static/public/project.css", "/static/public/project-responsive.css"},
-		Scripts:      []string{"/static/public/download-selectors.js", "/static/public/project.js"},
+		Scripts: []string{"/static/public/download-selectors.js",
+			"/static/public/download-file-browser.js", "/static/public/project.js"},
 	})
 	return true
 }
