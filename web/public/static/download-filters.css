@@ -129,6 +129,7 @@
 }
 .catalog-filter-option:hover { background: var(--panel-muted); color: var(--text); }
 .catalog-filter-option input { width: 16px; height: 16px; accent-color: var(--accent); }
+.catalog-filter-option input:checked + span { color: var(--text); }
 
 .catalog-results { min-width: 0; }
 .catalog-suggestions { margin-top: 28px; }
