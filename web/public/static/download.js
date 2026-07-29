@@ -52,6 +52,8 @@
     });
     link.href = projectHref;
     card.querySelector(".project-name").textContent = project.display_name;
+    card.querySelector(".version-badge").textContent =
+      defaultVersion ? "最新版本：" + defaultVersion : "暂无版本";
     card.querySelector(".project-repository").textContent = project.repository;
     card.querySelector(".project-updated").textContent = "最近更新：" + (project.latest_published_at || "暂无");
     const versionField = card.querySelector(".version-field");
@@ -64,7 +66,6 @@
     const modeButtons = Array.from(card.querySelectorAll("[data-selection-mode]"));
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
-    const badge = card.querySelector(".version-badge");
     const systemEnabled = selectorEnabled(project,
       "system_selector_enabled", "system_match_enabled");
     const architectureEnabled = selectorEnabled(project,
@@ -134,7 +135,6 @@
         project.assets.find((item) => item.asset_id === archSelect.value) ||
         preferredAsset(project.assets.filter((item) => item.version === versionSelect.value));
       selectedAsset = selected;
-      badge.textContent = selected ? selected.version : "暂无版本";
       if (!selected) {
         selectedAsset = null;
         sizeText.textContent = "暂无可下载文件";

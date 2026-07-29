@@ -87,6 +87,17 @@ func TestDownloadCardButtonRepresentsAvailability(t *testing.T) {
 	}
 }
 
+func TestDownloadCardStaticKeepsLatestVersion(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/static/public/download.js", nil))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK ||
+		!strings.Contains(body, `defaultVersion ? "最新版本：" + defaultVersion : "暂无版本"`) {
+		t.Fatalf("卡片头部应固定展示项目最新版本：status=%d body=%s", rec.Code, body)
+	}
+}
+
 func TestCatalogETag(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
