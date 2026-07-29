@@ -18,6 +18,13 @@
     userSystem: () => ""
   };
   let project = null;
+  let systemEnabled = false;
+  let architectureEnabled = false;
+
+  function selectorEnabled(item, field, legacyField) {
+    if (item[field] != null) return !!item[field];
+    return !!item[legacyField];
+  }
 
   function setStatus(message, level) {
     statusBox.textContent = message || "";
@@ -49,7 +56,7 @@
   }
 
   function refreshSystems() {
-    if (!project.system_match_enabled) {
+    if (!systemEnabled) {
       refreshArchitectures();
       return;
     }
@@ -70,12 +77,12 @@
 
   function refreshArchitectures() {
     let list = project.assets.filter((item) => item.version === versionSelect.value);
-    if (project.system_match_enabled) {
+    if (systemEnabled) {
       list = list.filter((item) => item.system === systemSelect.value);
     }
-    const choice = selectors.preferredAssetForUser(list, !!project.architecture_match_enabled);
+    const choice = selectors.preferredAssetForUser(list, architectureEnabled);
     archSelect.innerHTML = "";
-    if (!project.architecture_match_enabled) {
+    if (!architectureEnabled) {
       refreshDetails(choice);
       return;
     }
@@ -114,6 +121,10 @@
 
   function bindProject(nextProject) {
     project = nextProject;
+    systemEnabled = selectorEnabled(project,
+      "system_selector_enabled", "system_match_enabled");
+    architectureEnabled = selectorEnabled(project,
+      "architecture_selector_enabled", "architecture_match_enabled");
     const versions = uniqueVersions(project.assets || []);
     versionSelect.innerHTML = "";
     versions.forEach((version) => {
@@ -123,8 +134,8 @@
       if (version === project.default_version) option.selected = true;
       versionSelect.appendChild(option);
     });
-    systemField.hidden = !project.system_match_enabled;
-    archField.hidden = !project.architecture_match_enabled;
+    systemField.hidden = !systemEnabled;
+    archField.hidden = !architectureEnabled;
     setStatus(versions.length ? "" : "暂无可展示文件。", versions.length ? "muted" : "warn");
     refreshSystems();
   }

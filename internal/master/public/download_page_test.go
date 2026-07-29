@@ -67,6 +67,8 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 		`/static/project-icons/p1`,
 		`"system_match_enabled":false`,
 		`"architecture_match_enabled":false`,
+		`"system_selector_enabled":false`,
+		`"architecture_selector_enabled":false`,
 		`"default_version":"v1"`,
 		`"asset_id":"asset-1"`,
 	} {
@@ -111,11 +113,12 @@ func TestDownloadPageIncludesSystemSelectorWhenEnabled(t *testing.T) {
 	seedRoutableAsset(t, db)
 	mustExec(t, db, `UPDATE assets SET system = 'win' WHERE id = 'asset-1'`)
 	srv := Server{Store: Store{DB: db}, ProjectAssets: map[string]projectAssetConfig{
-		"p1": {SystemMatchEnabled: true},
+		"p1": {SystemSelectorEnabled: true},
 	}}
 
 	body := string(catalogBody(t, srv))
 	if !strings.Contains(body, `"system_match_enabled":true`) ||
+		!strings.Contains(body, `"system_selector_enabled":true`) ||
 		!strings.Contains(body, `"system":"win"`) {
 		t.Fatalf("expected system selector and system payload: %s", body)
 	}
@@ -125,12 +128,37 @@ func TestDownloadPageIncludesArchitectureMatchFlagWhenEnabled(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	srv := Server{Store: Store{DB: db}, ProjectAssets: map[string]projectAssetConfig{
-		"p1": {ArchitectureMatchEnabled: true},
+		"p1": {ArchitectureSelectorEnabled: true},
 	}}
 
 	body := string(catalogBody(t, srv))
-	if !strings.Contains(body, `"architecture_match_enabled":true`) {
+	if !strings.Contains(body, `"architecture_match_enabled":true`) ||
+		!strings.Contains(body, `"architecture_selector_enabled":true`) {
 		t.Fatalf("expected architecture match flag: %s", body)
+	}
+}
+
+func TestProjectAssetMapUsesExplicitSelectorSwitches(t *testing.T) {
+	enabled := true
+	disabled := false
+	items := projectAssetMap(config.Projects{Projects: []config.Project{{
+		ID: "p1",
+		AssetPipeline: config.AssetPipeline{
+			Selectors: config.AssetSelectorConfig{
+				ArchitectureEnabled: &disabled,
+				SystemEnabled:       &enabled,
+			},
+			Classify: config.AssetClassifyConfig{
+				Mode: "rules",
+				Rules: []config.AssetClassifyRule{{
+					Match:  config.AssetClassifyMatch{Exact: "tool.zip"},
+					Assign: config.AssetClassification{Architecture: "amd64"},
+				}},
+			},
+		},
+	}}})
+	if items["p1"].ArchitectureSelectorEnabled || !items["p1"].SystemSelectorEnabled {
+		t.Fatalf("公开页选择器开关未按项目显式配置生效：%+v", items["p1"])
 	}
 }
 

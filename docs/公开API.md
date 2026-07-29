@@ -137,6 +137,8 @@
       "repository": "owner/repo",
       "available": true,
       "icon_url": "/static/project-icons/example",
+      "architecture_selector_enabled": false,
+      "system_selector_enabled": false,
       "architecture_match_enabled": false,
       "system_match_enabled": false,
       "default_version": "v1.2.3",
@@ -145,6 +147,8 @@
   ]
 }
 ```
+
+`architecture_selector_enabled` 和 `system_selector_enabled` 是分类方式无关的下载页展示开关。旧的 `architecture_match_enabled`、`system_match_enabled` 暂时保留兼容，其值与对应新开关一致。
 
 ## 4. 下载接入方式
 

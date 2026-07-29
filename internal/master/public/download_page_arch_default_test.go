@@ -11,7 +11,7 @@ func TestDownloadPageOmitsArchitectureDefaultFlag(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	srv := Server{Store: Store{DB: db}, ProjectAssets: map[string]projectAssetConfig{
-		"p1": {ArchitectureMatchEnabled: true},
+		"p1": {ArchitectureSelectorEnabled: true},
 	}}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

@@ -8,7 +8,8 @@ import (
 )
 
 type AssetPipeline struct {
-	Classify AssetClassifyConfig `yaml:"classify"`
+	Selectors AssetSelectorConfig `yaml:"selectors,omitempty"`
+	Classify  AssetClassifyConfig `yaml:"classify"`
 }
 
 type AssetClassifyConfig struct {

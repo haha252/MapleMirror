@@ -15,6 +15,9 @@ func TestProjectsLoadAssetPipelineClassifyRules(t *testing.T) {
     repository: ip7z/7zip
     enabled: true
     asset_pipeline:
+      selectors:
+        architecture_enabled: false
+        system_enabled: true
       classify:
         mode: rules
         rules:
@@ -35,6 +38,9 @@ func TestProjectsLoadAssetPipelineClassifyRules(t *testing.T) {
 	project := projects.Projects[0]
 	if !project.PipelineUsesSystem() || !project.PipelineUsesArchitecture() {
 		t.Fatalf("分类规则应启用系统和架构选择：%+v", project.AssetPipeline)
+	}
+	if project.ArchitectureSelectorEnabled() || !project.SystemSelectorEnabled() {
+		t.Fatalf("选择器开关应独立于分类规则：%+v", project.AssetPipeline.Selectors)
 	}
 	if project.AssetPipeline.Classify.Mode != "rules" {
 		t.Fatalf("分类模式解析错误：%q", project.AssetPipeline.Classify.Mode)
@@ -70,6 +76,46 @@ func TestProjectClassifyModeSeparatesRegexAndRules(t *testing.T) {
 	}
 	if !rulesProject.PipelineUsesArchitecture() || !rulesProject.PipelineUsesSystem() {
 		t.Fatalf("rules 模式应只由分类规则启用选择器：%+v", rulesProject)
+	}
+}
+
+func TestProjectSelectorSwitchesOverrideClassifierMode(t *testing.T) {
+	enabled := true
+	disabled := false
+	project := Project{AssetPipeline: AssetPipeline{
+		Selectors: AssetSelectorConfig{
+			ArchitectureEnabled: &disabled,
+			SystemEnabled:       &enabled,
+		},
+		Classify: AssetClassifyConfig{
+			Mode: "rules",
+			Rules: []AssetClassifyRule{{
+				Match:  AssetClassifyMatch{Exact: "tool.zip"},
+				Assign: AssetClassification{System: "linux", Architecture: "amd64"},
+			}},
+		},
+	}}
+	if project.ArchitectureSelectorEnabled() {
+		t.Fatal("架构选择器显式关闭后不应被 rules 分类自动开启")
+	}
+	if !project.SystemSelectorEnabled() {
+		t.Fatal("系统选择器应可在 rules 分类下独立开启")
+	}
+	if !project.PipelineUsesArchitecture() || !project.PipelineUsesSystem() {
+		t.Fatal("展示开关不应改变资产分类字段")
+	}
+}
+
+func TestProjectSelectorSwitchesFallbackToClassifierForCompatibility(t *testing.T) {
+	project := Project{AssetPipeline: AssetPipeline{Classify: AssetClassifyConfig{
+		Mode: "rules",
+		Rules: []AssetClassifyRule{{
+			Match:  AssetClassifyMatch{Exact: "tool.zip"},
+			Assign: AssetClassification{Architecture: "amd64"},
+		}},
+	}}}
+	if !project.ArchitectureSelectorEnabled() || project.SystemSelectorEnabled() {
+		t.Fatal("未配置展示开关时应保持旧版按分类字段推断的行为")
 	}
 }
 

@@ -174,14 +174,14 @@ func projectAssetMap(projects config.Projects) map[string]projectAssetConfig {
 	projectAssets := map[string]projectAssetConfig{}
 	for _, item := range projects.Projects {
 		projectAssets[item.ID] = projectAssetConfig{
-			IconPath:                 filepath.Clean(item.ResolvedIconPath),
-			ArchitectureMatchEnabled: item.PipelineUsesArchitecture(),
-			SystemMatchEnabled:       item.PipelineUsesSystem(),
+			IconPath:                    filepath.Clean(item.ResolvedIconPath),
+			ArchitectureSelectorEnabled: item.ArchitectureSelectorEnabled(),
+			SystemSelectorEnabled:       item.SystemSelectorEnabled(),
 		}
 		if strings.TrimSpace(item.ResolvedIconPath) == "" {
 			projectAssets[item.ID] = projectAssetConfig{
-				ArchitectureMatchEnabled: item.PipelineUsesArchitecture(),
-				SystemMatchEnabled:       item.PipelineUsesSystem(),
+				ArchitectureSelectorEnabled: item.ArchitectureSelectorEnabled(),
+				SystemSelectorEnabled:       item.SystemSelectorEnabled(),
 			}
 		}
 	}

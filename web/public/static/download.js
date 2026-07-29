@@ -48,6 +48,11 @@
     return selectors.preferredAssetForUser(items, useArchitecture);
   }
 
+  function selectorEnabled(project, field, legacyField) {
+    if (project[field] != null) return !!project[field];
+    return !!project[legacyField];
+  }
+
   function buildCard(project) {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
     const versions = uniqueVersions(project.assets);
@@ -75,6 +80,10 @@
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
     const badge = card.querySelector(".version-badge");
+    const systemEnabled = selectorEnabled(project,
+      "system_selector_enabled", "system_match_enabled");
+    const architectureEnabled = selectorEnabled(project,
+      "architecture_selector_enabled", "architecture_match_enabled");
 
     function architectureLabel(item) {
       return String(item.architecture || "").trim() || "None";
@@ -96,12 +105,12 @@
 
     function refreshArchitectures() {
       let list = project.assets.filter((item) => item.version === versionSelect.value);
-      if (project.system_match_enabled) {
+      if (systemEnabled) {
         list = list.filter((item) => item.system === systemSelect.value);
       }
-      const choice = preferredAssetForUser(list, !!project.architecture_match_enabled);
+      const choice = preferredAssetForUser(list, architectureEnabled);
       archSelect.innerHTML = "";
-      if (!project.architecture_match_enabled) {
+      if (!architectureEnabled) {
         refreshDetails(choice);
         return;
       }
@@ -116,7 +125,7 @@
     }
 
     function refreshSystems() {
-      if (!project.system_match_enabled) {
+      if (!systemEnabled) {
         refreshArchitectures();
         return;
       }
@@ -157,8 +166,8 @@
       else button.removeAttribute("title");
     }
 
-    if (project.system_match_enabled) systemField.hidden = false;
-    if (project.architecture_match_enabled) archField.hidden = false;
+    if (systemEnabled) systemField.hidden = false;
+    if (architectureEnabled) archField.hidden = false;
     versionSelect.addEventListener("change", refreshSystems);
     systemSelect.addEventListener("change", refreshArchitectures);
     archSelect.addEventListener("change", function () { refreshDetails(); });

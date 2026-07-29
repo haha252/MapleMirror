@@ -48,6 +48,12 @@ asset_exclude:
 # 可选：分类/指派规则。过滤仍由 asset_include 和 asset_exclude 决定；
 # 这里用于为文件补充 system、architecture、variant 等展示和选择信息。
 asset_pipeline:
+  # 下载页的条件选择器独立于分类方式，可按维度分别开启。
+  selectors:
+    # 是否显示架构选择器；适用于 regex、rules 和 script 分类。
+    architecture_enabled: true
+    # 是否显示系统选择器；适用于 regex、rules 和 script 分类。
+    system_enabled: true
   # classify.mode 为每个项目选择一种资产分类方式。
   # - regex：只使用 regex 子节点里的提取配置，rules 和 script 不参与分类。
   # - rules：只使用下方 rules/script，旧正则配置即使存在也不会执行。

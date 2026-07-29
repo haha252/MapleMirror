@@ -12,7 +12,22 @@
   function rule(r) {
     return { Pattern: val(r, "Pattern", ""), Type: val(r, "Type", "glob"), Required: !!val(r, "Required", false) };
   }
+  function selectorValue(p, pipeline, field, legacyField) {
+    var config = val(pipeline, "Selectors", val(pipeline, "selectors", {})) || {};
+    if (config[field] != null) return !!config[field];
+    var classify = val(pipeline, "Classify", val(pipeline, "classify", {})) || {};
+    var mode = String(val(classify, "Mode", "") || "").toLowerCase();
+    if (mode !== "rules" && !!val(p, legacyField, false)) return true;
+    if (mode === "regex") return false;
+    var script = val(classify, "Script", {}) || {};
+    if (val(script, "Path", "") || val(script, "Inline", "")) return true;
+    return (val(classify, "Rules", []) || []).some(function (item) {
+      var assign = val(item, "Assign", {}) || {};
+      return String(val(assign, field === "SystemEnabled" ? "System" : "Architecture", "")).trim() !== "";
+    });
+  }
   function normalize(p) {
+    var pipeline = val(p, "AssetPipeline", val(p, "asset_pipeline", {})) || {};
     return {
       ID: val(p, "ID", ""), Name: val(p, "Name", ""), Repository: val(p, "Repository", ""),
       Description: val(p, "Description", ""), HomepageURL: val(p, "HomepageURL", ""),
@@ -22,7 +37,11 @@
       DownloadMultiplier: Number(val(p, "DownloadMultiplier", 1)) || 1,
       AssetInclude: (val(p, "AssetInclude", []) || []).map(rule),
       AssetExclude: (val(p, "AssetExclude", []) || []).map(rule),
-      AssetPipeline: val(p, "AssetPipeline", val(p, "asset_pipeline", {})) || {},
+      AssetPipeline: pipeline,
+      ArchitectureSelectorEnabled: selectorValue(p, pipeline,
+        "ArchitectureEnabled", "ArchitectureMatchEnabled"),
+      SystemSelectorEnabled: selectorValue(p, pipeline,
+        "SystemEnabled", "SystemMatchEnabled"),
       ArchitectureMatchEnabled: !!val(p, "ArchitectureMatchEnabled", false),
       ArchitectureRegex: val(p, "ArchitectureRegex", ""),
       SystemMatchEnabled: !!val(p, "SystemMatchEnabled", false),
@@ -39,6 +58,8 @@
       section("运行策略", num("RetainVersions", "保留版本数", p.RetainVersions) +
         num("DownloadMultiplier", "下载倍率", p.DownloadMultiplier) + check("Enabled", "启用项目", p.Enabled) +
         check("IncludePrerelease", "包含预发布版本", p.IncludePrerelease)) +
+      section("下载选择器", check("SystemSelectorEnabled", "显示系统选择器", p.SystemSelectorEnabled) +
+        check("ArchitectureSelectorEnabled", "显示架构选择器", p.ArchitectureSelectorEnabled)) +
       section("架构识别", check("ArchitectureMatchEnabled", "启用架构匹配", p.ArchitectureMatchEnabled) +
         input("ArchitectureRegex", "架构提取正则", p.ArchitectureRegex)) +
       section("系统识别", check("SystemMatchEnabled", "启用系统匹配", p.SystemMatchEnabled) +
@@ -84,6 +105,13 @@
     });
     p.AssetInclude = readRules("AssetInclude");
     p.AssetExclude = readRules("AssetExclude");
+    p.AssetPipeline = p.AssetPipeline || {};
+    p.AssetPipeline.Selectors = {
+      ArchitectureEnabled: !!p.ArchitectureSelectorEnabled,
+      SystemEnabled: !!p.SystemSelectorEnabled
+    };
+    delete p.ArchitectureSelectorEnabled;
+    delete p.SystemSelectorEnabled;
     return p;
   }
   function readRules(group) {
