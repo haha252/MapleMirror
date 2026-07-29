@@ -15,6 +15,7 @@ func TestCatalogPageIncludesDesktopAndMobileFilterSurfaces(t *testing.T) {
 		httptest.NewRequest(http.MethodGet, "/", nil))
 	body := rec.Body.String()
 	for _, want := range []string{
+		`class="site-header__right"`,
 		`class="site-header__catalog"`,
 		`id="catalog-search-desktop"`,
 		`class="catalog-mobile-toolbar"`,
@@ -38,6 +39,11 @@ func TestCatalogPageIncludesDesktopAndMobileFilterSurfaces(t *testing.T) {
 	controllerAt := strings.Index(body, `/static/public/download.js?v=`)
 	if cardAt < 0 || controllerAt < 0 || cardAt >= controllerAt {
 		t.Fatalf("卡片模块必须在目录控制器前加载：%s", body)
+	}
+	searchAt := strings.Index(body, `class="site-header__catalog"`)
+	themeAt := strings.Index(body, `class="theme-tools"`)
+	if searchAt < 0 || themeAt < 0 || searchAt >= themeAt {
+		t.Fatalf("桌面搜索框必须紧邻并位于主题工具左侧：%s", body)
 	}
 }
 
@@ -98,8 +104,11 @@ func TestCatalogStylesUseWideDesktopAndMobileDrawer(t *testing.T) {
 	for _, want := range []string{
 		`max-width: 1840px`,
 		`grid-template-columns: 250px minmax(0, 1fr)`,
+		`.catalog-left-rail`,
+		`.catalog-page-notices`,
 		`position: sticky`,
 		`@media (max-width: 1100px)`,
+		`display: contents`,
 		`position: fixed`,
 		`body.catalog-filter-open`,
 	} {

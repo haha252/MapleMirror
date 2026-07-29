@@ -26,9 +26,14 @@
     gap: 6px;
     padding: 7px;
   }
+  .site-header__right {
+    flex: 0 0 auto;
+    gap: 8px;
+    margin-left: auto;
+  }
   .theme-tools {
     flex: 0 0 auto;
-    margin-left: auto;
+    margin-left: 0;
     gap: 4px;
     padding: 7px;
   }

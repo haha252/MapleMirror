@@ -1,29 +1,34 @@
 <section class="download-page">
-  <div class="catalog-mobile-toolbar">
-    <label class="catalog-search" for="catalog-search-mobile">
-      <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
-      <input id="catalog-search-mobile" type="search" autocomplete="off"
-        maxlength="100" placeholder="搜索项目、ID 或标签">
-    </label>
-    <button id="catalog-filter-button" class="catalog-filter-button" type="button"
-      aria-controls="catalog-filters" aria-expanded="false">
-      <svg aria-hidden="true"><use href="{{staticURL "icons.svg#filter"}}"></use></svg>
-      <span>筛选</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
-    </button>
-  </div>
   <div id="catalog-filter-backdrop" class="catalog-filter-backdrop" hidden></div>
   <div class="download-layout">
-    <aside id="catalog-filters" class="catalog-filters" aria-label="项目筛选器">
-      <div class="catalog-filters__mobile-head">
-        <h2>筛选器</h2>
-        <button id="catalog-filter-close" type="button" aria-label="关闭筛选器">
-          <svg aria-hidden="true"><use href="{{staticURL "icons.svg#close"}}"></use></svg>
-        </button>
-      </div>
-      <div id="catalog-filter-groups" class="catalog-filter-groups">
-        <p class="muted">正在加载筛选器...</p>
-      </div>
-    </aside>
+    <div class="catalog-left-rail">
+      {{if .Notices}}<div class="page-notices catalog-page-notices">
+        {{range .Notices}}<div class="page-notice page-notice--{{.Level}}" role="status" aria-live="polite">{{.Message}}</div>{{end}}
+      </div>{{end}}
+      <aside id="catalog-filters" class="catalog-filters" aria-label="项目筛选器">
+        <div class="catalog-filters__mobile-head">
+          <h2>筛选器</h2>
+          <button id="catalog-filter-close" type="button" aria-label="关闭筛选器">
+            <svg aria-hidden="true"><use href="{{staticURL "icons.svg#close"}}"></use></svg>
+          </button>
+        </div>
+        <div id="catalog-filter-groups" class="catalog-filter-groups">
+          <p class="muted">正在加载筛选器...</p>
+        </div>
+      </aside>
+    </div>
+    <div class="catalog-mobile-toolbar">
+      <label class="catalog-search" for="catalog-search-mobile">
+        <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
+        <input id="catalog-search-mobile" type="search" autocomplete="off"
+          maxlength="100" placeholder="搜索项目、ID 或标签">
+      </label>
+      <button id="catalog-filter-button" class="catalog-filter-button" type="button"
+        aria-controls="catalog-filters" aria-expanded="false">
+        <svg aria-hidden="true"><use href="{{staticURL "icons.svg#filter"}}"></use></svg>
+        <span>筛选</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
+      </button>
+    </div>
     <section class="catalog-results" aria-live="polite">
       <div id="download-status" class="status muted">正在加载项目列表...</div>
       <div id="project-cards" class="project-grid" data-project-grid></div>

@@ -64,19 +64,21 @@
       </a>
     </nav>
   </div>
-  {{if .CatalogSearch}}<label class="site-header__catalog" for="catalog-search-desktop">
-    <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
-    <input id="catalog-search-desktop" type="search" autocomplete="off"
-      maxlength="100" placeholder="搜索项目、ID 或标签">
-  </label>{{end}}
-  <div class="theme-tools">
-    <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"></button>
-    <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色">
-      <svg aria-hidden="true">
-        <use href="{{staticURL "icons.svg#palette"}}"></use>
-      </svg>
-    </button>
-    <div id="palette-menu" class="palette-menu" hidden></div>
+  <div class="site-header__right">
+    {{if .CatalogSearch}}<label class="site-header__catalog" for="catalog-search-desktop">
+      <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
+      <input id="catalog-search-desktop" type="search" autocomplete="off"
+        maxlength="100" placeholder="搜索项目、ID 或标签">
+    </label>{{end}}
+    <div class="theme-tools">
+      <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"></button>
+      <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色">
+        <svg aria-hidden="true">
+          <use href="{{staticURL "icons.svg#palette"}}"></use>
+        </svg>
+      </button>
+      <div id="palette-menu" class="palette-menu" hidden></div>
+    </div>
   </div>
 </header>
 {{end}}

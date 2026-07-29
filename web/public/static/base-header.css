@@ -27,6 +27,14 @@
   pointer-events: auto;
 }
 
+.site-header__right {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-left: auto;
+  pointer-events: none;
+}
+
 @supports (color: color-mix(in srgb, #000 50%, #fff)) {
   .site-header__left,
   .theme-tools {

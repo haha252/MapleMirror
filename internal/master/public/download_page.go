@@ -43,6 +43,10 @@ type downloadAssetUI struct {
 	UnavailableReason string `json:"unavailable_reason"`
 }
 
+type downloadPageData struct {
+	Notices []noticeView
+}
+
 func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		if s.maybeProjectPage(w, r) {
@@ -52,7 +56,8 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.trackPageView(w, r)
-	body, err := s.renderDownloadBody()
+	notices := s.currentNotices()
+	body, err := s.renderDownloadBody(notices)
 	if err != nil {
 		http.Error(w, "下载页面渲染失败", http.StatusInternalServerError)
 		return
@@ -61,7 +66,6 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		Title:         "枫源镜像",
 		BrowserTitle:  "枫源镜像",
 		Subtitle:      mirrorDescription,
-		BeforeNotices: s.currentNotices(),
 		Description:   mirrorDescription,
 		BodyClass:     "page-download",
 		CatalogSearch: true,
@@ -122,8 +126,8 @@ func normalizedDefaultSelectionMode(value string) string {
 	return config.ProjectSelectionModeSelectors
 }
 
-func (s Server) renderDownloadBody() (template.HTML, error) {
-	return s.renderTemplateBody("download", nil)
+func (s Server) renderDownloadBody(notices []noticeView) (template.HTML, error) {
+	return s.renderTemplateBody("download", downloadPageData{Notices: notices})
 }
 
 func displayDate(value string) string {

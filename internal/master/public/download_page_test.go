@@ -21,7 +21,6 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	srv.downloadPage(rec, req)
-
 	body := rec.Body.String()
 	if !strings.Contains(body, `<title>枫源镜像</title>`) {
 		t.Fatalf("expected mirror title in page: %s", body)
@@ -38,6 +37,11 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if first < 0 || second < 0 || first >= second || !strings.Contains(body, `第一条公告`) ||
 		!strings.Contains(body, `备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！`) {
 		t.Fatalf("expected test notice in page: %s", body)
+	}
+	filters, mobileSearch := strings.Index(body, `id="catalog-filters"`), strings.Index(body, `id="catalog-search-mobile"`)
+	if filters < 0 || mobileSearch < 0 || first >= filters || filters >= mobileSearch ||
+		strings.Count(body, `第一条公告`) != 1 {
+		t.Fatalf("公告应在左侧筛选器上方，移动搜索应排在公告之后：%s", body)
 	}
 	if !strings.Contains(body, `class="project-card panel-card"`) {
 		t.Fatalf("expected project card in page: %s", body)
