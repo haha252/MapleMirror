@@ -105,18 +105,18 @@
   font-weight: 700;
   flex: 0 0 auto;
 }
-.project-download,
 .project-description {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
   color: var(--text);
 }
+.project-selection-mode {
+  justify-self: end;
+}
 .project-download {
-  min-height: 150px;
   display: grid;
   gap: 14px;
-  padding: 28px 32px;
   align-content: center;
 }
 .project-download__summary {
@@ -174,14 +174,11 @@
   justify-content: space-between;
   gap: 16px;
 }
+.project-download__asset[hidden] {
+  display: none;
+}
 .project-download__asset > div:first-child {
   min-width: 0;
-}
-.project-download__action {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  flex: 0 0 auto;
 }
 #project-file-name {
   font-weight: 700;

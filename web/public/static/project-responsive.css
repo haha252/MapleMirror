@@ -29,8 +29,4 @@
   .project-download .download-button {
     width: 100%;
   }
-  .project-download__action {
-    justify-content: space-between;
-    width: 100%;
-  }
 }

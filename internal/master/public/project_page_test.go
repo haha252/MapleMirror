@@ -50,12 +50,16 @@ func TestProjectPageRendersOptionalHomepageAndDescription(t *testing.T) {
 			t.Fatalf("expected project page to contain %q: %s", want, body)
 		}
 	}
+	modeAt := strings.Index(body, `class="selection-mode project-selection-mode"`)
+	downloadAt := strings.Index(body, `class="project-download"`)
 	availabilityAt := strings.Index(body, `id="project-availability"`)
-	actionAt := strings.Index(body, `class="project-download__action"`)
-	modeAt := strings.LastIndex(body, `class="selection-mode"`)
-	if availabilityAt < 0 || actionAt < 0 || modeAt < 0 ||
-		availabilityAt >= actionAt || modeAt <= actionAt {
-		t.Fatalf("详情页可用状态应移到资产信息，选择方式应放入原操作位置：%s", body)
+	buttonAt := strings.Index(body, `id="project-download-button"`)
+	if modeAt < 0 || downloadAt < 0 || availabilityAt < 0 || buttonAt < 0 ||
+		modeAt >= downloadAt || availabilityAt >= buttonAt {
+		t.Fatalf("详情页选择方式应位于下载选择区外侧，资产信息应位于下载按钮之前：%s", body)
+	}
+	if strings.Contains(body, `class="project-download__action"`) {
+		t.Fatalf("详情页下载按钮不应继续套用多余操作容器：%s", body)
 	}
 }
 

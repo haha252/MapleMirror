@@ -185,6 +185,19 @@ func TestDownloadCardButtonRepresentsAvailability(t *testing.T) {
 	}
 }
 
+func TestProjectFileModeHidesRepeatedAssetSummary(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/static/public/project.js", nil))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK ||
+		!strings.Contains(body, `const assetSummary = page.querySelector(".project-download__asset")`) ||
+		!strings.Contains(body, `assetSummary.hidden = mode === "file"`) {
+		t.Fatalf("项目详情页文件模式应隐藏重复资产摘要：status=%d body=%s",
+			rec.Code, body)
+	}
+}
+
 func TestDownloadCardStaticKeepsLatestVersion(t *testing.T) {
 	rec := httptest.NewRecorder()
 	Server{}.Handler().ServeHTTP(rec,

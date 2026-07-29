@@ -11,6 +11,7 @@
   const archField = document.getElementById("project-architecture-field");
   const archSelect = document.getElementById("project-architecture");
   const fileBrowser = document.getElementById("project-file-browser");
+  const assetSummary = page.querySelector(".project-download__asset");
   const fileName = document.getElementById("project-file-name");
   const fileMeta = document.getElementById("project-file-meta");
   const button = document.getElementById("project-download-button");
@@ -126,6 +127,7 @@
     versionField.hidden = mode === "file" || versions.length <= 1;
     systemField.hidden = mode !== "selectors" || !systemEnabled;
     archField.hidden = mode !== "selectors" || !architectureEnabled;
+    assetSummary.hidden = mode === "file";
     if (mode === "file") browser.showDefault(selectedAsset, versionSelect.value);
     else refreshSystems(selectedAsset);
   }
