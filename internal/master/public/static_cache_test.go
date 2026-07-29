@@ -103,6 +103,56 @@ func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 	}
 }
 
+func TestDownloadPageUsesStableMasonryLayout(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	rec := httptest.NewRecorder()
+	Server{Store: Store{DB: db}}.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/", nil))
+	body := rec.Body.String()
+	masonryAt := strings.Index(body, `/static/public/download-masonry.js?v=`)
+	downloadAt := strings.Index(body, `/static/public/download.js?v=`)
+	if rec.Code != http.StatusOK || masonryAt < 0 || downloadAt < 0 || masonryAt >= downloadAt {
+		t.Fatalf("首页应在目录脚本前加载带版本号的瀑布流布局器：status=%d body=%s",
+			rec.Code, body)
+	}
+
+	staticRec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(staticRec,
+		httptest.NewRequest(http.MethodGet, "/static/public/download-masonry.js", nil))
+	script := staticRec.Body.String()
+	for _, want := range []string{
+		`typeof ResizeObserver !== "function"`,
+		`if (heights[index] < heights[best])`,
+		`assignments.get(card)`,
+		`nextColumnCount !== columnCount`,
+		`resizeObserver.observe(card)`,
+		`new MutationObserver`,
+	} {
+		if staticRec.Code != http.StatusOK || !strings.Contains(script, want) {
+			t.Fatalf("瀑布流布局器缺少稳定分列行为 %q：status=%d body=%s",
+				want, staticRec.Code, script)
+		}
+	}
+
+	cssRec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(cssRec,
+		httptest.NewRequest(http.MethodGet, "/static/public/download.css", nil))
+	css := cssRec.Body.String()
+	for _, want := range []string{
+		`--project-grid-columns: 3`,
+		`align-items: start`,
+		`.project-grid--masonry`,
+		`--project-grid-columns: 2`,
+		`--project-grid-columns: 1`,
+	} {
+		if cssRec.Code != http.StatusOK || !strings.Contains(css, want) {
+			t.Fatalf("首页卡片样式缺少响应式瀑布流或顶对齐回退 %q：status=%d body=%s",
+				want, cssRec.Code, css)
+		}
+	}
+}
+
 func TestDownloadPagesUseProjectDefaultModeAndSkipSingleVersionChoice(t *testing.T) {
 	for _, name := range []string{"download.js", "project.js"} {
 		rec := httptest.NewRecorder()

@@ -1,7 +1,19 @@
 .project-grid {
+  --project-grid-columns: 3;
+  --project-grid-gap: 16px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(var(--project-grid-columns), minmax(0, 1fr));
+  gap: var(--project-grid-gap);
+  align-items: start;
+}
+
+.project-grid--masonry {
+  position: relative;
+  display: block;
+}
+
+.project-grid--masonry > .project-card {
+  position: absolute;
 }
 
 .project-card {
@@ -92,10 +104,10 @@
 .download-button { min-width: 112px; padding: 10px 16px; }
 
 @media (max-width: 1120px) {
-  .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-grid { --project-grid-columns: 2; }
 }
 
 @media (max-width: 680px) {
-  .project-grid { grid-template-columns: 1fr; }
+  .project-grid { --project-grid-columns: 1; }
   .project-card__body { grid-template-columns: 1fr; }
 }
