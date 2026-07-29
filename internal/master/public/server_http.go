@@ -52,6 +52,12 @@ func (s Server) Handler() http.Handler {
 }
 
 func (s Server) Close() {
+	if s.CatalogIndex != nil {
+		s.CatalogIndex.close()
+	}
+	if s.CatalogCache != nil {
+		s.CatalogCache.close()
+	}
 	if s.ClientBlocks != nil {
 		s.ClientBlocks.close()
 	}

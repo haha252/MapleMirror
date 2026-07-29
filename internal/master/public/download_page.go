@@ -1,9 +1,6 @@
 package public
 
 import (
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -12,22 +9,23 @@ import (
 )
 
 type downloadProjectView struct {
-	ProjectID                   string            `json:"project_id"`
-	DisplayName                 string            `json:"display_name"`
-	Repository                  string            `json:"repository"`
-	Description                 string            `json:"description"`
-	HomepageURL                 string            `json:"homepage_url"`
-	Available                   bool              `json:"available"`
-	UnavailableReason           string            `json:"unavailable_reason"`
-	IconURL                     string            `json:"icon_url"`
-	ArchitectureMatchEnabled    bool              `json:"architecture_match_enabled"`
-	SystemMatchEnabled          bool              `json:"system_match_enabled"`
-	ArchitectureSelectorEnabled bool              `json:"architecture_selector_enabled"`
-	SystemSelectorEnabled       bool              `json:"system_selector_enabled"`
-	DefaultSelectionMode        string            `json:"default_selection_mode"`
-	LatestPublishedAt           string            `json:"latest_published_at"`
-	DefaultVersion              string            `json:"default_version"`
-	Assets                      []downloadAssetUI `json:"assets"`
+	ProjectID                   string              `json:"project_id"`
+	DisplayName                 string              `json:"display_name"`
+	Repository                  string              `json:"repository"`
+	Description                 string              `json:"description"`
+	HomepageURL                 string              `json:"homepage_url"`
+	Available                   bool                `json:"available"`
+	UnavailableReason           string              `json:"unavailable_reason"`
+	IconURL                     string              `json:"icon_url"`
+	ArchitectureMatchEnabled    bool                `json:"architecture_match_enabled"`
+	SystemMatchEnabled          bool                `json:"system_match_enabled"`
+	ArchitectureSelectorEnabled bool                `json:"architecture_selector_enabled"`
+	SystemSelectorEnabled       bool                `json:"system_selector_enabled"`
+	DefaultSelectionMode        string              `json:"default_selection_mode"`
+	LatestPublishedAt           string              `json:"latest_published_at"`
+	DefaultVersion              string              `json:"default_version"`
+	Tags                        map[string][]string `json:"tags,omitempty"`
+	Assets                      []downloadAssetUI   `json:"assets"`
 }
 
 type downloadAssetUI struct {
@@ -72,51 +70,6 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 			"/static/public/download-file-browser.js", "/static/public/download-masonry.js",
 			"/static/public/download.js"},
 	})
-}
-
-func (s Server) catalog(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
-		return
-	}
-	views, err := s.downloadCatalog(r)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "项目列表读取失败")
-		return
-	}
-	body, err := json.Marshal(map[string]any{"projects": views})
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "项目列表编码失败")
-		return
-	}
-	sum := sha256.Sum256(body)
-	etag := fmt.Sprintf(`"catalog-%x"`, sum[:12])
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "public, max-age=30, must-revalidate")
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
-}
-
-func (s Server) downloadCatalog(r *http.Request) ([]downloadProjectView, error) {
-	projects, err := s.Store.Projects(r.Context())
-	if err != nil {
-		return nil, err
-	}
-	views := make([]downloadProjectView, 0, len(projects))
-	projectAssets := s.currentProjectAssets()
-	for _, project := range projects {
-		assets, err := s.Store.Assets(r.Context(), project.ProjectID)
-		if err != nil {
-			return nil, err
-		}
-		views = append(views, buildDownloadProjectView(project, assets, projectAssets[project.ProjectID]))
-	}
-	return views, nil
 }
 
 func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, assetConfig projectAssetConfig) downloadProjectView {

@@ -55,6 +55,9 @@ func (s Server) projectIcon(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) currentProjectAssets() map[string]projectAssetConfig {
+	if s.CatalogIndex != nil {
+		return s.CatalogIndex.assets()
+	}
 	if strings.TrimSpace(s.ProjectsPath) == "" {
 		return s.ProjectAssets
 	}

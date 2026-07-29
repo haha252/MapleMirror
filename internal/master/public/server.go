@@ -42,6 +42,8 @@ type Server struct {
 	ResourceLimiter  *publicResourceLimiter
 	StatsCache       *statsCache
 	WebVerifications *webVerificationTokenStore
+	CatalogIndex     *catalogIndex
+	CatalogCache     *catalogResultCache
 }
 
 type TokenLifetime struct {
@@ -53,7 +55,8 @@ type TokenLifetime struct {
 func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duration,
 	tokenLifetime TokenLifetime,
 	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
-	projects config.Projects, projectsPath, noticesPath string, notices []config.PublicNotice,
+	projects config.Projects, filters config.Filters,
+	projectsPath, filtersPath, noticesPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
 	logger *logging.Logger, publicProbeNetworkFailures int,
 	archive *accountingarchive.Writer, statsBuffer *statbuffer.Buffer) (Server, error) {
@@ -71,6 +74,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	clientBlocks.start()
 	webVerifications := newWebVerificationTokenStore(webVerificationTokenCapacity, webVerificationTokenTTL)
 	webVerifications.startCleanup()
+	catalogCache := newCatalogResultCache(filters.CacheBytes)
+	catalogIndex := newCatalogIndex(projects, filters, projectsPath, filtersPath, catalogCache, logger)
 	return Server{
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
 			Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota),
@@ -101,6 +106,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 		ResourceLimiter:  newPublicResourceLimiter(quota),
 		StatsCache:       &statsCache{},
 		WebVerifications: webVerifications,
+		CatalogIndex:     catalogIndex,
+		CatalogCache:     catalogCache,
 	}, nil
 }
 

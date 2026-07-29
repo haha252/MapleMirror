@@ -34,6 +34,7 @@ func main() {
 	projectsPath := flag.String("projects", "projects.yaml", "项目清单配置文件路径")
 	quotaPath := flag.String("quota", "quota.yaml", "额度配置文件路径")
 	noticesPath := flag.String("notices", "notices.yaml", "公告配置文件路径")
+	filtersPath := flag.String("filters", "filters.yaml", "首页筛选配置文件路径")
 	archiveAccounting := flag.Bool("archive-accounting", false, "归档旧数据库明细并收缩在线状态")
 	flag.Parse()
 	var warnings [][2]string
@@ -56,6 +57,10 @@ func main() {
 	if handleLoad(err, "公告配置", &created) {
 		os.Exit(1)
 	}
+	filters, err := config.LoadFilters(*filtersPath, warn)
+	if handleLoad(err, "首页筛选配置", &created) {
+		os.Exit(1)
+	}
 
 	if created {
 		cfg, err = config.LoadMaster(*path, warn)
@@ -67,7 +72,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "主节点首次初始化未完成：%v\n", err)
 			os.Exit(1)
 		}
-		fmt.Fprintln(os.Stderr, "已生成主节点所需示例配置和安全材料，请确认项目、额度和公告配置后重新启动。")
+		fmt.Fprintln(os.Stderr, "已生成主节点所需示例配置和安全材料，请确认项目、额度、公告和筛选配置后重新启动。")
 		return
 	}
 	if bootstrap.MasterNeedsMaterials(cfg) {
@@ -151,8 +156,9 @@ func main() {
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
-	publicServer, err := newPublicServer(cfg, quota, notices, projects, *projectsPath,
-		*noticesPath, location, database, runtime, logger, tokenSigner, archive, statsBuffer)
+	publicServer, err := newPublicServer(cfg, quota, notices, projects, filters,
+		*projectsPath, *filtersPath, *noticesPath, location, database, runtime,
+		logger, tokenSigner, archive, statsBuffer)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -174,7 +180,8 @@ func main() {
 }
 
 func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notices,
-	projects config.Projects, projectsPath, noticesPath string, loc *time.Location,
+	projects config.Projects, filters config.Filters,
+	projectsPath, filtersPath, noticesPath string, loc *time.Location,
 	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger,
 	signer downloadtoken.Signer, archive *accountingarchive.Writer,
 	statsBuffer *statbuffer.Buffer) (public.Server, error) {
@@ -191,7 +198,8 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenLifetime,
 		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
-		cfg.Proxy.TrustedCIDRs, projects, projectsPath, noticesPath, notices.Notices, runtime, logger,
+		cfg.Proxy.TrustedCIDRs, projects, filters, projectsPath, filtersPath,
+		noticesPath, notices.Notices, runtime, logger,
 		cfg.Node.PublicProbeNetworkFailures, archive, statsBuffer)
 	if err != nil {
 		return public.Server{}, err
