@@ -46,6 +46,7 @@ func TestCatalogControllerDebouncesCanonicalCachedRequests(t *testing.T) {
 	for _, want := range []string{
 		`window.setTimeout(loadCatalog, 300)`,
 		`new URLSearchParams()`,
+		`params.set("q", search.toLowerCase())`,
 		`filters.selectedFilters().forEach`,
 		`cache: "default"`,
 		`new AbortController()`,

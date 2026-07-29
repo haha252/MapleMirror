@@ -35,7 +35,7 @@
   function catalogURL() {
     const params = new URLSearchParams();
     const search = filters.search();
-    if (search) params.set("q", search);
+    if (search) params.set("q", search.toLowerCase());
     filters.selectedFilters().forEach((value) => params.append("filter", value));
     const query = params.toString();
     return "/api/public/v1/catalog" + (query ? "?" + query : "");
