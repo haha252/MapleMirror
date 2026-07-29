@@ -54,7 +54,6 @@
     card.querySelector(".project-name").textContent = project.display_name;
     card.querySelector(".project-repository").textContent = project.repository;
     card.querySelector(".project-updated").textContent = "最近更新：" + (project.latest_published_at || "暂无");
-    const availability = card.querySelector(".project-availability");
     const versionField = card.querySelector(".version-field");
     const versionSelect = card.querySelector(".version-select");
     const systemField = card.querySelector(".system-field");
@@ -76,12 +75,6 @@
 
     function architectureLabel(item) {
       return String(item.architecture || "").trim() || "None";
-    }
-
-    function setAvailability(selected) {
-      const available = !!(selected && selected.available);
-      availability.textContent = available ? "可下载" : "暂不可下载";
-      availability.className = "project-availability " + (available ? "ok" : "warn");
     }
 
     versions.forEach((version) => {
@@ -141,22 +134,22 @@
         project.assets.find((item) => item.asset_id === archSelect.value) ||
         preferredAsset(project.assets.filter((item) => item.version === versionSelect.value));
       selectedAsset = selected;
-      badge.textContent = selected ? " " + selected.version : "";
+      badge.textContent = selected ? selected.version : "暂无版本";
       if (!selected) {
         selectedAsset = null;
-        setAvailability(null);
         sizeText.textContent = "暂无可下载文件";
         sizeText.className = "project-card__size warn";
         button.disabled = true;
+        button.textContent = "暂不可下载";
         delete button.dataset.assetId;
         delete button.dataset.downloadPath;
         button.removeAttribute("title");
         return;
       }
-      setAvailability(selected);
       sizeText.textContent = selectors.bytesText(selected.size_bytes);
       sizeText.className = "project-card__size " + (selected.available ? "muted" : "warn");
       button.disabled = !selected.available;
+      button.textContent = selected.available ? "下载" : "暂不可下载";
       button.dataset.assetId = selected.asset_id;
       button.dataset.downloadPath = selected.download_path || "";
       if (selected.unavailable_reason) button.title = selected.unavailable_reason;

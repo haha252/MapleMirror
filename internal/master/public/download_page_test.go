@@ -57,13 +57,7 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 		!strings.Contains(body, `#selection-files`) {
 		t.Fatalf("expected selectors in page: %s", body)
 	}
-	modeAt := strings.Index(body, `class="selection-mode"`)
-	bodyAt := strings.Index(body, `class="project-card__body"`)
-	availabilityAt := strings.Index(body, `class="project-availability"`)
-	if modeAt < 0 || bodyAt < 0 || availabilityAt < 0 ||
-		modeAt >= bodyAt || availabilityAt <= bodyAt {
-		t.Fatalf("选择方式应替换摘要可用状态，可用状态应移到资产操作区：%s", body)
-	}
+	assertDownloadCardLayout(t, body)
 	if !strings.Contains(body, `/static/public/download.js?v=`) || !strings.Contains(body, `id="palette-toggle"`) {
 		t.Fatalf("expected themed assets in page: %s", body)
 	}

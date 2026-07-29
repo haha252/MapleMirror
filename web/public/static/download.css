@@ -12,12 +12,12 @@
 }
 
 .project-card__head {
-  display: grid;
-  gap: 12px;
+  min-width: 0;
 }
 
 .project-card__meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
@@ -34,13 +34,20 @@
 }
 
 .project-card__title { min-width: 0; }
-.project-card__title h2 { margin-bottom: 4px; font-size: 21px; line-height: 1.2; overflow-wrap: anywhere; }
+.project-card__title h2 { margin-bottom: 6px; font-size: 21px; line-height: 1.2; overflow-wrap: anywhere; }
 .project-link { color: var(--text); }
 .project-link:hover { color: var(--accent-hover); }
-.project-card__title .version-badge { color: var(--muted); font-size: 14px; margin-left: 4px; }
+.project-card__identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.project-card__source { display: grid; gap: 2px; min-width: 0; }
+.version-badge, .project-repository, .project-updated { margin-bottom: 0; }
+.version-badge { font-size: 14px; }
 .project-repository { font-size: 13px; overflow-wrap: anywhere; }
-.project-card__summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
-.project-card__summary p { margin-bottom: 0; }
+.project-updated { margin-top: 5px; font-size: 12px; }
 
 .project-card__body {
   display: grid;
@@ -80,9 +87,7 @@
 }
 
 .project-card__size { font-size: 13px; overflow-wrap: anywhere; }
-.project-card__asset-meta { display: inline-flex; align-items: center; gap: 8px; }
-.project-availability { font-size: 13px; font-weight: 700; white-space: nowrap; }
-.download-button { min-width: 96px; padding: 10px 16px; }
+.download-button { min-width: 112px; padding: 10px 16px; }
 
 @media (max-width: 1120px) {
   .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -90,6 +95,5 @@
 
 @media (max-width: 680px) {
   .project-grid { grid-template-columns: 1fr; }
-  .project-card__summary, .project-card__actions { align-items: flex-start; flex-direction: column; }
   .project-card__body { grid-template-columns: 1fr; }
 }

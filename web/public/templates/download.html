@@ -7,21 +7,24 @@
         <div class="project-card__meta">
           <img class="project-card__icon" alt="">
           <div class="project-card__title">
-            <h2><a class="project-link" href=""><span class="project-name"></span></a><span class="version-badge"></span></h2>
-            <p class="muted project-repository"></p>
-          </div>
-        </div>
-        <div class="project-card__summary">
-          <p class="muted project-updated"></p>
-          <div class="selection-mode" role="group" aria-label="文件选择方式">
-            <button type="button" data-selection-mode="selectors" aria-pressed="true"
-              aria-label="条件选择" title="条件选择">
-              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
-            </button>
-            <button type="button" data-selection-mode="file" aria-pressed="false"
-              aria-label="文件选择" title="文件选择">
-              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
-            </button>
+            <h2><a class="project-link" href=""><span class="project-name"></span></a></h2>
+            <div class="project-card__identity">
+              <div class="project-card__source">
+                <p class="muted version-badge"></p>
+                <p class="muted project-repository"></p>
+              </div>
+              <div class="selection-mode" role="group" aria-label="文件选择方式">
+                <button type="button" data-selection-mode="selectors" aria-pressed="true"
+                  aria-label="条件选择" title="条件选择">
+                  <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
+                </button>
+                <button type="button" data-selection-mode="file" aria-pressed="false"
+                  aria-label="文件选择" title="文件选择">
+                  <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
+                </button>
+              </div>
+            </div>
+            <p class="muted project-updated"></p>
           </div>
         </div>
       </div>
@@ -52,11 +55,8 @@
           </section>
         </div>
         <div class="project-card__actions">
-          <span class="project-card__asset-meta">
-            <span class="project-card__size muted"></span>
-            <span class="project-availability"></span>
-          </span>
-          <button type="button" class="download-button">下载</button>
+          <span class="project-card__size muted"></span>
+          <button type="button" class="download-button" disabled>暂不可下载</button>
         </div>
       </div>
     </section>

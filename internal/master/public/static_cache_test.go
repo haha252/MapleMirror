@@ -75,6 +75,18 @@ func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 	}
 }
 
+func TestDownloadCardButtonRepresentsAvailability(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/static/public/download.js", nil))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK ||
+		!strings.Contains(body, `button.disabled = !selected.available`) ||
+		!strings.Contains(body, `selected.available ? "下载" : "暂不可下载"`) {
+		t.Fatalf("下载按钮应同时表达资产可用状态：status=%d body=%s", rec.Code, body)
+	}
+}
+
 func TestCatalogETag(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
