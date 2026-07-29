@@ -4,8 +4,11 @@
   const cardTemplate = document.getElementById("project-card-template");
   if (!statusBox || !container || !cardTemplate) return;
   const selectors = window.DownloadSelectors || {
+    bytesText: (value) => String(value || 0) + " B",
     preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
     preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
+    setModeButtons: () => {},
+    uniqueVersions: (items) => Array.from(new Set(items.map((item) => item.version))),
     userSystem: () => ""
   };
 
@@ -23,26 +26,6 @@
     return button;
   }
 
-  function bytesText(value) {
-    const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let size = Number(value) || 0;
-    let unit = 0;
-    while (size >= 1024 && unit < units.length - 1) {
-      size = size / 1024;
-      unit++;
-    }
-    return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
-  }
-
-  function uniqueVersions(items) {
-    const seen = new Set();
-    return items.filter((item) => {
-      if (seen.has(item.version)) return false;
-      seen.add(item.version);
-      return true;
-    }).map((item) => item.version);
-  }
-
   function preferredAsset(items) { return selectors.preferredAsset(items); }
   function preferredAssetForUser(items, useArchitecture) {
     return selectors.preferredAssetForUser(items, useArchitecture);
@@ -55,7 +38,7 @@
 
   function buildCard(project) {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
-    const versions = uniqueVersions(project.assets);
+    const versions = selectors.uniqueVersions(project.assets);
     const defaultVersion = project.default_version || (versions[0] || "");
     const projectHref = "/" + encodeURIComponent(project.project_id || "") + "/";
     const icon = card.querySelector(".project-card__icon");
@@ -77,6 +60,9 @@
     const systemSelect = card.querySelector(".system-select");
     const archField = card.querySelector(".architecture-field");
     const archSelect = card.querySelector(".architecture-select");
+    const fileField = card.querySelector(".file-field");
+    const fileSelect = card.querySelector(".file-select");
+    const modeButtons = Array.from(card.querySelectorAll("[data-selection-mode]"));
     const sizeText = card.querySelector(".project-card__size");
     const button = card.querySelector(".download-button");
     const badge = card.querySelector(".version-badge");
@@ -84,6 +70,8 @@
       "system_selector_enabled", "system_match_enabled");
     const architectureEnabled = selectorEnabled(project,
       "architecture_selector_enabled", "architecture_match_enabled");
+    let mode = "selectors";
+    let selectedAsset = null;
 
     function architectureLabel(item) {
       return String(item.architecture || "").trim() || "None";
@@ -103,12 +91,13 @@
       versionSelect.appendChild(option);
     });
 
-    function refreshArchitectures() {
+    function refreshArchitectures(preferred) {
       let list = project.assets.filter((item) => item.version === versionSelect.value);
       if (systemEnabled) {
         list = list.filter((item) => item.system === systemSelect.value);
       }
-      const choice = preferredAssetForUser(list, architectureEnabled);
+      const choice = list.includes(preferred) ? preferred :
+        preferredAssetForUser(list, architectureEnabled);
       archSelect.innerHTML = "";
       if (!architectureEnabled) {
         refreshDetails(choice);
@@ -124,15 +113,17 @@
       refreshDetails(choice);
     }
 
-    function refreshSystems() {
+    function refreshSystems(preferred) {
       if (!systemEnabled) {
-        refreshArchitectures();
+        refreshArchitectures(preferred);
         return;
       }
       const list = project.assets.filter((item) => item.version === versionSelect.value);
       const systems = Array.from(new Set(list.map((item) => item.system).filter(Boolean)));
       const wanted = selectors.userSystem ? selectors.userSystem() : "";
-      const choice = systems.includes(wanted) ? wanted : systems[0] || "";
+      const preferredSystem = preferred && list.includes(preferred) ? preferred.system : "";
+      const choice = systems.includes(preferredSystem) ? preferredSystem :
+        systems.includes(wanted) ? wanted : systems[0] || "";
       systemSelect.innerHTML = "";
       systems.forEach((system) => {
         const option = document.createElement("option");
@@ -141,23 +132,43 @@
         if (system === choice) option.selected = true;
         systemSelect.appendChild(option);
       });
-      refreshArchitectures();
+      refreshArchitectures(preferred);
+    }
+
+    function refreshFiles(preferred) {
+      const list = project.assets.filter((item) => item.version === versionSelect.value);
+      const choice = list.includes(preferred) ? preferred : preferredAsset(list);
+      fileSelect.innerHTML = "";
+      list.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.asset_id;
+        option.textContent = item.file_name || "未命名文件";
+        if (choice && choice.asset_id === item.asset_id) option.selected = true;
+        fileSelect.appendChild(option);
+      });
+      refreshDetails(choice);
     }
 
     function refreshDetails(preferred) {
       const selected = preferred ||
-        project.assets.find((item) => item.asset_id === archSelect.value) ||
-        preferredAsset(project.assets);
+        project.assets.find((item) => item.asset_id ===
+          (mode === "file" ? fileSelect.value : archSelect.value)) ||
+        preferredAsset(project.assets.filter((item) => item.version === versionSelect.value));
+      selectedAsset = selected;
       badge.textContent = selected ? " " + selected.version : "";
       if (!selected) {
+        selectedAsset = null;
         setAvailability(null);
         sizeText.textContent = "暂无可下载文件";
         sizeText.className = "project-card__size warn";
         button.disabled = true;
+        delete button.dataset.assetId;
+        delete button.dataset.downloadPath;
+        button.removeAttribute("title");
         return;
       }
       setAvailability(selected);
-      sizeText.textContent = bytesText(selected.size_bytes);
+      sizeText.textContent = selectors.bytesText(selected.size_bytes);
       sizeText.className = "project-card__size " + (selected.available ? "muted" : "warn");
       button.disabled = !selected.available;
       button.dataset.assetId = selected.asset_id;
@@ -166,13 +177,28 @@
       else button.removeAttribute("title");
     }
 
-    if (systemEnabled) systemField.hidden = false;
-    if (architectureEnabled) archField.hidden = false;
-    versionSelect.addEventListener("change", refreshSystems);
-    systemSelect.addEventListener("change", refreshArchitectures);
+    function setMode(nextMode) {
+      mode = nextMode === "file" ? "file" : "selectors";
+      selectors.setModeButtons(modeButtons, mode);
+      fileField.hidden = mode !== "file";
+      systemField.hidden = mode !== "selectors" || !systemEnabled;
+      archField.hidden = mode !== "selectors" || !architectureEnabled;
+      if (mode === "file") refreshFiles(selectedAsset);
+      else refreshSystems(selectedAsset);
+    }
+
+    versionSelect.addEventListener("change", function () {
+      if (mode === "file") refreshFiles();
+      else refreshSystems();
+    });
+    systemSelect.addEventListener("change", function () { refreshArchitectures(); });
     archSelect.addEventListener("change", function () { refreshDetails(); });
+    fileSelect.addEventListener("change", function () { refreshDetails(); });
+    modeButtons.forEach((item) => item.addEventListener("click", function () {
+      setMode(item.dataset.selectionMode);
+    }));
     button.addEventListener("click", function () { startDownload(button); });
-    refreshSystems();
+    setMode("selectors");
     return card;
   }
 

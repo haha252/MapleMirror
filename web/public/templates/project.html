@@ -36,6 +36,10 @@
         <div class="project-download__summary">
           <p id="project-download-status">正在加载下载组件...</p>
         </div>
+        <div class="selection-mode" role="group" aria-label="文件选择方式">
+          <button type="button" data-selection-mode="selectors" aria-pressed="true">条件选择</button>
+          <button type="button" data-selection-mode="file" aria-pressed="false">文件选择</button>
+        </div>
         <div class="project-download__controls">
           <label class="field">
             <span>版本</span>
@@ -48,6 +52,10 @@
           <label class="field" id="project-architecture-field" hidden>
             <span>架构</span>
             <select id="project-architecture"></select>
+          </label>
+          <label class="field" id="project-file-field" hidden>
+            <span>文件</span>
+            <select id="project-file"></select>
           </label>
         </div>
         <div class="project-download__asset">

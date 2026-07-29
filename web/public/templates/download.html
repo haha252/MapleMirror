@@ -17,7 +17,11 @@
         </div>
       </div>
       <div class="project-card__body">
-        <div class="field">
+        <div class="selection-mode" role="group" aria-label="文件选择方式">
+          <button type="button" data-selection-mode="selectors" aria-pressed="true">条件选择</button>
+          <button type="button" data-selection-mode="file" aria-pressed="false">文件选择</button>
+        </div>
+        <div class="field version-field">
           <label>版本</label>
           <select class="version-select"></select>
         </div>
@@ -28,6 +32,10 @@
         <div class="field architecture-field" hidden>
           <label>架构</label>
           <select class="architecture-select"></select>
+        </div>
+        <div class="field file-field" hidden>
+          <label>文件</label>
+          <select class="file-select"></select>
         </div>
         <div class="project-card__actions">
           <span class="project-card__size muted"></span>

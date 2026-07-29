@@ -9,17 +9,25 @@
   const systemSelect = document.getElementById("project-system");
   const archField = document.getElementById("project-architecture-field");
   const archSelect = document.getElementById("project-architecture");
+  const fileField = document.getElementById("project-file-field");
+  const fileSelect = document.getElementById("project-file");
   const fileName = document.getElementById("project-file-name");
   const fileMeta = document.getElementById("project-file-meta");
   const button = document.getElementById("project-download-button");
+  const modeButtons = Array.from(page.querySelectorAll("[data-selection-mode]"));
   const selectors = window.DownloadSelectors || {
+    bytesText: (value) => String(value || 0) + " B",
     preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
     preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
+    setModeButtons: () => {},
+    uniqueVersions: (items) => Array.from(new Set(items.map((item) => item.version))),
     userSystem: () => ""
   };
   let project = null;
   let systemEnabled = false;
   let architectureEnabled = false;
+  let mode = "selectors";
+  let selectedAsset = null;
 
   function selectorEnabled(item, field, legacyField) {
     if (item[field] != null) return !!item[field];
@@ -31,39 +39,21 @@
     statusBox.className = level || "muted";
   }
 
-  function bytesText(value) {
-    const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let size = Number(value) || 0;
-    let unit = 0;
-    while (size >= 1024 && unit < units.length - 1) {
-      size = size / 1024;
-      unit++;
-    }
-    return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
-  }
-
-  function uniqueVersions(items) {
-    const seen = new Set();
-    return items.filter((item) => {
-      if (seen.has(item.version)) return false;
-      seen.add(item.version);
-      return true;
-    }).map((item) => item.version);
-  }
-
   function architectureLabel(item) {
     return String(item.architecture || "").trim() || "None";
   }
 
-  function refreshSystems() {
+  function refreshSystems(preferred) {
     if (!systemEnabled) {
-      refreshArchitectures();
+      refreshArchitectures(preferred);
       return;
     }
     const list = project.assets.filter((item) => item.version === versionSelect.value);
     const systems = Array.from(new Set(list.map((item) => item.system).filter(Boolean)));
     const wanted = selectors.userSystem ? selectors.userSystem() : "";
-    const choice = systems.includes(wanted) ? wanted : systems[0] || "";
+    const preferredSystem = preferred && list.includes(preferred) ? preferred.system : "";
+    const choice = systems.includes(preferredSystem) ? preferredSystem :
+      systems.includes(wanted) ? wanted : systems[0] || "";
     systemSelect.innerHTML = "";
     systems.forEach((system) => {
       const option = document.createElement("option");
@@ -72,15 +62,16 @@
       if (system === choice) option.selected = true;
       systemSelect.appendChild(option);
     });
-    refreshArchitectures();
+    refreshArchitectures(preferred);
   }
 
-  function refreshArchitectures() {
+  function refreshArchitectures(preferred) {
     let list = project.assets.filter((item) => item.version === versionSelect.value);
     if (systemEnabled) {
       list = list.filter((item) => item.system === systemSelect.value);
     }
-    const choice = selectors.preferredAssetForUser(list, architectureEnabled);
+    const choice = list.includes(preferred) ? preferred :
+      selectors.preferredAssetForUser(list, architectureEnabled);
     archSelect.innerHTML = "";
     if (!architectureEnabled) {
       refreshDetails(choice);
@@ -96,27 +87,57 @@
     refreshDetails(choice);
   }
 
+  function refreshFiles(preferred) {
+    const list = project.assets.filter((item) => item.version === versionSelect.value);
+    const choice = list.includes(preferred) ? preferred : selectors.preferredAsset(list);
+    fileSelect.innerHTML = "";
+    list.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.asset_id;
+      option.textContent = item.file_name || "未命名文件";
+      if (choice && choice.asset_id === item.asset_id) option.selected = true;
+      fileSelect.appendChild(option);
+    });
+    refreshDetails(choice);
+  }
+
   function refreshDetails(preferred) {
     const selected = preferred ||
-      project.assets.find((item) => item.asset_id === archSelect.value) ||
-      selectors.preferredAsset(project.assets);
+      project.assets.find((item) => item.asset_id ===
+        (mode === "file" ? fileSelect.value : archSelect.value)) ||
+      selectors.preferredAsset(project.assets.filter((item) => item.version === versionSelect.value));
+    selectedAsset = selected;
     if (!selected) {
+      selectedAsset = null;
       availability.textContent = "暂不可下载";
       availability.className = "project-availability warn";
       fileName.textContent = "暂无可下载文件";
       fileMeta.textContent = "";
       button.disabled = true;
+      delete button.dataset.downloadPath;
+      button.removeAttribute("title");
       return;
     }
     const available = !!selected.available;
     availability.textContent = available ? "可下载" : "暂不可下载";
     availability.className = "project-availability " + (available ? "ok" : "warn");
     fileName.textContent = selected.file_name || "未命名文件";
-    fileMeta.textContent = selected.version + " · " + bytesText(selected.size_bytes);
+    fileMeta.textContent = selected.version + " · " + selectors.bytesText(selected.size_bytes);
     button.disabled = !available;
     button.dataset.downloadPath = selected.download_path || "";
     if (selected.unavailable_reason) button.title = selected.unavailable_reason;
     else button.removeAttribute("title");
+  }
+
+  function setMode(nextMode) {
+    if (!project) return;
+    mode = nextMode === "file" ? "file" : "selectors";
+    selectors.setModeButtons(modeButtons, mode);
+    fileField.hidden = mode !== "file";
+    systemField.hidden = mode !== "selectors" || !systemEnabled;
+    archField.hidden = mode !== "selectors" || !architectureEnabled;
+    if (mode === "file") refreshFiles(selectedAsset);
+    else refreshSystems(selectedAsset);
   }
 
   function bindProject(nextProject) {
@@ -125,7 +146,7 @@
       "system_selector_enabled", "system_match_enabled");
     architectureEnabled = selectorEnabled(project,
       "architecture_selector_enabled", "architecture_match_enabled");
-    const versions = uniqueVersions(project.assets || []);
+    const versions = selectors.uniqueVersions(project.assets || []);
     versionSelect.innerHTML = "";
     versions.forEach((version) => {
       const option = document.createElement("option");
@@ -134,10 +155,8 @@
       if (version === project.default_version) option.selected = true;
       versionSelect.appendChild(option);
     });
-    systemField.hidden = !systemEnabled;
-    archField.hidden = !architectureEnabled;
     setStatus(versions.length ? "" : "暂无可展示文件。", versions.length ? "muted" : "warn");
-    refreshSystems();
+    setMode("selectors");
   }
 
   async function loadProject() {
@@ -155,9 +174,16 @@
     }
   }
 
-  versionSelect.addEventListener("change", refreshSystems);
-  systemSelect.addEventListener("change", refreshArchitectures);
+  versionSelect.addEventListener("change", function () {
+    if (mode === "file") refreshFiles();
+    else refreshSystems();
+  });
+  systemSelect.addEventListener("change", function () { refreshArchitectures(); });
   archSelect.addEventListener("change", function () { refreshDetails(); });
+  fileSelect.addEventListener("change", function () { refreshDetails(); });
+  modeButtons.forEach((item) => item.addEventListener("click", function () {
+    setMode(item.dataset.selectionMode);
+  }));
   button.addEventListener("click", function () {
     const path = button.dataset.downloadPath;
     if (!path) return;

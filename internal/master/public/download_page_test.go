@@ -42,7 +42,11 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	if !strings.Contains(body, `class="project-card panel-card"`) {
 		t.Fatalf("expected project card in page: %s", body)
 	}
-	if !strings.Contains(body, `class="version-select"`) || !strings.Contains(body, `class="architecture-select"`) {
+	if !strings.Contains(body, `class="version-select"`) ||
+		!strings.Contains(body, `class="architecture-select"`) ||
+		!strings.Contains(body, `class="file-select"`) ||
+		!strings.Contains(body, `data-selection-mode="selectors"`) ||
+		!strings.Contains(body, `data-selection-mode="file"`) {
 		t.Fatalf("expected selectors in page: %s", body)
 	}
 	if !strings.Contains(body, `/static/public/download.js?v=`) || !strings.Contains(body, `id="palette-toggle"`) {

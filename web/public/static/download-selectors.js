@@ -35,6 +35,28 @@
     return items.find((item) => item.available) || items[0] || null;
   }
 
+  function bytesText(value) {
+    const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let size = Number(value) || 0;
+    let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) {
+      size = size / 1024;
+      unit++;
+    }
+    return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
+  }
+
+  function uniqueVersions(items) {
+    return Array.from(new Set(items.map((item) => item.version)));
+  }
+
+  function setModeButtons(buttons, mode) {
+    buttons.forEach((button) => {
+      const active = button.dataset.selectionMode === mode;
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
   function preferredAssetForUser(items, useArchitecture) {
     const available = items.filter((item) => item.available);
     const list = available.length ? available : items;
@@ -62,8 +84,11 @@
   }
 
   window.DownloadSelectors = {
+    bytesText: bytesText,
     preferredAsset: preferredAsset,
     preferredAssetForUser: preferredAssetForUser,
+    setModeButtons: setModeButtons,
+    uniqueVersions: uniqueVersions,
     userSystem: userSystem,
     systemLabel: systemLabel
   };
