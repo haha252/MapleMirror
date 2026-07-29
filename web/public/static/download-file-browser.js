@@ -9,9 +9,23 @@
     return button;
   }
 
+  function folderIcon(href) {
+    const namespace = "http://www.w3.org/2000/svg";
+    const icon = document.createElementNS(namespace, "svg");
+    const use = document.createElementNS(namespace, "use");
+    icon.setAttribute("aria-hidden", "true");
+    use.setAttribute("href", href);
+    icon.appendChild(use);
+    return icon;
+  }
+
   function create(root, items, options) {
+    const versionsView = root.querySelector(".file-browser__level--versions");
+    const filesView = root.querySelector(".file-browser__level--files");
     const versionsBox = root.querySelector(".file-browser__versions");
     const filesBox = root.querySelector(".file-browser__files");
+    const backButton = root.querySelector(".file-browser__back");
+    const pathText = root.querySelector(".file-browser__path");
     const versions = options.uniqueVersions(items);
     let currentVersion = "";
     let currentAsset = null;
@@ -19,8 +33,12 @@
     function renderVersions() {
       versionsBox.innerHTML = "";
       versions.forEach((version) => {
-        const button = optionButton("file-browser__version", version, version === currentVersion);
-        button.addEventListener("click", function () { setVersion(version, currentAsset); });
+        const button = optionButton("file-browser__version", "", version === currentVersion);
+        const label = document.createElement("span");
+        label.textContent = version;
+        button.appendChild(folderIcon(root.dataset.folderIcon));
+        button.appendChild(label);
+        button.addEventListener("click", function () { openVersion(version); });
         versionsBox.appendChild(button);
       });
     }
@@ -57,11 +75,23 @@
       options.onSelect(choice);
     }
 
-    function setVersion(version, preferred) {
+    function openVersion(version) {
       currentVersion = versions.includes(version) ? version : versions[0] || "";
+      const preferred = currentAsset && currentAsset.version === currentVersion ? currentAsset : null;
       renderVersions();
+      versionsView.hidden = true;
+      filesView.hidden = false;
+      pathText.textContent = "版本 / " + currentVersion;
       options.onVersion(currentVersion);
       renderFiles(preferred);
+    }
+
+    function showVersions(asset, version) {
+      currentAsset = asset || currentAsset;
+      currentVersion = asset ? asset.version : version || currentVersion;
+      renderVersions();
+      versionsView.hidden = false;
+      filesView.hidden = true;
     }
 
     function selectFile(item) {
@@ -69,11 +99,12 @@
       renderFiles(item);
     }
 
-    setVersion(options.version || "", options.asset || null);
+    backButton.addEventListener("click", function () {
+      showVersions(currentAsset, currentVersion);
+    });
+    showVersions(options.asset || null, options.version || "");
     return {
-      select: function (asset, version) {
-        setVersion(asset ? asset.version : version, asset || null);
-      }
+      showVersions: showVersions
     };
   }
 

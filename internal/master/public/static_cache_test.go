@@ -65,8 +65,12 @@ func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 	if rec.Code != http.StatusOK ||
 		!strings.Contains(body, `.file-browser__versions`) ||
 		!strings.Contains(body, `.file-browser__files`) ||
+		!strings.Contains(body, `function openVersion(version)`) ||
+		!strings.Contains(body, `versionsView.hidden = true`) ||
+		!strings.Contains(body, `filesView.hidden = false`) ||
+		!strings.Contains(body, `showVersions: showVersions`) ||
 		!strings.Contains(body, `item.file_name`) {
-		t.Fatalf("文件浏览器应按版本和完整文件名分两级渲染：status=%d body=%s",
+		t.Fatalf("文件浏览器应先展示版本文件夹，再进入完整文件名列表：status=%d body=%s",
 			rec.Code, body)
 	}
 }

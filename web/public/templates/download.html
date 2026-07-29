@@ -38,13 +38,16 @@
           <label>架构</label>
           <select class="architecture-select"></select>
         </div>
-        <div class="file-browser" hidden>
-          <section class="file-browser__level">
-            <p class="file-browser__title">版本</p>
+        <div class="file-browser" data-folder-icon="{{staticURL "icons.svg#selection-files"}}" hidden>
+          <section class="file-browser__level file-browser__level--versions">
+            <p class="file-browser__title">版本文件夹</p>
             <div class="file-browser__versions" role="listbox" aria-label="版本"></div>
           </section>
-          <section class="file-browser__level">
-            <p class="file-browser__title">文件</p>
+          <section class="file-browser__level file-browser__level--files" hidden>
+            <div class="file-browser__toolbar">
+              <button class="file-browser__back" type="button">← 返回版本列表</button>
+              <p class="file-browser__path"></p>
+            </div>
             <div class="file-browser__files" role="listbox" aria-label="文件"></div>
           </section>
         </div>

@@ -123,7 +123,7 @@
     versionField.hidden = mode === "file";
     systemField.hidden = mode !== "selectors" || !systemEnabled;
     archField.hidden = mode !== "selectors" || !architectureEnabled;
-    if (mode === "file") browser.select(selectedAsset, versionSelect.value);
+    if (mode === "file") browser.showVersions(selectedAsset, versionSelect.value);
     else refreshSystems(selectedAsset);
   }
 
