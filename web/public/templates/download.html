@@ -13,14 +13,19 @@
         </div>
         <div class="project-card__summary">
           <p class="muted project-updated"></p>
-          <p class="project-availability"></p>
+          <div class="selection-mode" role="group" aria-label="文件选择方式">
+            <button type="button" data-selection-mode="selectors" aria-pressed="true"
+              aria-label="条件选择" title="条件选择">
+              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
+            </button>
+            <button type="button" data-selection-mode="file" aria-pressed="false"
+              aria-label="文件选择" title="文件选择">
+              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
+            </button>
+          </div>
         </div>
       </div>
       <div class="project-card__body">
-        <div class="selection-mode" role="group" aria-label="文件选择方式">
-          <button type="button" data-selection-mode="selectors" aria-pressed="true">条件选择</button>
-          <button type="button" data-selection-mode="file" aria-pressed="false">文件选择</button>
-        </div>
         <div class="field version-field">
           <label>版本</label>
           <select class="version-select"></select>
@@ -38,7 +43,10 @@
           <select class="file-select"></select>
         </div>
         <div class="project-card__actions">
-          <span class="project-card__size muted"></span>
+          <span class="project-card__asset-meta">
+            <span class="project-card__size muted"></span>
+            <span class="project-availability"></span>
+          </span>
           <button type="button" class="download-button">下载</button>
         </div>
       </div>

@@ -148,27 +148,6 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
-.selection-mode {
-  display: inline-flex;
-  width: fit-content;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--panel-muted);
-}
-.selection-mode button {
-  padding: 7px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font: inherit;
-}
-.selection-mode button[aria-pressed="true"] {
-  background: var(--accent);
-  color: #140f08;
-}
 .field span {
   display: block;
   margin-bottom: 6px;
@@ -211,6 +190,11 @@
 #project-file-meta {
   color: var(--text);
   opacity: .78;
+}
+.project-file-subline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .project-download .download-button {
   min-width: 116px;

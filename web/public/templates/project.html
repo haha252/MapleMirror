@@ -36,10 +36,6 @@
         <div class="project-download__summary">
           <p id="project-download-status">正在加载下载组件...</p>
         </div>
-        <div class="selection-mode" role="group" aria-label="文件选择方式">
-          <button type="button" data-selection-mode="selectors" aria-pressed="true">条件选择</button>
-          <button type="button" data-selection-mode="file" aria-pressed="false">文件选择</button>
-        </div>
         <div class="project-download__controls">
           <label class="field">
             <span>版本</span>
@@ -61,10 +57,22 @@
         <div class="project-download__asset">
           <div>
             <p id="project-file-name">暂无可下载文件</p>
-            <p id="project-file-meta"></p>
+            <div class="project-file-subline">
+              <p id="project-file-meta"></p>
+              <p id="project-availability" class="project-availability"></p>
+            </div>
           </div>
           <div class="project-download__action">
-            <p id="project-availability" class="project-availability"></p>
+            <div class="selection-mode" role="group" aria-label="文件选择方式">
+              <button type="button" data-selection-mode="selectors" aria-pressed="true"
+                aria-label="条件选择" title="条件选择">
+                <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
+              </button>
+              <button type="button" data-selection-mode="file" aria-pressed="false"
+                aria-label="文件选择" title="文件选择">
+                <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
+              </button>
+            </div>
             <button id="project-download-button" class="download-button" type="button" disabled>下载</button>
           </div>
         </div>

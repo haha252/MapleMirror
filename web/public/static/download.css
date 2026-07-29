@@ -39,7 +39,7 @@
 .project-link:hover { color: var(--accent-hover); }
 .project-card__title .version-badge { color: var(--muted); font-size: 14px; margin-left: 4px; }
 .project-repository { font-size: 13px; overflow-wrap: anywhere; }
-.project-card__summary { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.project-card__summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
 .project-card__summary p { margin-bottom: 0; }
 
 .project-card__body {
@@ -47,31 +47,6 @@
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   align-items: end;
-}
-
-.selection-mode {
-  grid-column: 1 / -1;
-  display: inline-flex;
-  width: fit-content;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--panel-muted);
-}
-
-.selection-mode button {
-  padding: 7px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font: inherit;
-}
-
-.selection-mode button[aria-pressed="true"] {
-  background: var(--accent);
-  color: #140f08;
 }
 
 .field label {
@@ -105,6 +80,8 @@
 }
 
 .project-card__size { font-size: 13px; overflow-wrap: anywhere; }
+.project-card__asset-meta { display: inline-flex; align-items: center; gap: 8px; }
+.project-availability { font-size: 13px; font-weight: 700; white-space: nowrap; }
 .download-button { min-width: 96px; padding: 10px 16px; }
 
 @media (max-width: 1120px) {

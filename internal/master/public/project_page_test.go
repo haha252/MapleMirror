@@ -32,6 +32,8 @@ func TestProjectPageRendersOptionalHomepageAndDescription(t *testing.T) {
 		`项目描述正文`,
 		`data-selection-mode="selectors"`,
 		`data-selection-mode="file"`,
+		`#selection-conditions`,
+		`#selection-files`,
 		`id="project-file"`,
 		`/static/public/project.css?v=`,
 		`/static/public/project-responsive.css?v=`,
@@ -40,6 +42,13 @@ func TestProjectPageRendersOptionalHomepageAndDescription(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected project page to contain %q: %s", want, body)
 		}
+	}
+	availabilityAt := strings.Index(body, `id="project-availability"`)
+	actionAt := strings.Index(body, `class="project-download__action"`)
+	modeAt := strings.LastIndex(body, `class="selection-mode"`)
+	if availabilityAt < 0 || actionAt < 0 || modeAt < 0 ||
+		availabilityAt >= actionAt || modeAt <= actionAt {
+		t.Fatalf("详情页可用状态应移到资产信息，选择方式应放入原操作位置：%s", body)
 	}
 }
 

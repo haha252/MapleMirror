@@ -21,4 +21,14 @@
   <symbol id="heart" viewBox="0 0 24 24">
     <path d="M20.8 4.6a5.4 5.4 0 0 0-7.6 0L12 5.8l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.8a5.4 5.4 0 0 0 0-7.6Z"/>
   </symbol>
+  <symbol id="selection-conditions" viewBox="0 0 24 24">
+    <path d="M4 6h6m4 0h6M4 12h2m4 0h10M4 18h9m4 0h3"/>
+    <circle cx="12" cy="6" r="2"/>
+    <circle cx="8" cy="12" r="2"/>
+    <circle cx="15" cy="18" r="2"/>
+  </symbol>
+  <symbol id="selection-files" viewBox="0 0 24 24">
+    <path d="M3 7h7l2 2h9v10H3zM3 7V5h7l2 2"/>
+    <path d="M7 13h10M7 16h7"/>
+  </symbol>
 </svg>

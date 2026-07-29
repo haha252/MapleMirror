@@ -55,3 +55,40 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+.selection-mode {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-muted);
+}
+
+.selection-mode button {
+  width: 34px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.selection-mode button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #140f08;
+}
+
+.selection-mode svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
