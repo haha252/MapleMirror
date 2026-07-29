@@ -58,16 +58,18 @@
         const name = document.createElement("span");
         name.className = "file-browser__file-name";
         name.textContent = item.file_name || "未命名文件";
+        const meta = document.createElement("span");
+        meta.className = "file-browser__file-meta " + (item.available ? "muted" : "warn");
+        const size = document.createElement("span");
+        size.textContent = fileMeta(item);
+        meta.appendChild(size);
         if (recommended) {
           const tag = document.createElement("span");
           tag.className = "file-browser__recommendation";
           tag.textContent = "推荐下载";
-          button.appendChild(tag);
+          meta.appendChild(tag);
         }
-        const meta = document.createElement("span");
-        meta.className = "file-browser__file-meta " + (item.available ? "muted" : "warn");
-        meta.textContent = fileMeta(item);
-        button.insertBefore(name, button.firstChild);
+        button.appendChild(name);
         button.appendChild(meta);
         button.disabled = !item.available;
         if (item.available) {

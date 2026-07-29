@@ -229,6 +229,9 @@
 }
 
 .file-browser__file-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   grid-column: 1 / -1;
 }
 

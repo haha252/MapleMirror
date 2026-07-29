@@ -92,6 +92,9 @@ func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 		!strings.Contains(body, `showVersions: showVersions`) ||
 		!strings.Contains(body, `file-browser__file--recommended`) ||
 		!strings.Contains(body, `tag.textContent = "推荐下载"`) ||
+		!strings.Contains(body, `meta.appendChild(size)`) ||
+		!strings.Contains(body, `meta.appendChild(tag)`) ||
+		strings.Contains(body, `button.appendChild(tag)`) ||
 		!strings.Contains(body, `button.disabled = !item.available`) ||
 		!strings.Contains(body, `options.onDownload(item)`) ||
 		!strings.Contains(body, `item.file_name`) {
