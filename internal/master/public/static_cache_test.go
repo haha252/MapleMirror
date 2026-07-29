@@ -125,7 +125,7 @@ func TestDownloadPageUsesStableMasonryLayout(t *testing.T) {
 		`typeof ResizeObserver !== "function"`,
 		`if (heights[index] < heights[best])`,
 		`assignments.get(card)`,
-		`nextColumnCount !== columnCount`,
+		`nextColumns !== columnCount`,
 		`resizeObserver.observe(card)`,
 		`new MutationObserver`,
 	} {
@@ -154,7 +154,7 @@ func TestDownloadPageUsesStableMasonryLayout(t *testing.T) {
 }
 
 func TestDownloadPagesUseProjectDefaultModeAndSkipSingleVersionChoice(t *testing.T) {
-	for _, name := range []string{"download.js", "project.js"} {
+	for _, name := range []string{"download-card.js", "project.js"} {
 		rec := httptest.NewRecorder()
 		Server{}.Handler().ServeHTTP(rec,
 			httptest.NewRequest(http.MethodGet, "/static/public/"+name, nil))
@@ -175,7 +175,7 @@ func TestDownloadPagesUseProjectDefaultModeAndSkipSingleVersionChoice(t *testing
 func TestDownloadCardButtonRepresentsAvailability(t *testing.T) {
 	rec := httptest.NewRecorder()
 	Server{}.Handler().ServeHTTP(rec,
-		httptest.NewRequest(http.MethodGet, "/static/public/download.js", nil))
+		httptest.NewRequest(http.MethodGet, "/static/public/download-card.js", nil))
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK ||
 		!strings.Contains(body, `button.disabled = !selected.available`) ||
@@ -188,7 +188,7 @@ func TestDownloadCardButtonRepresentsAvailability(t *testing.T) {
 func TestDownloadCardStaticKeepsLatestVersion(t *testing.T) {
 	rec := httptest.NewRecorder()
 	Server{}.Handler().ServeHTTP(rec,
-		httptest.NewRequest(http.MethodGet, "/static/public/download.js", nil))
+		httptest.NewRequest(http.MethodGet, "/static/public/download-card.js", nil))
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK ||
 		!strings.Contains(body, `defaultVersion ? "最新版本：" + defaultVersion : "暂无版本"`) {

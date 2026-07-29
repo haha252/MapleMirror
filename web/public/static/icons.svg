@@ -31,4 +31,17 @@
     <path d="M3 7h7l2 2h9v10H3zM3 7V5h7l2 2"/>
     <path d="M7 13h10M7 16h7"/>
   </symbol>
+  <symbol id="search" viewBox="0 0 24 24">
+    <circle cx="11" cy="11" r="7"/>
+    <path d="m20 20-4-4"/>
+  </symbol>
+  <symbol id="filter" viewBox="0 0 24 24">
+    <path d="M4 6h16M7 12h10M10 18h4"/>
+  </symbol>
+  <symbol id="close" viewBox="0 0 24 24">
+    <path d="m6 6 12 12M18 6 6 18"/>
+  </symbol>
+  <symbol id="chevron-down" viewBox="0 0 24 24">
+    <path d="m7 10 5 5 5-5"/>
+  </symbol>
 </svg>

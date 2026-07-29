@@ -1,244 +1,118 @@
 (function () {
   const statusBox = document.getElementById("download-status");
-  const container = document.getElementById("project-cards");
+  const projectsContainer = document.getElementById("project-cards");
+  const suggestionsContainer = document.getElementById("suggested-project-cards");
+  const suggestionsSection = document.getElementById("catalog-suggestions");
   const cardTemplate = document.getElementById("project-card-template");
-  if (!statusBox || !container || !cardTemplate) return;
-  const selectors = window.DownloadSelectors || {
-    bytesText: (value) => String(value || 0) + " B",
-    preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
-    preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
-    rememberSelectionMode: () => {},
-    selectionModeForProject: (_, mode) => mode === "file" ? "file" : "selectors",
-    setModeButtons: () => {},
-    uniqueVersions: (items) => Array.from(new Set(items.map((item) => item.version))),
-    userSystem: () => ""
-  };
+  if (!statusBox || !projectsContainer || !suggestionsContainer || !cardTemplate ||
+      !window.DownloadCardRenderer || !window.DownloadFilters) return;
 
-  function setStatus(message, level) {
-    statusBox.textContent = message;
+  let debounceTimer = 0;
+  let requestController = null;
+  let requestSequence = 0;
+  const filters = window.DownloadFilters.create({onChange: scheduleLoad});
+
+  function setStatus(message, level, retry) {
+    statusBox.replaceChildren();
     statusBox.className = "status " + (level || "muted");
     statusBox.hidden = !message;
+    if (!message) return;
+    statusBox.appendChild(document.createTextNode(message));
+    if (retry) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "重试";
+      button.addEventListener("click", loadCatalog);
+      statusBox.append(document.createTextNode(" "), button);
+    }
   }
 
-  function retryButton() {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "重试";
-    button.addEventListener("click", loadCatalog);
-    return button;
+  function scheduleLoad() {
+    window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(loadCatalog, 300);
   }
 
-  function preferredAsset(items) { return selectors.preferredAsset(items); }
-  function preferredAssetForUser(items, useArchitecture) {
-    return selectors.preferredAssetForUser(items, useArchitecture);
-  }
-
-  function selectorEnabled(project, field, legacyField) {
-    if (project[field] != null) return !!project[field];
-    return !!project[legacyField];
-  }
-
-  function buildCard(project) {
-    const card = cardTemplate.content.firstElementChild.cloneNode(true);
-    const versions = selectors.uniqueVersions(project.assets);
-    const defaultVersion = project.default_version || (versions[0] || "");
-    const projectHref = "/" + encodeURIComponent(project.project_id || "") + "/";
-    const icon = card.querySelector(".project-card__icon");
-    const link = card.querySelector(".project-link");
-    icon.src = project.icon_url;
-    icon.alt = project.display_name + " 图标";
-    icon.addEventListener("click", function () { window.location.href = projectHref; });
-    icon.tabIndex = 0;
-    icon.addEventListener("keydown", function (event) {
-      if (event.key === "Enter" || event.key === " ") window.location.href = projectHref;
-    });
-    link.href = projectHref;
-    card.querySelector(".project-name").textContent = project.display_name;
-    card.querySelector(".version-badge").textContent =
-      defaultVersion ? "最新版本：" + defaultVersion : "暂无版本";
-    card.querySelector(".project-repository").textContent = project.repository;
-    card.querySelector(".project-updated").textContent = "最近更新：" + (project.latest_published_at || "暂无");
-    const versionField = card.querySelector(".version-field");
-    const versionSelect = card.querySelector(".version-select");
-    const systemField = card.querySelector(".system-field");
-    const systemSelect = card.querySelector(".system-select");
-    const archField = card.querySelector(".architecture-field");
-    const archSelect = card.querySelector(".architecture-select");
-    const fileBrowser = card.querySelector(".file-browser");
-    const modeButtons = Array.from(card.querySelectorAll("[data-selection-mode]"));
-    const sizeText = card.querySelector(".project-card__size");
-    const actions = card.querySelector(".project-card__actions");
-    const button = card.querySelector(".download-button");
-    const systemEnabled = selectorEnabled(project,
-      "system_selector_enabled", "system_match_enabled");
-    const architectureEnabled = selectorEnabled(project,
-      "architecture_selector_enabled", "architecture_match_enabled");
-    let mode = "selectors";
-    let selectedAsset = null;
-    let browser = null;
-
-    function architectureLabel(item) {
-      return String(item.architecture || "").trim() || "None";
-    }
-
-    versions.forEach((version) => {
-      const option = document.createElement("option");
-      option.value = version;
-      option.textContent = version;
-      if (version === defaultVersion) option.selected = true;
-      versionSelect.appendChild(option);
-    });
-
-    function refreshArchitectures(preferred) {
-      let list = project.assets.filter((item) => item.version === versionSelect.value);
-      if (systemEnabled) {
-        list = list.filter((item) => item.system === systemSelect.value);
-      }
-      const choice = list.includes(preferred) ? preferred :
-        preferredAssetForUser(list, architectureEnabled);
-      archSelect.innerHTML = "";
-      if (!architectureEnabled) {
-        refreshDetails(choice);
-        return;
-      }
-      list.forEach((item) => {
-        const option = document.createElement("option");
-        option.value = item.asset_id;
-        option.textContent = architectureLabel(item);
-        if (choice && choice.asset_id === item.asset_id) option.selected = true;
-        archSelect.appendChild(option);
-      });
-      refreshDetails(choice);
-    }
-
-    function refreshSystems(preferred) {
-      if (!systemEnabled) {
-        refreshArchitectures(preferred);
-        return;
-      }
-      const list = project.assets.filter((item) => item.version === versionSelect.value);
-      const systems = Array.from(new Set(list.map((item) => item.system).filter(Boolean)));
-      const wanted = selectors.userSystem ? selectors.userSystem() : "";
-      const preferredSystem = preferred && list.includes(preferred) ? preferred.system : "";
-      const choice = systems.includes(preferredSystem) ? preferredSystem :
-        systems.includes(wanted) ? wanted : systems[0] || "";
-      systemSelect.innerHTML = "";
-      systems.forEach((system) => {
-        const option = document.createElement("option");
-        option.value = system;
-        option.textContent = selectors.systemLabel ? selectors.systemLabel(system) : system;
-        if (system === choice) option.selected = true;
-        systemSelect.appendChild(option);
-      });
-      refreshArchitectures(preferred);
-    }
-
-    function refreshDetails(preferred) {
-      const selected = preferred ||
-        project.assets.find((item) => item.asset_id === archSelect.value) ||
-        preferredAsset(project.assets.filter((item) => item.version === versionSelect.value));
-      selectedAsset = selected;
-      if (!selected) {
-        selectedAsset = null;
-        sizeText.textContent = "暂无可下载文件";
-        sizeText.className = "project-card__size warn";
-        button.disabled = true;
-        button.textContent = "暂不可下载";
-        delete button.dataset.assetId;
-        delete button.dataset.downloadPath;
-        button.removeAttribute("title");
-        return;
-      }
-      sizeText.textContent = selectors.bytesText(selected.size_bytes);
-      sizeText.className = "project-card__size " + (selected.available ? "muted" : "warn");
-      button.disabled = !selected.available;
-      button.textContent = selected.available ? "下载" : "暂不可下载";
-      button.dataset.assetId = selected.asset_id;
-      button.dataset.downloadPath = selected.download_path || "";
-      if (selected.unavailable_reason) button.title = selected.unavailable_reason;
-      else button.removeAttribute("title");
-    }
-
-    function setMode(nextMode) {
-      mode = nextMode === "file" ? "file" : "selectors";
-      selectors.setModeButtons(modeButtons, mode);
-      fileBrowser.hidden = mode !== "file";
-      versionField.hidden = mode === "file" || versions.length <= 1;
-      systemField.hidden = mode !== "selectors" || !systemEnabled;
-      archField.hidden = mode !== "selectors" || !architectureEnabled;
-      actions.hidden = mode === "file";
-      if (mode === "file") browser.showDefault(selectedAsset, versionSelect.value);
-      else refreshSystems(selectedAsset);
-    }
-
-    browser = window.DownloadFileBrowser.create(fileBrowser, project.assets, {
-      asset: selectedAsset,
-      bytesText: selectors.bytesText,
-      onDownload: startAssetDownload,
-      onVersion: function (version) { versionSelect.value = version; },
-      recommendedAsset: function (items) {
-        return preferredAssetForUser(items, architectureEnabled);
-      },
-      uniqueVersions: selectors.uniqueVersions,
-      version: versionSelect.value
-    });
-    versionSelect.addEventListener("change", function () { refreshSystems(); });
-    systemSelect.addEventListener("change", function () { refreshArchitectures(); });
-    archSelect.addEventListener("change", function () { refreshDetails(); });
-    modeButtons.forEach((item) => item.addEventListener("click", function () {
-      if (item.dataset.selectionMode === mode) return;
-      setMode(item.dataset.selectionMode);
-      selectors.rememberSelectionMode(project.project_id, mode);
-    }));
-    button.addEventListener("click", function () { startDownload(button); });
-    setMode(selectors.selectionModeForProject(
-      project.project_id, project.default_selection_mode));
-    return card;
-  }
-
-  function startDownload(button) {
-    const assetId = button.dataset.assetId;
-    const downloadPath = button.dataset.downloadPath;
-    if (!assetId || !downloadPath) {
-      setStatus("下载资产缺失，请刷新后重试。", "warn");
-      return;
-    }
-    window.location.href = homeDownloadHref(downloadPath);
-  }
-
-  function startAssetDownload(asset) {
-    if (!asset || !asset.available || !asset.asset_id || !asset.download_path) {
-      setStatus("下载资产缺失，请刷新后重试。", "warn");
-      return;
-    }
-    window.location.href = homeDownloadHref(asset.download_path);
-  }
-
-  function homeDownloadHref(downloadPath) {
-    const target = new URL(downloadPath, window.location.href);
-    target.searchParams.set("from", "home");
-    return target.pathname + target.search + target.hash;
+  function catalogURL() {
+    const params = new URLSearchParams();
+    const search = filters.search();
+    if (search) params.set("q", search);
+    filters.selectedFilters().forEach((value) => params.append("filter", value));
+    const query = params.toString();
+    return "/api/public/v1/catalog" + (query ? "?" + query : "");
   }
 
   async function loadCatalog() {
-    setStatus("正在加载项目列表...", "muted");
-    container.innerHTML = "";
+    window.clearTimeout(debounceTimer);
+    const sequence = ++requestSequence;
+    if (requestController) requestController.abort();
+    requestController = new AbortController();
+    setStatus("正在更新项目列表...", "muted");
     try {
-      const resp = await fetch("/api/public/v1/catalog", {cache: "default"});
-      if (!resp.ok) throw new Error("项目列表加载失败");
-      const catalog = await resp.json();
-      const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
-      if (!projects.length) {
-        setStatus("暂无可展示项目。", "muted");
+      const response = await fetch(catalogURL(), {
+        cache: "default", signal: requestController.signal
+      });
+      if (!response.ok) throw await responseError(response);
+      const catalog = await response.json();
+      if (sequence !== requestSequence) return;
+      filters.setGroups(catalog.filter_groups);
+      renderCatalog(catalog);
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      if (sequence !== requestSequence) return;
+      if (error.status === 400 && filters.clearSelections()) {
+        loadCatalog();
         return;
       }
-      projects.forEach((project) => container.appendChild(buildCard(project)));
-      setStatus("", "muted");
-    } catch (err) {
-      setStatus("项目列表加载失败，请稍后重试。", "warn");
-      statusBox.appendChild(document.createTextNode(" "));
-      statusBox.appendChild(retryButton());
+      if (error.status === 429) {
+        const wait = error.retryAfter ? "，请在 " + error.retryAfter + " 秒后重试" : "";
+        setStatus("搜索或筛选请求过于频繁" + wait + "。", "warn", true);
+      } else {
+        setStatus("项目列表加载失败，请稍后重试。", "warn", true);
+      }
     }
+  }
+
+  async function responseError(response) {
+    const error = new Error("catalog request failed");
+    error.status = response.status;
+    error.retryAfter = response.headers.get("Retry-After") || "";
+    try {
+      const body = await response.json();
+      error.code = body.code || "";
+    } catch (_) {
+      error.code = "";
+    }
+    return error;
+  }
+
+  function renderCatalog(catalog) {
+    const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
+    const suggestions = Array.isArray(catalog.suggested_projects) ?
+      catalog.suggested_projects : [];
+    const options = {
+      template: cardTemplate,
+      selectedTags: filters.selectedTags(),
+      tagLabels: filters.tagLabels(),
+      status: setStatus
+    };
+    renderCards(projectsContainer, projects, options);
+    renderCards(suggestionsContainer, suggestions, options);
+    suggestionsSection.hidden = suggestions.length === 0;
+    if (projects.length || suggestions.length) {
+      setStatus("", "muted");
+    } else if (filters.search() || filters.selectedFilters().length) {
+      setStatus("没有找到符合当前搜索和筛选条件的项目。", "muted");
+    } else {
+      setStatus("暂无可展示项目。", "muted");
+    }
+  }
+
+  function renderCards(container, projects, options) {
+    const fragment = document.createDocumentFragment();
+    projects.forEach((project) => {
+      fragment.appendChild(window.DownloadCardRenderer.create(project, options));
+    });
+    container.replaceChildren(fragment);
   }
 
   loadCatalog();

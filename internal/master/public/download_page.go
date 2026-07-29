@@ -64,10 +64,13 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		BeforeNotices: s.currentNotices(),
 		Description:   mirrorDescription,
 		BodyClass:     "page-download",
+		CatalogSearch: true,
 		Body:          body,
-		Styles:        []string{"/static/public/download.css"},
+		Styles: []string{"/static/public/download.css",
+			"/static/public/download-filters.css"},
 		Scripts: []string{"/static/public/download-selectors.js",
 			"/static/public/download-file-browser.js", "/static/public/download-masonry.js",
+			"/static/public/download-card.js", "/static/public/download-filters.js",
 			"/static/public/download.js"},
 	})
 }

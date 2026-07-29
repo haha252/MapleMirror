@@ -60,6 +60,31 @@
 .version-badge { font-size: 14px; }
 .project-repository { font-size: 13px; overflow-wrap: anywhere; }
 .project-updated { margin-top: 5px; font-size: 12px; }
+.project-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.project-tags:empty { display: none; }
+.project-tag {
+  max-width: 100%;
+  padding: 2px 7px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-muted);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-tag--active {
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 
 .project-card__body {
   display: grid;
@@ -103,7 +128,7 @@
 .project-card__size { font-size: 13px; overflow-wrap: anywhere; }
 .download-button { min-width: 112px; padding: 10px 16px; }
 
-@media (max-width: 1120px) {
+@media (max-width: 1450px) {
   .project-grid { --project-grid-columns: 2; }
 }
 

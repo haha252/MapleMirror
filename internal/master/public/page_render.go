@@ -15,6 +15,7 @@ type pageData struct {
 	Description   string
 	BodyClass     string
 	HideHeader    bool
+	CatalogSearch bool
 	Body          template.HTML
 	Styles        []string
 	Scripts       []string

@@ -1,6 +1,38 @@
 <section class="download-page">
-  <div id="download-status" class="status muted">正在加载项目列表...</div>
-  <div id="project-cards" class="project-grid"></div>
+  <div class="catalog-mobile-toolbar">
+    <label class="catalog-search" for="catalog-search-mobile">
+      <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
+      <input id="catalog-search-mobile" type="search" autocomplete="off"
+        maxlength="100" placeholder="搜索项目、ID 或标签">
+    </label>
+    <button id="catalog-filter-button" class="catalog-filter-button" type="button"
+      aria-controls="catalog-filters" aria-expanded="false">
+      <svg aria-hidden="true"><use href="{{staticURL "icons.svg#filter"}}"></use></svg>
+      <span>筛选</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
+    </button>
+  </div>
+  <div id="catalog-filter-backdrop" class="catalog-filter-backdrop" hidden></div>
+  <div class="download-layout">
+    <aside id="catalog-filters" class="catalog-filters" aria-label="项目筛选器">
+      <div class="catalog-filters__mobile-head">
+        <h2>筛选器</h2>
+        <button id="catalog-filter-close" type="button" aria-label="关闭筛选器">
+          <svg aria-hidden="true"><use href="{{staticURL "icons.svg#close"}}"></use></svg>
+        </button>
+      </div>
+      <div id="catalog-filter-groups" class="catalog-filter-groups">
+        <p class="muted">正在加载筛选器...</p>
+      </div>
+    </aside>
+    <section class="catalog-results" aria-live="polite">
+      <div id="download-status" class="status muted">正在加载项目列表...</div>
+      <div id="project-cards" class="project-grid" data-project-grid></div>
+      <section id="catalog-suggestions" class="catalog-suggestions" hidden>
+        <h2><span>没有严格匹配的项，但你可能在找：</span></h2>
+        <div id="suggested-project-cards" class="project-grid" data-project-grid></div>
+      </section>
+    </section>
+  </div>
   <template id="project-card-template">
     <section class="project-card panel-card">
       <div class="project-card__head">
@@ -25,22 +57,14 @@
               </div>
             </div>
             <p class="muted project-updated"></p>
+            <div class="project-tags" aria-label="项目标签"></div>
           </div>
         </div>
       </div>
       <div class="project-card__body">
-        <div class="field version-field">
-          <label>版本</label>
-          <select class="version-select"></select>
-        </div>
-        <div class="field system-field" hidden>
-          <label>系统</label>
-          <select class="system-select"></select>
-        </div>
-        <div class="field architecture-field" hidden>
-          <label>架构</label>
-          <select class="architecture-select"></select>
-        </div>
+        <div class="field version-field"><label>版本</label><select class="version-select"></select></div>
+        <div class="field system-field" hidden><label>系统</label><select class="system-select"></select></div>
+        <div class="field architecture-field" hidden><label>架构</label><select class="architecture-select"></select></div>
         <div class="file-browser" data-folder-icon="{{staticURL "icons.svg#selection-files"}}" hidden>
           <section class="file-browser__level file-browser__level--versions">
             <p class="file-browser__title">版本文件夹</p>
