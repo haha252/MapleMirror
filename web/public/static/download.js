@@ -3,9 +3,11 @@
   const projectsContainer = document.getElementById("project-cards");
   const suggestionsContainer = document.getElementById("suggested-project-cards");
   const suggestionsSection = document.getElementById("catalog-suggestions");
+  const suggestionsTitle = document.getElementById("catalog-suggestions-title");
   const cardTemplate = document.getElementById("project-card-template");
-  if (!statusBox || !projectsContainer || !suggestionsContainer || !cardTemplate ||
-      !window.DownloadCardRenderer || !window.DownloadFilters) return;
+  if (!statusBox || !projectsContainer || !suggestionsContainer || !suggestionsSection ||
+      !suggestionsTitle || !cardTemplate || !window.DownloadCardRenderer ||
+      !window.DownloadFilters) return;
 
   let debounceTimer = 0;
   let requestController = null;
@@ -97,6 +99,8 @@
     };
     renderCards(projectsContainer, projects, options);
     renderCards(suggestionsContainer, suggestions, options);
+    suggestionsTitle.textContent = projects.length ?
+      "您可能还在找：" : "没有严格匹配的项，但你可能在找：";
     suggestionsSection.hidden = suggestions.length === 0;
     if (projects.length || suggestions.length) {
       setStatus("", "muted");

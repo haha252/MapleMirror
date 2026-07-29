@@ -24,6 +24,7 @@ func TestCatalogPageIncludesDesktopAndMobileFilterSurfaces(t *testing.T) {
 		`id="catalog-filters"`,
 		`id="catalog-filter-backdrop"`,
 		`id="catalog-suggestions"`,
+		`id="catalog-suggestions-title"`,
 		`没有严格匹配的项，但你可能在找：`,
 		`id="suggested-project-cards"`,
 		`class="project-tags"`,
@@ -60,6 +61,8 @@ func TestCatalogControllerDebouncesCanonicalCachedRequests(t *testing.T) {
 		`error.status === 429`,
 		`response.headers.get("Retry-After")`,
 		`catalog.suggested_projects`,
+		`suggestionsTitle.textContent = projects.length`,
+		`"您可能还在找：" : "没有严格匹配的项，但你可能在找："`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("目录控制器缺少行为 %q：%s", want, body)
