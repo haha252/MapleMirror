@@ -57,6 +57,23 @@ func TestDownloadSelectorStaticSupportsHarmony(t *testing.T) {
 	}
 }
 
+func TestDownloadSelectorStaticRemembersModePerProject(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Server{}.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/static/public/download-selectors.js", nil))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK ||
+		!strings.Contains(body, `const selectionModeKeyPrefix = "mirror-selection-mode:v2:"`) ||
+		!strings.Contains(body, `function selectionModeForProject(projectId, fallback)`) ||
+		!strings.Contains(body, `function rememberSelectionMode(projectId, mode)`) ||
+		!strings.Contains(body, `localStorage.getItem(selectionModeKeyPrefix + projectId)`) ||
+		!strings.Contains(body, `localStorage.setItem(selectionModeKeyPrefix + projectId`) ||
+		!strings.Contains(body, `return normalizeSelectionMode(fallback)`) {
+		t.Fatalf("选择模式应按项目安全持久化并回退配置默认值：status=%d body=%s",
+			rec.Code, body)
+	}
+}
+
 func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 	rec := httptest.NewRecorder()
 	Server{}.Handler().ServeHTTP(rec,
@@ -68,6 +85,10 @@ func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 		!strings.Contains(body, `function openVersion(version)`) ||
 		!strings.Contains(body, `versionsView.hidden = true`) ||
 		!strings.Contains(body, `filesView.hidden = false`) ||
+		!strings.Contains(body, `function showDefault(asset, version)`) ||
+		!strings.Contains(body, `versions.length === 1`) ||
+		!strings.Contains(body, `backButton.hidden = true`) ||
+		!strings.Contains(body, `showDefault: showDefault`) ||
 		!strings.Contains(body, `showVersions: showVersions`) ||
 		!strings.Contains(body, `file-browser__file--recommended`) ||
 		!strings.Contains(body, `tag.textContent = "推荐下载"`) ||
@@ -76,6 +97,25 @@ func TestDownloadFileBrowserStaticUsesTwoLevels(t *testing.T) {
 		!strings.Contains(body, `item.file_name`) {
 		t.Fatalf("文件浏览器应逐级展示文件、标记推荐项并直接下载：status=%d body=%s",
 			rec.Code, body)
+	}
+}
+
+func TestDownloadPagesUseProjectDefaultModeAndSkipSingleVersionChoice(t *testing.T) {
+	for _, name := range []string{"download.js", "project.js"} {
+		rec := httptest.NewRecorder()
+		Server{}.Handler().ServeHTTP(rec,
+			httptest.NewRequest(http.MethodGet, "/static/public/"+name, nil))
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK ||
+			!strings.Contains(body, `selectors.selectionModeForProject(`) ||
+			!strings.Contains(body, `project.default_selection_mode`) ||
+			!strings.Contains(body, `selectors.rememberSelectionMode(`) ||
+			!strings.Contains(body, `item.dataset.selectionMode === mode`) ||
+			!strings.Contains(body, `versionField.hidden = mode === "file" || versions.length <= 1`) ||
+			!strings.Contains(body, `browser.showDefault(selectedAsset, versionSelect.value)`) {
+			t.Fatalf("%s 应使用项目默认模式，并在单版本时跳过版本选择：status=%d body=%s",
+				name, rec.Code, body)
+		}
 	}
 }
 

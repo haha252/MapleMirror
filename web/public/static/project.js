@@ -19,6 +19,8 @@
     bytesText: (value) => String(value || 0) + " B",
     preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
     preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
+    rememberSelectionMode: () => {},
+    selectionModeForProject: (_, mode) => mode === "file" ? "file" : "selectors",
     setModeButtons: () => {},
     uniqueVersions: (items) => Array.from(new Set(items.map((item) => item.version))),
     userSystem: () => ""
@@ -29,6 +31,7 @@
   let mode = "selectors";
   let selectedAsset = null;
   let browser = null;
+  let versions = [];
 
   function selectorEnabled(item, field, legacyField) {
     if (item[field] != null) return !!item[field];
@@ -120,10 +123,10 @@
     mode = nextMode === "file" ? "file" : "selectors";
     selectors.setModeButtons(modeButtons, mode);
     fileBrowser.hidden = mode !== "file";
-    versionField.hidden = mode === "file";
+    versionField.hidden = mode === "file" || versions.length <= 1;
     systemField.hidden = mode !== "selectors" || !systemEnabled;
     archField.hidden = mode !== "selectors" || !architectureEnabled;
-    if (mode === "file") browser.showVersions(selectedAsset, versionSelect.value);
+    if (mode === "file") browser.showDefault(selectedAsset, versionSelect.value);
     else refreshSystems(selectedAsset);
   }
 
@@ -140,7 +143,7 @@
       "system_selector_enabled", "system_match_enabled");
     architectureEnabled = selectorEnabled(project,
       "architecture_selector_enabled", "architecture_match_enabled");
-    const versions = selectors.uniqueVersions(project.assets || []);
+    versions = selectors.uniqueVersions(project.assets || []);
     versionSelect.innerHTML = "";
     versions.forEach((version) => {
       const option = document.createElement("option");
@@ -161,7 +164,7 @@
       version: versionSelect.value
     });
     setStatus(versions.length ? "" : "暂无可展示文件。", versions.length ? "muted" : "warn");
-    setMode("selectors");
+    setMode(selectors.selectionModeForProject(projectId, project.default_selection_mode));
   }
 
   async function loadProject() {
@@ -183,7 +186,9 @@
   systemSelect.addEventListener("change", function () { refreshArchitectures(); });
   archSelect.addEventListener("change", function () { refreshDetails(); });
   modeButtons.forEach((item) => item.addEventListener("click", function () {
+    if (!project || item.dataset.selectionMode === mode) return;
     setMode(item.dataset.selectionMode);
+    selectors.rememberSelectionMode(projectId, mode);
   }));
   button.addEventListener("click", function () {
     openDownload(button.dataset.downloadPath);

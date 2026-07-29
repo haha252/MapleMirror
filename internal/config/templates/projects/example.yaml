@@ -19,6 +19,8 @@ retain_versions: 3
 include_prerelease: false
 # 倍率仅扣减请求额度，不放大实际流量统计或每日流量限额。
 download_multiplier: 1
+# 下载页初始选择方式；selectors 表示条件选择，file 表示文件选择。
+default_selection_mode: selectors
 # 资产入选规则，只有通过 asset_include 且未命中 asset_exclude 的资产才会进入镜像。
 # 每条规则可以写成旧格式字符串，例如 "*.zip"；旧格式等同于 type: glob、required: false。
 # 推荐写成对象，字段说明：

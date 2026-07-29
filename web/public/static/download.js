@@ -7,6 +7,8 @@
     bytesText: (value) => String(value || 0) + " B",
     preferredAsset: (items) => items.find((item) => item.available) || items[0] || null,
     preferredAssetForUser: (items) => items.find((item) => item.available) || items[0] || null,
+    rememberSelectionMode: () => {},
+    selectionModeForProject: (_, mode) => mode === "file" ? "file" : "selectors",
     setModeButtons: () => {},
     uniqueVersions: (items) => Array.from(new Set(items.map((item) => item.version))),
     userSystem: () => ""
@@ -161,11 +163,11 @@
       mode = nextMode === "file" ? "file" : "selectors";
       selectors.setModeButtons(modeButtons, mode);
       fileBrowser.hidden = mode !== "file";
-      versionField.hidden = mode === "file";
+      versionField.hidden = mode === "file" || versions.length <= 1;
       systemField.hidden = mode !== "selectors" || !systemEnabled;
       archField.hidden = mode !== "selectors" || !architectureEnabled;
       actions.hidden = mode === "file";
-      if (mode === "file") browser.showVersions(selectedAsset, versionSelect.value);
+      if (mode === "file") browser.showDefault(selectedAsset, versionSelect.value);
       else refreshSystems(selectedAsset);
     }
 
@@ -184,10 +186,13 @@
     systemSelect.addEventListener("change", function () { refreshArchitectures(); });
     archSelect.addEventListener("change", function () { refreshDetails(); });
     modeButtons.forEach((item) => item.addEventListener("click", function () {
+      if (item.dataset.selectionMode === mode) return;
       setMode(item.dataset.selectionMode);
+      selectors.rememberSelectionMode(project.project_id, mode);
     }));
     button.addEventListener("click", function () { startDownload(button); });
-    setMode("selectors");
+    setMode(selectors.selectionModeForProject(
+      project.project_id, project.default_selection_mode));
     return card;
   }
 

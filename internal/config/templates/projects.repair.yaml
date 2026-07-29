@@ -23,6 +23,8 @@ projects:
     include_prerelease: false
     # 倍率仅扣减请求额度，不放大实际流量统计或每日流量限额。
     download_multiplier: 1
+    # 下载页初始选择方式；selectors 表示条件选择，file 表示文件选择。
+    default_selection_mode: selectors
     # 资产入选规则；空列表保持默认允许所有资产。
     asset_include:
       -

@@ -1,4 +1,6 @@
 (function () {
+  const selectionModeKeyPrefix = "mirror-selection-mode:v2:";
+
   function browserText() {
     return [navigator.userAgentData && navigator.userAgentData.platform,
       navigator.userAgentData && navigator.userAgentData.architecture,
@@ -57,6 +59,33 @@
     });
   }
 
+  function normalizeSelectionMode(mode) {
+    return String(mode || "").toLowerCase().trim() === "file" ? "file" : "selectors";
+  }
+
+  function selectionModeForProject(projectId, fallback) {
+    if (!projectId) return normalizeSelectionMode(fallback);
+    try {
+      const stored = window.localStorage ?
+        localStorage.getItem(selectionModeKeyPrefix + projectId) : "";
+      if (stored === "selectors" || stored === "file") return stored;
+    } catch (_) {
+      // localStorage may be unavailable in private or restricted browser contexts.
+    }
+    return normalizeSelectionMode(fallback);
+  }
+
+  function rememberSelectionMode(projectId, mode) {
+    if (!projectId) return;
+    try {
+      if (window.localStorage) {
+        localStorage.setItem(selectionModeKeyPrefix + projectId, normalizeSelectionMode(mode));
+      }
+    } catch (_) {
+      // The current page selection still works when persistence is unavailable.
+    }
+  }
+
   function preferredAssetForUser(items, useArchitecture) {
     const available = items.filter((item) => item.available);
     const list = available.length ? available : items;
@@ -87,6 +116,8 @@
     bytesText: bytesText,
     preferredAsset: preferredAsset,
     preferredAssetForUser: preferredAssetForUser,
+    rememberSelectionMode: rememberSelectionMode,
+    selectionModeForProject: selectionModeForProject,
     setModeButtons: setModeButtons,
     uniqueVersions: uniqueVersions,
     userSystem: userSystem,

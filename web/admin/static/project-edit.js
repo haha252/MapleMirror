@@ -35,6 +35,7 @@
       RetainVersions: Number(val(p, "RetainVersions", 3)) || 3,
       IncludePrerelease: !!val(p, "IncludePrerelease", false),
       DownloadMultiplier: Number(val(p, "DownloadMultiplier", 1)) || 1,
+      DefaultSelectionMode: val(p, "DefaultSelectionMode", ""),
       AssetInclude: (val(p, "AssetInclude", []) || []).map(rule),
       AssetExclude: (val(p, "AssetExclude", []) || []).map(rule),
       AssetPipeline: pipeline,

@@ -7,6 +7,8 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+
+	"mirror-server/internal/config"
 )
 
 type downloadProjectView struct {
@@ -22,6 +24,7 @@ type downloadProjectView struct {
 	SystemMatchEnabled          bool              `json:"system_match_enabled"`
 	ArchitectureSelectorEnabled bool              `json:"architecture_selector_enabled"`
 	SystemSelectorEnabled       bool              `json:"system_selector_enabled"`
+	DefaultSelectionMode        string            `json:"default_selection_mode"`
 	LatestPublishedAt           string            `json:"latest_published_at"`
 	DefaultVersion              string            `json:"default_version"`
 	Assets                      []downloadAssetUI `json:"assets"`
@@ -115,7 +118,7 @@ func (s Server) downloadCatalog(r *http.Request) ([]downloadProjectView, error) 
 	return views, nil
 }
 
-func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, config projectAssetConfig) downloadProjectView {
+func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, assetConfig projectAssetConfig) downloadProjectView {
 	view := downloadProjectView{
 		ProjectID:                   project.ProjectID,
 		DisplayName:                 project.DisplayName,
@@ -125,10 +128,11 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 		Available:                   project.Available,
 		UnavailableReason:           project.UnavailableReason,
 		IconURL:                     "/static/project-icons/" + project.ProjectID,
-		ArchitectureMatchEnabled:    config.ArchitectureSelectorEnabled,
-		SystemMatchEnabled:          config.SystemSelectorEnabled,
-		ArchitectureSelectorEnabled: config.ArchitectureSelectorEnabled,
-		SystemSelectorEnabled:       config.SystemSelectorEnabled,
+		ArchitectureMatchEnabled:    assetConfig.ArchitectureSelectorEnabled,
+		SystemMatchEnabled:          assetConfig.SystemSelectorEnabled,
+		ArchitectureSelectorEnabled: assetConfig.ArchitectureSelectorEnabled,
+		SystemSelectorEnabled:       assetConfig.SystemSelectorEnabled,
+		DefaultSelectionMode:        normalizedDefaultSelectionMode(assetConfig.DefaultSelectionMode),
 		LatestPublishedAt:           displayDate(project.LatestPublishedAt),
 		Assets:                      make([]downloadAssetUI, 0, len(assets)),
 	}
@@ -152,6 +156,13 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, con
 		})
 	}
 	return view
+}
+
+func normalizedDefaultSelectionMode(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), config.ProjectSelectionModeFile) {
+		return config.ProjectSelectionModeFile
+	}
+	return config.ProjectSelectionModeSelectors
 }
 
 func (s Server) renderDownloadBody() (template.HTML, error) {

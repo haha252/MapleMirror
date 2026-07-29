@@ -74,7 +74,8 @@ func TestSaveProjectsWritesFileAndSyncsState(t *testing.T) {
 	body, _ := json.Marshal(config.Projects{Projects: []config.Project{{
 		ID: "demo", Name: "演示项目", Repository: "owner/demo",
 		Enabled: true, RetainVersions: 2, DownloadMultiplier: 1,
-		AssetInclude: config.AssetRules{{Pattern: "*.zip", Type: "glob"}},
+		DefaultSelectionMode: config.ProjectSelectionModeFile,
+		AssetInclude:         config.AssetRules{{Pattern: "*.zip", Type: "glob"}},
 	}}})
 	req := httptest.NewRequest(http.MethodPut, "/admin/api/projects", strings.NewReader(string(body)))
 	req.RemoteAddr = "127.0.0.1:55000"
@@ -96,8 +97,22 @@ func TestSaveProjectsWritesFileAndSyncsState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Projects[0].ID != "demo" {
-		t.Fatalf("saved project = %s", loaded.Projects[0].ID)
+	if loaded.Projects[0].ID != "demo" ||
+		loaded.Projects[0].DefaultSelectionMode != config.ProjectSelectionModeFile {
+		t.Fatalf("saved project = %+v", loaded.Projects[0])
+	}
+}
+
+func TestProjectEditorPreservesDefaultSelectionMode(t *testing.T) {
+	server, _ := newTestServer(t)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/static/admin/project-edit.js", nil))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK ||
+		!strings.Contains(body, `DefaultSelectionMode: val(p, "DefaultSelectionMode", "")`) ||
+		strings.Contains(body, `data-field="DefaultSelectionMode"`) {
+		t.Fatalf("项目编辑页应无控件保留默认选择模式：status=%d body=%s", rec.Code, body)
 	}
 }
 

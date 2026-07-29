@@ -85,6 +85,7 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 		`"architecture_match_enabled":false`,
 		`"system_selector_enabled":false`,
 		`"architecture_selector_enabled":false`,
+		`"default_selection_mode":"selectors"`,
 		`"default_version":"v1"`,
 		`"asset_id":"asset-1"`,
 	} {
@@ -173,7 +174,8 @@ func TestProjectAssetMapUsesExplicitSelectorSwitches(t *testing.T) {
 			},
 		},
 	}}})
-	if items["p1"].ArchitectureSelectorEnabled || !items["p1"].SystemSelectorEnabled {
+	if items["p1"].ArchitectureSelectorEnabled || !items["p1"].SystemSelectorEnabled ||
+		items["p1"].DefaultSelectionMode != config.ProjectSelectionModeSelectors {
 		t.Fatalf("公开页选择器开关未按项目显式配置生效：%+v", items["p1"])
 	}
 }

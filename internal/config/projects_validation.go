@@ -23,6 +23,9 @@ func validateProject(p Project, known map[string]bool) error {
 	if p.RetainVersions <= 0 || p.DownloadMultiplier <= 0 {
 		return errors.New("项目保留版本数和下载倍率必须大于零")
 	}
+	if !validProjectSelectionMode(p.DefaultSelectionMode) {
+		return fmt.Errorf("项目 %s 的 default_selection_mode 必须为 selectors 或 file", p.ID)
+	}
 	if p.RegexClassificationEnabled() && p.ClassifyArchitectureEnabled() {
 		if strings.TrimSpace(p.ClassifyArchitectureRegex()) == "" {
 			return fmt.Errorf("项目 %s 启用架构匹配时必须配置 architecture_regex", p.ID)

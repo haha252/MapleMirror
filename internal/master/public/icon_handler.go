@@ -16,6 +16,7 @@ type projectAssetConfig struct {
 	IconPath                    string
 	ArchitectureSelectorEnabled bool
 	SystemSelectorEnabled       bool
+	DefaultSelectionMode        string
 }
 
 func (s Server) projectIcon(w http.ResponseWriter, r *http.Request) {

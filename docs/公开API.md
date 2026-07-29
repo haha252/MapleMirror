@@ -141,6 +141,7 @@
       "system_selector_enabled": false,
       "architecture_match_enabled": false,
       "system_match_enabled": false,
+      "default_selection_mode": "selectors",
       "default_version": "v1.2.3",
       "assets": []
     }
@@ -149,6 +150,8 @@
 ```
 
 `architecture_selector_enabled` 和 `system_selector_enabled` 是分类方式无关的下载页展示开关。旧的 `architecture_match_enabled`、`system_match_enabled` 暂时保留兼容，其值与对应新开关一致。
+
+`default_selection_mode` 是项目下载界面的默认选择方式，固定返回规范化后的 `selectors`（条件选择）或 `file`（文件选择）。浏览器按项目记忆用户上次手动切换结果；存在有效记忆时优先使用用户选择，否则使用该接口返回的默认值。
 
 ## 4. 下载接入方式
 

@@ -24,6 +24,7 @@ type Project struct {
 	RetainVersions             int           `yaml:"retain_versions"`
 	IncludePrerelease          bool          `yaml:"include_prerelease"`
 	DownloadMultiplier         int           `yaml:"download_multiplier"`
+	DefaultSelectionMode       string        `yaml:"default_selection_mode"`
 	AssetInclude               AssetRules    `yaml:"asset_include"`
 	AssetExclude               AssetRules    `yaml:"asset_exclude"`
 	AssetPipeline              AssetPipeline `yaml:"asset_pipeline"`
@@ -56,6 +57,7 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 		RetainVersions             int           `yaml:"retain_versions"`
 		IncludePrerelease          bool          `yaml:"include_prerelease"`
 		DownloadMultiplier         int           `yaml:"download_multiplier"`
+		DefaultSelectionMode       string        `yaml:"default_selection_mode"`
 		AssetInclude               AssetRules    `yaml:"asset_include"`
 		AssetExclude               AssetRules    `yaml:"asset_exclude"`
 		AssetPipeline              AssetPipeline `yaml:"asset_pipeline"`
@@ -73,10 +75,11 @@ func (p *Project) UnmarshalYAML(value *yaml.Node) error {
 		ID: raw.ID, Name: raw.Name, Repository: raw.Repository,
 		Description: raw.Description, HomepageURL: raw.HomepageURL,
 		IconPath: raw.IconPath, Enabled: raw.Enabled,
-		RetainVersions:     raw.RetainVersions,
-		IncludePrerelease:  raw.IncludePrerelease,
-		DownloadMultiplier: raw.DownloadMultiplier,
-		AssetInclude:       raw.AssetInclude, AssetExclude: raw.AssetExclude,
+		RetainVersions:       raw.RetainVersions,
+		IncludePrerelease:    raw.IncludePrerelease,
+		DownloadMultiplier:   raw.DownloadMultiplier,
+		DefaultSelectionMode: raw.DefaultSelectionMode,
+		AssetInclude:         raw.AssetInclude, AssetExclude: raw.AssetExclude,
 		AssetPipeline:              raw.AssetPipeline,
 		ArchitectureMatchEnabled:   raw.ArchitectureMatchEnabled,
 		ArchitectureRegex:          raw.ArchitectureRegex,

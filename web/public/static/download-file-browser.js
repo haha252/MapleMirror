@@ -100,11 +100,22 @@
       filesView.hidden = true;
     }
 
+    function showDefault(asset, version) {
+      if (versions.length === 1) {
+        openVersion(versions[0]);
+        backButton.hidden = true;
+        return;
+      }
+      backButton.hidden = false;
+      showVersions(asset, version);
+    }
+
     backButton.addEventListener("click", function () {
       showVersions(null, currentVersion);
     });
     showVersions(options.asset || null, options.version || "");
     return {
+      showDefault: showDefault,
       showVersions: showVersions
     };
   }

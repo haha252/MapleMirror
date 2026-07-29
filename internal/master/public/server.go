@@ -177,11 +177,13 @@ func projectAssetMap(projects config.Projects) map[string]projectAssetConfig {
 			IconPath:                    filepath.Clean(item.ResolvedIconPath),
 			ArchitectureSelectorEnabled: item.ArchitectureSelectorEnabled(),
 			SystemSelectorEnabled:       item.SystemSelectorEnabled(),
+			DefaultSelectionMode:        item.NormalizedDefaultSelectionMode(),
 		}
 		if strings.TrimSpace(item.ResolvedIconPath) == "" {
 			projectAssets[item.ID] = projectAssetConfig{
 				ArchitectureSelectorEnabled: item.ArchitectureSelectorEnabled(),
 				SystemSelectorEnabled:       item.SystemSelectorEnabled(),
+				DefaultSelectionMode:        item.NormalizedDefaultSelectionMode(),
 			}
 		}
 	}
