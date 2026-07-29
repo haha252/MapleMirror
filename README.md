@@ -41,6 +41,8 @@
 - `configs/config.example.yaml`
 - `configs/projects.example.yaml`
 - `configs/quota.example.yaml`
+- `configs/notices.example.yaml`
+- `configs/filters.example.yaml`
 - `configs/node.example.yaml`
 - `configs/sponsor.example.json`
 
@@ -48,10 +50,11 @@
 
 ### 2. 启动主节点
 
-主节点启动命令需要三个配置文件：
+主节点启动命令默认读取五个 YAML 配置文件：
 
 ```bash
-./mirror-master
+./mirror-master -config config.yaml -projects projects.yaml -quota quota.yaml \
+  -notices notices.yaml -filters filters.yaml
 ```
 
 如果配置文件缺失，程序会先生成中文示例配置并安全退出。首次运行时，如果检测到所需的安全材料缺失，还会进入首次初始化流程，生成必要的示例配置和密钥材料后再退出，等待你确认后重新启动。
@@ -107,6 +110,8 @@
 
 - `projects.yaml`：项目镜像清单
 - `quota.yaml`：额度、黑名单与白名单配置
+- `notices.yaml`：公共页面公告
+- `filters.yaml`：首页筛选器与目录查询缓存上限
 
 主节点配置涵盖：
 

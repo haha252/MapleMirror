@@ -126,10 +126,30 @@
 
 `GET /api/public/v1/catalog`
 
-返回主站首页渲染所需的项目与资产聚合数据。该接口用于浏览器页面首屏加载，避免首页 HTML 内嵌完整资产 JSON，也避免按项目拆分请求造成请求数放大。响应支持 `ETag`；客户端带 `If-None-Match` 命中时返回 `304 Not Modified`。
+返回主站首页渲染所需的筛选器、项目与资产聚合数据。无查询参数时，`projects` 仍是现有完整目录，`suggested_projects` 为空，旧客户端可继续只读取 `projects`。
+
+搜索和筛选示例：
+
+```text
+GET /api/public/v1/catalog?q=ffmpeg&filter=software_type:launcher&filter=supported_system:windows
+```
+
+- `q` 可选，去除首尾空格后最长 100 个 Unicode 字符，搜索不区分大小写。
+- `filter` 可重复，格式为 `{selector_id}:{option_id}`；重复项会去重。
+- 未知筛选器、未知公开选项或非法格式返回 `400 INVALID_REQUEST`。
+- 客户端应对筛选项排序后生成稳定 URL，便于浏览器复用同一条件的缓存。
 
 ```json
 {
+  "filter_groups": [
+    {
+      "id": "software_type",
+      "name": "软件类型",
+      "options": [
+        {"id": "launcher", "name": "启动器"}
+      ]
+    }
+  ],
   "projects": [
     {
       "project_id": "example",
@@ -143,15 +163,26 @@
       "system_match_enabled": false,
       "default_selection_mode": "selectors",
       "default_version": "v1.2.3",
+      "tags": {
+        "software_type": ["launcher"],
+        "keywords": ["example"]
+      },
       "assets": []
     }
-  ]
+  ],
+  "suggested_projects": []
 }
 ```
 
 `architecture_selector_enabled` 和 `system_selector_enabled` 是分类方式无关的下载页展示开关。旧的 `architecture_match_enabled`、`system_match_enabled` 暂时保留兼容，其值与对应新开关一致。
 
 `default_selection_mode` 是项目下载界面的默认选择方式，固定返回规范化后的 `selectors`（条件选择）或 `file`（文件选择）。浏览器按项目记忆用户上次手动切换结果；存在有效记忆时优先使用用户选择，否则使用该接口返回的默认值。
+
+直接搜索会匹配精确项目 ID、完整项目名称、完整标签值、已公开标签选项的显示名称，以及包含搜索词的项目名称。只有直接结果为零时才启用 Unicode Damerau-Levenshtein 拼写兜底；搜索长度 2–4、5–8、9 以上分别最多允许 1、2、3 个字符差异，最多返回 3 个项目，放入 `suggested_projects`。
+
+搜索词是硬条件：存在直接搜索结果时，只在这些项目中应用标签条件。所有已选标签按 AND 完全匹配，全部命中的项目进入 `projects`；未全部命中但至少命中一个的项目进入 `suggested_projects`；一个标签都未命中的项目不返回。部分匹配推荐先按命中标签数量降序，再按搜索相关度、项目名称和项目 ID 稳定排序。
+
+搜索和标签匹配只读取主节点内存索引；项目资产、版本和实时可用性仍在缓存未命中时从数据库读取。服务端以规范化搜索词、排序去重后的筛选项和索引版本为键缓存已编码响应与 ETag，TTL 固定 1 分钟；响应带 `Cache-Control: private, max-age=60`。客户端带 `If-None-Match` 命中时返回 `304 Not Modified`。公共资源限流位于目录缓存之前，因此任何到达服务器的请求，包括服务端缓存命中和 304，均计一次请求；浏览器在 `max-age` 新鲜期直接使用私有缓存时不会访问服务器。
 
 ## 4. 下载接入方式
 

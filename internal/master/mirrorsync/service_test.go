@@ -207,6 +207,15 @@ func testProject(id, repo string, enabled bool) config.Project {
 	}
 }
 
+func TestProjectHashIgnoresCatalogTags(t *testing.T) {
+	first := testProject("p1", "owner/one", true)
+	second := first
+	second.Tags = map[string][]string{"keywords": {"ffmpeg"}}
+	if projectHash(first) != projectHash(second) {
+		t.Fatal("首页标签变化不应触发 Release 重新扫描")
+	}
+}
+
 func assertScanRows(t *testing.T, db interface {
 	QueryRow(string, ...any) *sql.Row
 }, projectID string, want int) {

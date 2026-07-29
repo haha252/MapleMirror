@@ -102,6 +102,28 @@ func TestCatalogQueryRejectsUnknownAndOversizedConditions(t *testing.T) {
 	}
 }
 
+func TestCatalogQueryNormalizesCacheKeyAndDeduplicatesFilters(t *testing.T) {
+	index := testCatalogIndex()
+	first, err := index.resolve(url.Values{
+		"q": {"  FFMPEG  "}, "filter": {
+			"supported_system:linux", "software_type:launcher",
+			"supported_system:linux",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := index.resolve(url.Values{
+		"q": {"ffmpeg"}, "filter": {
+			"software_type:launcher", "supported_system:linux",
+		},
+	})
+	if err != nil || first.Query.CacheKey != second.Query.CacheKey ||
+		len(first.Query.Selections) != 2 {
+		t.Fatalf("查询条件未规范化：first=%+v second=%+v err=%v", first.Query, second.Query, err)
+	}
+}
+
 func testCatalogIndex() *catalogIndex {
 	projects := config.Projects{Projects: []config.Project{
 		{ID: "alpha", Name: "FFmpeg 启动器", Enabled: true, Tags: map[string][]string{

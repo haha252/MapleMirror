@@ -52,6 +52,13 @@ func TestCatalogIndexReloadsChangedSplitFilesAndClearsCache(t *testing.T) {
 	if index.reloadIfChanged() {
 		t.Fatal("文件未变化时不应重建索引")
 	}
+	if err := os.Remove(secondPath); err != nil {
+		t.Fatal(err)
+	}
+	if !index.reloadIfChanged() || index.current().Generation != 3 ||
+		len(index.current().Projects) != 1 {
+		t.Fatalf("删除 glob 项目文件应重建索引：%+v", index.current())
+	}
 }
 
 func TestCatalogIndexKeepsLastGoodSnapshotOnInvalidReload(t *testing.T) {

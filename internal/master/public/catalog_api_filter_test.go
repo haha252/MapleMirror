@@ -50,6 +50,18 @@ func TestCatalogAPIRejectsUnknownFilter(t *testing.T) {
 	}
 }
 
+func TestCatalogAPIWithoutQueryKeepsCompleteLegacyProjectList(t *testing.T) {
+	srv, cache := filteredCatalogTestServer(t)
+	defer cache.close()
+	rec := httptest.NewRecorder()
+	srv.catalog(rec, httptest.NewRequest(http.MethodGet, "/api/public/v1/catalog", nil))
+	var body catalogResponse
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &body) != nil ||
+		len(body.Projects) != 2 || len(body.SuggestedProjects) != 0 {
+		t.Fatalf("无参数目录不兼容：status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCatalogServerCacheHitStillUsesPublicResourceLimit(t *testing.T) {
 	srv, cache := filteredCatalogTestServer(t)
 	defer cache.close()
