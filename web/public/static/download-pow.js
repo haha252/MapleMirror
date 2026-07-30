@@ -3,12 +3,17 @@
   const title = document.getElementById("download-pow-title");
   const meta = document.getElementById("download-pow-meta");
   const statusBox = document.getElementById("download-pow-status");
+  const statusCopies = statusBox && statusBox.querySelectorAll(".download-pow__status-copy");
   const retryButton = document.getElementById("download-pow-retry");
   const returnButton = document.querySelector(".download-pow__back");
-  if (!source || !title || !meta || !statusBox || !retryButton) return;
+  if (!source || !title || !meta || !statusBox || !statusCopies ||
+      statusCopies.length !== 2 || !retryButton) return;
 
   const asset = JSON.parse(source.textContent || "{}");
   let running = false;
+  let progressFrame = 0;
+  let pendingProgressAttempts = 0;
+  let pendingProgressDifficulty = 0;
 
   function bytesText(value) {
     const size = Number(value) || 0;
@@ -29,9 +34,66 @@
     element.hidden = text === "";
   }
 
-  function setStatus(message, level) {
-    statusBox.textContent = message;
-    statusBox.className = "status " + (level || "muted");
+  function setStatusContent(message, percent) {
+    statusCopies.forEach(function (copy) {
+      copy.querySelector(".download-pow__status-message").textContent = message;
+      const percentBox = copy.querySelector(".download-pow__status-percent");
+      percentBox.textContent = percent === null ? "" : percent + "%";
+      percentBox.hidden = percent === null;
+    });
+  }
+
+  function setStatus(message, level, progress) {
+    const active = Number.isFinite(progress);
+    const value = active ? Math.max(0, Math.min(100, progress)) : null;
+    const percent = active ? Math.round(value) : null;
+    statusBox.className = "status " + (level || "muted") + (active ? " status--progress" : "");
+    setStatusContent(message, percent);
+    statusBox.setAttribute("role", active ? "progressbar" : "status");
+    statusBox.setAttribute("aria-live", active ? "off" : "polite");
+    if (!active) {
+      statusBox.style.removeProperty("--download-pow-progress");
+      statusBox.removeAttribute("aria-valuemin");
+      statusBox.removeAttribute("aria-valuemax");
+      statusBox.removeAttribute("aria-valuenow");
+      statusBox.removeAttribute("aria-valuetext");
+      statusBox.removeAttribute("aria-label");
+      return;
+    }
+    statusBox.style.setProperty("--download-pow-progress", value + "%");
+    statusBox.setAttribute("aria-valuemin", "0");
+    statusBox.setAttribute("aria-valuemax", "100");
+    statusBox.setAttribute("aria-valuenow", String(percent));
+    statusBox.setAttribute("aria-valuetext", percent + "%");
+    statusBox.setAttribute("aria-label", message);
+  }
+
+  function estimatedProgress(attempts, difficulty) {
+    const bits = Math.max(1, Math.floor(Number(difficulty) || 0));
+    const chancePerAttempt = Math.pow(2, -bits);
+    const target = Math.ceil(Math.log(0.2) / Math.log1p(-chancePerAttempt));
+    const count = Math.max(0, Number(attempts) || 0);
+    if (count <= target) return 95 * count / target;
+    return Math.min(99, 95 + 4 * (1 - Math.exp(-(count - target) / target)));
+  }
+
+  function queueCalculationProgress(attempts, difficulty) {
+    pendingProgressAttempts = attempts;
+    pendingProgressDifficulty = difficulty;
+    if (progressFrame) return;
+    progressFrame = window.requestAnimationFrame(function () {
+      progressFrame = 0;
+      setStatus("正在计算验证答案...", "muted",
+        estimatedProgress(pendingProgressAttempts, pendingProgressDifficulty));
+    });
+  }
+
+  function cancelProgressUpdate() {
+    if (!progressFrame) return;
+    window.cancelAnimationFrame(progressFrame);
+    progressFrame = 0;
+    pendingProgressAttempts = 0;
+    pendingProgressDifficulty = 0;
   }
 
   function powStartupMessage() {
@@ -120,14 +182,20 @@
       const challengeData = challengeResp.data || {};
       const altcha = challengeData.altcha || {};
       if (!challengeData.challenge_id || !altcha.challenge) throw new Error("挑战数据缺失");
-      setStatus("正在计算验证答案...", "muted");
+      const difficulty = challengeData.difficulty || 10;
+      setStatus("正在计算验证答案...", "muted", 0);
       let number;
       try {
-        number = await window.PowSolver.solve(altcha.challenge, challengeData.difficulty || 10);
+        number = await window.PowSolver.solve(altcha.challenge, difficulty, {
+          onProgress: function (attempts) {
+            queueCalculationProgress(attempts, difficulty);
+          }
+        });
       } catch (err) {
         throw new Error(powStartupMessage());
       }
-      setStatus("正在签发并同步下载令牌...", "muted");
+      cancelProgressUpdate();
+      setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);
       const authResp = await postJSON("/api/public/v1/web/authorizations", {
         challenge_id: challengeData.challenge_id,
         asset_id: asset.asset_id,
@@ -138,6 +206,7 @@
       setStatus("令牌签发完成，正在开始下载。", "ok");
       window.location.assign(downloadURL(authData));
     } catch (err) {
+      cancelProgressUpdate();
       setStatus(err && err.message ? err.message : "下载失败", "warn");
       retryButton.hidden = false;
     } finally {

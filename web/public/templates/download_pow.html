@@ -18,7 +18,16 @@
           <h2 id="download-pow-title" hidden></h2>
           <p id="download-pow-meta" class="muted" hidden></p>
         </div>
-        <div id="download-pow-status" class="status muted">正在准备挑战...</div>
+        <div id="download-pow-status" class="status muted" role="status" aria-live="polite">
+          <span class="download-pow__status-copy">
+            <span class="download-pow__status-message">正在准备挑战...</span>
+            <span class="download-pow__status-percent" hidden>0%</span>
+          </span>
+          <span class="download-pow__status-copy download-pow__status-copy--complete" aria-hidden="true">
+            <span class="download-pow__status-message">正在准备挑战...</span>
+            <span class="download-pow__status-percent" hidden>0%</span>
+          </span>
+        </div>
         <div class="download-pow__support">
           <div class="download-pow__support-copy">
             <div class="download-pow__actions">

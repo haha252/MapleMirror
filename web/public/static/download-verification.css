@@ -31,6 +31,59 @@
   gap: 20px;
 }
 
+.download-pow .status--progress {
+  --download-pow-progress: 0%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.download-pow .status--progress::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0 auto 0 0;
+  width: var(--download-pow-progress);
+  content: "";
+  background: var(--accent-hover);
+  transition: width 160ms linear;
+}
+
+.download-pow__status-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.download-pow__status-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.download-pow__status-percent {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.download-pow__status-copy--complete {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: none;
+  padding: inherit;
+  color: #140f08;
+  clip-path: inset(0 calc(100% - var(--download-pow-progress)) 0 0);
+  pointer-events: none;
+  transition: clip-path 160ms linear;
+}
+
+.status--progress .download-pow__status-copy--complete {
+  display: flex;
+}
+
 .download-pow__verification-options {
   position: absolute;
   z-index: 1;
@@ -75,6 +128,13 @@
   gap: 10px;
   align-items: center;
   justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .download-pow .status--progress::before,
+  .download-pow__status-copy--complete {
+    transition: none;
+  }
 }
 
 @media (max-width: 860px) {

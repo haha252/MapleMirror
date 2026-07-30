@@ -1,5 +1,8 @@
 (function () {
   const encoder = new TextEncoder();
+  const progressBatch = 8192;
+  const progressInterval = 200;
+  const subtleProgressBatch = 2048;
   let wasmBytesPromise;
   let workerURL;
 
@@ -16,11 +19,20 @@
     return bits <= 0;
   }
 
-  async function solveWithSubtle(challenge, difficulty) {
+  async function solveWithSubtle(challenge, difficulty, onAttempts, trackProgress) {
+    let pending = 0;
     for (let i = 0; ; i++) {
       const data = encoder.encode(challenge + ":" + i);
       const digest = await crypto.subtle.digest("SHA-256", data);
-      if (hasLeadingZeroBits(new Uint8Array(digest), difficulty)) return i;
+      if (trackProgress) pending++;
+      if (hasLeadingZeroBits(new Uint8Array(digest), difficulty)) {
+        if (trackProgress) onAttempts(pending);
+        return i;
+      }
+      if (trackProgress && pending >= subtleProgressBatch) {
+        onAttempts(pending);
+        pending = 0;
+      }
       if ((i & 1023) === 0) await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
@@ -66,8 +78,12 @@
           hi: (startHi + stepHi * batch + Math.floor(low / 4294967296)) >>> 0
         };
       }
+      function now() {
+        return self.performance && performance.now ? performance.now() : Date.now();
+      }
       self.onmessage = async (event) => {
         const data = event.data || {};
+        let pending = 0;
         try {
           const loaded = await WebAssembly.instantiate(data.wasmBytes, {});
           const exports = loaded.instance.exports;
@@ -78,13 +94,26 @@
           const stepLo = Number(data.step || 1) >>> 0;
           const stepHi = Number(data.stepHi || 0) >>> 0;
           const batch = Number(data.batch) || 32768;
+          const reportInterval = Number(data.progressInterval) || 200;
+          let lastReport = now();
           for (;;) {
             const tried = exports.solve_pow(inputLen, data.difficulty,
               startLo, startHi, stepLo, stepHi, batch);
             if (tried < 0) throw new Error("invalid pow input");
             if (tried > 0) {
-              self.postMessage({type: "found", nonce: readCString(exports.memory, ptr)});
+              if (data.trackProgress) pending += tried;
+              self.postMessage({
+                type: "found",
+                nonce: readCString(exports.memory, ptr),
+                attempts: pending
+              });
               return;
+            }
+            if (data.trackProgress) pending += batch;
+            if (data.trackProgress && now() - lastReport >= reportInterval) {
+              self.postMessage({type: "progress", attempts: pending});
+              pending = 0;
+              lastReport = now();
             }
             const next = advanceNonce(startLo, startHi, stepLo, stepHi, batch);
             startLo = next.lo;
@@ -92,7 +121,11 @@
             await new Promise((resolve) => setTimeout(resolve, 0));
           }
         } catch (err) {
-          self.postMessage({type: "error", message: err && err.message ? err.message : "wasm failed"});
+          self.postMessage({
+            type: "error",
+            message: err && err.message ? err.message : "wasm failed",
+            attempts: pending
+          });
         }
       };
     `;
@@ -100,7 +133,7 @@
     return workerURL;
   }
 
-  async function solveWithWorkers(challenge, difficulty, workerLimit) {
+  async function solveWithWorkers(challenge, difficulty, workerLimit, onAttempts, trackProgress) {
     if (!window.Worker) return Promise.reject(new Error("worker unavailable"));
     const wasmBytes = await loadWASMBytes();
     return new Promise((resolve, reject) => {
@@ -118,14 +151,21 @@
         const worker = new Worker(makeWorkerURL());
         workers.push(worker);
         worker.onmessage = (event) => {
+          if (settled) return;
           const data = event.data || {};
-          if (data.type === "found") finish(resolve, Number(data.nonce));
+          if (data.type === "progress") onAttempts(data.attempts);
+          if (data.type === "found") {
+            onAttempts(data.attempts);
+            finish(resolve, Number(data.nonce));
+          }
           if (data.type === "error") {
+            onAttempts(data.attempts);
             failures++;
             if (failures >= total) finish(reject, new Error(data.message || "wasm unavailable"));
           }
         };
         worker.onerror = () => {
+          if (settled) return;
           failures++;
           if (failures >= total) finish(reject, new Error("worker failed"));
         };
@@ -134,7 +174,9 @@
           difficulty,
           start: i,
           step: total,
-          batch: 262144,
+          batch: trackProgress ? progressBatch : 262144,
+          progressInterval,
+          trackProgress,
           wasmBytes
         });
       }
@@ -145,11 +187,23 @@
     threads: workerCount,
     async solve(challenge, difficulty, options) {
       const workerLimit = typeof options === "number" ? options : options && options.workerLimit;
+      const onProgress = options && typeof options === "object" &&
+        typeof options.onProgress === "function" ? options.onProgress : null;
+      const trackProgress = Boolean(onProgress);
+      let attempts = 0;
+      function onAttempts(value) {
+        if (!trackProgress) return;
+        const delta = Math.max(0, Math.floor(Number(value) || 0));
+        if (delta <= 0) return;
+        attempts += delta;
+        onProgress(attempts);
+      }
       try {
-        return await solveWithWorkers(challenge, difficulty, workerLimit);
+        return await solveWithWorkers(
+          challenge, difficulty, workerLimit, onAttempts, trackProgress);
       } catch (err) {
         console.warn("PoW worker failed; falling back to single-threaded Web Crypto.", err);
-        return solveWithSubtle(challenge, difficulty);
+        return solveWithSubtle(challenge, difficulty, onAttempts, trackProgress);
       }
     }
   };
