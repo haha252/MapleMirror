@@ -79,9 +79,9 @@ func seedAvailabilitySamples(t *testing.T, db *sql.DB, nodeID string) {
 	}
 }
 
-func mustExec(t *testing.T, db *sql.DB, query string) {
+func mustExec(t *testing.T, db *sql.DB, query string, args ...any) {
 	t.Helper()
-	if _, err := db.Exec(query); err != nil {
+	if _, err := db.Exec(query, args...); err != nil {
 		t.Fatal(err)
 	}
 }

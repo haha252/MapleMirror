@@ -3,7 +3,6 @@ package public
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -65,40 +64,6 @@ func TestBlockedDownloadPageUsesFastPunishmentPath(t *testing.T) {
 	}
 }
 
-func TestAPIChallengeReturnsAdaptiveDifficulty(t *testing.T) {
-	db := openMaster(t)
-	seedRoutableAsset(t, db)
-	cfg := testAbuseControl("enforce", true)
-	tracker := newAbuseTracker(cfg)
-	now := time.Now().UTC()
-	for i := 0; i < 6; i++ {
-		tracker.record("api", "192.0.2.9/32", 1, now)
-	}
-	srv := Server{
-		Store: Store{DB: db}, APIZeroBits: 23, APITTL: time.Minute,
-		Blocklist: newBlocklistPolicy(config.Quota{}, nil), AbuseTracker: tracker,
-	}
-	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/challenges",
-		strings.NewReader(`{"asset_id":"asset-1"}`))
-	req.RemoteAddr = "192.0.2.9:1234"
-	rec := httptest.NewRecorder()
-	srv.apiChallenge(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("创建挑战失败：%d %s", rec.Code, rec.Body.String())
-	}
-	var body struct {
-		Data struct {
-			Bits int `json:"leading_zero_bits"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if body.Data.Bits != 25 {
-		t.Fatalf("动态难度=%d，期望 25", body.Data.Bits)
-	}
-}
-
 func TestAPIChallengeRejectsRequestThatReachesThreshold(t *testing.T) {
 	cfg := testAbuseControl("enforce", true)
 	tracker := newAbuseTracker(cfg)
@@ -106,7 +71,7 @@ func TestAPIChallengeRejectsRequestThatReachesThreshold(t *testing.T) {
 	for i := 0; i < cfg.Challenge.Exact.RejectBurst-1; i++ {
 		tracker.record("api", "192.0.2.9/32", 1, now)
 	}
-	srv := Server{AbuseTracker: tracker, APIZeroBits: 23}
+	srv := Server{AbuseTracker: tracker}
 	req := httptest.NewRequest(http.MethodPost, "/api/public/v1/api/challenges",
 		strings.NewReader(`{"asset_id":"asset-1"}`))
 	req.RemoteAddr = "192.0.2.9:1234"

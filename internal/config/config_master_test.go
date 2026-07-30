@@ -16,11 +16,13 @@ func TestLoadMasterExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits != 23 {
+	if c.APIPoW.Algorithm != "sha256" {
 		t.Fatal("公开 API PoW 默认合同被修改")
 	}
-	if c.ALTCHA.Difficulty != 22 {
-		t.Fatal("网页验证安全合同被修改")
+	if len(c.PoWSizeTiers) != 6 ||
+		c.PoWSizeTiers[0] != (PoWSizeTier{MinSize: "0 B", Difficulty: 20}) ||
+		c.PoWSizeTiers[5] != (PoWSizeTier{MinSize: "500 MiB", Difficulty: 26}) {
+		t.Fatalf("普通 PoW 默认分档错误：%+v", c.PoWSizeTiers)
 	}
 	if c.Logging.MaxFileSizeMB != DefaultLogMaxFileSizeMB {
 		t.Fatalf("日志文件大小上限 = %d MiB，want %d MiB",

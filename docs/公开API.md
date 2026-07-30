@@ -11,7 +11,7 @@
 | --- | --- |
 | 身份 | 公开 API 不使用账号、API Key 或管理面板会话 |
 | 网页验证 | 网页端使用自研 SHA-256 前导零挑战，不叠加滑块 |
-| API 验证 | 公开 API 使用独立 SHA-256 前导零 PoW，默认前导 `23` 个二进制零位 |
+| API 验证 | 公开 API 使用独立 SHA-256 前导零 PoW，实际位数按可信资产大小和来源请求频率动态选择 |
 | 参数隔离 | `altcha.*` 与 `api_pow.*` 不得混用或互相解释 |
 | 授权 | 所有下载必须先由主节点签发短时、单节点绑定下载令牌 |
 | 节点 | 下载节点只服务本地已验证资产，不接受未签名或跨节点令牌 |
@@ -543,7 +543,7 @@ JSON 示例：
 SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 ```
 
-的二进制摘要满足前导零位数要求。默认难度是前导 `23` 个二进制零位。
+的二进制摘要满足前导零位数要求。示例中的 `23` 是本次挑战的实际难度，不是固定默认值。
 
 ### 6.2 提交 API PoW 并领取授权
 
@@ -565,7 +565,7 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 
 若授权签发因为 `REQUEST_QUOTA_EXHAUSTED` 或 `TRAFFIC_LIMIT_EXCEEDED` 失败，主节点会把客户端前缀写入本站自动封禁表。默认封禁 7 天，时长由 `quota.yaml` 的 `blocklist.auto_ban_duration` 调整；过期后自动不再生效。订阅源黑名单不受该过期时间影响，只跟随订阅源当前快照。
 
-挑战创建还会应用 `abuse_control` 的精确地址与网段窗口。可疑来源收到的 `difficulty` 或 `leading_zero_bits` 是本次挑战的实际难度，客户端必须按响应值计算；拒绝等级返回 `429 CLIENT_RATE_LIMITED` 和 `Retry-After`。已封禁 API 客户端始终收到 `403 CLIENT_BLOCKED`，不会收到浏览器惩罚 PoW。
+挑战创建先按主节点记录的可信资产大小从 `pow_size_tiers` 选择基础难度，再应用 `abuse_control` 的精确地址与网段窗口。可疑来源在基础难度上增加位数，普通挑战最终不超过 `abuse_control.challenge.max_bits`。客户端必须始终按响应中的 `difficulty` 或 `leading_zero_bits` 计算；拒绝等级返回 `429 CLIENT_RATE_LIMITED` 和 `Retry-After`。已封禁 API 客户端始终收到 `403 CLIENT_BLOCKED`，不会收到浏览器惩罚 PoW；独立惩罚 PoW 不使用文件大小分档，也不受普通挑战上限影响。
 
 ## 7. 授权查询
 

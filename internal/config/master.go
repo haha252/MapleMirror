@@ -16,6 +16,7 @@ type Master struct {
 	Stats         Stats          `yaml:"stats"`
 	Archive       Archive        `yaml:"archive"`
 	Scan          Scan           `yaml:"scan"`
+	PoWSizeTiers  []PoWSizeTier  `yaml:"pow_size_tiers"`
 	ALTCHA        ALTCHA         `yaml:"altcha"`
 	APIPoW        APIPoW         `yaml:"api_pow"`
 	DownloadToken DownloadToken  `yaml:"download_token"`
@@ -58,13 +59,11 @@ type Socks5Proxy struct {
 	Password string `yaml:"password"`
 }
 type ALTCHA struct {
-	Difficulty   int    `yaml:"difficulty"`
 	ChallengeTTL string `yaml:"challenge_ttl"`
 }
 type APIPoW struct {
-	Algorithm       string `yaml:"algorithm"`
-	LeadingZeroBits int    `yaml:"leading_zero_bits"`
-	ChallengeTTL    string `yaml:"challenge_ttl"`
+	Algorithm    string `yaml:"algorithm"`
+	ChallengeTTL string `yaml:"challenge_ttl"`
 }
 type DownloadToken struct {
 	FirstConnectionTimeout string `yaml:"first_connection_timeout"`
@@ -100,9 +99,15 @@ type TLS struct {
 
 func LoadMaster(path string, warn WarnFunc) (Master, error) {
 	var c Master
-	data, repaired, err := readYAMLWithRepair(path, &c, MasterExample, MasterExample)
+	data, repaired, legacyALTCHA, legacyAPI, err := readMasterYAML(path, &c)
 	if err != nil {
 		return c, err
+	}
+	if legacyALTCHA {
+		warnDeprecated(warn, "altcha.difficulty", "pow_size_tiers")
+	}
+	if legacyAPI {
+		warnDeprecated(warn, "api_pow.leading_zero_bits", "pow_size_tiers")
 	}
 	applyMasterDefaults(&c, warn)
 	if err := validateMaster(c); err != nil {
@@ -122,16 +127,8 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	applyArchiveDefaults(c, warn)
 	setString(&c.Scan.Interval, "15m", "scan.interval", warn)
 	setString(&c.Scan.GitHubTimeout, "2m", "scan.github_timeout", warn)
-	if c.ALTCHA.Difficulty == 0 {
-		c.ALTCHA.Difficulty = 22
-		warnDefault(warn, "altcha.difficulty", "22")
-	}
 	setString(&c.ALTCHA.ChallengeTTL, "2m", "altcha.challenge_ttl", warn)
 	setString(&c.APIPoW.Algorithm, "sha256", "api_pow.algorithm", warn)
-	if c.APIPoW.LeadingZeroBits == 0 {
-		c.APIPoW.LeadingZeroBits = 23
-		warnDefault(warn, "api_pow.leading_zero_bits", "23")
-	}
 	setString(&c.APIPoW.ChallengeTTL, "2m", "api_pow.challenge_ttl", warn)
 	setString(&c.DownloadToken.FirstConnectionTimeout, "20s", "download_token.first_connection_timeout", warn)
 	setString(&c.DownloadToken.IdleTimeout, "120s", "download_token.idle_timeout", warn)
@@ -223,11 +220,11 @@ func validateMaster(c Master) error {
 	if err := validateScanSocks5(c.Scan.Socks5); err != nil {
 		return err
 	}
-	if c.ALTCHA.Difficulty <= 0 {
-		return errors.New("网页挑战难度必须大于零")
+	if err := validatePoWSizeTiers(c.PoWSizeTiers); err != nil {
+		return err
 	}
-	if c.APIPoW.Algorithm != "sha256" || c.APIPoW.LeadingZeroBits <= 0 {
-		return errors.New("公开 API PoW 必须使用 sha256 且前导零位数大于零")
+	if c.APIPoW.Algorithm != "sha256" {
+		return errors.New("公开 API PoW 必须使用 sha256")
 	}
 	if c.DownloadToken.SigningKeyFile != "" {
 		return errors.New("download_token.signing_key_file 已废弃，请改用 Ed25519 signing_private_key_file 与 verify_public_key_file")

@@ -122,7 +122,7 @@ const apiDocsBody = `
 
     <h3>第三步：创建 API PoW 挑战</h3>
     <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v1/api/challenges</code></div>
-    <p>为指定资产创建 SHA-256 前导零 PoW 挑战。响应会返回 <code>challenge_id</code>、<code>nonce_seed</code>、<code>leading_zero_bits</code> 和 <code>canonical_format</code>。</p>
+    <p>为指定资产创建 SHA-256 前导零 PoW 挑战。主节点会按可信资产大小和来源请求频率选择实际难度；响应会返回 <code>challenge_id</code>、<code>nonce_seed</code>、<code>leading_zero_bits</code> 和 <code>canonical_format</code>。</p>
     <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>asset_id</td><td>JSON</td><td>要下载的资产标识</td></tr></tbody></table>
     <p class="api-label">Example Request</p>
     <pre><code>POST /api/public/v1/api/challenges

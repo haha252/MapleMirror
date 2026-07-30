@@ -37,7 +37,7 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	difficulty := s.ALTCHADifficulty
+	additionalBits := 0
 	if s.AbuseTracker != nil {
 		decision := s.AbuseTracker.recordAndDecide("web", prefix, 1, now)
 		if s.AbuseTracker.mode == "enforce" && decision.Level == abuseLevelReject {
@@ -48,14 +48,11 @@ func (s Server) webChallenge(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if s.AbuseTracker.mode == "enforce" && decision.Bits > 0 {
-			difficulty = minInt(difficulty+decision.Bits, s.AbuseTracker.cfg.Challenge.MaxBits)
+			additionalBits = decision.Bits
 		}
 	}
-	if difficulty <= 0 {
-		difficulty = s.ALTCHADifficulty
-	}
-	challenge, err := s.Store.CreateChallenge(r.Context(), "altcha", in.AssetID,
-		prefix, difficulty, s.ALTCHATTL, requestID(r))
+	challenge, err := s.Store.CreatePoWChallenge(r.Context(), "altcha", in.AssetID,
+		prefix, additionalBits, s.ALTCHATTL)
 	if err != nil {
 		if err == errChallengeQuota {
 			writeError(w, r, http.StatusTooManyRequests, "CHALLENGE_RATE_LIMITED", "挑战创建过于频繁，请稍后再试")
@@ -87,7 +84,7 @@ func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	difficulty := s.APIZeroBits
+	additionalBits := 0
 	if s.AbuseTracker != nil {
 		decision := s.AbuseTracker.recordAndDecide("api", prefix, 1, now)
 		if s.AbuseTracker.mode == "enforce" && decision.Level == abuseLevelReject {
@@ -98,11 +95,11 @@ func (s Server) apiChallenge(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if s.AbuseTracker.mode == "enforce" && decision.Bits > 0 {
-			difficulty = minInt(difficulty+decision.Bits, s.AbuseTracker.cfg.Challenge.MaxBits)
+			additionalBits = decision.Bits
 		}
 	}
-	challenge, err := s.Store.CreateChallenge(r.Context(), "api_pow", in.AssetID,
-		prefix, difficulty, s.APITTL, requestID(r))
+	challenge, err := s.Store.CreatePoWChallenge(r.Context(), "api_pow", in.AssetID,
+		prefix, additionalBits, s.APITTL)
 	if err != nil {
 		if err == errChallengeQuota {
 			writeError(w, r, http.StatusTooManyRequests, "CHALLENGE_RATE_LIMITED", "挑战创建过于频繁，请稍后再试")
@@ -215,11 +212,4 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, out any) bool {
 
 func normalizeSolution(value string) string {
 	return strings.TrimSpace(value)
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

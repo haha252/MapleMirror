@@ -32,7 +32,7 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 	}
 	logger.Info(context.Background(), "公共下载链路已启用")
 	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenLifetime,
-		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
+		cfg.PoWSizeTiers, quota, loc,
 		cfg.Proxy.TrustedCIDRs, projects, filters, projectsPath, filtersPath,
 		noticesPath, changelogPath, notices.Notices, runtime, logger,
 		cfg.Node.PublicProbeNetworkFailures, *cfg.Server.CatalogBatchRows,

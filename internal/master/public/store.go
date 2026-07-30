@@ -22,6 +22,7 @@ type Store struct {
 	Quota                      quotaPolicy
 	Location                   *time.Location
 	Challenges                 *challengeMemory
+	PoWDifficulty              powSizePolicy
 	MaxBytes                   maxBytesPolicy
 	RangeLimit                 int
 	Runtime                    *mastercontrol.RuntimeStore
@@ -126,6 +127,23 @@ type AuthorizationStatus struct {
 }
 
 func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, _ string) (Challenge, error) {
+	return s.createChallenge(ctx, kind, assetID, prefix,
+		func(int64) int { return difficulty }, ttl)
+}
+
+func (s *Store) CreatePoWChallenge(ctx context.Context, kind, assetID, prefix string,
+	additionalBits int, ttl time.Duration) (Challenge, error) {
+	if len(s.PoWDifficulty.tiers) == 0 {
+		return Challenge{}, errors.New("普通 PoW 大小分档未初始化")
+	}
+	return s.createChallenge(ctx, kind, assetID, prefix,
+		func(sizeBytes int64) int {
+			return s.PoWDifficulty.difficulty(sizeBytes, additionalBits)
+		}, ttl)
+}
+
+func (s *Store) createChallenge(ctx context.Context, kind, assetID, prefix string,
+	difficultyForSize func(int64) int, ttl time.Duration) (Challenge, error) {
 	now := time.Now().UTC()
 	challenges := s.challengeMemory()
 	challenges.cleanup(now)
@@ -136,7 +154,8 @@ func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix strin
 	if err != nil {
 		return Challenge{}, err
 	}
-	if _, err := s.routableAsset(ctx, assetID); err != nil {
+	sizeBytes, err := s.routableAsset(ctx, assetID)
+	if err != nil {
 		return Challenge{}, err
 	}
 	challenge := Challenge{
@@ -145,7 +164,7 @@ func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix strin
 		AssetID:         assetID,
 		ClientPrefixKey: prefix,
 		Nonce:           randomText(16),
-		Difficulty:      difficulty,
+		Difficulty:      difficultyForSize(sizeBytes),
 		ExpiresAt:       now.Add(ttl).Format(time.RFC3339Nano),
 	}
 	challenges.put(challenge, now)

@@ -22,10 +22,8 @@ type Server struct {
 	Store                        Store
 	Signer                       downloadtoken.Signer
 	ALTCHATTL                    time.Duration
-	ALTCHADifficulty             int
 	APITTL                       time.Duration
 	TokenLifetime                TokenLifetime
-	APIZeroBits                  int
 	TrustedCIDRs                 []string
 	Logger                       *logging.Logger
 	WebAssets                    *webAssets
@@ -57,7 +55,7 @@ type TokenLifetime struct {
 
 func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duration,
 	tokenLifetime TokenLifetime,
-	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
+	powSizeTiers []config.PoWSizeTier, quota config.Quota, loc *time.Location, trusted []string,
 	projects config.Projects, filters config.Filters,
 	projectsPath, filtersPath, noticesPath, changelogPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
@@ -65,6 +63,11 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	catalogBatchRows, catalogPrefetchRemainingRows int,
 	archive *accountingarchive.Writer,
 	statsBuffer *statbuffer.Buffer) (Server, error) {
+	powDifficulty, err := newPoWSizePolicy(
+		powSizeTiers, quota.AbuseControl.Challenge.MaxBits)
+	if err != nil {
+		return Server{}, err
+	}
 	assets, err := loadDefaultWebAssets()
 	if err != nil {
 		return Server{}, err
@@ -83,7 +86,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	catalogIndex := newCatalogIndex(projects, filters, projectsPath, filtersPath, catalogCache, logger)
 	return Server{
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
-			Challenges: challenges, MaxBytes: newMaxBytesPolicy(quota),
+			Challenges: challenges, PoWDifficulty: powDifficulty,
+			MaxBytes:   newMaxBytesPolicy(quota),
 			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime,
 			PublicProbeNetworkFailures: publicProbeNetworkFailures,
 			Archive:                    archive,
@@ -91,10 +95,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 			StatsBuffer:                statsBuffer},
 		Signer:                       signer,
 		ALTCHATTL:                    altchaTTL,
-		ALTCHADifficulty:             altchaDifficulty,
 		APITTL:                       apiTTL,
 		TokenLifetime:                tokenLifetime,
-		APIZeroBits:                  apiBits,
 		TrustedCIDRs:                 trusted,
 		Logger:                       logger,
 		WebAssets:                    assets,

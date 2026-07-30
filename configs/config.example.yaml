@@ -94,10 +94,48 @@ scan:
     # SOCKS5 密码；无认证时留空。
     password: ""
 
+# 普通网页与公开 API PoW 按可信资产大小共用的基础难度分档。
+# 匹配不超过资产大小的最后一个 min_size；可继续增加严格递增的分档。
+pow_size_tiers:
+  # 小于 5 MiB 的资产。
+  -
+    # 该档生效的最小资产大小。
+    min_size: "0 B"
+    # SHA-256 前导零位数。
+    difficulty: 20
+  # 5 MiB 到 50 MiB 的资产。
+  -
+    # 该档生效的最小资产大小。
+    min_size: "5 MiB"
+    # SHA-256 前导零位数。
+    difficulty: 22
+  # 50 MiB 到 150 MiB 的资产。
+  -
+    # 该档生效的最小资产大小。
+    min_size: "50 MiB"
+    # SHA-256 前导零位数。
+    difficulty: 23
+  # 150 MiB 到 300 MiB 的资产。
+  -
+    # 该档生效的最小资产大小。
+    min_size: "150 MiB"
+    # SHA-256 前导零位数。
+    difficulty: 24
+  # 300 MiB 到 500 MiB 的资产。
+  -
+    # 该档生效的最小资产大小。
+    min_size: "300 MiB"
+    # SHA-256 前导零位数。
+    difficulty: 25
+  # 500 MiB 及以上的资产。
+  -
+    # 该档生效的最小资产大小。
+    min_size: "500 MiB"
+    # SHA-256 前导零位数。
+    difficulty: 26
+
 # 网页下载验证挑战配置。
 altcha:
-  # 网页验证使用 SHA-256 前导零挑战；值越大客户端计算越慢。
-  difficulty: 22
   # 网页挑战从创建到过期的有效时间。
   challenge_ttl: "2m"
 
@@ -105,8 +143,6 @@ altcha:
 api_pow:
   # 公开 API PoW 算法；当前实现只支持 sha256。
   algorithm: "sha256"
-  # 公开 API SHA-256 前导零位难度，不与网页挑战参数混用。
-  leading_zero_bits: 23
   # 公开 API 挑战从创建到过期的有效时间。
   challenge_ttl: "2m"
 
