@@ -5,9 +5,9 @@
 }
 
 .site-header__catalog {
-  flex: 0 1 620px;
-  width: min(620px, calc(100vw - 720px));
-  max-width: 620px;
+  flex: 0 1 420px;
+  width: min(420px, calc(100vw - 800px));
+  max-width: 420px;
   height: 52px;
   display: flex;
   align-items: center;

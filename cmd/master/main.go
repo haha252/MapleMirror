@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -21,7 +20,6 @@ import (
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/master/health"
 	"mirror-server/internal/master/mirrorsync"
-	"mirror-server/internal/master/public"
 	"mirror-server/internal/master/statbuffer"
 	"mirror-server/internal/requestid"
 	"mirror-server/internal/storage"
@@ -35,6 +33,7 @@ func main() {
 	quotaPath := flag.String("quota", "quota.yaml", "额度配置文件路径")
 	noticesPath := flag.String("notices", "notices.yaml", "公告配置文件路径")
 	filtersPath := flag.String("filters", "filters.yaml", "首页筛选配置文件路径")
+	changelogPath := flag.String("changelog", "changelog", "更新日志目录路径")
 	archiveAccounting := flag.Bool("archive-accounting", false, "归档旧数据库明细并收缩在线状态")
 	flag.Parse()
 	var warnings [][2]string
@@ -157,7 +156,7 @@ func main() {
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
 	publicServer, err := newPublicServer(cfg, quota, notices, projects, filters,
-		*projectsPath, *filtersPath, *noticesPath, location, database, runtime,
+		*projectsPath, *filtersPath, *noticesPath, *changelogPath, location, database, runtime,
 		logger, tokenSigner, archive, statsBuffer)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
@@ -177,42 +176,6 @@ func main() {
 		databaseFailed = !databaseWatchdog.Ready()
 		exitCode = 1
 	}
-}
-
-func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notices,
-	projects config.Projects, filters config.Filters,
-	projectsPath, filtersPath, noticesPath string, loc *time.Location,
-	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger,
-	signer downloadtoken.Signer, archive *accountingarchive.Writer,
-	statsBuffer *statbuffer.Buffer) (public.Server, error) {
-	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
-	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
-	firstConnectionTimeout, _ := time.ParseDuration(cfg.DownloadToken.FirstConnectionTimeout)
-	idleTimeout, _ := time.ParseDuration(cfg.DownloadToken.IdleTimeout)
-	maxDuration, _ := time.ParseDuration(cfg.DownloadToken.MaxDuration)
-	tokenLifetime := public.TokenLifetime{
-		FirstConnectionTimeout: firstConnectionTimeout,
-		IdleTimeout:            idleTimeout,
-		MaxDuration:            maxDuration,
-	}
-	logger.Info(context.Background(), "公共下载链路已启用")
-	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenLifetime,
-		cfg.ALTCHA.Difficulty, cfg.APIPoW.LeadingZeroBits, quota, loc,
-		cfg.Proxy.TrustedCIDRs, projects, filters, projectsPath, filtersPath,
-		noticesPath, notices.Notices, runtime, logger,
-		cfg.Node.PublicProbeNetworkFailures, *cfg.Server.CatalogBatchRows,
-		*cfg.Server.CatalogPrefetchRemainingRows, archive, statsBuffer)
-	if err != nil {
-		return public.Server{}, err
-	}
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			_ = server.Store.SampleNodeAvailability(context.Background())
-		}
-	}()
-	return server, nil
 }
 
 func startControlServices(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {

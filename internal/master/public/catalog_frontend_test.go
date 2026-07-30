@@ -157,6 +157,9 @@ func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 	body := publicStaticBody(t, "download-filters.css")
 	for _, want := range []string{
 		`max-width: 1840px`,
+		`flex: 0 1 420px`,
+		`width: min(420px, calc(100vw - 800px))`,
+		`max-width: 420px`,
 		`grid-template-columns: 250px minmax(0, 1fr)`,
 		`.catalog-left-rail`,
 		`.catalog-page-notices`,
@@ -165,6 +168,10 @@ func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("桌面搜索筛选样式缺少规则 %q：%s", want, body)
 		}
+	}
+	header := publicStaticBody(t, "base-header.css")
+	if !strings.Contains(header, `white-space: nowrap`) {
+		t.Fatalf("桌面顶栏导航文字应禁止换行：%s", header)
 	}
 }
 

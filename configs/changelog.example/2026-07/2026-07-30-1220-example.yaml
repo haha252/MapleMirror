@@ -1,0 +1,11 @@
+# 更新等级：info（蓝）、notice（绿）、warn（黄）、critical（红）。
+level: "notice"
+# 更新标题。
+title: "上线更新日志页面"
+# 北京时间，固定使用 YYYY-MM-DD HH:mm；月份必须与所在目录一致。
+time: "2026-07-30 12:20"
+# 支持多行，以及 **加粗**、*斜体*、~~删除线~~ 和 http/https 链接。
+description: |-
+  新增 **更新日志** 页面，可按等级筛选和搜索。
+  旧入口将在 ~~后续版本~~ 中逐步调整。
+  详情请查看 [API 文档](https://example.com/api-docs)。

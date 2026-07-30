@@ -92,7 +92,7 @@
   }
 }
 
-@media (max-width: 345px) {
+@media (max-width: 400px) {
   .site-header {
     gap: 6px;
     padding: 7px 6px;

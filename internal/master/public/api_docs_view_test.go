@@ -36,6 +36,7 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/api/public/v1/api/authorizations`,
 		`/api/public/v1/blocklist.txt`,
 		`/api/public/v1/blocklist.json`,
+		`/api/public/v1/changelog`,
 		`/{project_id}/{version}/{file_name}`,
 		`download_url`,
 		`Authorization: Bearer &lt;download_token&gt;`,

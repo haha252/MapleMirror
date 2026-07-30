@@ -14,6 +14,25 @@ func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 		Scripts: []string{"/static/public/stats-sources.js", "/static/public/stats.js"}})
 }
 
+func (s Server) changelogPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	s.trackPageView(w, r)
+	s.renderPage(w, pageData{
+		Title: "更新日志", BrowserTitle: "更新日志 - 枫源镜像",
+		Subtitle:  "记录枫源镜像的功能、维护与重要变更",
+		BodyClass: "page-changelog", ChangelogSearch: true, Body: changelogShellBody(s.staticURL),
+		Styles: []string{
+			"/static/public/download-filters.css",
+			"/static/public/download-filters-mobile.css",
+			"/static/public/changelog.css",
+		},
+		Scripts: []string{"/static/public/changelog.js"},
+	})
+}
+
 func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
 	sponsors := buildSponsorPage(loadSponsors(), requestedSponsorPage(r.URL.Query().Get("sponsor_page")), sponsorPageSize)

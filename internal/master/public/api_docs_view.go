@@ -196,6 +196,14 @@ Range: bytes=1048576-2097151</code></pre>
 }</code></pre>
   </section>
 
+  <section class="api-endpoint" id="changelog-api">
+    <h2>更新日志</h2>
+    <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/changelog</code></div>
+    <p>按时间倒序查询本站更新记录。<code>minimum_level</code> 可选 info、notice、warn 或 critical；<code>q</code> 搜索标题和可见描述；<code>limit</code> 默认 20、最大 50。存在下一批时响应返回不透明的 <code>next_cursor</code>。</p>
+    <p class="api-label">Example Request</p>
+    <pre><code>GET /api/public/v1/changelog?minimum_level=notice&amp;q=下载&amp;limit=20</code></pre>
+  </section>
+
   <section class="api-endpoint">
     <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/authorizations/{authorization_id}</code></div>
     <p>携带对应下载令牌查询授权状态、过期时间、公开节点名和已入账真实发送字节。</p>

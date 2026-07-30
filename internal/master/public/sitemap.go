@@ -28,7 +28,7 @@ func (s Server) sitemap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	origin := sitemapOrigin(r)
-	paths := []string{"/", "/stats", "/api-docs", "/about"}
+	paths := []string{"/", "/stats", "/api-docs", "/changelog", "/about"}
 	for _, project := range projects {
 		if strings.TrimSpace(project.ProjectID) == "" || strings.Contains(project.ProjectID, "/") {
 			continue

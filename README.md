@@ -21,6 +21,7 @@
 - `cmd/node`：下载节点入口
 - `configs/`：示例配置文件
 - `configs/sponsor.example.json`：公开关于页赞助者列表示例；部署时实际文件仍放在主节点可执行文件同级目录并命名为 `sponsor.json`
+- `configs/changelog.example/`：更新日志目录结构与单事件 YAML 示例
 - `docs/`：设计、部署、API 与管理面板文档
 - `internal/`：核心业务实现
 - `web/`：嵌入式前端资源
@@ -54,7 +55,7 @@
 
 ```bash
 ./mirror-master -config config.yaml -projects projects.yaml -quota quota.yaml \
-  -notices notices.yaml -filters filters.yaml
+  -notices notices.yaml -filters filters.yaml -changelog changelog
 ```
 
 如果配置文件缺失，程序会先生成中文示例配置并安全退出。首次运行时，如果检测到所需的安全材料缺失，还会进入首次初始化流程，生成必要的示例配置和密钥材料后再退出，等待你确认后重新启动。
@@ -112,6 +113,7 @@
 - `quota.yaml`：额度、黑名单与白名单配置
 - `notices.yaml`：公共页面公告
 - `filters.yaml`：首页筛选器与目录查询缓存上限
+- `changelog/YYYY-MM/*.yaml`：部署机维护的公开更新记录，修改后自动热重载
 
 主节点配置涵盖：
 
@@ -145,6 +147,7 @@
 - `docs/管理面板.md`
 - `docs/节点通信协议.md`
 - `docs/数据模型与事务.md`
+- `docs/更新日志维护.md`
 
 ## 开发
 

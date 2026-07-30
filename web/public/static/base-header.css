@@ -89,6 +89,7 @@
 .site-nav a {
   padding: 0 12px;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .icon-button {
@@ -104,6 +105,7 @@
 
 .page-download .site-nav a[href="/"],
 .page-stats .site-nav a[href="/stats"],
+.page-changelog .site-nav a[href="/changelog"],
 .page-about .site-nav a[href="/about"],
 .page-api-docs .site-nav a[href="/api-docs"] {
   background: var(--panel-muted);

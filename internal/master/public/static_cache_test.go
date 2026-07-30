@@ -12,7 +12,7 @@ func TestPublicPagesUseVersionedStaticURLs(t *testing.T) {
 	seedRoutableAsset(t, db)
 	srv := Server{Store: Store{DB: db}}
 
-	for _, path := range []string{"/", "/stats", "/download/asset-1", "/about", "/api-docs"} {
+	for _, path := range []string{"/", "/stats", "/download/asset-1", "/changelog", "/about", "/api-docs"} {
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		body := rec.Body.String()

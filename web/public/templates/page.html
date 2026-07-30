@@ -56,6 +56,12 @@
         </svg>
         <span>API 文档</span>
       </a>
+      <a href="/changelog" aria-label="更新日志" title="更新日志">
+        <svg aria-hidden="true">
+          <use href="{{staticURL "icons.svg#changelog"}}"></use>
+        </svg>
+        <span>更新日志</span>
+      </a>
       <a href="/about" aria-label="关于" title="关于">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#about"}}"></use>
@@ -69,6 +75,10 @@
       <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
       <input id="catalog-search-desktop" type="search" autocomplete="off"
         maxlength="100" placeholder="搜索项目、ID 或标签">
+    </label>{{else if .ChangelogSearch}}<label class="site-header__catalog" for="changelog-search-desktop">
+      <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
+      <input id="changelog-search-desktop" type="search" autocomplete="off"
+        maxlength="100" placeholder="搜索更新标题或描述">
     </label>{{end}}
     <div class="theme-tools">
       <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"></button>

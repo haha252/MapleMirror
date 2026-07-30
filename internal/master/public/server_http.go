@@ -28,6 +28,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/robots.txt", s.robotsTXT)
 	mux.HandleFunc("/sitemap.xml", s.sitemap)
 	mux.HandleFunc("/stats", s.statsPage)
+	mux.HandleFunc("/changelog", s.changelogPage)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
@@ -36,6 +37,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/public/v1/catalog", s.catalog)
 	mux.Handle("/api/public/v1/stats", statsJSONCompression(http.HandlerFunc(s.statsAPI)))
 	mux.Handle("/api/public/v1/stats/details", statsJSONCompression(http.HandlerFunc(s.statsDetailsAPI)))
+	mux.HandleFunc("/api/public/v1/changelog", s.changelogAPI)
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
 	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
 	mux.HandleFunc("/api/public/v1/web/challenges", s.webChallenge)
@@ -57,6 +59,9 @@ func (s Server) Close() {
 	}
 	if s.CatalogCache != nil {
 		s.CatalogCache.close()
+	}
+	if s.changelog != nil {
+		s.changelog.close()
 	}
 	if s.ClientBlocks != nil {
 		s.ClientBlocks.close()

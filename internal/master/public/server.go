@@ -44,6 +44,7 @@ type Server struct {
 	WebVerifications             *webVerificationTokenStore
 	CatalogIndex                 *catalogIndex
 	CatalogCache                 *catalogResultCache
+	changelog                    *changelogStore
 	CatalogBatchRows             int
 	CatalogPrefetchRemainingRows *int
 }
@@ -58,7 +59,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	tokenLifetime TokenLifetime,
 	altchaDifficulty, apiBits int, quota config.Quota, loc *time.Location, trusted []string,
 	projects config.Projects, filters config.Filters,
-	projectsPath, filtersPath, noticesPath string, notices []config.PublicNotice,
+	projectsPath, filtersPath, noticesPath, changelogPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
 	logger *logging.Logger, publicProbeNetworkFailures int,
 	catalogBatchRows, catalogPrefetchRemainingRows int,
@@ -112,6 +113,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 		WebVerifications:             webVerifications,
 		CatalogIndex:                 catalogIndex,
 		CatalogCache:                 catalogCache,
+		changelog:                    newChangelogStore(changelogPath, logger),
 		CatalogBatchRows:             catalogBatchRows,
 		CatalogPrefetchRemainingRows: &catalogPrefetchRemainingRows,
 	}, nil

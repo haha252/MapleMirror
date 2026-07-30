@@ -7,6 +7,7 @@
 # 运行期数据、日志与本地确认后的配置
 /data/
 /logs/
+/changelog/
 /config.yaml
 /projects.yaml
 /quota.yaml

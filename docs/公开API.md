@@ -196,6 +196,42 @@ GET /api/public/v1/catalog?q=ffmpeg&filter=software_type:launcher&filter=support
 
 搜索和标签匹配只读取主节点内存索引；项目资产、版本和实时可用性仍在缓存未命中时从数据库读取。服务端以规范化搜索词、排序去重后的筛选项、索引版本和分页位置为键缓存已编码响应与 ETag，TTL 固定 1 分钟；每一页使用独立 ETag。响应带 `Cache-Control: private, max-age=60`。客户端带 `If-None-Match` 命中时返回 `304 Not Modified`。公共资源限流位于目录缓存之前，因此任何到达服务器的请求，包括服务端缓存命中和 304，均计一次请求；浏览器在 `max-age` 新鲜期直接使用私有缓存时不会访问服务器。
 
+### 3.4 更新日志
+
+`GET /api/public/v1/changelog`
+
+按时间倒序返回部署机 `changelog/YYYY-MM/*.yaml` 中的公开更新记录。
+
+| 参数 | 规则 |
+| --- | --- |
+| `minimum_level` | 最低等级，默认为 `info`，可选 `info`、`notice`、`warn`、`critical` |
+| `q` | 可选搜索词，最长 100 个 Unicode 字符，匹配标题和可见描述文本 |
+| `limit` | 每批数量，默认 20，最大 50 |
+| `cursor` | 响应返回的不透明续读游标，不得解析、修改或跨查询复用 |
+
+```json
+{
+  "status": "success",
+  "message": "查询成功",
+  "request_id": "请求标识",
+  "data": {
+    "items": [
+      {
+        "level": "notice",
+        "title": "上线更新日志页面",
+        "occurred_at": "2026-07-30T12:20:00+08:00",
+        "description_html": "新增 <strong>更新日志</strong> 页面。"
+      }
+    ],
+    "next_cursor": "不透明游标"
+  }
+}
+```
+
+`description_html` 已由服务端限制为安全的行内格式，只包含加粗、斜体、删除线、
+`http/https` 链接和换行。配置热重载导致快照变化时，旧游标返回
+`409 CHANGELOG_CHANGED`，客户端应清空已有记录并重新查询首批。
+
 ## 4. 下载接入方式
 
 公开下载分为两条线。网页、官网、论坛、公告页或前端页面里的下载按钮，推荐跳转主站验证页；命令行工具、自动更新器、CI 脚本、下载器或后端服务，使用程序 API 链路。

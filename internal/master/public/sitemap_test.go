@@ -38,6 +38,7 @@ func TestSitemapIncludesPublicPagesAndEnabledProjectPages(t *testing.T) {
 		`<loc>https://mirror.example.test/</loc>`,
 		`<loc>https://mirror.example.test/stats</loc>`,
 		`<loc>https://mirror.example.test/api-docs</loc>`,
+		`<loc>https://mirror.example.test/changelog</loc>`,
 		`<loc>https://mirror.example.test/about</loc>`,
 		`<loc>https://mirror.example.test/p1/</loc>`,
 		`<loc>https://mirror.example.test/p%20two/</loc>`,

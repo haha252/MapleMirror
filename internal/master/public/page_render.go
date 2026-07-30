@@ -7,21 +7,22 @@ import (
 )
 
 type pageData struct {
-	Title         string
-	BrowserTitle  string
-	Subtitle      string
-	BeforeNotices []noticeView
-	AfterNotices  []noticeView
-	Description   string
-	BodyClass     string
-	HideHeader    bool
-	CatalogSearch bool
-	Body          template.HTML
-	Styles        []string
-	Scripts       []string
-	StaticNames   []string
-	StaticJSON    template.JS
-	StatusCode    int
+	Title           string
+	BrowserTitle    string
+	Subtitle        string
+	BeforeNotices   []noticeView
+	AfterNotices    []noticeView
+	Description     string
+	BodyClass       string
+	HideHeader      bool
+	CatalogSearch   bool
+	ChangelogSearch bool
+	Body            template.HTML
+	Styles          []string
+	Scripts         []string
+	StaticNames     []string
+	StaticJSON      template.JS
+	StatusCode      int
 }
 
 func (s Server) assets() (*webAssets, error) {
