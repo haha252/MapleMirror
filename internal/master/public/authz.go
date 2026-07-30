@@ -126,6 +126,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 			slog.String("project_id", debug.ProjectID),
 			slog.String("system", debug.System),
 			slog.String("architecture", debug.Architecture),
+			slog.Int("pow_difficulty", loaded.Difficulty),
 			slog.String("expires_at", debug.ExpiresAt),
 			slog.Int64("max_bytes", debug.MaxBytes),
 			slog.Int("range_limit", debug.RangeLimit),

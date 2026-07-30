@@ -79,6 +79,7 @@ func TestConsoleLoggerUsesHumanReadableChineseFields(t *testing.T) {
 		slog.String("project_id", "FoldCraftLauncher"),
 		slog.String("system", ""),
 		slog.String("architecture", "arm64-v8a"),
+		slog.Int("pow_difficulty", 24),
 		slog.String("client_prefix", "180.98.84.9/32"),
 		slog.Any("request_remaining_tokens", map[string]int64{"ipv4_24": 594, "ipv4_32": 114}),
 		slog.Any("request_remaining_microunits", map[string]int64{"ipv4_24": 594000000}),
@@ -97,6 +98,7 @@ func TestConsoleLoggerUsesHumanReadableChineseFields(t *testing.T) {
 		"，项目=FoldCraftLauncher",
 		"，系统=",
 		"，架构=arm64-v8a",
+		"，难度=24",
 		"，剩余令牌={ipv4_24=594, ipv4_32=114}",
 		"，剩余流量={ipv4_24=20GB, ipv4_32=3GB}",
 	} {

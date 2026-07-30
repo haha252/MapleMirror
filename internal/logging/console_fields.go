@@ -69,6 +69,7 @@ var consoleFieldLabels = map[string]string{
 	"offline":                      "离线",
 	"offline_nodes":                "离线节点",
 	"path":                         "路径",
+	"pow_difficulty":               "难度",
 	"project_id":                   "项目",
 	"project_interval":             "项目间隔",
 	"range_limit":                  "分片限制",
