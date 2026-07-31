@@ -383,10 +383,10 @@ typeof BigInt === "function" && typeof Worker === "function"
 新增独立遥测 writer，根目录为：
 
 ```text
-filepath.Join(config.Logging.Directory, "pow")
+filepath.Join(filepath.Dir(config.Logging.Directory), "pow")
 ```
 
-默认 `logging.directory=logs`，所以实际路径为：
+默认 `logging.directory=logs/master`，主日志位置保持不变；PoW 遥测使用主日志目录的同级目录，所以实际路径为：
 
 ```text
 logs/pow/YYYY-MM-DD.jsonl

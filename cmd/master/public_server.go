@@ -44,7 +44,7 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 	if err != nil {
 		return public.Server{}, err
 	}
-	telemetry, telemetryErr := powtelemetry.New(filepath.Join(cfg.Logging.Directory, "pow"),
+	telemetry, telemetryErr := powtelemetry.New(powTelemetryDirectory(cfg.Logging.Directory),
 		cfg.Logging.RetentionDays, loc)
 	if telemetryErr != nil {
 		logger.Warn(context.Background(), "PoW 遥测日志初始化失败，不影响下载授权",
@@ -54,6 +54,10 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 	}
 	go sampleNodeAvailability(server)
 	return server, nil
+}
+
+func powTelemetryDirectory(masterLogDirectory string) string {
+	return filepath.Join(filepath.Dir(filepath.Clean(masterLogDirectory)), "pow")
 }
 
 func sampleNodeAvailability(server public.Server) {

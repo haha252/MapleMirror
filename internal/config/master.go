@@ -119,7 +119,7 @@ func LoadMaster(path string, warn WarnFunc) (Master, error) {
 }
 
 func applyMasterDefaults(c *Master, warn WarnFunc) {
-	applyLoggingDefaults(&c.Logging, "logs", warn)
+	applyLoggingDefaults(&c.Logging, "logs/master", warn)
 	setString(&c.Server.ManagementListen, "127.0.0.1:9080", "server.management_listen", warn)
 	applyCatalogDefaults(&c.Server, warn)
 	applyDatabaseDefaults(c, warn)
