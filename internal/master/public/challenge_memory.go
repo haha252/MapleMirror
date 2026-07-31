@@ -55,14 +55,16 @@ func (m *challengeMemory) reserve(prefix string, now time.Time) error {
 		m.buckets[prefix] = bucket
 		return errChallengeQuota
 	}
-	bucket.tokens--
-	m.buckets[prefix] = bucket
 	if m.outstanding[prefix] >= m.limits.MaxOutstandingExact {
+		m.buckets[prefix] = bucket
 		return errChallengeOutstanding
 	}
 	if m.total >= m.limits.MaxOutstandingTotal {
+		m.buckets[prefix] = bucket
 		return errChallengeCapacity
 	}
+	bucket.tokens--
+	m.buckets[prefix] = bucket
 	m.outstanding[prefix]++
 	m.total++
 	return nil

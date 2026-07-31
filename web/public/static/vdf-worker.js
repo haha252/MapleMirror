@@ -51,26 +51,20 @@
     let completed = 0;
     let lastReport = performance.now();
     const started = lastReport;
-
-    function step() {
-      const sliceStarted = performance.now();
-      while (completed < iterations && performance.now() - sliceStarted < 25) {
+    while (completed < iterations) {
+      const batchEnd = Math.min(iterations, completed + 256);
+      while (completed < batchEnd) {
         value = (value * value) % modulus;
         completed++;
       }
       const now = performance.now();
-      if (completed === iterations || now - lastReport >= 100) {
+      if (completed === iterations || now - lastReport >= 90) {
         self.postMessage({type: "progress", completed: completed, iterations: iterations});
         lastReport = now;
       }
-      if (completed < iterations) {
-        setTimeout(step, 0);
-        return;
-      }
-      self.postMessage({type: "result", solution: bytesToBase64url(bigIntToBytes(value)),
-        solve_elapsed_ms: Math.max(1, Math.round(performance.now() - started))});
     }
-    step();
+    self.postMessage({type: "result", solution: bytesToBase64url(bigIntToBytes(value)),
+      solve_elapsed_ms: Math.max(1, Math.round(performance.now() - started))});
   }
 
   self.onmessage = function (event) {

@@ -123,6 +123,40 @@ func TestVDFBusyReleasesOutstandingReservation(t *testing.T) {
 	}
 }
 
+func TestOutstandingRejectionDoesNotConsumeBucketToken(t *testing.T) {
+	memory := newChallengeMemory(config.ChallengeLimits{BucketCapacity: 2,
+		BucketFullRefill: "10m", MaxOutstandingExact: 1, MaxOutstandingTotal: 10})
+	now := time.Now().UTC()
+	if err := memory.reserve("192.0.2.9/32", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := memory.reserve("192.0.2.9/32", now); !errors.Is(err, errChallengeOutstanding) {
+		t.Fatalf("expected outstanding rejection, got %v", err)
+	}
+	memory.releaseReservation("192.0.2.9/32")
+	if err := memory.reserve("192.0.2.9/32", now); err != nil {
+		t.Fatalf("outstanding rejection consumed a bucket token: %v", err)
+	}
+}
+
+func TestExpiredChallengeReleasesOutstandingCapacity(t *testing.T) {
+	memory := newChallengeMemory(config.ChallengeLimits{BucketCapacity: 2,
+		BucketFullRefill: "10m", MaxOutstandingExact: 1, MaxOutstandingTotal: 1})
+	now := time.Now().UTC()
+	prefix := "192.0.2.10/32"
+	if err := memory.reserve(prefix, now); err != nil {
+		t.Fatal(err)
+	}
+	memory.put(Challenge{ID: "expired", ClientPrefixKey: prefix,
+		ExpiresAt: now.Add(time.Second).Format(time.RFC3339Nano)}, now)
+	if _, ok := memory.get("expired", now.Add(2*time.Second)); ok {
+		t.Fatal("expired challenge remained loadable")
+	}
+	if err := memory.reserve(prefix, now.Add(2*time.Second)); err != nil {
+		t.Fatalf("expired challenge did not release outstanding capacity: %v", err)
+	}
+}
+
 type failingTelemetryWriter struct{ calls int }
 
 func (w *failingTelemetryWriter) Write(powtelemetry.Record) error {

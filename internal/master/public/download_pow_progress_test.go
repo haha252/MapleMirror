@@ -46,7 +46,16 @@ func TestDownloadPowProgressAssetsDeclareVDFBehavior(t *testing.T) {
 		`self.postMessage({type: "progress", completed: completed, iterations: iterations});`,
 		"performance.now() - started",
 		"const BYTE_LENGTH = 384;",
+		"completed + 256",
+		"now - lastReport >= 90",
 	})
+	workerData, err := fs.ReadFile(assets.staticFS, "vdf-worker.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(workerData), "setTimeout(") {
+		t.Fatal("vdf worker should not yield through timers while its isolated thread is solving")
+	}
 	assertStaticContains(t, assets.staticFS, "download-pow.js", []string{
 		`typeof BigInt !== "function" || typeof Worker !== "function"`,
 		`worker = new Worker(workerURL);`,
