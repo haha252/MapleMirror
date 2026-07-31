@@ -79,7 +79,7 @@ const apiDocsBody = `
       <li>选择可用下载节点。</li>
       <li>跳转到真实下载地址开始下载。</li>
     </ol>
-    <p>外部网站不要直接拼接节点下载地址，也不要调用程序下载用的 <code>/api/public/v2/api/*</code> 接口来替代这个流程。正常网页只使用单个 Worker 和原生 BigInt 完成 RSA repeated-squaring，不使用 WebGPU，不回退 SHA。</p>
+    <p>外部网站不要直接拼接节点下载地址，也不要调用程序下载用的 <code>/api/public/v2/api/*</code> 接口来替代这个流程。</p>
   </section>
 
   <section class="api-endpoint api-flow" id="api-download-flow">
