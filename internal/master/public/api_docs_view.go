@@ -17,7 +17,8 @@ func (s Server) apiDocsPage(w http.ResponseWriter, r *http.Request) {
 		Subtitle:     "面向用户的公共 API",
 		BodyClass:    "page-api-docs",
 		Body:         template.HTML(apiDocsBody),
-		Styles:       []string{"/static/public/api-docs.css"},
+		Styles:       []string{"/static/public/api-docs.css", "/static/public/api-docs-copy.css"},
+		Scripts:      []string{"/static/public/api-docs.js"},
 	})
 }
 
@@ -121,6 +122,7 @@ const apiDocsBody = `
 }</code></pre>
 
     <h3>第三步：创建 API V2 顺序工作量挑战</h3>
+    <p class="api-danger-note" role="alert"><strong>API V1 计算与验证方式弃用提醒：</strong>旧版第三步接口 <code>/api/public/v1/api/challenges</code> 和旧版第五步接口 <code>/api/public/v1/api/authorizations</code> 使用 SHA-256 前导零 nonce 搜索，将在后续版本弃用。API V2 已改为 RSA repeated-squaring 顺序模平方并提交 384 字节定长 <code>solution</code>；请求和响应字段也随之改变，不能只替换接口路径。现有 V1 兼容开关不代表长期可用，新客户端和新集成应直接实现下面的 V2 计算与验证方式。</p>
     <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v2/api/challenges</code></div>
     <p>为指定资产创建 3072 位 RSA repeated-squaring 挑战。响应中的 <code>modulus</code> 和 <code>base</code> 是 384 字节无符号大端整数的无填充 base64url 编码。</p>
     <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>asset_id</td><td>JSON</td><td>要下载的资产标识</td></tr></tbody></table>
@@ -143,6 +145,7 @@ const apiDocsBody = `
 
     <h3>第四步：顺序计算 solution</h3>
     <p>从 <code>y = base</code> 开始，严格执行 <code>iterations</code> 次 <code>y = y² mod modulus</code>，再把 y 编码为 384 字节定长大端 base64url。不得提交十进制、十六进制或可变长整数。</p>
+` + apiVDFPrincipleDetails + `
 
     <h3>第五步：提交 solution 并领取下载授权</h3>
     <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v2/api/authorizations</code></div>

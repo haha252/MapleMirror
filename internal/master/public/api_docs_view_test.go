@@ -34,7 +34,19 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/api/public/v1/projects/{project_id}/assets`,
 		`/api/public/v2/api/challenges`,
 		`/api/public/v2/api/authorizations`,
+		`API V1 计算与验证方式弃用提醒`,
+		`SHA-256 前导零 nonce 搜索`,
+		`不能只替换接口路径`,
+		`/api/public/v1/api/challenges`,
+		`/api/public/v1/api/authorizations`,
+		`class="api-danger-note" role="alert"`,
 		`rsa-repeated-squaring-v1`,
+		`展开了解 RSA repeated-squaring 的计算原理`,
+		`id="api-vdf-principle"`,
+		`复制原理Markdown`,
+		`data-copy-markdown="api-vdf-principle-markdown"`,
+		`repeat exactly iterations times:`,
+		`/static/public/api-docs.js`,
 		`/api/public/v1/blocklist.txt`,
 		`/api/public/v1/blocklist.json`,
 		`/api/public/v1/changelog`,
@@ -57,6 +69,22 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 	if home < 0 || stats < 0 || docs < 0 || about < 0 || !(home < stats && stats < docs && docs < about) {
 		t.Fatalf("expected nav order home, stats, API docs, about: %s", body)
 	}
+}
+
+func TestAPIDocsCopyAssetsDeclareMarkdownBehavior(t *testing.T) {
+	assets, err := loadEmbeddedWebAssets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertStaticContains(t, assets.staticFS, "api-docs.js", []string{
+		`document.querySelectorAll("[data-copy-markdown]")`,
+		`navigator.clipboard.writeText(text)`,
+		`document.execCommand("copy")`,
+		`source.textContent.trim()`,
+	})
+	assertStaticContains(t, assets.staticFS, "api-docs-copy.css", []string{
+		".api-details-actions", ".api-copy-markdown", ".api-principle-points", ".api-danger-note",
+	})
 }
 
 func TestAPIDocsPageRejectsNonGETWithoutPageView(t *testing.T) {
