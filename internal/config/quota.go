@@ -11,15 +11,23 @@ import (
 )
 
 type Quota struct {
-	RequestBuckets                  RequestBuckets `yaml:"request_buckets"`
-	PublicResourceBuckets           RequestBuckets `yaml:"public_resource_buckets"`
-	DailyTraffic                    DailyTraffic   `yaml:"daily_traffic"`
-	AuthorizationMaxBytesMultiplier int            `yaml:"authorization_max_bytes_multiplier"`
-	RangeConcurrencyLimit           int            `yaml:"range_concurrency_limit"`
-	Blacklist                       []string       `yaml:"blacklist"`
-	Blocklist                       Blocklist      `yaml:"blocklist"`
-	AbuseControl                    AbuseControl   `yaml:"abuse_control"`
-	Exemptions                      []string       `yaml:"exemptions"`
+	RequestBuckets                  RequestBuckets  `yaml:"request_buckets"`
+	PublicResourceBuckets           RequestBuckets  `yaml:"public_resource_buckets"`
+	DailyTraffic                    DailyTraffic    `yaml:"daily_traffic"`
+	AuthorizationMaxBytesMultiplier int             `yaml:"authorization_max_bytes_multiplier"`
+	RangeConcurrencyLimit           int             `yaml:"range_concurrency_limit"`
+	Blacklist                       []string        `yaml:"blacklist"`
+	Blocklist                       Blocklist       `yaml:"blocklist"`
+	AbuseControl                    AbuseControl    `yaml:"abuse_control"`
+	ChallengeLimits                 ChallengeLimits `yaml:"challenge_limits"`
+	Exemptions                      []string        `yaml:"exemptions"`
+}
+
+type ChallengeLimits struct {
+	BucketCapacity      int    `yaml:"bucket_capacity"`
+	BucketFullRefill    string `yaml:"bucket_full_refill"`
+	MaxOutstandingExact int    `yaml:"max_outstanding_exact"`
+	MaxOutstandingTotal int    `yaml:"max_outstanding_total"`
 }
 
 type Blocklist struct {
@@ -93,6 +101,19 @@ func LoadQuota(path string, warn WarnFunc) (Quota, error) {
 		warnDefault(warn, "range_concurrency_limit", "32")
 	}
 	setString(&c.Blocklist.AutoBanDuration, "168h", "blocklist.auto_ban_duration", warn)
+	if c.ChallengeLimits.BucketCapacity == 0 {
+		c.ChallengeLimits.BucketCapacity = 30
+		warnDefault(warn, "challenge_limits.bucket_capacity", "30")
+	}
+	setString(&c.ChallengeLimits.BucketFullRefill, "10m", "challenge_limits.bucket_full_refill", warn)
+	if c.ChallengeLimits.MaxOutstandingExact == 0 {
+		c.ChallengeLimits.MaxOutstandingExact = 4
+		warnDefault(warn, "challenge_limits.max_outstanding_exact", "4")
+	}
+	if c.ChallengeLimits.MaxOutstandingTotal == 0 {
+		c.ChallengeLimits.MaxOutstandingTotal = 100000
+		warnDefault(warn, "challenge_limits.max_outstanding_total", "100000")
+	}
 	applyAbuseControlDefaults(&c.AbuseControl, warn)
 	if err := validateQuota(c); err != nil {
 		return c, err
@@ -164,6 +185,13 @@ func validateQuota(c Quota) error {
 		return err
 	}
 	if err := validateAbuseControl(c.AbuseControl); err != nil {
+		return err
+	}
+	if c.ChallengeLimits.BucketCapacity <= 0 || c.ChallengeLimits.MaxOutstandingExact <= 0 ||
+		c.ChallengeLimits.MaxOutstandingTotal <= 0 {
+		return errors.New("challenge_limits 的所有限制值必须大于零")
+	}
+	if err := validDuration("challenge_limits.bucket_full_refill", c.ChallengeLimits.BucketFullRefill); err != nil {
 		return err
 	}
 	return nil

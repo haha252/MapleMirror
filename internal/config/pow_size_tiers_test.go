@@ -10,7 +10,8 @@ import (
 func TestLegacyFixedPoWDifficultyMigratesToSizeTiers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	legacy := strings.Replace(string(MasterExample), "pow_size_tiers:", "legacy_pow_size_tiers:", 1)
-	legacy = strings.Replace(legacy, "altcha:\n", "altcha:\n  difficulty: 24\n", 1)
+	legacy = strings.Replace(legacy, "# 公开 API PoW 挑战配置。\n",
+		"altcha:\n  difficulty: 24\n  challenge_ttl: \"2m\"\n\n# 公开 API PoW 挑战配置。\n", 1)
 	legacy = strings.Replace(legacy, "  algorithm: \"sha256\"\n",
 		"  algorithm: \"sha256\"\n  leading_zero_bits: 24\n", 1)
 	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {

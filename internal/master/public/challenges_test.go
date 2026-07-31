@@ -15,9 +15,7 @@ func TestChallengeHandlersRejectOversizedJSONBody(t *testing.T) {
 		path    string
 		handler func(http.ResponseWriter, *http.Request)
 	}{
-		{name: "web challenge", path: "/api/public/v1/web/challenges", handler: server.webChallenge},
 		{name: "api challenge", path: "/api/public/v1/api/challenges", handler: server.apiChallenge},
-		{name: "web authorization", path: "/api/public/v1/web/authorizations", handler: server.webAuthorize},
 		{name: "api authorization", path: "/api/public/v1/api/authorizations", handler: server.apiAuthorize},
 	}
 	for _, tc := range cases {
@@ -32,6 +30,17 @@ func TestChallengeHandlersRejectOversizedJSONBody(t *testing.T) {
 				t.Fatalf("expected stable error code, body=%s", rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestV1WebHandlersAreRetiredBeforeParsing(t *testing.T) {
+	server := Server{}
+	for _, handler := range []func(http.ResponseWriter, *http.Request){server.webChallenge, server.webAuthorize} {
+		rec := httptest.NewRecorder()
+		handler(rec, httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not-json")))
+		if rec.Code != http.StatusGone || !strings.Contains(rec.Body.String(), `"code":"WEB_PROTOCOL_RETIRED"`) {
+			t.Fatalf("V1 web retirement status=%d body=%s", rec.Code, rec.Body.String())
+		}
 	}
 }
 

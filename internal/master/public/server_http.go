@@ -40,12 +40,17 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/api/public/v1/changelog", s.changelogAPI)
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
 	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
-	mux.HandleFunc("/api/public/v1/web/challenges", s.webChallenge)
-	mux.HandleFunc("/api/public/v1/web/authorizations", s.webAuthorize)
+	mux.Handle("/api/public/v1/web/challenges", privateNoStore(http.HandlerFunc(s.webChallenge)))
+	mux.Handle("/api/public/v1/web/authorizations", privateNoStore(http.HandlerFunc(s.webAuthorize)))
 	mux.HandleFunc("/api/public/v1/web/verifications", s.webVerification)
-	mux.HandleFunc("/api/public/v1/api/challenges", s.apiChallenge)
-	mux.HandleFunc("/api/public/v1/api/authorizations", s.apiAuthorize)
-	mux.HandleFunc("/api/public/v1/authorizations/", s.authorization)
+	mux.Handle("/api/public/v1/api/challenges", privateNoStore(http.HandlerFunc(s.apiChallenge)))
+	mux.Handle("/api/public/v1/api/authorizations", privateNoStore(http.HandlerFunc(s.apiAuthorize)))
+	mux.Handle("/api/public/v1/authorizations/", privateNoStore(http.HandlerFunc(s.authorization)))
+	mux.Handle("/api/public/v2/web/challenges", privateNoStore(http.HandlerFunc(s.webV2Challenge)))
+	mux.Handle("/api/public/v2/web/authorizations", privateNoStore(http.HandlerFunc(s.webV2Authorize)))
+	mux.Handle("/api/public/v2/api/challenges", privateNoStore(http.HandlerFunc(s.apiV2Challenge)))
+	mux.Handle("/api/public/v2/api/authorizations", privateNoStore(http.HandlerFunc(s.apiV2Authorize)))
+	mux.Handle("/api/public/v2/authorizations/", privateNoStore(http.HandlerFunc(s.authorizationV2)))
 	mux.HandleFunc("/", s.downloadPage)
 	if s.ResourceLimiter != nil {
 		return s.ResourceLimiter.middleware(mux, s.TrustedCIDRs)
@@ -54,6 +59,15 @@ func (s Server) Handler() http.Handler {
 }
 
 func (s Server) Close() {
+	if s.Store.Challenges != nil {
+		s.Store.Challenges.Close()
+	}
+	if s.VDFKeys != nil {
+		s.VDFKeys.Close()
+	}
+	if s.PowTelemetry != nil {
+		_ = s.PowTelemetry.Close()
+	}
 	if s.CatalogIndex != nil {
 		s.CatalogIndex.close()
 	}
@@ -83,6 +97,13 @@ func (s Server) ResetClientBlockCache(clientPrefix string) {
 func immutableCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func privateNoStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "private, no-store")
 		next.ServeHTTP(w, r)
 	})
 }

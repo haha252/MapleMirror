@@ -1,26 +1,29 @@
 package public
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"mirror-server/internal/downloadtoken"
 )
 
 type challengeSubmit struct {
-	Kind        string
-	ChallengeID string
-	AssetID     string
-	Solution    string
+	SourceKind      string
+	ProtocolVersion string
+	Algorithm       string
+	ChallengeID     string
+	AssetID         string
+	Solution        string
+	Telemetry       *powTelemetryInput
 }
 
 func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSubmit) {
 	prefix := s.clientPrefix(r)
-	sourceKind := authorizationSourceKind(in.Kind)
+	sourceKind := in.SourceKind
 	now := time.Now().UTC()
 	loaded, err := s.Store.LoadChallenge(r.Context(), in.ChallengeID)
 	if err != nil {
@@ -30,7 +33,8 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, http.StatusNotFound, "CHALLENGE_REQUIRED", "挑战不存在或已失效")
 		return
 	}
-	if loaded.Kind != in.Kind || loaded.AssetID != in.AssetID {
+	if loaded.SourceKind != in.SourceKind || loaded.ProtocolVersion != in.ProtocolVersion ||
+		loaded.Algorithm != in.Algorithm || loaded.AssetID != in.AssetID {
 		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
 			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
 		}
@@ -44,7 +48,11 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与客户端不匹配")
 		return
 	}
-	if !s.validSolution(loaded, normalizeSolution(in.Solution)) {
+	solution := in.Solution
+	if loaded.ProtocolVersion == "v1" {
+		solution = normalizeSolution(solution)
+	}
+	if !s.validSolution(loaded, solution) {
 		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
 			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
 		}
@@ -116,7 +124,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 		debug.ExpiresAt = expiresAt
 	}
 	if s.Logger != nil {
-		s.Logger.Info(r.Context(), "下载令牌已签发",
+		attrs := []slog.Attr{
 			slog.String("request_id", requestID(r)),
 			slog.String("authorization_id", auth.Claims.AuthorizationID),
 			slog.String("asset_id", in.AssetID),
@@ -126,14 +134,25 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 			slog.String("project_id", debug.ProjectID),
 			slog.String("system", debug.System),
 			slog.String("architecture", debug.Architecture),
-			slog.Int("pow_difficulty", loaded.Difficulty),
+			slog.String("pow_algorithm", loaded.Algorithm),
+			slog.String("pow_protocol_version", loaded.ProtocolVersion),
+			slog.Int64("challenge_age_ms", challengeAgeMilliseconds(loaded, time.Now().UTC())),
 			slog.String("expires_at", debug.ExpiresAt),
 			slog.Int64("max_bytes", debug.MaxBytes),
 			slog.Int("range_limit", debug.RangeLimit),
 			slog.Any("request_remaining_tokens", remainingTokens(debug.RequestRemainingMicrounits)),
 			slog.Any("request_remaining_microunits", debug.RequestRemainingMicrounits),
-			slog.Any("traffic_remaining_bytes", debug.TrafficRemainingBytes))
+			slog.Any("traffic_remaining_bytes", debug.TrafficRemainingBytes),
+		}
+		if loaded.ProtocolVersion == "v1" {
+			attrs = append(attrs, slog.Int("pow_difficulty", loaded.Difficulty))
+		} else {
+			attrs = append(attrs, slog.Uint64("pow_iterations", loaded.Iterations),
+				slog.Int("pow_multiplier", loaded.Multiplier), slog.String("modulus_id", loaded.ModulusID))
+		}
+		s.Logger.Info(r.Context(), "下载令牌已签发", attrs...)
 	}
+	s.writePoWTelemetry(r, loaded, auth.Claims.AuthorizationID, in.Telemetry)
 	writeOK(w, r, http.StatusCreated, "下载授权已签发", map[string]any{
 		"authorization_id":        auth.Claims.AuthorizationID,
 		"download_url":            debug.DownloadURL,
@@ -152,11 +171,30 @@ func (s Server) invalidSolutionWeight() int64 {
 }
 
 func (s Server) validSolution(c Challenge, solution string) bool {
-	if c.Kind == "api_pow" {
+	if c.ProtocolVersion == "v2" && c.Algorithm == vdfAlgorithm {
+		return validVDFSolution(c, solution)
+	}
+	if c.ProtocolVersion == "v1" && c.Algorithm == "sha256" {
 		return validLeadingZeros(c, solution)
 	}
-	n, err := strconv.Atoi(solution)
-	return err == nil && n >= 0 && validAltchaSolution(c, solution)
+	if c.ProtocolVersion == "v1" && c.Algorithm == "altcha-sha256-v1" {
+		n, err := strconv.Atoi(solution)
+		return err == nil && n >= 0 && validAltchaSolution(c, solution)
+	}
+	return false
+}
+
+func validAltchaSolution(c Challenge, solution string) bool {
+	sum := sha256.Sum256([]byte(c.Nonce + ":" + solution))
+	return hasLeadingZeros(sum[:], c.Difficulty)
+}
+
+func challengeAgeMilliseconds(c Challenge, now time.Time) int64 {
+	created, err := time.Parse(time.RFC3339Nano, c.CreatedAt)
+	if err != nil || now.Before(created) {
+		return 0
+	}
+	return now.Sub(created).Milliseconds()
 }
 
 func remainingTokens(microunits map[string]int64) map[string]int64 {
@@ -165,44 +203,6 @@ func remainingTokens(microunits map[string]int64) map[string]int64 {
 		out[scope] = value / tokenUnit
 	}
 	return out
-}
-
-func (s Server) authorization(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
-		return
-	}
-	id := r.URL.Path[len("/api/public/v1/authorizations/"):]
-	auth, err := s.Store.Authorization(r.Context(), id)
-	if err != nil {
-		writeError(w, r, http.StatusNotFound, "ASSET_NOT_FOUND", "授权不存在")
-		return
-	}
-	token := authorizationBearer(r)
-	claims, verifyErr := s.Signer.Verify(token)
-	legacyOK := verifyErr == nil && claims.AuthorizationID == id &&
-		claims.AssetID == auth.AssetID && claims.NodeID == auth.NodeID &&
-		claims.ClientPrefix == auth.ClientPrefixKey && claims.ClientPrefix == s.clientPrefix(r)
-	opaqueOK := auth.TokenHash != "" && auth.TokenHash == downloadtoken.OpaqueHash(token) &&
-		auth.ClientPrefixKey == s.clientPrefix(r)
-	if !legacyOK && !opaqueOK {
-		writeError(w, r, http.StatusUnauthorized, "DOWNLOAD_TOKEN_INVALID", "下载令牌无效")
-		return
-	}
-	sent, first, _ := s.Store.AuthorizationBytes(r.Context(), id)
-	writeOK(w, r, http.StatusOK, "查询成功", map[string]any{
-		"authorization_id": auth.AuthorizationID, "asset_id": auth.AssetID,
-		"node_id": auth.NodeName, "state": auth.State, "expires_at": auth.ExpiresAt,
-		"bytes_accounting_enabled": true, "sent_bytes": sent, "first_transfer_at": first,
-	})
-}
-
-func authorizationBearer(r *http.Request) string {
-	const prefix = "Bearer "
-	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, prefix) {
-		return strings.TrimPrefix(auth, prefix)
-	}
-	return ""
 }
 
 func expiresAfter(now time.Time, ttl time.Duration) string {

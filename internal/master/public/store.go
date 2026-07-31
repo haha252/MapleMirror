@@ -16,6 +16,9 @@ import (
 )
 
 var errChallengeQuota = errors.New("挑战创建过于频繁")
+var errChallengeOutstanding = errors.New("当前来源待完成挑战过多")
+var errChallengeCapacity = errors.New("全局待完成挑战已满")
+var errVDFBusy = errors.New("VDF 挑战创建繁忙")
 
 type Store struct {
 	DB                         *sql.DB
@@ -23,6 +26,7 @@ type Store struct {
 	Location                   *time.Location
 	Challenges                 *challengeMemory
 	PoWDifficulty              powSizePolicy
+	VDF                        *vdfService
 	MaxBytes                   maxBytesPolicy
 	RangeLimit                 int
 	Runtime                    *mastercontrol.RuntimeStore
@@ -101,16 +105,6 @@ type NodeSummary struct {
 	PublicDownloadBaseURL string `json:"-"`
 }
 
-type Challenge struct {
-	ID              string
-	Kind            string
-	AssetID         string
-	ClientPrefixKey string
-	Nonce           string
-	Difficulty      int
-	ExpiresAt       string
-}
-
 type IssuedAuthorization struct {
 	Claims downloadtoken.Claims
 }
@@ -127,7 +121,11 @@ type AuthorizationStatus struct {
 }
 
 func (s *Store) CreateChallenge(ctx context.Context, kind, assetID, prefix string, difficulty int, ttl time.Duration, _ string) (Challenge, error) {
-	return s.createChallenge(ctx, kind, assetID, prefix,
+	source, algorithm := "web", "altcha-sha256-v1"
+	if kind == "api_pow" {
+		source, algorithm = "api", "sha256"
+	}
+	return s.createChallenge(ctx, source, "v1", algorithm, assetID, prefix,
 		func(int64) int { return difficulty }, ttl)
 }
 
@@ -136,20 +134,29 @@ func (s *Store) CreatePoWChallenge(ctx context.Context, kind, assetID, prefix st
 	if len(s.PoWDifficulty.tiers) == 0 {
 		return Challenge{}, errors.New("普通 PoW 大小分档未初始化")
 	}
-	return s.createChallenge(ctx, kind, assetID, prefix,
+	source, algorithm := "web", "altcha-sha256-v1"
+	if kind == "api_pow" {
+		source, algorithm = "api", "sha256"
+	}
+	return s.createChallenge(ctx, source, "v1", algorithm, assetID, prefix,
 		func(sizeBytes int64) int {
 			return s.PoWDifficulty.difficulty(sizeBytes, additionalBits)
 		}, ttl)
 }
 
-func (s *Store) createChallenge(ctx context.Context, kind, assetID, prefix string,
+func (s *Store) createChallenge(ctx context.Context, source, version, algorithm, assetID, prefix string,
 	difficultyForSize func(int64) int, ttl time.Duration) (Challenge, error) {
 	now := time.Now().UTC()
 	challenges := s.challengeMemory()
-	challenges.cleanup(now)
-	if !challenges.allow(kind, prefix, now) {
-		return Challenge{}, errChallengeQuota
+	if err := challenges.reserve(prefix, now); err != nil {
+		return Challenge{}, err
 	}
+	committed := false
+	defer func() {
+		if !committed {
+			challenges.releaseReservation(prefix)
+		}
+	}()
 	id, err := requestid.New()
 	if err != nil {
 		return Challenge{}, err
@@ -160,14 +167,19 @@ func (s *Store) createChallenge(ctx context.Context, kind, assetID, prefix strin
 	}
 	challenge := Challenge{
 		ID:              id,
-		Kind:            kind,
+		SourceKind:      source,
+		ProtocolVersion: version,
+		Algorithm:       algorithm,
 		AssetID:         assetID,
+		AssetSizeBytes:  sizeBytes,
 		ClientPrefixKey: prefix,
+		CreatedAt:       now.Format(time.RFC3339Nano),
 		Nonce:           randomText(16),
 		Difficulty:      difficultyForSize(sizeBytes),
 		ExpiresAt:       now.Add(ttl).Format(time.RFC3339Nano),
 	}
 	challenges.put(challenge, now)
+	committed = true
 	return challenge, nil
 }
 
@@ -177,10 +189,6 @@ func (s *Store) LoadChallenge(_ context.Context, id string) (Challenge, error) {
 		return Challenge{}, sql.ErrNoRows
 	}
 	return challenge, nil
-}
-
-func (s *Store) consumeChallenge(id string) bool {
-	return s.challengeMemory().consume(id, time.Now().UTC())
 }
 
 func (s *Store) beginChallenge(id string) (Challenge, bool, bool) {

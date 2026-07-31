@@ -21,8 +21,9 @@ import (
 type Server struct {
 	Store                        Store
 	Signer                       downloadtoken.Signer
-	ALTCHATTL                    time.Duration
+	VDFTTL                       time.Duration
 	APITTL                       time.Duration
+	APIV1Enabled                 *bool
 	TokenLifetime                TokenLifetime
 	TrustedCIDRs                 []string
 	Logger                       *logging.Logger
@@ -43,6 +44,9 @@ type Server struct {
 	CatalogIndex                 *catalogIndex
 	CatalogCache                 *catalogResultCache
 	changelog                    *changelogStore
+	VDFKeys                      *vdfKeyManager
+	PowTelemetry                 PoWTelemetryWriter
+	TelemetryWarnings            *telemetryWarningLimiter
 	CatalogBatchRows             int
 	CatalogPrefetchRemainingRows *int
 }
@@ -53,9 +57,10 @@ type TokenLifetime struct {
 	MaxDuration            time.Duration
 }
 
-func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duration,
+func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	tokenLifetime TokenLifetime,
-	powSizeTiers []config.PoWSizeTier, quota config.Quota, loc *time.Location, trusted []string,
+	powSizeTiers []config.PoWSizeTier, vdfSizeTiers []config.VDFSizeTier, vdfConfig config.VDF,
+	apiV1Enabled bool, quota config.Quota, loc *time.Location, trusted []string,
 	projects config.Projects, filters config.Filters,
 	projectsPath, filtersPath, noticesPath, changelogPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
@@ -68,12 +73,25 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	if err != nil {
 		return Server{}, err
 	}
-	assets, err := loadDefaultWebAssets()
+	vdfPolicy, err := newVDFPolicy(vdfSizeTiers, vdfConfig)
 	if err != nil {
 		return Server{}, err
 	}
-	challenges := newChallengeMemory()
-	challenges.startCleanup(minDuration(altchaTTL, apiTTL, time.Minute))
+	rotation, err := time.ParseDuration(vdfConfig.KeyRotationInterval)
+	if err != nil {
+		return Server{}, err
+	}
+	keys, err := newVDFKeyManager(rotation, logger, nil)
+	if err != nil {
+		return Server{}, err
+	}
+	assets, err := loadDefaultWebAssets()
+	if err != nil {
+		keys.Close()
+		return Server{}, err
+	}
+	challenges := newChallengeMemory(quota.ChallengeLimits)
+	challenges.startCleanup(minDuration(vdfTTL, apiTTL, time.Minute))
 	blocklist := newBlocklistPolicy(quota, logger)
 	blocklist.start()
 	abuseTracker := newAbuseTracker(quota.AbuseControl)
@@ -87,6 +105,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 	return Server{
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
 			Challenges: challenges, PoWDifficulty: powDifficulty,
+			VDF: &vdfService{keys: keys, policy: vdfPolicy,
+				semaphore: make(chan struct{}, vdfConfig.MaxParallelCreations)},
 			MaxBytes:   newMaxBytesPolicy(quota),
 			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime,
 			PublicProbeNetworkFailures: publicProbeNetworkFailures,
@@ -94,8 +114,9 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 			Logger:                     logger,
 			StatsBuffer:                statsBuffer},
 		Signer:                       signer,
-		ALTCHATTL:                    altchaTTL,
+		VDFTTL:                       vdfTTL,
 		APITTL:                       apiTTL,
+		APIV1Enabled:                 &apiV1Enabled,
 		TokenLifetime:                tokenLifetime,
 		TrustedCIDRs:                 trusted,
 		Logger:                       logger,
@@ -116,6 +137,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, altchaTTL, apiTTL time.Duratio
 		CatalogIndex:                 catalogIndex,
 		CatalogCache:                 catalogCache,
 		changelog:                    newChangelogStore(changelogPath, logger),
+		VDFKeys:                      keys,
 		CatalogBatchRows:             catalogBatchRows,
 		CatalogPrefetchRemainingRows: &catalogPrefetchRemainingRows,
 	}, nil
@@ -205,16 +227,6 @@ func projectAssetMap(projects config.Projects) map[string]projectAssetConfig {
 		}
 	}
 	return projectAssets
-}
-
-func minDuration(values ...time.Duration) time.Duration {
-	out := time.Duration(0)
-	for _, value := range values {
-		if value > 0 && (out == 0 || value < out) {
-			out = value
-		}
-	}
-	return out
 }
 
 func (s Server) staticURL(name string) string {

@@ -16,13 +16,6 @@ func insertAuthorization(ctx context.Context, tx *sql.Tx, id string, c Challenge
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued', ?, ?, ?, ?, ?, ?)`,
 		id, c.AssetID, nodeID, c.ClientPrefixKey, issued, expires, size,
 		trafficLimit, rangeLimit, reqID, tokenHash,
-		firstConnectionSeconds, idleTimeoutSeconds, maxDurationSeconds, authorizationSourceKind(c.Kind))
+		firstConnectionSeconds, idleTimeoutSeconds, maxDurationSeconds, c.SourceKind)
 	return err
-}
-
-func authorizationSourceKind(challengeKind string) string {
-	if challengeKind == "api_pow" {
-		return "api"
-	}
-	return "web"
 }

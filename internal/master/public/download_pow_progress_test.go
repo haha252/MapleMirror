@@ -36,24 +36,23 @@ func TestDownloadPowPageIncludesProgressLayers(t *testing.T) {
 	}
 }
 
-func TestDownloadPowProgressAssetsDeclarePlannedBehavior(t *testing.T) {
+func TestDownloadPowProgressAssetsDeclareVDFBehavior(t *testing.T) {
 	assets, err := loadEmbeddedWebAssets()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertStaticContains(t, assets.staticFS, "pow-loader.js", []string{
-		"const progressBatch = 8192;",
-		"const progressInterval = 200;",
-		"const subtleProgressBatch = 2048;",
-		`self.postMessage({type: "progress", attempts: pending});`,
-		"typeof options.onProgress",
-		"onProgress(attempts);",
+	assertStaticContains(t, assets.staticFS, "vdf-worker.js", []string{
+		"value = (value * value) % modulus;",
+		`self.postMessage({type: "progress", completed: completed, iterations: iterations});`,
+		"performance.now() - started",
+		"const BYTE_LENGTH = 384;",
 	})
 	assertStaticContains(t, assets.staticFS, "download-pow.js", []string{
-		"const chancePerAttempt = Math.pow(2, -bits);",
-		"const target = Math.ceil(Math.log(0.2) / Math.log1p(-chancePerAttempt));",
-		"if (count <= target) return 95 * count / target;",
-		"return Math.min(99, 95 + 4 * (1 - Math.exp(-(count - target) / target)));",
+		`typeof BigInt !== "function" || typeof Worker !== "function"`,
+		`worker = new Worker(workerURL);`,
+		"100 * message.completed / message.iterations",
+		`postJSON("/api/public/v2/web/challenges"`,
+		`postJSON("/api/public/v2/web/authorizations"`,
 		`setStatus("正在计算验证答案...", "muted", 0);`,
 		`setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);`,
 	})

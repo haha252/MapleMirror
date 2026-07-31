@@ -79,7 +79,7 @@ const apiDocsBody = `
       <li>选择可用下载节点。</li>
       <li>跳转到真实下载地址开始下载。</li>
     </ol>
-    <p>外部网站不要直接拼接节点下载地址，也不要调用程序下载用的 <code>/api/public/v1/api/*</code> 接口来替代这个流程。本站网页验证采用 C 语言 WASM 计算，速度快，并由主站统一维护。</p>
+    <p>外部网站不要直接拼接节点下载地址，也不要调用程序下载用的 <code>/api/public/v2/api/*</code> 接口来替代这个流程。正常网页只使用单个 Worker 和原生 BigInt 完成 RSA repeated-squaring，不使用 WebGPU，不回退 SHA。</p>
   </section>
 
   <section class="api-endpoint api-flow" id="api-download-flow">
@@ -120,35 +120,37 @@ const apiDocsBody = `
   }
 }</code></pre>
 
-    <h3>第三步：创建 API PoW 挑战</h3>
-    <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v1/api/challenges</code></div>
-    <p>为指定资产创建 SHA-256 前导零 PoW 挑战。主节点会按可信资产大小和来源请求频率选择实际难度；响应会返回 <code>challenge_id</code>、<code>nonce_seed</code>、<code>leading_zero_bits</code> 和 <code>canonical_format</code>。</p>
+    <h3>第三步：创建 API V2 顺序工作量挑战</h3>
+    <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v2/api/challenges</code></div>
+    <p>为指定资产创建 3072 位 RSA repeated-squaring 挑战。响应中的 <code>modulus</code> 和 <code>base</code> 是 384 字节无符号大端整数的无填充 base64url 编码。</p>
     <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>asset_id</td><td>JSON</td><td>要下载的资产标识</td></tr></tbody></table>
     <p class="api-label">Example Request</p>
-    <pre><code>POST /api/public/v1/api/challenges
+    <pre><code>POST /api/public/v2/api/challenges
 {"asset_id":"asset_123"}</code></pre>
     <p class="api-label">Example Response</p>
     <pre><code>{
   "status": "success",
   "data": {
     "challenge_id": "challenge_123",
-    "algorithm": "sha256",
-    "leading_zero_bits": 23,
-    "canonical_format": "download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}"
+    "algorithm": "rsa-repeated-squaring-v1",
+    "modulus_id": "模数标识",
+    "modulus": "512 字符 base64url 整数",
+    "base": "512 字符 base64url 整数",
+    "iterations": 96000,
+    "encoding": "base64url-uint-be-384"
   }
 }</code></pre>
 
-    <h3>第四步：计算 nonce</h3>
-    <p>程序需要寻找一个 <code>nonce</code>，让下面这个字符串的 SHA-256 摘要满足响应里的 <code>leading_zero_bits</code>：</p>
-    <pre><code>download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}</code></pre>
+    <h3>第四步：顺序计算 solution</h3>
+    <p>从 <code>y = base</code> 开始，严格执行 <code>iterations</code> 次 <code>y = y² mod modulus</code>，再把 y 编码为 384 字节定长大端 base64url。不得提交十进制、十六进制或可变长整数。</p>
 
-    <h3>第五步：提交 nonce 并领取下载授权</h3>
-    <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v1/api/authorizations</code></div>
-    <p>提交 PoW 结果并领取短时、单节点绑定的下载授权。成功后会返回 <code>download_url</code> 和 <code>download_token</code>。</p>
+    <h3>第五步：提交 solution 并领取下载授权</h3>
+    <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v2/api/authorizations</code></div>
+    <p>提交顺序工作量结果并领取短时、单节点绑定的下载授权。<code>telemetry</code> 可选且只用于统计，不影响授权。API V1 在配置开启时仍保持原 SHA-256 合同。</p>
     <table class="api-params"><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>challenge_id</td><td>JSON</td><td>挑战标识</td></tr><tr><td>asset_id</td><td>JSON</td><td>资产标识</td></tr><tr><td>nonce</td><td>JSON</td><td>满足前导零要求的 nonce</td></tr></tbody></table>
     <p class="api-label">Example Request</p>
-    <pre><code>POST /api/public/v1/api/authorizations
-{"challenge_id":"challenge_123","asset_id":"asset_123","nonce":"456789"}</code></pre>
+    <pre><code>POST /api/public/v2/api/authorizations
+{"challenge_id":"challenge_123","asset_id":"asset_123","solution":"512 字符 base64url 整数"}</code></pre>
     <p class="api-label">Example Response</p>
     <pre><code>{
   "status": "success",

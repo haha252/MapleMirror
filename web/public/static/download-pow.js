@@ -1,31 +1,25 @@
 (function () {
+  "use strict";
   const source = document.getElementById("download-pow-asset");
   const title = document.getElementById("download-pow-title");
   const meta = document.getElementById("download-pow-meta");
   const statusBox = document.getElementById("download-pow-status");
-  const statusCopies = statusBox && statusBox.querySelectorAll(".download-pow__status-copy");
-  const retryButton = document.getElementById("download-pow-retry");
+  const copies = statusBox && statusBox.querySelectorAll(".download-pow__status-copy");
+  const retry = document.getElementById("download-pow-retry");
   const returnButton = document.querySelector(".download-pow__back");
-  if (!source || !title || !meta || !statusBox || !statusCopies ||
-      statusCopies.length !== 2 || !retryButton) return;
+  if (!source || !title || !meta || !statusBox || !copies || copies.length !== 2 || !retry) return;
 
   const asset = JSON.parse(source.textContent || "{}");
   let running = false;
-  let progressFrame = 0;
-  let pendingProgressAttempts = 0;
-  let pendingProgressDifficulty = 0;
+  let worker = null;
 
   function bytesText(value) {
-    const size = Number(value) || 0;
-    if (size <= 0) return "";
     const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let scaled = size;
+    let size = Number(value) || 0;
     let unit = 0;
-    while (scaled >= 1024 && unit < units.length - 1) {
-      scaled = scaled / 1024;
-      unit++;
-    }
-    return (unit === 0 ? String(scaled) : scaled.toFixed(2)) + " " + units[unit];
+    if (size <= 0) return "";
+    while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit++; }
+    return (unit === 0 ? String(size) : size.toFixed(2)) + " " + units[unit];
   }
 
   function showText(element, value) {
@@ -34,30 +28,24 @@
     element.hidden = text === "";
   }
 
-  function setStatusContent(message, percent) {
-    statusCopies.forEach(function (copy) {
-      copy.querySelector(".download-pow__status-message").textContent = message;
-      const percentBox = copy.querySelector(".download-pow__status-percent");
-      percentBox.textContent = percent === null ? "" : percent + "%";
-      percentBox.hidden = percent === null;
-    });
-  }
-
   function setStatus(message, level, progress) {
     const active = Number.isFinite(progress);
     const value = active ? Math.max(0, Math.min(100, progress)) : null;
     const percent = active ? Math.round(value) : null;
     statusBox.className = "status " + (level || "muted") + (active ? " status--progress" : "");
-    setStatusContent(message, percent);
+    copies.forEach(function (copy) {
+      copy.querySelector(".download-pow__status-message").textContent = message;
+      const box = copy.querySelector(".download-pow__status-percent");
+      box.textContent = percent === null ? "" : percent + "%";
+      box.hidden = percent === null;
+    });
     statusBox.setAttribute("role", active ? "progressbar" : "status");
     statusBox.setAttribute("aria-live", active ? "off" : "polite");
     if (!active) {
       statusBox.style.removeProperty("--download-pow-progress");
-      statusBox.removeAttribute("aria-valuemin");
-      statusBox.removeAttribute("aria-valuemax");
-      statusBox.removeAttribute("aria-valuenow");
-      statusBox.removeAttribute("aria-valuetext");
-      statusBox.removeAttribute("aria-label");
+      ["aria-valuemin", "aria-valuemax", "aria-valuenow", "aria-valuetext", "aria-label"].forEach(function (name) {
+        statusBox.removeAttribute(name);
+      });
       return;
     }
     statusBox.style.setProperty("--download-pow-progress", value + "%");
@@ -68,49 +56,49 @@
     statusBox.setAttribute("aria-label", message);
   }
 
-  function estimatedProgress(attempts, difficulty) {
-    const bits = Math.max(1, Math.floor(Number(difficulty) || 0));
-    const chancePerAttempt = Math.pow(2, -bits);
-    const target = Math.ceil(Math.log(0.2) / Math.log1p(-chancePerAttempt));
-    const count = Math.max(0, Number(attempts) || 0);
-    if (count <= target) return 95 * count / target;
-    return Math.min(99, 95 + 4 * (1 - Math.exp(-(count - target) / target)));
-  }
-
-  function queueCalculationProgress(attempts, difficulty) {
-    pendingProgressAttempts = attempts;
-    pendingProgressDifficulty = difficulty;
-    if (progressFrame) return;
-    progressFrame = window.requestAnimationFrame(function () {
-      progressFrame = 0;
-      setStatus("正在计算验证答案...", "muted",
-        estimatedProgress(pendingProgressAttempts, pendingProgressDifficulty));
-    });
-  }
-
-  function cancelProgressUpdate() {
-    if (!progressFrame) return;
-    window.cancelAnimationFrame(progressFrame);
-    progressFrame = 0;
-    pendingProgressAttempts = 0;
-    pendingProgressDifficulty = 0;
-  }
-
-  function powStartupMessage() {
-    return "PoW 验证组件启动失败。请升级当前浏览器，或更换为新版 Chrome、Edge、Firefox、Safari 后重试。";
-  }
-
   async function postJSON(url, payload) {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
-    });
-    const text = await resp.text();
+    const response = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload), cache: "no-store"});
+    const text = await response.text();
     let body = {message: text};
-    try { body = JSON.parse(text); } catch (err) {}
-    if (!resp.ok) throw new Error(body.message || "请求失败");
+    try { body = JSON.parse(text); } catch (error) {}
+    if (!response.ok) throw new Error(body.message || "请求失败");
     return body;
+  }
+
+  function stopWorker() {
+    if (worker) worker.terminate();
+    worker = null;
+  }
+
+  function solveVDF(challenge) {
+    return new Promise(function (resolve, reject) {
+      const workerURL = window.MirrorStatic && window.MirrorStatic["vdf-worker.js"];
+      if (!workerURL) { reject(new Error("验证 Worker 资源缺失")); return; }
+      stopWorker();
+      worker = new Worker(workerURL);
+      worker.onmessage = function (event) {
+        const message = event.data || {};
+        if (message.type === "progress") {
+          setStatus("正在计算验证答案...", "muted", 100 * message.completed / message.iterations);
+        } else if (message.type === "result") {
+          stopWorker();
+          resolve(message);
+        } else if (message.type === "error") {
+          stopWorker(); reject(new Error(message.message || "验证计算失败"));
+        }
+      };
+      worker.onerror = function () { stopWorker(); reject(new Error("验证 Worker 运行失败")); };
+      worker.postMessage({modulus: challenge.modulus, base: challenge.base, iterations: challenge.iterations});
+    });
+  }
+
+  function telemetry(elapsed) {
+    const platform = navigator.userAgentData && navigator.userAgentData.platform || navigator.platform || "";
+    const data = {solve_elapsed_ms: elapsed, platform: platform,
+      hardware_concurrency: navigator.hardwareConcurrency || 0};
+    if (Number.isFinite(navigator.deviceMemory)) data.device_memory_gib = navigator.deviceMemory;
+    return data;
   }
 
   function downloadURL(data) {
@@ -119,117 +107,54 @@
     return target.toString();
   }
 
-  function safeReferrerURL() {
-    const raw = String(document.referrer || "").trim();
-    if (!raw) return "";
-    try {
-      const target = new URL(raw);
-      if (target.protocol !== "http:" && target.protocol !== "https:") return "";
-      if (target.href === window.location.href) return "";
-      return target.href;
-    } catch (err) {
-      return "";
-    }
-  }
-
-  function fallbackTo(referrerURL) {
-    window.location.assign(referrerURL || "/");
-  }
-
-  function likelyOpenedInNewTab(referrerURL) {
-    return Boolean(window.opener) || Boolean(referrerURL && window.history.length <= 1);
-  }
-
-  function closeWithFallback(referrerURL) {
-    const timer = window.setTimeout(function () {
-      fallbackTo(referrerURL);
-    }, 300);
-    window.addEventListener("pagehide", function () {
-      window.clearTimeout(timer);
-    }, {once: true});
-    window.close();
-  }
-
-  function backWithFallback(referrerURL) {
-    if (window.history.length <= 1) {
-      fallbackTo(referrerURL);
-      return;
-    }
-    const timer = window.setTimeout(function () {
-      fallbackTo(referrerURL);
-    }, 700);
-    window.addEventListener("pagehide", function () {
-      window.clearTimeout(timer);
-    }, {once: true});
-    window.history.back();
-  }
-
   async function start() {
     if (running) return;
-    retryButton.hidden = true;
-    if (!asset.available) {
-      setStatus(asset.unavailable_reason, "warn");
-      return;
-    }
-    if (!window.crypto || !window.crypto.subtle || !window.PowSolver) {
-      setStatus(powStartupMessage(), "warn status--strong");
+    stopWorker(); retry.hidden = true;
+    if (!asset.available) { setStatus(asset.unavailable_reason, "warn"); return; }
+    if (typeof BigInt !== "function" || typeof Worker !== "function") {
+      setStatus("当前浏览器不支持顺序验证，请升级 Chrome、Edge、Firefox 或 Safari。", "warn status--strong");
       return;
     }
     running = true;
     try {
       setStatus("正在创建下载挑战...", "muted");
-      const challengeResp = await postJSON("/api/public/v1/web/challenges", {asset_id: asset.asset_id});
-      const challengeData = challengeResp.data || {};
-      const altcha = challengeData.altcha || {};
-      if (!challengeData.challenge_id || !altcha.challenge) throw new Error("挑战数据缺失");
-      const difficulty = challengeData.difficulty || 10;
-      setStatus("正在计算验证答案...", "muted", 0);
-      let number;
-      try {
-        number = await window.PowSolver.solve(altcha.challenge, difficulty, {
-          onProgress: function (attempts) {
-            queueCalculationProgress(attempts, difficulty);
-          }
-        });
-      } catch (err) {
-        throw new Error(powStartupMessage());
+      const challengeResponse = await postJSON("/api/public/v2/web/challenges", {asset_id: asset.asset_id});
+      const challenge = challengeResponse.data || {};
+      if (challenge.algorithm !== "rsa-repeated-squaring-v1" || challenge.encoding !== "base64url-uint-be-384" ||
+          !challenge.challenge_id || !challenge.modulus || !challenge.base || !challenge.iterations) {
+        throw new Error("挑战数据不完整");
       }
-      cancelProgressUpdate();
+      setStatus("正在计算验证答案...", "muted", 0);
+      const solved = await solveVDF(challenge);
       setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);
-      const authResp = await postJSON("/api/public/v1/web/authorizations", {
-        challenge_id: challengeData.challenge_id,
-        asset_id: asset.asset_id,
-        altcha_payload: {number: number}
+      const authorization = await postJSON("/api/public/v2/web/authorizations", {
+        challenge_id: challenge.challenge_id, asset_id: asset.asset_id, solution: solved.solution,
+        telemetry: telemetry(solved.solve_elapsed_ms)
       });
-      const authData = authResp.data || {};
-      if (!authData.download_url || !authData.download_token) throw new Error("授权数据缺失");
+      const data = authorization.data || {};
+      if (!data.download_url || !data.download_token) throw new Error("授权数据缺失");
       setStatus("令牌签发完成，正在开始下载。", "ok");
-      window.location.assign(downloadURL(authData));
-    } catch (err) {
-      cancelProgressUpdate();
-      setStatus(err && err.message ? err.message : "下载失败", "warn");
-      retryButton.hidden = false;
-    } finally {
-      running = false;
-    }
+      window.location.assign(downloadURL(data));
+    } catch (error) {
+      stopWorker();
+      setStatus(error && error.message || "下载失败", "warn");
+      retry.hidden = false;
+    } finally { running = false; }
+  }
+
+  function setupReturnButton() {
+    if (!returnButton) return;
+    let referrer = "";
+    try { const url = new URL(document.referrer); if (url.href !== window.location.href) referrer = url.href; } catch (error) {}
+    returnButton.addEventListener("click", function () {
+      if (window.history.length > 1) window.history.back(); else window.location.assign(referrer || "/");
+    });
   }
 
   showText(title, asset.project_name);
-  showText(meta, [
-    asset.version,
-    asset.system,
-    asset.architecture,
-    bytesText(asset.size_bytes)
-  ].filter(Boolean).join(" / "));
-  retryButton.addEventListener("click", start);
-  if (returnButton) {
-    const referrerURL = safeReferrerURL();
-    const openedInNewTab = likelyOpenedInNewTab(referrerURL);
-    returnButton.textContent = openedInNewTab ? "关闭并返回来源页" : "返回上一页";
-    returnButton.addEventListener("click", function () {
-      if (openedInNewTab) closeWithFallback(referrerURL);
-      else backWithFallback(referrerURL);
-    });
-  }
+  showText(meta, [asset.version, asset.system, asset.architecture, bytesText(asset.size_bytes)].filter(Boolean).join(" / "));
+  retry.addEventListener("click", start);
+  window.addEventListener("pagehide", stopWorker);
+  setupReturnButton();
   start();
 })();

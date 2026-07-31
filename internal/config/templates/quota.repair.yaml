@@ -71,6 +71,17 @@ authorization_max_bytes_multiplier: 2
 # 单个下载授权允许同时存在的 Range 请求数。
 range_concurrency_limit: 32
 
+# Web V2、API V1 和 API V2 共享的挑战创建护栏。
+challenge_limits:
+  # 精确来源挑战令牌桶的容量。
+  bucket_capacity: 30
+  # 挑战令牌桶从空恢复到满所需时间。
+  bucket_full_refill: "10m"
+  # 单个精确来源允许的待完成挑战数。
+  max_outstanding_exact: 4
+  # 主节点允许的全局待完成挑战数。
+  max_outstanding_total: 100000
+
 # 黑名单命中后会拒绝挑战创建和下载授权签发；exemptions 优先于黑名单。
 blocklist:
   # 静态黑名单 IP 或 CIDR 列表；可写单个 IP 或网段。

@@ -44,8 +44,8 @@ logging:
   console_level: "info"
   # 文件日志等级，可选 debug、info、warn、error。
   file_level: "info"
-  # 日志文件目录；主节点按日期写入 master-YYYY-MM-DD.log，历史日志会自动压缩为 .log.gz。
-  directory: "logs/master"
+  # 日志根目录；主节点按日期写入 master-YYYY-MM-DD.log，PoW 遥测写入 pow/ 子目录。
+  directory: "logs"
   # 日志保留天数；早于该天数的主节点 .log 和 .log.gz 会在轮转时清理。
   retention_days: 365
   # 单个日志文件上限（MiB）；达到后按序号封存并在后台压缩，默认 1 GiB。
@@ -134,10 +134,53 @@ pow_size_tiers:
     # SHA-256 前导零位数。
     difficulty: 26
 
-# 网页下载验证挑战配置。
-altcha:
-  # 网页挑战从创建到过期的有效时间。
+# 正常网页与公开 API V2 的 repeated-squaring 迭代数分档。
+vdf_size_tiers:
+  -
+    # 该档生效的最小资产大小。
+    min_size: "0 B"
+    # 该档的基础重复平方迭代数。
+    iterations: 12000
+  -
+    # 该档生效的最小资产大小。
+    min_size: "5 MiB"
+    # 该档的基础重复平方迭代数。
+    iterations: 48000
+  -
+    # 该档生效的最小资产大小。
+    min_size: "50 MiB"
+    # 该档的基础重复平方迭代数。
+    iterations: 96000
+  -
+    # 该档生效的最小资产大小。
+    min_size: "150 MiB"
+    # 该档的基础重复平方迭代数。
+    iterations: 192000
+  -
+    # 该档生效的最小资产大小。
+    min_size: "300 MiB"
+    # 该档的基础重复平方迭代数。
+    iterations: 384000
+  -
+    # 该档生效的最小资产大小。
+    min_size: "500 MiB"
+    # 该档的基础重复平方迭代数。
+    iterations: 768000
+
+# RSA repeated-squaring 挑战配置。
+vdf:
+  # V2 挑战从创建到过期的有效时间。
   challenge_ttl: "2m"
+  # 后台生成并原子切换 RSA 模数的间隔。
+  key_rotation_interval: "24h"
+  # 可疑来源的迭代数倍率。
+  elevated_multiplier: 2
+  # 严重来源的迭代数倍率。
+  severe_multiplier: 4
+  # 单个挑战允许的最大迭代数。
+  max_iterations: 10000000
+  # 服务端同时计算预期答案的最大数量。
+  max_parallel_creations: 4
 
 # 公开 API PoW 挑战配置。
 api_pow:
@@ -145,6 +188,8 @@ api_pow:
   algorithm: "sha256"
   # 公开 API 挑战从创建到过期的有效时间。
   challenge_ttl: "2m"
+  # 是否保留 V1 SHA-256 挑战和授权入口。
+  v1_enabled: true
 
 # 公共下载链路自适应防御与惩罚 PoW。
 abuse_control:

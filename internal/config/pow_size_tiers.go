@@ -25,16 +25,18 @@ func DefaultPoWSizeTiers() []PoWSizeTier {
 	return append([]PoWSizeTier(nil), defaultPoWSizeTiers...)
 }
 
-func readMasterYAML(path string, target *Master) ([]byte, bool, bool, bool, error) {
-	var legacyALTCHA, legacyAPI bool
+func readMasterYAML(path string, target *Master) ([]byte, bool, bool, bool, bool, error) {
+	var legacyALTCHA, legacyAPI, legacyTTL bool
 	data, repaired, err := readYAMLWithRepair(path, target, MasterExample, MasterExample,
 		func(doc *yaml.Node) bool {
 			changed, oldALTCHA, oldAPI := migrateMasterPoWSizeTiers(doc)
 			legacyALTCHA = legacyALTCHA || oldALTCHA
 			legacyAPI = legacyAPI || oldAPI
-			return changed
+			ttlChanged, oldTTL := migrateVDFChallengeTTL(doc)
+			legacyTTL = legacyTTL || oldTTL
+			return changed || ttlChanged
 		})
-	return data, repaired, legacyALTCHA, legacyAPI, err
+	return data, repaired, legacyALTCHA, legacyAPI, legacyTTL, err
 }
 
 func validatePoWSizeTiers(tiers []PoWSizeTier) error {

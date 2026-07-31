@@ -232,7 +232,10 @@ func TestCreateChallengeRejectsUnavailableAsset(t *testing.T) {
 func TestCreateChallengeAppliesMemoryRateLimit(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
-	store := Store{DB: db}
+	store := Store{DB: db, Challenges: newChallengeMemory(config.ChallengeLimits{
+		BucketCapacity: challengeBucketCapacity, BucketFullRefill: "10m",
+		MaxOutstandingExact: 100, MaxOutstandingTotal: 1000,
+	})}
 	for i := 0; i < challengeBucketCapacity; i++ {
 		if _, err := store.CreateChallenge(context.Background(), "api_pow",
 			"asset-1", "192.0.2.1/32", 4, time.Minute, "req"); err != nil {

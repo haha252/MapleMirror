@@ -148,8 +148,8 @@ func upsertAssetStats(ctx context.Context, tx *sql.Tx, day, assetID string,
 	return err
 }
 
-func authorizationSourceIncrements(challengeKind string) (int64, int64) {
-	if authorizationSourceKind(challengeKind) == "api" {
+func authorizationSourceIncrements(sourceKind string) (int64, int64) {
+	if sourceKind == "api" {
 		return 0, 1
 	}
 	return 1, 0

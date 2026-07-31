@@ -112,3 +112,24 @@ func TestConsoleLoggerUsesHumanReadableChineseFields(t *testing.T) {
 		}
 	}
 }
+
+func TestConsoleLoggerShowsVDFIssuanceFields(t *testing.T) {
+	var console bytes.Buffer
+	logger, err := New("master", config.Logging{ConsoleLevel: "info", FileLevel: "info",
+		Directory: t.TempDir(), RetentionDays: 30}, time.UTC, &console)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.Info(context.Background(), "下载令牌已签发",
+		slog.String("pow_algorithm", "rsa-repeated-squaring-v1"),
+		slog.String("pow_protocol_version", "v2"), slog.Uint64("pow_iterations", 192000),
+		slog.Int("pow_multiplier", 2), slog.String("modulus_id", "mod-1"),
+		slog.Int64("challenge_age_ms", 3523))
+	_ = logger.Close()
+	for _, want := range []string{"PoW算法=rsa-repeated-squaring-v1", "PoW协议=v2",
+		"PoW迭代数=192000", "PoW倍率=2", "模数标识=mod-1", "挑战耗时毫秒=3523"} {
+		if !strings.Contains(console.String(), want) {
+			t.Fatalf("控制台日志缺少 %q：%s", want, console.String())
+		}
+	}
+}

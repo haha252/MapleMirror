@@ -66,7 +66,7 @@ func TestPoWSizePolicyRejectsTierAboveNormalMaximum(t *testing.T) {
 	}
 }
 
-func TestWebAndAPIChallengesUseSameAssetSizeTier(t *testing.T) {
+func TestAPIV1ChallengeUsesAssetSizeTier(t *testing.T) {
 	db := openMaster(t)
 	seedRoutableAsset(t, db)
 	size := int64(160 << 20)
@@ -77,23 +77,17 @@ func TestWebAndAPIChallengesUseSameAssetSizeTier(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := Server{
-		Store:     Store{DB: db, PoWDifficulty: policy},
-		ALTCHATTL: time.Minute,
-		APITTL:    time.Minute,
+		Store:  Store{DB: db, PoWDifficulty: policy},
+		APITTL: time.Minute,
 	}
-	for _, tc := range []struct {
-		path       string
-		handler    func(http.ResponseWriter, *http.Request)
-		difficulty string
-	}{
-		{"/api/public/v1/web/challenges", server.webChallenge, "difficulty"},
-		{"/api/public/v1/api/challenges", server.apiChallenge, "leading_zero_bits"},
+	for _, tc := range []struct{ path, difficulty string }{
+		{"/api/public/v1/api/challenges", "leading_zero_bits"},
 	} {
 		req := httptest.NewRequest(http.MethodPost, tc.path,
 			strings.NewReader(`{"asset_id":"asset-1"}`))
 		req.RemoteAddr = "192.0.2.9:1234"
 		rec := httptest.NewRecorder()
-		tc.handler(rec, req)
+		server.apiChallenge(rec, req)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%s 创建挑战失败：%d %s", tc.path, rec.Code, rec.Body.String())
 		}

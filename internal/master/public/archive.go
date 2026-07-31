@@ -29,7 +29,7 @@ func authorizationArchiveRecord(authID string, challenge Challenge, asset routab
 		AssetID:                       challenge.AssetID,
 		NodeID:                        asset.NodeID,
 		ClientPrefixKey:               challenge.ClientPrefixKey,
-		SourceKind:                    authorizationSourceKind(challenge.Kind),
+		SourceKind:                    challenge.SourceKind,
 		ProjectID:                     asset.ProjectID,
 		System:                        asset.System,
 		Architecture:                  asset.Architecture,

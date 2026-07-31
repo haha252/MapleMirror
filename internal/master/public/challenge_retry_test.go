@@ -78,7 +78,7 @@ func TestHTTPAuthorizationReturnsShortOpaqueToken(t *testing.T) {
 	delivered := deliverNextAuthorization(t, db, "node-1")
 
 	server.authorize(rec, req, challengeSubmit{
-		Kind:        "api_pow",
+		SourceKind: "api", ProtocolVersion: "v1", Algorithm: "sha256",
 		ChallengeID: challenge.ID,
 		AssetID:     "asset-1",
 		Solution:    solveNonce(challenge),
@@ -123,7 +123,7 @@ func TestHTTPAuthorizationWaitsForNodeDeliveryBeforeResponding(t *testing.T) {
 	go func() {
 		defer close(done)
 		server.authorize(rec, req, challengeSubmit{
-			Kind:        "api_pow",
+			SourceKind: "api", ProtocolVersion: "v1", Algorithm: "sha256",
 			ChallengeID: challenge.ID,
 			AssetID:     "asset-1",
 			Solution:    solveNonce(challenge),
@@ -185,7 +185,7 @@ func TestHTTPAuthorizationRejectsDifferentClientPrefix(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	server.authorize(rec, req, challengeSubmit{
-		Kind:        "api_pow",
+		SourceKind: "api", ProtocolVersion: "v1", Algorithm: "sha256",
 		ChallengeID: challenge.ID,
 		AssetID:     "asset-1",
 		Solution:    solveNonce(challenge),

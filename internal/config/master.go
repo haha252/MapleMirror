@@ -17,7 +17,8 @@ type Master struct {
 	Archive       Archive        `yaml:"archive"`
 	Scan          Scan           `yaml:"scan"`
 	PoWSizeTiers  []PoWSizeTier  `yaml:"pow_size_tiers"`
-	ALTCHA        ALTCHA         `yaml:"altcha"`
+	VDFSizeTiers  []VDFSizeTier  `yaml:"vdf_size_tiers"`
+	VDF           VDF            `yaml:"vdf"`
 	APIPoW        APIPoW         `yaml:"api_pow"`
 	DownloadToken DownloadToken  `yaml:"download_token"`
 	Node          NodeControl    `yaml:"node"`
@@ -58,12 +59,10 @@ type Socks5Proxy struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
-type ALTCHA struct {
-	ChallengeTTL string `yaml:"challenge_ttl"`
-}
 type APIPoW struct {
 	Algorithm    string `yaml:"algorithm"`
 	ChallengeTTL string `yaml:"challenge_ttl"`
+	V1Enabled    *bool  `yaml:"v1_enabled"`
 }
 type DownloadToken struct {
 	FirstConnectionTimeout string `yaml:"first_connection_timeout"`
@@ -99,7 +98,7 @@ type TLS struct {
 
 func LoadMaster(path string, warn WarnFunc) (Master, error) {
 	var c Master
-	data, repaired, legacyALTCHA, legacyAPI, err := readMasterYAML(path, &c)
+	data, repaired, legacyALTCHA, legacyAPI, legacyTTL, err := readMasterYAML(path, &c)
 	if err != nil {
 		return c, err
 	}
@@ -109,6 +108,9 @@ func LoadMaster(path string, warn WarnFunc) (Master, error) {
 	if legacyAPI {
 		warnDeprecated(warn, "api_pow.leading_zero_bits", "pow_size_tiers")
 	}
+	if legacyTTL {
+		warnDeprecated(warn, "altcha.challenge_ttl", "vdf.challenge_ttl")
+	}
 	applyMasterDefaults(&c, warn)
 	if err := validateMaster(c); err != nil {
 		return c, err
@@ -117,7 +119,7 @@ func LoadMaster(path string, warn WarnFunc) (Master, error) {
 }
 
 func applyMasterDefaults(c *Master, warn WarnFunc) {
-	applyLoggingDefaults(&c.Logging, "logs/master", warn)
+	applyLoggingDefaults(&c.Logging, "logs", warn)
 	setString(&c.Server.ManagementListen, "127.0.0.1:9080", "server.management_listen", warn)
 	applyCatalogDefaults(&c.Server, warn)
 	applyDatabaseDefaults(c, warn)
@@ -127,9 +129,14 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	applyArchiveDefaults(c, warn)
 	setString(&c.Scan.Interval, "15m", "scan.interval", warn)
 	setString(&c.Scan.GitHubTimeout, "2m", "scan.github_timeout", warn)
-	setString(&c.ALTCHA.ChallengeTTL, "2m", "altcha.challenge_ttl", warn)
+	applyVDFDefaults(c, warn)
 	setString(&c.APIPoW.Algorithm, "sha256", "api_pow.algorithm", warn)
 	setString(&c.APIPoW.ChallengeTTL, "2m", "api_pow.challenge_ttl", warn)
+	if c.APIPoW.V1Enabled == nil {
+		enabled := true
+		c.APIPoW.V1Enabled = &enabled
+		warnDefault(warn, "api_pow.v1_enabled", "true")
+	}
 	setString(&c.DownloadToken.FirstConnectionTimeout, "20s", "download_token.first_connection_timeout", warn)
 	setString(&c.DownloadToken.IdleTimeout, "120s", "download_token.idle_timeout", warn)
 	setString(&c.DownloadToken.MaxDuration, "30m", "download_token.max_duration", warn)
@@ -162,13 +169,6 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	applyAdminWebDefaults(c, warn)
 	setString(&c.Admin.TLS.CertFile, "secrets/admin-web.crt", "admin.tls.cert_file", warn)
 	setString(&c.Admin.TLS.KeyFile, "secrets/admin-web.key", "admin.tls.key_file", warn)
-}
-
-func setString(value *string, fallback, field string, warn WarnFunc) {
-	if *value == "" {
-		*value = fallback
-		warnDefault(warn, field, fallback)
-	}
 }
 
 func validateMaster(c Master) error {
@@ -221,6 +221,9 @@ func validateMaster(c Master) error {
 		return err
 	}
 	if err := validatePoWSizeTiers(c.PoWSizeTiers); err != nil {
+		return err
+	}
+	if err := validateVDF(c); err != nil {
 		return err
 	}
 	if c.APIPoW.Algorithm != "sha256" {

@@ -24,6 +24,9 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
 	}
+	if rec.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("download verification page must not be cached: %q", rec.Header().Get("Cache-Control"))
+	}
 	for _, want := range []string{
 		`<title>下载验证 - 枫源镜像</title>`,
 		`"asset_id":"asset-1"`,
@@ -31,8 +34,8 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`"version":"v1"`,
 		`"architecture":"amd64"`,
 		`"size_bytes":12`,
-		`/static/public/pow-loader.js`,
 		`/static/public/download-pow.js`,
+		`"vdf-worker.js":"/static/public/vdf-worker.js`,
 		`/static/public/wechat.png`,
 		`/static/public/alipay.png`,
 		`button-link button-link--primary`,
@@ -53,6 +56,8 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		t.Fatalf("download verification notice should be between content card and footer: %s", body)
 	}
 	for _, unwanted := range []string{
+		`/static/public/pow-loader.js`,
+		`pow.wasm`,
 		`<header class="site-header">`,
 		`完成浏览器验证后将自动开始下载`,
 		`正在准备安全验证`,

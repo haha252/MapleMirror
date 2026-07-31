@@ -1,18 +1,18 @@
 # 公开 API
 
 > 状态：已实现，进入 M6 前评估
-> 版本前缀：`/api/public/v1`
+> 版本前缀：`/api/public/v1` 与 `/api/public/v2`
 > 需求基线：`docs/开发要求.md` 定稿 v1.1（2026-05-27）
-> 阶段边界：本文记录项目查询、网页下载挑战授权、公开 API SHA-256 前导零 PoW、节点绑定令牌、Range 下载、M5 额度扣减、流量入账、统计聚合、SLA 和错误格式。
+> 阶段边界：本文记录项目查询、V2 RSA repeated-squaring 下载挑战、可选 V1 SHA-256 API、节点绑定令牌、Range 下载、额度与流量入账、统计聚合、SLA 和错误格式。
 
 ## 1. 通用原则
 
 | 主题 | 规则 |
 | --- | --- |
 | 身份 | 公开 API 不使用账号、API Key 或管理面板会话 |
-| 网页验证 | 网页端使用自研 SHA-256 前导零挑战，不叠加滑块 |
-| API 验证 | 公开 API 使用独立 SHA-256 前导零 PoW，实际位数按可信资产大小和来源请求频率动态选择 |
-| 参数隔离 | `altcha.*` 与 `api_pow.*` 不得混用或互相解释 |
+| 网页验证 | 正常页只使用 V2 3072 位 RSA repeated-squaring 和单 Worker 原生 BigInt；惩罚页仍使用独立 SHA-256 前导 128 零位逻辑 |
+| API 验证 | API V2 与正常网页共用 repeated-squaring 协议；API V1 在 `api_pow.v1_enabled=true` 时保持原 SHA-256 合同 |
+| 参数隔离 | 挑战按来源、协议版本和算法显式验证，未知值不得回落到 V1 或 Web 分支 |
 | 授权 | 所有下载必须先由主节点签发短时、单节点绑定下载令牌 |
 | 节点 | 下载节点只服务本地已验证资产，不接受未签名或跨节点令牌 |
 | Range | 节点支持 HTTP Range 和断点续传，并限制同一令牌并发分片 |
@@ -52,12 +52,15 @@
 | `404` | `ASSET_NOT_FOUND` | 项目、版本或资产不存在 |
 | `409` | `CHALLENGE_IN_PROGRESS` | 同一挑战正在签发授权，请稍后重试 |
 | `409` | `NO_ROUTABLE_NODE` | 当前没有可用下载节点 |
+| `410` | `API_VERSION_RETIRED` | API V1 挑战或授权已由配置关闭 |
+| `410` | `WEB_PROTOCOL_RETIRED` | V1 Web 挑战与授权已固定停用 |
 | `416` | `RANGE_NOT_SATISFIABLE` | Range 不合法或超出文件范围 |
 | `429` | `PUBLIC_RESOURCE_RATE_LIMITED` | 主节点公共资源请求过于频繁 |
 | `429` | `CLIENT_RATE_LIMITED` | 客户端挑战创建频率达到自适应拒绝等级 |
 | `429` | `REQUEST_QUOTA_EXHAUSTED` | 地址级或网段级请求额度不足 |
 | `429` | `TRAFFIC_LIMIT_EXCEEDED` | 地址级或网段级每日流量预算不足 |
 | `500` | `PUBLIC_INTERNAL_ERROR` | 服务端处理失败，使用请求 ID 排查 |
+| `503` | `VDF_BUSY` | VDF 预期答案计算并发上限已满 |
 
 ## 3. 项目与资产查询
 
@@ -307,7 +310,7 @@ https://mirror.example.com/example/v1.2.3/example-windows-amd64.zip
 4. 选择可用下载节点。
 5. 跳转到真实下载地址开始下载。
 
-外部网站不要直接拼接节点下载地址，也不要调用程序下载用的 `/api/public/v1/api/*` 接口来替代这个流程。本站网页验证采用 C 语言 WASM 计算，速度快，并由主站统一维护。
+外部网站不要直接拼接节点下载地址，也不要调用程序下载用的 `/api/public/v2/api/*` 接口来替代这个流程。正常网页只创建一个 `vdf-worker.js` Worker，使用原生 BigInt 顺序计算，不使用 WebGPU，也不回退 SHA。
 
 ### 4.2 方式二：程序调用 API 下载
 
@@ -330,28 +333,28 @@ GET /api/public/v1/projects/{project_id}/assets
 第三步，创建 API PoW 挑战：
 
 ```text
-POST /api/public/v1/api/challenges
+POST /api/public/v2/api/challenges
 
 {
   "asset_id": "asset_123"
 }
 ```
 
-第四步，计算 `nonce`。程序需要寻找一个 `nonce`，让下面这个字符串的 SHA-256 摘要满足响应里的 `leading_zero_bits`：
+第四步，计算 `solution`。把 `modulus` 和 `base` 按 `base64url-uint-be-384` 解码，从 `y=base` 开始执行响应指定次数的：
 
 ```text
-download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}
+y = y² mod modulus
 ```
 
-第五步，提交 `nonce` 并领取下载授权：
+结果必须重新编码为恰好 384 字节、512 字符的无填充 base64url。第五步，提交 `solution` 并领取下载授权：
 
 ```text
-POST /api/public/v1/api/authorizations
+POST /api/public/v2/api/authorizations
 
 {
   "challenge_id": "挑战标识",
   "asset_id": "asset_123",
-  "nonce": "客户端找到的 nonce"
+  "solution": "512 字符的定长 base64url 整数"
 }
 ```
 
@@ -427,15 +430,15 @@ JSON 示例：
 
 ## 5. 网页下载挑战授权接口
 
-网页页面可以使用公开 API 下的下载挑战接口；这些接口仅服务浏览器下载链路。当前响应仍兼容旧的 `altcha` 字段，浏览器端优先使用自研 WASM/Worker 前导零求解器。
+网页页面使用 V2 RSA repeated-squaring 挑战；这些接口仅服务浏览器下载链路。V1 Web 挑战和授权固定返回 `410 WEB_PROTOCOL_RETIRED`，非 PoW 的 `/api/public/v1/web/verifications` 保持原合同。
 
-浏览器推荐入口为主站上的 `GET /{project_id}/{version}/{file_name}`，例如 `/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk`。首页下载按钮和外部网站都应跳转到该独立验证页，由页面完成网页挑战、领取下载授权并跳转到节点 `download_url` 发起下载；外部网站不要直接拼接节点下载 URL 或调用公开 API PoW 授权接口替代网页下载入口。旧版 `GET /download/{asset_id}` 暂时保留为兼容入口。网页验证与公开 API PoW 是两套独立合同，`altcha.*` 与 `api_pow.*` 参数仍不得混用。
+浏览器推荐入口为主站上的 `GET /{project_id}/{version}/{file_name}`，例如 `/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk`。首页下载按钮和外部网站都应跳转到该独立验证页，由页面完成 V2 挑战、领取下载授权并跳转到节点 `download_url`。旧版 `GET /download/{asset_id}` 暂时保留为兼容入口。
 
 ### 5.1 创建网页挑战
 
-`POST /api/public/v1/web/challenges`
+`POST /api/public/v2/web/challenges`
 
-挑战保存在主节点内存中，不写入数据库；主节点按客户端前缀和挑战类型执行轻量限流，并定期清理过期挑战。
+挑战保存在主节点内存中，不写入数据库。Web V2、API V1 和 API V2 对同一精确来源共享令牌桶、outstanding 上限和全局容量。
 
 创建挑战前会先检查 `quota.yaml` 黑名单。命中静态黑名单或订阅源黑名单时返回 `403 CLIENT_BLOCKED`，不会创建挑战。
 
@@ -456,13 +459,13 @@ JSON 示例：
   "request_id": "请求标识",
   "data": {
     "challenge_id": "挑战标识",
-    "altcha": {
-      "challenge": "网页挑战字段",
-      "salt": "兼容字段",
-      "algorithm": "sha256",
-      "signature": "服务端签名"
-    },
-    "difficulty": 22,
+    "asset_id": "asset_123",
+    "algorithm": "rsa-repeated-squaring-v1",
+    "modulus_id": "模数标识",
+    "modulus": "512 字符定长 base64url 整数",
+    "base": "512 字符定长 base64url 整数",
+    "iterations": 96000,
+    "encoding": "base64url-uint-be-384",
     "expires_at": "2026-05-28T12:00:00Z"
   }
 }
@@ -470,7 +473,7 @@ JSON 示例：
 
 ### 5.2 提交网页挑战并领取授权
 
-`POST /api/public/v1/web/authorizations`
+`POST /api/public/v2/web/authorizations`
 
 请求：
 
@@ -478,7 +481,13 @@ JSON 示例：
 {
   "challenge_id": "挑战标识",
   "asset_id": "asset_123",
-  "altcha_payload": {"number": 456789}
+  "solution": "512 字符定长 base64url 整数",
+  "telemetry": {
+    "solve_elapsed_ms": 3523,
+    "platform": "Linux x86_64",
+    "hardware_concurrency": 12,
+    "device_memory_gib": 8
+  }
 }
 ```
 
@@ -500,9 +509,11 @@ JSON 示例：
 }
 ```
 
-成功响应表示主节点已经把授权详情同步到被绑定的下载节点，下载节点已缓存短令牌哈希；客户端可以立即访问返回的真实 `download_url`。
+成功响应表示主节点已经把授权详情同步到被绑定的下载节点。`telemetry` 可缺省，其粗粒度设备信息和纯求解耗时只用于 JSONL 统计，不参与验证、abuse、额度或路由判断。
 
-## 6. 公开 API PoW 授权接口
+## 6. API V1 SHA-256 兼容接口
+
+`api_pow.v1_enabled=true` 时，以下两个 V1 接口的请求、响应和错误合同保持不变；显式设为 `false` 时两者返回 `410 API_VERSION_RETIRED`。V1 授权状态查询始终保留，本次不实现代码删除或自动下线计划。
 
 ### 6.1 创建 API PoW 挑战
 
@@ -570,6 +581,8 @@ SHA-256("download.v1:{challenge_id}:{asset_id}:{nonce_seed}:{nonce}")
 ## 7. 授权查询
 
 `GET /api/public/v1/authorizations/{authorization_id}`
+
+V2 别名为 `GET /api/public/v2/authorizations/{authorization_id}`，两者返回相同授权状态。
 
 必须携带该授权对应的下载令牌，且客户端前缀必须与授权记录一致。M5 返回授权基本状态和已由主节点幂等入账的真实发送字节；`node_id` 字段为公开节点名，不返回内部节点 ID。
 

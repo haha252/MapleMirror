@@ -71,6 +71,7 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, asset DownloadAssetSummary) {
+	w.Header().Set("Cache-Control", "private, no-store")
 	s.trackPageView(w, r)
 	body, err := s.renderDownloadPowBody(r, asset, downloadPowFromHome(r))
 	if err != nil {
@@ -89,8 +90,8 @@ func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, as
 			"/static/public/download-pow.css",
 			"/static/public/download-verification.css",
 		},
-		Scripts:     []string{"/static/public/pow-loader.js", "/static/public/download-pow.js"},
-		StaticNames: []string{"pow.wasm"},
+		Scripts:     []string{"/static/public/download-pow.js"},
+		StaticNames: []string{"vdf-worker.js"},
 	})
 }
 

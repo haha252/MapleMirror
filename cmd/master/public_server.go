@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"database/sql"
+	"log/slog"
+	"path/filepath"
 	"time"
 
 	"mirror-server/internal/config"
@@ -10,6 +12,7 @@ import (
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
+	"mirror-server/internal/master/powtelemetry"
 	"mirror-server/internal/master/public"
 	"mirror-server/internal/master/statbuffer"
 )
@@ -20,7 +23,7 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger,
 	signer downloadtoken.Signer, archive *accountingarchive.Writer,
 	statsBuffer *statbuffer.Buffer) (public.Server, error) {
-	altchaTTL, _ := time.ParseDuration(cfg.ALTCHA.ChallengeTTL)
+	vdfTTL, _ := time.ParseDuration(cfg.VDF.ChallengeTTL)
 	apiTTL, _ := time.ParseDuration(cfg.APIPoW.ChallengeTTL)
 	firstConnectionTimeout, _ := time.ParseDuration(cfg.DownloadToken.FirstConnectionTimeout)
 	idleTimeout, _ := time.ParseDuration(cfg.DownloadToken.IdleTimeout)
@@ -31,14 +34,23 @@ func newPublicServer(cfg config.Master, quota config.Quota, notices config.Notic
 		MaxDuration:            maxDuration,
 	}
 	logger.Info(context.Background(), "公共下载链路已启用")
-	server, err := public.New(db, signer, altchaTTL, apiTTL, tokenLifetime,
-		cfg.PoWSizeTiers, quota, loc,
+	server, err := public.New(db, signer, vdfTTL, apiTTL, tokenLifetime,
+		cfg.PoWSizeTiers, cfg.VDFSizeTiers, cfg.VDF,
+		cfg.APIPoW.V1Enabled != nil && *cfg.APIPoW.V1Enabled, quota, loc,
 		cfg.Proxy.TrustedCIDRs, projects, filters, projectsPath, filtersPath,
 		noticesPath, changelogPath, notices.Notices, runtime, logger,
 		cfg.Node.PublicProbeNetworkFailures, *cfg.Server.CatalogBatchRows,
 		*cfg.Server.CatalogPrefetchRemainingRows, archive, statsBuffer)
 	if err != nil {
 		return public.Server{}, err
+	}
+	telemetry, telemetryErr := powtelemetry.New(filepath.Join(cfg.Logging.Directory, "pow"),
+		cfg.Logging.RetentionDays, loc)
+	if telemetryErr != nil {
+		logger.Warn(context.Background(), "PoW 遥测日志初始化失败，不影响下载授权",
+			slog.String("error", telemetryErr.Error()))
+	} else {
+		server.SetPoWTelemetry(telemetry)
 	}
 	go sampleNodeAvailability(server)
 	return server, nil
