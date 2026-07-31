@@ -44,9 +44,8 @@
   }
 
   async function request(nextCursor, signal) {
-    const response = await fetch(requestURL(nextCursor), {
-      cache: "no-cache", signal: signal
-    });
+    const requestOptions = window.MirrorCompat.withAbortSignal({cache: "no-cache"}, signal);
+    const response = await fetch(requestURL(nextCursor), requestOptions);
     let payload = null;
     try {
       payload = await response.json();
@@ -66,7 +65,7 @@
     window.clearTimeout(debounce);
     const current = ++sequence;
     if (controller) controller.abort();
-    controller = new AbortController();
+    controller = window.MirrorCompat.createAbortController();
     cursor = "";
     loaded = 0;
     timeline.replaceChildren();
@@ -90,7 +89,7 @@
   async function loadMore() {
     if (loading || !cursor) return;
     const current = sequence;
-    controller = new AbortController();
+    controller = window.MirrorCompat.createAbortController();
     loading = true;
     setStatus("正在加载更多更新记录...");
     setButton(false);
@@ -236,7 +235,7 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") setFilterOpen(false);
   });
-  window.matchMedia("(min-width: 1101px)").addEventListener("change", function (event) {
+  window.MirrorCompat.onMediaChange(window.matchMedia("(min-width: 1101px)"), function (event) {
     if (event.matches) setFilterOpen(false);
   });
   if ("IntersectionObserver" in window) {

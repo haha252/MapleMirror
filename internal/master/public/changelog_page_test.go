@@ -60,7 +60,8 @@ func TestChangelogStaticAssetsSupportLazyLoadingAndAccessibleLevels(t *testing.T
 	script := publicStaticBody(t, "changelog.js")
 	for _, want := range []string{
 		`window.setTimeout(loadInitial, 300)`,
-		`new AbortController()`,
+		`window.MirrorCompat.createAbortController()`,
+		`window.MirrorCompat.onMediaChange`,
 		`new IntersectionObserver`,
 		`document.querySelector(".changelog-content") : null`,
 		`root: scrollRoot`,

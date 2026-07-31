@@ -70,7 +70,8 @@ func TestCatalogControllerDebouncesCanonicalCachedRequests(t *testing.T) {
 		`params.set("q", search.toLowerCase())`,
 		`filters.selectedFilters().forEach`,
 		`cache: "default"`,
-		`new AbortController()`,
+		`window.MirrorCompat.createAbortController()`,
+		`window.MirrorCompat.withAbortSignal`,
 		`initialController.abort()`,
 		`error.status === 429`,
 		`response.headers.get("Retry-After")`,
@@ -171,8 +172,8 @@ func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 		`.catalog-left-rail`,
 		`.catalog-page-notices`,
 		`position: sticky`,
-		`:is(.page-download, .page-changelog) .download-layout`,
-		`.catalog-left-rail, .catalog-results, .changelog-content`,
+		`.page-download .download-layout`,
+		`.page-changelog .catalog-results`,
 		`overflow-y: auto`,
 		`position: static`,
 		`@media (min-width: 1101px)`,
@@ -187,7 +188,8 @@ func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 	}
 	shell := publicStaticBody(t, "base-shell.css")
 	for _, want := range []string{
-		`:is(.page-download, .page-changelog)`,
+		`.page-download,`,
+		`.page-changelog`,
 		`height: 100dvh`,
 		`overflow: hidden`,
 		`.site-footer__filing`,

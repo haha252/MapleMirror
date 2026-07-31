@@ -90,7 +90,8 @@ func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, as
 			"/static/public/download-pow.css",
 			"/static/public/download-verification.css",
 		},
-		Scripts:     []string{"/static/public/download-pow.js"},
+		Scripts: []string{"/static/public/vdf-fallback.js",
+			"/static/public/download-pow.js"},
 		StaticNames: []string{"vdf-worker.js"},
 	})
 }

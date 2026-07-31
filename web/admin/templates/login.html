@@ -7,8 +7,12 @@
 <script>
 (function () {
   var root = document.documentElement;
-  var mode = localStorage.getItem("mirror-mode");
-  var accent = localStorage.getItem("mirror-accent") || "maple";
+  var mode = "";
+  var accent = "maple";
+  try {
+    mode = localStorage.getItem("mirror-mode");
+    accent = localStorage.getItem("mirror-accent") || accent;
+  } catch (_) {}
   if (mode !== "light" && mode !== "dark") {
     mode = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
@@ -44,6 +48,7 @@
     <button class="admin-primary" type="submit">登录</button>
   </form>
 </main>
+<script src="/static/public/compat.js" defer></script>
 <script src="/static/public/theme.js" defer></script>
 <script src="/static/admin/admin-controls.js" defer></script>
 </body>

@@ -4,7 +4,8 @@
 }
 
 @media (min-width: 1101px) {
-  :is(.page-download, .page-changelog) .site-scroll-region {
+  .page-download .site-scroll-region,
+  .page-changelog .site-scroll-region {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -12,24 +13,29 @@
     overflow: hidden;
   }
 
-  :is(.page-download, .page-changelog) {
+  .page-download,
+  .page-changelog {
     height: 100vh;
     min-height: 0;
     overflow: hidden;
   }
 
   @supports (height: 100dvh) {
-    :is(.page-download, .page-changelog) { height: 100dvh; }
+    .page-download, .page-changelog { height: 100dvh; }
   }
 
-  :is(.page-download, .page-changelog) .site-main {
+  .page-download .site-main,
+  .page-changelog .site-main {
     min-height: 0;
     display: flex;
     flex-direction: column;
     padding-bottom: 8px;
   }
 
-  :is(.page-download, .page-changelog) :is(.download-page, .changelog-page) {
+  .page-download .download-page,
+  .page-download .changelog-page,
+  .page-changelog .download-page,
+  .page-changelog .changelog-page {
     min-height: 0;
     display: flex;
     flex: 1;
@@ -226,14 +232,16 @@
 }
 
 @media (min-width: 1101px) {
-  :is(.page-download, .page-changelog) .site-footer {
+  .page-download .site-footer,
+  .page-changelog .site-footer {
     gap: 8px;
     margin-bottom: 10px;
     font-size: 11px;
     line-height: 1.3;
   }
 
-  :is(.page-download, .page-changelog) .site-footer__filing {
+  .page-download .site-footer__filing,
+  .page-changelog .site-footer__filing {
     flex: 0 0 auto;
     text-align: right;
   }

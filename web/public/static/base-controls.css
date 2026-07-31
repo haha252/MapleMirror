@@ -167,6 +167,7 @@
 
 .file-browser__file--recommended {
   border-color: var(--accent);
+  background: var(--panel-muted);
   background: color-mix(in srgb, var(--accent) 14%, var(--panel));
 }
 

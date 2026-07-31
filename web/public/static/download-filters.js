@@ -43,7 +43,7 @@
       }
     });
     const media = window.matchMedia("(min-width: 1101px)");
-    media.addEventListener("change", (event) => {
+    window.MirrorCompat.onMediaChange(media, (event) => {
       if (event.matches && open) closePanel(true);
       syncPanelAccessibility(event.matches);
     });

@@ -8,8 +8,12 @@
 <script>
 (function () {
   var root = document.documentElement;
-  var mode = localStorage.getItem("mirror-mode");
-  var accent = localStorage.getItem("mirror-accent") || "maple";
+  var mode = "";
+  var accent = "maple";
+  try {
+    mode = localStorage.getItem("mirror-mode");
+    accent = localStorage.getItem("mirror-accent") || accent;
+  } catch (_) {}
   if (mode !== "light" && mode !== "dark") {
     mode = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
@@ -27,6 +31,7 @@
 {{range .Styles}}<link rel="stylesheet" href="{{staticURL .}}">
 {{end}}
 <script>window.MirrorStatic = {{.StaticJSON}};</script>
+<script src="{{staticURL "compat.js"}}" defer></script>
 </head>
 <body class="{{.BodyClass}}">
 <div id="page-loading-bar" class="page-loading-bar" aria-hidden="true"></div>

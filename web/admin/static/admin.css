@@ -188,6 +188,10 @@
 }
 .admin-modal {
   position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   z-index: 1000;
   display: grid;
@@ -199,6 +203,8 @@
   display: none;
 }
 .admin-modal__box {
+  width: 92vw;
+  max-width: 460px;
   width: min(92vw, 460px);
   padding: 18px;
 }

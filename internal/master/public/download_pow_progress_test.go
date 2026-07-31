@@ -57,13 +57,22 @@ func TestDownloadPowProgressAssetsDeclareVDFBehavior(t *testing.T) {
 		t.Fatal("vdf worker should not yield through timers while its isolated thread is solving")
 	}
 	assertStaticContains(t, assets.staticFS, "download-pow.js", []string{
-		`typeof BigInt !== "function" || typeof Worker !== "function"`,
+		`typeof BigInt !== "function"`,
 		`worker = new Worker(workerURL);`,
+		`return await solveVDFInWorker(challenge);`,
+		`return window.VDFFallback.solve(challenge`,
 		"100 * message.completed / message.iterations",
 		`postJSON("/api/public/v2/web/challenges"`,
 		`postJSON("/api/public/v2/web/authorizations"`,
 		`setStatus("正在计算验证答案...", "muted", 0);`,
 		`setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);`,
+	})
+	assertStaticContains(t, assets.staticFS, "vdf-fallback.js", []string{
+		"value = (value * value) % modulus;",
+		"const BYTE_LENGTH = 384;",
+		"window.setTimeout(resolve, 0)",
+		"onProgress(completed, iterations)",
+		"solve_elapsed_ms:",
 	})
 	assertStaticContains(t, assets.staticFS, "download-verification.css", []string{
 		"background: var(--accent-hover);",

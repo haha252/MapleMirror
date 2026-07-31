@@ -125,9 +125,6 @@
 .project-download__summary:empty {
   display: none;
 }
-.project-download__summary:has(#project-download-status:empty) {
-  display: none;
-}
 .project-download__summary p,
 .project-download__asset p {
   margin-bottom: 0;

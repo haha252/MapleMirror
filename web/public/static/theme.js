@@ -14,7 +14,13 @@
   ];
 
   function saved(key) {
-    return window.localStorage ? localStorage.getItem(key) : "";
+    try { return window.localStorage ? localStorage.getItem(key) : ""; }
+    catch (_) { return ""; }
+  }
+
+  function save(key, value) {
+    try { if (window.localStorage) localStorage.setItem(key, value); }
+    catch (_) {}
   }
 
   function effectiveMode() {
@@ -58,7 +64,7 @@
       button.setAttribute("aria-label", label);
       button.innerHTML = '<span style="background:' + color + '"></span><b>' + label + "</b>";
       button.addEventListener("click", function () {
-        if (window.localStorage) localStorage.setItem(accentKey, name);
+        save(accentKey, name);
         applyAccent(name);
         menu.hidden = true;
       });
@@ -83,7 +89,7 @@
     updateModeIcon();
     if (mode) mode.addEventListener("click", function () {
       const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      if (window.localStorage) localStorage.setItem(modeKey, next);
+      save(modeKey, next);
       applyMode(next);
     });
     if (palette && menu) palette.addEventListener("click", function () {
@@ -99,8 +105,8 @@
     window.addEventListener("beforeunload", startPageLoading);
   });
 
-  if (media && media.addEventListener) {
-    media.addEventListener("change", function () {
+  if (media) {
+    window.MirrorCompat.onMediaChange(media, function () {
       if (!saved(modeKey)) applyMode(effectiveMode());
     });
   }

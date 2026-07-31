@@ -34,6 +34,7 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`"version":"v1"`,
 		`"architecture":"amd64"`,
 		`"size_bytes":12`,
+		`/static/public/vdf-fallback.js`,
 		`/static/public/download-pow.js`,
 		`"vdf-worker.js":"/static/public/vdf-worker.js`,
 		`/static/public/wechat.png`,

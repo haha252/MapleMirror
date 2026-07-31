@@ -192,6 +192,7 @@ func TestProjectFileModeHidesRepeatedAssetSummary(t *testing.T) {
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK ||
 		!strings.Contains(body, `const assetSummary = page.querySelector(".project-download__asset")`) ||
+		!strings.Contains(body, `statusSummary.hidden = !message`) ||
 		!strings.Contains(body, `assetSummary.hidden = mode === "file"`) {
 		t.Fatalf("项目详情页文件模式应隐藏重复资产摘要：status=%d body=%s",
 			rec.Code, body)

@@ -71,7 +71,7 @@
     worker = null;
   }
 
-  function solveVDF(challenge) {
+  function solveVDFInWorker(challenge) {
     return new Promise(function (resolve, reject) {
       const workerURL = window.MirrorStatic && window.MirrorStatic["vdf-worker.js"];
       if (!workerURL) { reject(new Error("验证 Worker 资源缺失")); return; }
@@ -93,6 +93,17 @@
     });
   }
 
+  async function solveVDF(challenge) {
+    if (typeof Worker === "function") {
+      try { return await solveVDFInWorker(challenge); }
+      catch (error) { console.warn("VDF Worker 不可用，改用主线程分批计算。", error); }
+    }
+    if (!window.VDFFallback) throw new Error("验证降级组件缺失");
+    return window.VDFFallback.solve(challenge, function (completed, iterations) {
+      setStatus("正在计算验证答案...", "muted", 100 * completed / iterations);
+    });
+  }
+
   function telemetry(elapsed) {
     const platform = navigator.userAgentData && navigator.userAgentData.platform || navigator.platform || "";
     const data = {solve_elapsed_ms: elapsed, platform: platform,
@@ -111,7 +122,7 @@
     if (running) return;
     stopWorker(); retry.hidden = true;
     if (!asset.available) { setStatus(asset.unavailable_reason, "warn"); return; }
-    if (typeof BigInt !== "function" || typeof Worker !== "function") {
+    if (typeof BigInt !== "function") {
       setStatus("当前浏览器不支持顺序验证，请升级 Chrome、Edge、Firefox 或 Safari。", "warn status--strong");
       return;
     }

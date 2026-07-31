@@ -84,7 +84,7 @@
     suggestionsContainer.replaceChildren();
     suggestionsSection.hidden = true;
     setStatus("正在更新项目列表...", "muted");
-    initialController = new AbortController();
+    initialController = window.MirrorCompat.createAbortController();
     try {
       const catalog = await requestCatalog("", initialController.signal,
         lazyLoader.batchSize(projectsContainer));
@@ -103,9 +103,8 @@
   }
 
   async function requestCatalog(cursor, signal, pageSize) {
-    const response = await fetch(catalogURL(cursor, pageSize), {
-      cache: "default", signal: signal
-    });
+    const requestOptions = window.MirrorCompat.withAbortSignal({cache: "default"}, signal);
+    const response = await fetch(catalogURL(cursor, pageSize), requestOptions);
     if (!response.ok) throw await responseError(response);
     return response.json();
   }
@@ -152,7 +151,7 @@
     const cursor = section.cursor;
     section.loading = true;
     section.failed = false;
-    section.controller = new AbortController();
+    section.controller = window.MirrorCompat.createAbortController();
     updateSentinel(section, "正在加载更多...");
     try {
       const catalog = await requestCatalog(cursor, section.controller.signal,

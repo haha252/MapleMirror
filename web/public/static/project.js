@@ -3,6 +3,7 @@
   if (!page) return;
   const projectId = page.dataset.projectId || "";
   const statusBox = document.getElementById("project-download-status");
+  const statusSummary = statusBox.parentElement;
   const availability = document.getElementById("project-availability");
   const versionField = document.getElementById("project-version-field");
   const versionSelect = document.getElementById("project-version");
@@ -42,6 +43,7 @@
   function setStatus(message, level) {
     statusBox.textContent = message || "";
     statusBox.className = level || "muted";
+    statusSummary.hidden = !message;
   }
 
   function architectureLabel(item) {

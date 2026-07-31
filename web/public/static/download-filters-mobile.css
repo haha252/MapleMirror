@@ -14,6 +14,7 @@
     right: max(16px, env(safe-area-inset-right));
     bottom: max(16px, env(safe-area-inset-bottom));
     z-index: 41;
+    width: calc(100vw - 32px);
     width: min(390px, calc(100vw - 32px));
     max-height: none;
     overflow-y: auto;
