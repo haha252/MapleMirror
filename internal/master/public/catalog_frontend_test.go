@@ -15,6 +15,10 @@ func TestCatalogPageIncludesDesktopAndMobileFilterSurfaces(t *testing.T) {
 		httptest.NewRequest(http.MethodGet, "/", nil))
 	body := rec.Body.String()
 	for _, want := range []string{
+		`class="site-scroll-region"`,
+		`</main>
+</div>
+<footer class="site-footer">`,
 		`class="site-header__right"`,
 		`class="site-header__catalog"`,
 		`id="catalog-search-desktop"`,
@@ -100,6 +104,9 @@ func TestCatalogControllerLoadsBothWaterfallsIncrementally(t *testing.T) {
 	lazy := publicStaticBody(t, "download-lazy.js")
 	for _, want := range []string{
 		`new IntersectionObserver`,
+		`window.matchMedia("(min-width: 1101px)").matches`,
+		`document.querySelector(".catalog-results") : null`,
+		`{root: scrollRoot}`,
 		`columns(container) * batchRows`,
 		`batchRows - remainingRows - 1`,
 		`columns(section.container) * triggerRow`,
@@ -164,6 +171,11 @@ func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 		`.catalog-left-rail`,
 		`.catalog-page-notices`,
 		`position: sticky`,
+		`:is(.page-download, .page-changelog) .download-layout`,
+		`.catalog-left-rail, .catalog-results, .changelog-content`,
+		`overflow-y: auto`,
+		`position: static`,
+		`@media (min-width: 1101px)`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("桌面搜索筛选样式缺少规则 %q：%s", want, body)
@@ -172,6 +184,19 @@ func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 	header := publicStaticBody(t, "base-header.css")
 	if !strings.Contains(header, `white-space: nowrap`) {
 		t.Fatalf("桌面顶栏导航文字应禁止换行：%s", header)
+	}
+	shell := publicStaticBody(t, "base-shell.css")
+	for _, want := range []string{
+		`:is(.page-download, .page-changelog)`,
+		`height: 100dvh`,
+		`overflow: hidden`,
+		`.site-footer__filing`,
+		`margin-bottom: 10px`,
+		`font-size: 11px`,
+	} {
+		if !strings.Contains(shell, want) {
+			t.Fatalf("页面独立滚动外壳缺少规则 %q：%s", want, shell)
+		}
 	}
 }
 

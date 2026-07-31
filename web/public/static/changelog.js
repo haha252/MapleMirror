@@ -240,11 +240,11 @@
     if (event.matches) setFilterOpen(false);
   });
   if ("IntersectionObserver" in window) {
+    const scrollRoot = window.matchMedia("(min-width: 1101px)").matches ? document.querySelector(".changelog-content") : null;
     const observer = new IntersectionObserver(function (entries) {
       if (entries.some(function (entry) { return entry.isIntersecting; })) loadMore();
-    }, {rootMargin: "300px 0px"});
+    }, {root: scrollRoot, rootMargin: "300px 0px"});
     observer.observe(sentinel);
   }
-  updateFilterState();
-  loadInitial();
+  updateFilterState(); loadInitial();
 })();

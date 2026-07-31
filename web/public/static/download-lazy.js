@@ -1,6 +1,8 @@
 (function () {
   function create(batchRows, remainingRows, onVisible) {
     const supported = typeof IntersectionObserver === "function";
+    const scrollRoot = window.matchMedia("(min-width: 1101px)").matches ?
+      document.querySelector(".catalog-results") : null;
     const observed = new Map();
     const sections = new Set();
     const observer = supported ? new IntersectionObserver((entries) => {
@@ -9,7 +11,7 @@
           onVisible(observed.get(entry.target));
         }
       });
-    }) : null;
+    }, {root: scrollRoot}) : null;
     let resizeFrame = 0;
 
     function columns(container) {

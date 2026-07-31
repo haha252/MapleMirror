@@ -60,6 +60,31 @@
   align-items: start;
 }
 
+@media (min-width: 1101px) {
+  :is(.page-download, .page-changelog) .download-layout {
+    min-height: 0;
+    flex: 1;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  :is(.page-download, .page-changelog) :is(
+    .catalog-left-rail, .catalog-results, .changelog-content
+  ) {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  :is(.page-download, .page-changelog).catalog-filter-open :is(
+    .catalog-results, .changelog-content
+  ) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
 .catalog-left-rail {
   position: sticky;
   top: 74px;
@@ -67,6 +92,15 @@
   max-height: calc(100vh - 90px);
   overflow: auto;
   scrollbar-width: thin;
+}
+
+@media (min-width: 1101px) {
+  :is(.page-download, .page-changelog) .catalog-left-rail {
+    position: static;
+    top: auto;
+    height: 100%;
+    max-height: none;
+  }
 }
 
 .catalog-page-notices {

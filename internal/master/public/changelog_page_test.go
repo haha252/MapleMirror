@@ -19,6 +19,7 @@ func TestChangelogPageIncludesTimelineControlsAndNavigation(t *testing.T) {
 	for _, want := range []string{
 		`<title>更新日志 - 枫源镜像</title>`,
 		`class="page-changelog"`,
+		`class="site-scroll-region"`,
 		`id="changelog-search-desktop"`,
 		`id="changelog-search-mobile"`,
 		`id="changelog-filters"`,
@@ -61,6 +62,8 @@ func TestChangelogStaticAssetsSupportLazyLoadingAndAccessibleLevels(t *testing.T
 		`window.setTimeout(loadInitial, 300)`,
 		`new AbortController()`,
 		`new IntersectionObserver`,
+		`document.querySelector(".changelog-content") : null`,
+		`root: scrollRoot`,
 		`rootMargin: "300px 0px"`,
 		`error.code === "CHANGELOG_CHANGED"`,
 		`article.setAttribute("aria-label", safeLevel`,

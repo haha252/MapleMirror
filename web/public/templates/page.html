@@ -92,6 +92,7 @@
   </div>
 </header>
 {{end}}
+<div class="site-scroll-region">
 <main class="site-main">
   <div class="page-title-row">
     <h1>{{.Title}}</h1>
@@ -105,6 +106,7 @@
     {{range .AfterNotices}}<div class="page-notice page-notice--{{.Level}}" role="status" aria-live="polite">{{.Message}}</div>{{end}}
   </div>{{end}}
 </main>
+</div>
 <footer class="site-footer">
   <div class="site-footer__meta">
     <span class="site-footer__built">
@@ -117,7 +119,7 @@
     <span class="site-footer__sep">|</span>
     <span class="site-footer__contact">联系我们（贡献节点/请求收录项目/安全报告）：<a href="mailto:frostlynx@qq.com">frostlynx@qq.com</a></span>
   </div>
-  <span>
+  <span class="site-footer__filing">
     <a href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">渝ICP备2024044523号-1</a>
     <span aria-hidden="true"> | </span>
     <a href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">渝ICP备2024044523号-2</a>
