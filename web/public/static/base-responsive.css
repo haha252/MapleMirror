@@ -1,9 +1,4 @@
-@media (max-width: 760px) {
-  html,
-  body {
-    overflow-x: hidden;
-  }
-
+@media (max-width: 900px) {
   .site-header {
     position: fixed;
     top: 0;
@@ -58,6 +53,14 @@
   .site-nav a { min-width: 32px; width: 32px; height: 32px; padding: 0; }
   .icon-button { width: 32px; height: 32px; }
   .site-nav span { display: none; }
+}
+
+@media (max-width: 760px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   .site-main { padding-top: 82px; }
   .site-footer {
     align-items: flex-start;

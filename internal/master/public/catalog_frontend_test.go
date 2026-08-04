@@ -186,6 +186,20 @@ func TestCatalogStylesUseWideDesktopLayout(t *testing.T) {
 	if !strings.Contains(header, `white-space: nowrap`) {
 		t.Fatalf("桌面顶栏导航文字应禁止换行：%s", header)
 	}
+	for _, want := range []string{
+		`.site-header__right {`,
+		`min-width: 0;`,
+		`.theme-tools {
+  flex: 0 0 auto;`,
+	} {
+		if !strings.Contains(header, want) {
+			t.Fatalf("桌面顶栏缺少窄宽度布局规则 %q：%s", want, header)
+		}
+	}
+	if !strings.Contains(header, `.site-header__catalog {
+  min-width: 0;`) {
+		t.Fatalf("桌面搜索框应允许在主题工具栏存在时收缩：%s", header)
+	}
 	shell := publicStaticBody(t, "base-shell.css")
 	for _, want := range []string{
 		`.page-download,`,

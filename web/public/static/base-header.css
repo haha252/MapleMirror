@@ -32,7 +32,12 @@
   align-items: flex-start;
   gap: 12px;
   margin-left: auto;
+  min-width: 0;
   pointer-events: none;
+}
+
+.site-header__catalog {
+  min-width: 0;
 }
 
 @supports (color: color-mix(in srgb, #000 50%, #fff)) {
@@ -67,6 +72,10 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.theme-tools {
+  flex: 0 0 auto;
 }
 
 .site-nav a,
