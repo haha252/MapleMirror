@@ -120,13 +120,16 @@ func fieldLabelForMessage(message, key string) string {
 }
 
 func showConsoleField(message, key string) bool {
+	if key == "pow_algorithm" || key == "modulus_id" {
+		return false
+	}
 	if message != "下载令牌已签发" {
 		return true
 	}
 	switch key {
 	case "client_ip", "client_source", "node_name", "project_id", "system",
-		"architecture", "pow_difficulty", "pow_algorithm", "pow_protocol_version",
-		"pow_iterations", "pow_multiplier", "modulus_id", "challenge_age_ms", "request_remaining_tokens",
+		"architecture", "pow_difficulty", "pow_protocol_version", "pow_iterations",
+		"pow_multiplier", "challenge_age_ms", "request_remaining_tokens",
 		"traffic_remaining_bytes":
 		return true
 	default:

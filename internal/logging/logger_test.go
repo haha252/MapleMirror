@@ -113,10 +113,11 @@ func TestConsoleLoggerUsesHumanReadableChineseFields(t *testing.T) {
 	}
 }
 
-func TestConsoleLoggerShowsVDFIssuanceFields(t *testing.T) {
+func TestConsoleLoggerHidesVDFInternalFieldsButKeepsFileFields(t *testing.T) {
+	dir := t.TempDir()
 	var console bytes.Buffer
 	logger, err := New("master", config.Logging{ConsoleLevel: "info", FileLevel: "info",
-		Directory: t.TempDir(), RetentionDays: 30}, time.UTC, &console)
+		Directory: dir, RetentionDays: 30}, time.UTC, &console)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,10 +127,29 @@ func TestConsoleLoggerShowsVDFIssuanceFields(t *testing.T) {
 		slog.Int("pow_multiplier", 2), slog.String("modulus_id", "mod-1"),
 		slog.Int64("challenge_age_ms", 3523))
 	_ = logger.Close()
-	for _, want := range []string{"PoW算法=rsa-repeated-squaring-v1", "PoW协议=v2",
-		"PoW迭代数=192000", "PoW倍率=2", "模数标识=mod-1", "挑战耗时毫秒=3523"} {
-		if !strings.Contains(console.String(), want) {
-			t.Fatalf("控制台日志缺少 %q：%s", want, console.String())
+	line := console.String()
+	for _, want := range []string{"PoW协议=v2", "PoW迭代数=192000", "PoW倍率=2", "挑战耗时毫秒=3523"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("控制台日志缺少 %q：%s", want, line)
+		}
+	}
+	for _, hidden := range []string{"PoW算法=rsa-repeated-squaring-v1", "模数标识=mod-1"} {
+		if strings.Contains(line, hidden) {
+			t.Fatalf("控制台日志不应包含 %q：%s", hidden, line)
+		}
+	}
+	files, err := filepath.Glob(filepath.Join(dir, "*.log"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("未找到文件日志：files=%v err=%v", files, err)
+	}
+	content, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileLine := string(content)
+	for _, want := range []string{`"pow_algorithm":"rsa-repeated-squaring-v1"`, `"modulus_id":"mod-1"`} {
+		if !strings.Contains(fileLine, want) {
+			t.Fatalf("文件日志缺少 %q：%s", want, fileLine)
 		}
 	}
 }
