@@ -3,28 +3,43 @@ package public
 import (
 	"database/sql"
 	"time"
+
+	"mirror-server/internal/geoip"
 )
 
 const routingPressureMaxAge = 2 * time.Minute
+const routingRegionBonus = 20
 
-func (s Store) selectRoutableAsset(candidates []routableAssetInfo) (routableAssetInfo, error) {
+func (s Store) selectRoutableAsset(candidates []routableAssetInfo, requestRegion geoip.Region) (routableAssetInfo, error) {
 	if len(candidates) == 0 {
 		return routableAssetInfo{}, sql.ErrNoRows
 	}
 	best := candidates[0]
-	bestScore := s.routingScore(best)
+	bestEffectivePriority := effectiveRoutingPriority(best, requestRegion)
+	bestScore := s.routingScore(best, requestRegion)
 	for _, item := range candidates[1:] {
-		score := s.routingScore(item)
-		if betterRoutableCandidate(item, score, best, bestScore) {
+		effectivePriority := effectiveRoutingPriority(item, requestRegion)
+		score := s.routingScore(item, requestRegion)
+		if betterRoutableCandidate(item, effectivePriority, score,
+			best, bestEffectivePriority, bestScore) {
 			best = item
+			bestEffectivePriority = effectivePriority
 			bestScore = score
 		}
 	}
 	return best, nil
 }
 
-func (s Store) routingScore(item routableAssetInfo) float64 {
-	score := float64(item.Priority)
+func effectiveRoutingPriority(item routableAssetInfo, requestRegion geoip.Region) int {
+	priority := item.Priority
+	if requestRegion != geoip.RegionUnknown && item.Region == requestRegion {
+		priority += routingRegionBonus
+	}
+	return priority
+}
+
+func (s Store) routingScore(item routableAssetInfo, requestRegion geoip.Region) float64 {
+	score := float64(effectiveRoutingPriority(item, requestRegion))
 	if s.Runtime == nil {
 		return score
 	}
@@ -49,13 +64,14 @@ func (s Store) routingScore(item routableAssetInfo) float64 {
 	return score - ratio*50 - float64(active)*0.1
 }
 
-func betterRoutableCandidate(candidate routableAssetInfo, candidateScore float64,
-	current routableAssetInfo, currentScore float64) bool {
+func betterRoutableCandidate(candidate routableAssetInfo, candidateEffectivePriority int,
+	candidateScore float64, current routableAssetInfo, currentEffectivePriority int,
+	currentScore float64) bool {
 	if candidateScore != currentScore {
 		return candidateScore > currentScore
 	}
-	if candidate.Priority != current.Priority {
-		return candidate.Priority > current.Priority
+	if candidateEffectivePriority != currentEffectivePriority {
+		return candidateEffectivePriority > currentEffectivePriority
 	}
 	candidateHeartbeat := parseHeartbeatTime(candidate.LastHeartbeat)
 	currentHeartbeat := parseHeartbeatTime(current.LastHeartbeat)

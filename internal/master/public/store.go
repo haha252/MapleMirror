@@ -8,6 +8,7 @@ import (
 
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/downloadurl"
+	"mirror-server/internal/geoip"
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
@@ -30,6 +31,7 @@ type Store struct {
 	MaxBytes                   maxBytesPolicy
 	RangeLimit                 int
 	Runtime                    *mastercontrol.RuntimeStore
+	RegionClassifier           geoip.Classifier
 	PublicProbeNetworkFailures int
 	Archive                    *accountingarchive.Writer
 	Logger                     *logging.Logger

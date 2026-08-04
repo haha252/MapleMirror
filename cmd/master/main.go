@@ -155,9 +155,13 @@ func main() {
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
+	regionClassifier := startCountryIPManager(cfg, logger)
+	if regionClassifier != nil {
+		defer regionClassifier.Close()
+	}
 	publicServer, err := newPublicServer(cfg, quota, notices, projects, filters,
 		*projectsPath, *filtersPath, *noticesPath, *changelogPath, location, database, runtime,
-		logger, tokenSigner, archive, statsBuffer)
+		logger, regionClassifier, tokenSigner, archive, statsBuffer)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)

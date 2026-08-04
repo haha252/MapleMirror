@@ -3,9 +3,11 @@ package public
 import (
 	"context"
 	"database/sql"
+	"net/netip"
 	"testing"
 	"time"
 
+	"mirror-server/internal/geoip"
 	mastercontrol "mirror-server/internal/master/control"
 	"mirror-server/internal/protocol"
 )
@@ -80,6 +82,69 @@ func TestIssueAuthorizationFallsBackToHeartbeatWithinSamePriority(t *testing.T) 
 	if auth.Claims.NodeID != "node-2" {
 		t.Fatalf("authorization node=%s want node-2", auth.Claims.NodeID)
 	}
+}
+
+func TestIssueAuthorizationTemporarilyBoostsMatchingNodeRegion(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	seedPriorityNode(t, db, "node-2", 40, "2026-01-01T00:00:00Z", "online")
+	mustExec(t, db, `UPDATE nodes SET download_priority = 50, region = 'unknown'
+		WHERE id = 'node-1'`)
+	mustExec(t, db, `UPDATE nodes SET region = 'mainland_china' WHERE id = 'node-2'`)
+	store := Store{DB: db, RegionClassifier: fixedRegionClassifier(geoip.RegionMainlandChina)}
+
+	auth := issuePriorityAuth(t, store)
+	if auth.Claims.NodeID != "node-2" {
+		t.Fatalf("authorization node=%s want node-2", auth.Claims.NodeID)
+	}
+	next := issuePriorityAuth(t, store)
+	if next.Claims.NodeID != "node-2" {
+		t.Fatalf("next authorization node=%s want node-2", next.Claims.NodeID)
+	}
+	var priority int
+	var region string
+	if err := db.QueryRow(`SELECT download_priority, region FROM nodes WHERE id = 'node-2'`).Scan(&priority, &region); err != nil {
+		t.Fatal(err)
+	}
+	if priority != 40 || region != "mainland_china" {
+		t.Fatalf("temporary region bonus changed node state: priority=%d region=%s", priority, region)
+	}
+}
+
+func TestIssueAuthorizationDoesNotBoostMismatchedNodeRegion(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	seedPriorityNode(t, db, "node-2", 40, "2026-01-01T00:00:00Z", "online")
+	mustExec(t, db, `UPDATE nodes SET download_priority = 50 WHERE id = 'node-1'`)
+	mustExec(t, db, `UPDATE nodes SET region = 'outside_mainland_china' WHERE id = 'node-2'`)
+	store := Store{DB: db, RegionClassifier: fixedRegionClassifier(geoip.RegionMainlandChina)}
+
+	auth := issuePriorityAuth(t, store)
+	if auth.Claims.NodeID != "node-1" {
+		t.Fatalf("authorization node=%s want node-1", auth.Claims.NodeID)
+	}
+}
+
+func TestRoutingTieUsesEffectivePriorityThenHeartbeat(t *testing.T) {
+	store := Store{}
+	best, err := store.selectRoutableAsset([]routableAssetInfo{
+		{NodeID: "node-a", Priority: 60, Region: geoip.RegionUnknown,
+			LastHeartbeat: "2026-01-01T00:00:00Z"},
+		{NodeID: "node-b", Priority: 40, Region: geoip.RegionMainlandChina,
+			LastHeartbeat: "2026-01-01T00:00:01Z"},
+	}, geoip.RegionMainlandChina)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if best.NodeID != "node-b" {
+		t.Fatalf("tie winner=%s want node-b", best.NodeID)
+	}
+}
+
+type fixedRegionClassifier geoip.Region
+
+func (f fixedRegionClassifier) Classify(netip.Addr) geoip.Region {
+	return geoip.Region(f)
 }
 
 func issuePriorityAuth(t *testing.T, store Store) IssuedAuthorization {

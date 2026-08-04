@@ -9,11 +9,19 @@
     return node.routing_ready ? "全量就绪" : "未全量就绪";
   }
 
+  function regionLabel(region) {
+    switch (String(region || "unknown")) {
+    case "mainland_china": return "中国大陆";
+    case "outside_mainland_china": return "非中国大陆";
+    default: return "未设置";
+    }
+  }
+
   function renderNodes(nodes) {
     var body = document.getElementById("nodes-body");
     if (!body) return;
     if (!nodes || !nodes.length) {
-      body.innerHTML = '<tr><td colspan="8" class="muted">暂无节点</td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="muted">暂无节点</td></tr>';
       currentNode = "";
       return;
     }
@@ -30,6 +38,7 @@
         a.pressureMeter(node) + "</td><td>" +
         '<span data-node-priority-value="' + a.esc(node.node_id) + '">' +
         a.esc(node.download_priority == null ? 50 : node.download_priority) + "</span></td><td>" +
+        a.esc(regionLabel(node.region)) + "</td><td>" +
         a.esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
         '<button class="admin-secondary" type="button" data-node-action="detail" data-node="' +
         a.esc(node.node_id) + '" aria-expanded="' + (node.node_id === currentNode ? "true" : "false") + '">详情</button>' +
@@ -82,7 +91,7 @@
       row = document.createElement("tr");
       row.className = "admin-inline-detail-row";
       row.setAttribute("data-node-detail-row", nodeID);
-      row.innerHTML = '<td colspan="8"><div class="admin-inline-detail detail-stack"></div></td>';
+      row.innerHTML = '<td colspan="9"><div class="admin-inline-detail detail-stack"></div></td>';
       anchor.insertAdjacentElement("afterend", row);
     }
     var box = row.querySelector(".admin-inline-detail");

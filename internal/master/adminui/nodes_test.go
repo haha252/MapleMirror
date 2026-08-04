@@ -87,6 +87,46 @@ func TestNodePriorityAPIReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestNodeRegionAPIUpdatesRegion(t *testing.T) {
+	server, db := newTestServer(t)
+	mustExecAdminUI(t, db, `INSERT INTO nodes
+		(id, public_name, state, target_bandwidth_bps, routing_ready, created_at, updated_at)
+		VALUES ('node-region', '地区节点', 'online', 0, 0, 'now', 'before')`)
+
+	for _, region := range []string{"unknown", "mainland_china", "outside_mainland_china"} {
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/nodes/node-region/region",
+			strings.NewReader(`{"region":"`+region+`"}`))
+		req = withAdminUser(req)
+		rec := httptest.NewRecorder()
+		server.nodeActionAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("region=%s status=%d body=%s", region, rec.Code, rec.Body.String())
+		}
+		var got, updated string
+		if err := db.QueryRow(`SELECT region, updated_at FROM nodes WHERE id = 'node-region'`).Scan(&got, &updated); err != nil {
+			t.Fatal(err)
+		}
+		if got != region || updated == "before" {
+			t.Fatalf("region=%s got=%s updated=%q", region, got, updated)
+		}
+	}
+}
+
+func TestNodeRegionAPIRejectsInvalidRegion(t *testing.T) {
+	server, db := newTestServer(t)
+	mustExecAdminUI(t, db, `INSERT INTO nodes
+		(id, public_name, state, target_bandwidth_bps, routing_ready, created_at, updated_at)
+		VALUES ('node-region', '地区节点', 'online', 0, 0, 'now', 'now')`)
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/nodes/node-region/region",
+		strings.NewReader(`{"region":"europe"}`))
+	req = withAdminUser(req)
+	rec := httptest.NewRecorder()
+	server.nodeActionAPI(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestNodeProjectsAPIReadsAssignments(t *testing.T) {
 	server, db := newTestServer(t)
 	seedNodeProjectAdminData(t, db, 1)

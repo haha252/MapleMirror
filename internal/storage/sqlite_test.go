@@ -40,6 +40,8 @@ func TestOpenMasterCreatesInitialContractAndIsIdempotent(t *testing.T) {
 	assertColumn(t, db, "nodes", "public_probe_network_failures")
 	assertColumn(t, db, "nodes", "download_priority")
 	assertColumnDefault(t, db, "nodes", "download_priority", "50")
+	assertColumn(t, db, "nodes", "region")
+	assertColumnDefault(t, db, "nodes", "region", "'unknown'")
 	assertColumn(t, db, "assets", "variant")
 	assertColumn(t, db, "assets", "classification_reason")
 	assertColumn(t, db, "download_authorizations", "token_hash")

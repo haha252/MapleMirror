@@ -5,27 +5,31 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"mirror-server/internal/geoip"
 )
 
 var ErrInvalidDownloadPriority = errors.New("invalid node download priority")
+var ErrInvalidNodeRegion = errors.New("invalid node region")
 
 type NodeSummary struct {
-	NodeID             string `json:"node_id"`
-	PublicName         string `json:"public_name"`
-	State              string `json:"state"`
-	ConnectionState    string `json:"connection_state"`
-	RoutingReady       bool   `json:"routing_ready"`
-	TargetBandwidthBPS int64  `json:"target_bandwidth_bps"`
-	DownloadPriority   int    `json:"download_priority"`
-	MaxMirrorProjects  int    `json:"max_mirror_projects"`
-	AssignmentMode     string `json:"project_assignment_mode"`
-	SoftwareVersion    string `json:"software_version,omitempty"`
-	LastHeartbeat      string `json:"last_heartbeat_at,omitempty"`
+	NodeID             string       `json:"node_id"`
+	PublicName         string       `json:"public_name"`
+	State              string       `json:"state"`
+	ConnectionState    string       `json:"connection_state"`
+	RoutingReady       bool         `json:"routing_ready"`
+	TargetBandwidthBPS int64        `json:"target_bandwidth_bps"`
+	DownloadPriority   int          `json:"download_priority"`
+	Region             geoip.Region `json:"region"`
+	MaxMirrorProjects  int          `json:"max_mirror_projects"`
+	AssignmentMode     string       `json:"project_assignment_mode"`
+	SoftwareVersion    string       `json:"software_version,omitempty"`
+	LastHeartbeat      string       `json:"last_heartbeat_at,omitempty"`
 }
 
 func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 	rows, err := r.DB.QueryContext(ctx, `SELECT id, public_name, state,
-		routing_ready, target_bandwidth_bps, download_priority, max_mirror_projects,
+		routing_ready, target_bandwidth_bps, download_priority, COALESCE(region, 'unknown'), max_mirror_projects,
 		project_assignment_mode, COALESCE(last_heartbeat_at, '')
 		FROM nodes ORDER BY created_at`)
 	if err != nil {
@@ -37,7 +41,7 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 		var item NodeSummary
 		var ready int
 		if err := rows.Scan(&item.NodeID, &item.PublicName, &item.State,
-			&ready, &item.TargetBandwidthBPS, &item.DownloadPriority, &item.MaxMirrorProjects,
+			&ready, &item.TargetBandwidthBPS, &item.DownloadPriority, &item.Region, &item.MaxMirrorProjects,
 			&item.AssignmentMode, &item.LastHeartbeat); err != nil {
 			return nil, err
 		}
@@ -47,6 +51,22 @@ func (r Repository) ListNodes(ctx context.Context) ([]NodeSummary, error) {
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (r Repository) UpdateNodeRegion(ctx context.Context, nodeID string, region geoip.Region) error {
+	if !geoip.ValidNodeRegion(region) {
+		return ErrInvalidNodeRegion
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	result, err := r.DB.ExecContext(ctx, `UPDATE nodes SET region = ?,
+		updated_at = ? WHERE id = ?`, region, now, nodeID)
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r Repository) UpdateNodeDownloadPriority(ctx context.Context, nodeID string, priority int) error {

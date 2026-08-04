@@ -12,6 +12,7 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/downloadtoken"
+	"mirror-server/internal/geoip"
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
@@ -64,6 +65,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	projects config.Projects, filters config.Filters,
 	projectsPath, filtersPath, noticesPath, changelogPath string, notices []config.PublicNotice,
 	runtime *mastercontrol.RuntimeStore,
+	regionClassifier geoip.Classifier,
 	logger *logging.Logger, publicProbeNetworkFailures int,
 	catalogBatchRows, catalogPrefetchRemainingRows int,
 	archive *accountingarchive.Writer,
@@ -109,6 +111,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 				semaphore: make(chan struct{}, vdfConfig.MaxParallelCreations)},
 			MaxBytes:   newMaxBytesPolicy(quota),
 			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime,
+			RegionClassifier:           regionClassifier,
 			PublicProbeNetworkFailures: publicProbeNetworkFailures,
 			Archive:                    archive,
 			Logger:                     logger,

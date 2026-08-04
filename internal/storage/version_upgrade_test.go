@@ -91,6 +91,7 @@ func TestOpenMasterBackfillsDownloadPriorityForExistingV3Database(t *testing.T) 
 	}
 	defer opened.Close()
 	assertColumn(t, opened, "nodes", "download_priority")
+	assertColumn(t, opened, "nodes", "region")
 	assertDBVersion(t, opened, "master", masterDBVersion)
 	var priority int
 	if err := opened.QueryRow(`SELECT download_priority FROM nodes WHERE id = 'node-1'`).Scan(&priority); err != nil {
@@ -98,6 +99,13 @@ func TestOpenMasterBackfillsDownloadPriorityForExistingV3Database(t *testing.T) 
 	}
 	if priority != 50 {
 		t.Fatalf("download_priority=%d want 50", priority)
+	}
+	var region string
+	if err := opened.QueryRow(`SELECT region FROM nodes WHERE id = 'node-1'`).Scan(&region); err != nil {
+		t.Fatal(err)
+	}
+	if region != "unknown" {
+		t.Fatalf("region=%q want unknown", region)
 	}
 }
 

@@ -14,6 +14,8 @@
         var data = items[1];
         document.getElementById("node-download-priority").value =
           node && node.download_priority != null ? node.download_priority : 50;
+        document.getElementById("node-region").value =
+          node && node.region ? node.region : "unknown";
         renderProjects(data);
       }).catch(function (err) { a.setStatus(err.message); });
   }
@@ -52,6 +54,18 @@
       }).catch(function (err) { a.setStatus(err.message); });
   }
 
+  function saveRegion() {
+    var region = document.getElementById("node-region").value;
+    a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/region", {
+      method: "POST",
+      body: JSON.stringify({ region: region })
+    })
+      .then(function (data) {
+        a.setStatus(data.message || "节点地区已更新");
+        document.getElementById("node-region").value = data.region || "unknown";
+      }).catch(function (err) { a.setStatus(err.message); });
+  }
+
   function render() {
     var body = document.getElementById("node-project-body");
     var auto = document.getElementById("node-project-auto").checked;
@@ -80,6 +94,7 @@
 
   document.getElementById("node-project-auto").addEventListener("change", render);
   document.getElementById("node-priority-save").addEventListener("click", savePriority);
+  document.getElementById("node-region-save").addEventListener("click", saveRegion);
   document.getElementById("node-project-save").addEventListener("click", function () {
     var auto = document.getElementById("node-project-auto").checked;
     var payload = {

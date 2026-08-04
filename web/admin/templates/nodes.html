@@ -3,7 +3,7 @@
   <article class="panel-card admin-panel">
     <div class="admin-panel__head"><h2>节点列表</h2><span id="node-summary" class="muted">加载中</span></div>
     <div class="admin-table-wrap">
-      <table><thead><tr><th>节点</th><th>状态</th><th>路由</th><th>带宽</th><th>压力</th><th>优先级</th><th>最近心跳</th><th>操作</th></tr></thead><tbody id="nodes-body"></tbody></table>
+      <table><thead><tr><th>节点</th><th>状态</th><th>路由</th><th>带宽</th><th>压力</th><th>优先级</th><th>地区</th><th>最近心跳</th><th>操作</th></tr></thead><tbody id="nodes-body"></tbody></table>
     </div>
   </article>
 </section>
@@ -20,6 +20,15 @@
     <label class="admin-field admin-number-field"><span>下载优先级</span><input id="node-download-priority" type="number" min="0" max="100" step="1"></label>
     <button id="node-priority-save" class="admin-primary node-priority-save" type="button">保存优先级</button>
     <span class="muted">0-100，数值越大越优先；保存后立即影响新下载授权。</span>
+  </div>
+  <div class="inline-form">
+    <label class="admin-field"><span>节点地区</span><select id="node-region">
+      <option value="unknown">未设置</option>
+      <option value="mainland_china">中国大陆</option>
+      <option value="outside_mainland_china">非中国大陆</option>
+    </select></label>
+    <button id="node-region-save" class="admin-primary" type="button">保存地区</button>
+    <span class="muted">请求来源与节点地区一致时，本次选择临时增加 20 优先级。</span>
   </div>
 </section>
 <section class="panel-card admin-panel admin-extra">
