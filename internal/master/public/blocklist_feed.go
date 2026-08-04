@@ -2,11 +2,12 @@ package public
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strings"
 )
 
-func parseBlocklistFeed(reader io.Reader, _ string) []blocklistEntry {
+func parseBlocklistFeed(reader io.Reader, feedURL string) ([]blocklistEntry, error) {
 	var entries []blocklistEntry
 	seen := map[string]struct{}{}
 	pendingNote := ""
@@ -37,7 +38,10 @@ func parseBlocklistFeed(reader io.Reader, _ string) []blocklistEntry {
 		entries = append(entries, blocklistEntry{prefix: prefix, source: line, note: note})
 		pendingNote = ""
 	}
-	return entries
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("读取黑名单订阅 %q 失败: %w", feedURL, err)
+	}
+	return entries, nil
 }
 
 func splitBlocklistLine(raw string) (string, string) {

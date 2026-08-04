@@ -212,7 +212,11 @@ func (p *blocklistPolicy) refreshFeed(feed blocklistFeed) {
 		p.logRefreshError(feed.url, errors.New(resp.Status))
 		return
 	}
-	entries := parseBlocklistFeed(io.LimitReader(resp.Body, maxBlocklistFeedBytes), feed.url)
+	entries, err := parseBlocklistFeed(io.LimitReader(resp.Body, maxBlocklistFeedBytes), feed.url)
+	if err != nil {
+		p.logRefreshError(feed.url, err)
+		return
+	}
 	p.mu.Lock()
 	p.feedItems[feed.url] = entries
 	p.mu.Unlock()

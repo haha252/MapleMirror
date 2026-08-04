@@ -3,6 +3,7 @@ package public
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -55,12 +56,40 @@ func TestBlocklistExemptionOverridesStaticBlock(t *testing.T) {
 }
 
 func TestParseBlocklistFeed(t *testing.T) {
-	entries := parseBlocklistFeed(strings.NewReader("192.0.2.1\n192.0.2.1/32\n# comment\n2001:db8::/32\nbad\n"), "feed")
+	entries, err := parseBlocklistFeed(strings.NewReader("192.0.2.1\n192.0.2.1/32\n# comment\n2001:db8::/32\nbad\n"), "feed")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(entries) != 2 {
 		t.Fatalf("订阅源应只保留有效 IP/CIDR：%+v", entries)
 	}
 	if entries[1].note != "comment" {
 		t.Fatalf("订阅源应保留 IP 前一行注释：%+v", entries)
+	}
+}
+
+type failingBlocklistReader struct {
+	data []byte
+	done bool
+}
+
+func (r *failingBlocklistReader) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, errors.New("模拟订阅源读取失败")
+	}
+	r.done = true
+	return copy(p, r.data), nil
+}
+
+func TestParseBlocklistFeedReturnsReadError(t *testing.T) {
+	entries, err := parseBlocklistFeed(&failingBlocklistReader{
+		data: []byte("192.0.2.1\n"),
+	}, "feed")
+	if err == nil {
+		t.Fatal("订阅源读取失败时应返回错误")
+	}
+	if entries != nil {
+		t.Fatalf("订阅源读取失败时不应返回部分结果：%+v", entries)
 	}
 }
 
