@@ -16,6 +16,8 @@
     let open = false;
     let historyEntry = false;
     let previousFocus = null;
+    const i18n = window.MirrorI18n;
+    const text = (key, fallback, params) => i18n ? i18n.t(key, params) : fallback;
 
     searches.forEach((input) => input.addEventListener("input", () => {
       searches.forEach((other) => {
@@ -49,6 +51,10 @@
     });
     panel.dataset.open = "false";
     syncPanelAccessibility(media.matches);
+    if (i18n) i18n.onChange(function () {
+      if (!groups.length) renderGroups();
+      updateCount();
+    });
 
     function setGroups(nextGroups) {
       groups = Array.isArray(nextGroups) ? nextGroups : [];
@@ -77,7 +83,7 @@
       if (!groups.length) {
         const empty = document.createElement("p");
         empty.className = "muted";
-        empty.textContent = "暂无可用筛选器。";
+        empty.textContent = text("catalog.noFilters", "暂无可用筛选器。");
         groupsContainer.appendChild(empty);
         return;
       }
@@ -124,8 +130,9 @@
       count.textContent = String(selected.size);
       count.hidden = selected.size === 0;
       clearButton.disabled = selected.size === 0;
-      openButton.setAttribute("aria-label",
-        selected.size ? "筛选器，已选择 " + selected.size + " 项" : "筛选器");
+      openButton.setAttribute("aria-label", selected.size ?
+        text("catalog.filterCount", "筛选器，已选择 " + selected.size + " 项", {count: selected.size}) :
+        text("catalog.filter", "筛选器"));
     }
 
     function openPanel() {

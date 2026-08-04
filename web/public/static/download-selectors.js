@@ -102,6 +102,7 @@
   }
 
   function systemLabel(value) {
+    const i18n = window.MirrorI18n;
     const labels = {
       win: "Windows",
       linux: "Linux",
@@ -109,6 +110,10 @@
       harmony: "鸿蒙",
       None: "未识别"
     };
+    if (i18n) {
+      labels.harmony = i18n.t("system.harmony");
+      labels.None = i18n.t("system.unidentified");
+    }
     return labels[value] || String(value || "");
   }
 

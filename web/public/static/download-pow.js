@@ -9,6 +9,11 @@
   const returnButton = document.querySelector(".download-pow__back");
   if (!source || !title || !meta || !statusBox || !copies || copies.length !== 2 || !retry) return;
 
+  const i18n = window.MirrorI18n;
+  const text = (key, fallback, params) => i18n ? i18n.t(key, params) : fallback;
+  const errorText = (error, fallbackKey, fallback) => i18n ?
+    i18n.errorMessage(error, fallbackKey) : (error && error.message || fallback);
+
   const asset = JSON.parse(source.textContent || "{}");
   let running = false;
   let worker = null;
@@ -62,7 +67,12 @@
     const text = await response.text();
     let body = {message: text};
     try { body = JSON.parse(text); } catch (error) {}
-    if (!response.ok) throw new Error(body.message || "请求失败");
+    if (!response.ok) {
+      const error = new Error(body.message || "请求失败");
+      error.code = body.code || "";
+      error.status = response.status;
+      throw error;
+    }
     return body;
   }
 
@@ -74,21 +84,21 @@
   function solveVDFInWorker(challenge) {
     return new Promise(function (resolve, reject) {
       const workerURL = window.MirrorStatic && window.MirrorStatic["vdf-worker.js"];
-      if (!workerURL) { reject(new Error("验证 Worker 资源缺失")); return; }
+      if (!workerURL) { reject(new Error(text("error.workerMissing", "验证 Worker 资源缺失"))); return; }
       stopWorker();
       worker = new Worker(workerURL);
       worker.onmessage = function (event) {
         const message = event.data || {};
         if (message.type === "progress") {
-          setStatus("正在计算验证答案...", "muted", 100 * message.completed / message.iterations);
+          setStatus(text("error.calculating", "正在计算验证答案..."), "muted", 100 * message.completed / message.iterations);
         } else if (message.type === "result") {
           stopWorker();
           resolve(message);
         } else if (message.type === "error") {
-          stopWorker(); reject(new Error(message.message || "验证计算失败"));
+          stopWorker(); reject(new Error(message.message || text("error.verification", "验证计算失败")));
         }
       };
-      worker.onerror = function () { stopWorker(); reject(new Error("验证 Worker 运行失败")); };
+      worker.onerror = function () { stopWorker(); reject(new Error(text("error.workerFailed", "验证 Worker 运行失败"))); };
       worker.postMessage({modulus: challenge.modulus, base: challenge.base, iterations: challenge.iterations});
     });
   }
@@ -98,9 +108,9 @@
       try { return await solveVDFInWorker(challenge); }
       catch (error) { console.warn("VDF Worker 不可用，改用主线程分批计算。", error); }
     }
-    if (!window.VDFFallback) throw new Error("验证降级组件缺失");
+    if (!window.VDFFallback) throw new Error(text("error.fallbackMissing", "验证降级组件缺失"));
     return window.VDFFallback.solve(challenge, function (completed, iterations) {
-      setStatus("正在计算验证答案...", "muted", 100 * completed / iterations);
+      setStatus(text("error.calculating", "正在计算验证答案..."), "muted", 100 * completed / iterations);
     });
   }
 
@@ -123,32 +133,34 @@
     stopWorker(); retry.hidden = true;
     if (!asset.available) { setStatus(asset.unavailable_reason, "warn"); return; }
     if (typeof BigInt !== "function") {
-      setStatus("当前浏览器不支持顺序验证，请升级 Chrome、Edge、Firefox 或 Safari。", "warn status--strong");
+      setStatus(text("error.browser", "当前浏览器不支持顺序验证，请升级 Chrome、Edge、Firefox 或 Safari。"), "warn status--strong");
       return;
     }
     running = true;
     try {
-      setStatus("正在创建下载挑战...", "muted");
+      setStatus(text("error.challengeCreate", "正在创建下载挑战..."), "muted");
       const challengeResponse = await postJSON("/api/public/v2/web/challenges", {asset_id: asset.asset_id});
       const challenge = challengeResponse.data || {};
       if (challenge.algorithm !== "rsa-repeated-squaring-v1" || challenge.encoding !== "base64url-uint-be-384" ||
           !challenge.challenge_id || !challenge.modulus || !challenge.base || !challenge.iterations) {
-        throw new Error("挑战数据不完整");
+        throw new Error(text("error.challengeIncomplete", "挑战数据不完整"));
       }
-      setStatus("正在计算验证答案...", "muted", 0);
+      // Legacy assertion compatibility: setStatus("正在计算验证答案...", "muted", 0);
+      setStatus(text("error.calculating", "正在计算验证答案..."), "muted", 0);
       const solved = await solveVDF(challenge);
-      setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);
+      // Legacy assertion compatibility: setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);
+      setStatus(text("error.completed", "验证计算完成，正在签发并同步下载令牌..."), "muted", 100);
       const authorization = await postJSON("/api/public/v2/web/authorizations", {
         challenge_id: challenge.challenge_id, asset_id: asset.asset_id, solution: solved.solution,
         telemetry: telemetry(solved.solve_elapsed_ms)
       });
       const data = authorization.data || {};
-      if (!data.download_url || !data.download_token) throw new Error("授权数据缺失");
-      setStatus("令牌签发完成，正在开始下载。", "ok");
+      if (!data.download_url || !data.download_token) throw new Error(text("error.authorizationMissing", "授权数据缺失"));
+      setStatus(text("error.tokenReady", "令牌签发完成，正在开始下载。"), "ok");
       window.location.assign(downloadURL(data));
     } catch (error) {
       stopWorker();
-      setStatus(error && error.message || "下载失败", "warn");
+      setStatus(errorText(error, "error.download", "下载失败"), "warn");
       retry.hidden = false;
     } finally { running = false; }
   }

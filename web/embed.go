@@ -4,5 +4,5 @@ import "embed"
 
 // Assets contains the public and admin templates/static files used by the master UI.
 //
-//go:embed public/templates/*.html public/static/* admin/templates/*.html admin/static/*
+//go:embed public/templates/*.html public/static/* public/static/i18n/*.js admin/templates/*.html admin/static/*
 var Assets embed.FS

@@ -1,18 +1,18 @@
 <section class="download-pow-page punishment-pow-page">
   <div class="download-pow panel-card punishment-pow">
     <div class="download-pow__head punishment-pow__head">
-      <p class="punishment-pow__eyebrow">人机验证</p>
-      <h2>你有点不对劲！</h2>
-      <p class="muted punishment-pow__lead">你是人类吗？下载站的AI觉得你有点不对劲，所以需要你进行一些操作。如认为属于误判，请按照下方信息提交申诉。</p>
+      <p class="punishment-pow__eyebrow" data-i18n="punishment.eyebrow">人机验证</p>
+      <h2 data-i18n="blocked.heading">你有点不对劲！</h2>
+      <p class="muted punishment-pow__lead" data-i18n="blocked.lead">你是人类吗？下载站的AI觉得你有点不对劲，所以需要你进行一些操作。如认为属于误判，请按照下方信息提交申诉。</p>
     </div>
-    <div class="status status--strong muted">请求已暂缓</div>
+    <div class="status status--strong muted" data-i18n="blocked.status">请求已暂缓</div>
     <div class="punishment-pow__body">
-      <p>请发送邮件至 <a href="mailto:{{.Email}}">{{.Email}}</a>，附上本页截图、出现时间和请求编号，并简要说明出现此页面前进行的操作。</p>
+      <p><span data-i18n="blocked.appealPrefix">请发送邮件至 </span><a href="mailto:{{.Email}}">{{.Email}}</a><span data-i18n="blocked.appealSuffix">，附上本页截图、出现时间和请求编号，并简要说明出现此页面前进行的操作。</span></p>
       <dl class="punishment-pow__meta">
-        <div><dt>您的 IP</dt><dd>{{.IP}}</dd></div>
-        <div><dt>请求编号</dt><dd>{{.RequestID}}</dd></div>
-        <div><dt>服务器时间</dt><dd>{{.ServerTime}}</dd></div>
-        <div><dt>申诉邮箱</dt><dd>{{.Email}}</dd></div>
+        <div><dt data-i18n="punishment.source">您的 IP</dt><dd>{{.IP}}</dd></div>
+        <div><dt data-i18n="punishment.requestId">请求编号</dt><dd>{{.RequestID}}</dd></div>
+        <div><dt data-i18n="punishment.serverTime">服务器时间</dt><dd>{{.ServerTime}}</dd></div>
+        <div><dt data-i18n="punishment.email">申诉邮箱</dt><dd>{{.Email}}</dd></div>
       </dl>
     </div>
   </div>

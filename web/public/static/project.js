@@ -1,6 +1,8 @@
 (function () {
   const page = document.querySelector(".project-page[data-project-id]");
   if (!page) return;
+  const i18n = window.MirrorI18n;
+  const text = (key, fallback, params) => i18n ? i18n.t(key, params) : fallback;
   const projectId = page.dataset.projectId || "";
   const statusBox = document.getElementById("project-download-status");
   const statusSummary = statusBox.parentElement;
@@ -16,6 +18,8 @@
   const fileName = document.getElementById("project-file-name");
   const fileMeta = document.getElementById("project-file-meta");
   const button = document.getElementById("project-download-button");
+  const icon = page.querySelector(".project-hero__icon");
+  const updated = page.querySelector(".project-updated");
   const modeButtons = Array.from(page.querySelectorAll("[data-selection-mode]"));
   const selectors = window.DownloadSelectors || {
     bytesText: (value) => String(value || 0) + " B",
@@ -34,6 +38,7 @@
   let selectedAsset = null;
   let browser = null;
   let versions = [];
+  let lastError = null;
 
   function selectorEnabled(item, field, legacyField) {
     if (item[field] != null) return !!item[field];
@@ -47,7 +52,8 @@
   }
 
   function architectureLabel(item) {
-    return String(item.architecture || "").trim() || "None";
+    const raw = String(item.architecture || "").trim();
+    return raw || text("system.unidentified", "未识别");
   }
 
   function refreshSystems(preferred) {
@@ -101,9 +107,9 @@
     selectedAsset = selected;
     if (!selected) {
       selectedAsset = null;
-      availability.textContent = "暂不可下载";
+      availability.textContent = text("download.unavailable", "暂不可下载");
       availability.className = "project-availability warn";
-      fileName.textContent = "暂无可下载文件";
+      fileName.textContent = text("project.noFile", "暂无可下载文件");
       fileMeta.textContent = "";
       button.disabled = true;
       delete button.dataset.downloadPath;
@@ -111,9 +117,10 @@
       return;
     }
     const available = !!selected.available;
-    availability.textContent = available ? "可下载" : "暂不可下载";
+    availability.textContent = available ? text("download.available", "可下载") :
+      text("download.unavailable", "暂不可下载");
     availability.className = "project-availability " + (available ? "ok" : "warn");
-    fileName.textContent = selected.file_name || "未命名文件";
+    fileName.textContent = selected.file_name || text("project.unnamedFile", "未命名文件");
     fileMeta.textContent = selected.version + " · " + selectors.bytesText(selected.size_bytes);
     button.disabled = !available;
     button.dataset.downloadPath = selected.download_path || "";
@@ -167,24 +174,60 @@
       uniqueVersions: selectors.uniqueVersions,
       version: versionSelect.value
     });
-    setStatus(versions.length ? "" : "暂无可展示文件。", versions.length ? "muted" : "warn");
+    setStatus(versions.length ? "" : text("project.noFiles", "暂无可展示文件。"),
+      versions.length ? "muted" : "warn");
     setMode(selectors.selectionModeForProject(projectId, project.default_selection_mode));
+    if (icon) icon.alt = text("project.icon", project.display_name + " 图标", {value: project.display_name});
+    if (updated) {
+      const value = project.latest_published_at || updated.dataset.updatedAt || "";
+      const formatted = value && i18n ? i18n.formatDate(value) : value;
+      updated.textContent = formatted ? text("download.projectUpdated", "最近更新：" + formatted, {value: formatted}) : "";
+    }
   }
 
   async function loadProject() {
     try {
       const resp = await fetch("/api/public/v1/catalog", {cache: "default"});
-      if (!resp.ok) throw new Error("项目数据加载失败");
+      if (!resp.ok) {
+        const error = new Error("项目数据加载失败");
+        error.status = resp.status;
+        try {
+          const body = await resp.json();
+          error.code = body.code || "";
+          error.message = body.message || error.message;
+        } catch (_) {}
+        throw error;
+      }
       const catalog = await resp.json();
       const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
       const found = projects.find((item) => item.project_id === projectId);
-      if (!found) throw new Error("项目不存在或未启用");
+      if (!found) {
+        const error = new Error("项目不存在或未启用");
+        error.code = "ASSET_NOT_FOUND";
+        throw error;
+      }
+      lastError = null;
       bindProject(found);
     } catch (err) {
-      setStatus(err.message || "项目数据加载失败", "warn");
+      lastError = err;
+      setStatus(i18n ? i18n.errorMessage(err, "error.project") : err.message || "项目数据加载失败", "warn");
       button.disabled = true;
     }
   }
+
+  if (i18n) i18n.onChange(function () {
+    if (project) {
+      if (icon) icon.alt = text("project.icon", project.display_name + " 图标", {value: project.display_name});
+      if (updated) {
+        const value = project.latest_published_at || updated.dataset.updatedAt || "";
+        const formatted = value ? i18n.formatDate(value) : "";
+        updated.textContent = formatted ? text("download.projectUpdated", "最近更新：" + formatted, {value: formatted}) : "";
+      }
+      refreshSystems(selectedAsset);
+    } else if (lastError) {
+      setStatus(i18n.errorMessage(lastError, "error.project"), "warn");
+    }
+  });
 
   versionSelect.addEventListener("change", function () { refreshSystems(); });
   systemSelect.addEventListener("change", function () { refreshArchitectures(); });

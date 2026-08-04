@@ -1,5 +1,6 @@
 (function () {
   "use strict";
+  const i18n = window.MirrorI18n;
 
   function fallbackCopy(text) {
     const area = document.createElement("textarea");
@@ -30,9 +31,9 @@
       button.disabled = true;
       try {
         await copyText(source.textContent.trim());
-        if (status) status.textContent = "原理 Markdown 已复制，可直接粘贴给 AI。";
+        if (status) status.textContent = i18n ? i18n.t("api.copySuccess") : "原理 Markdown 已复制，可直接粘贴给 AI。";
       } catch (error) {
-        if (status) status.textContent = "复制失败，请手动选择原理内容。";
+        if (status) status.textContent = i18n ? i18n.t("api.copyFailed") : "复制失败，请手动选择原理内容。";
       } finally {
         window.setTimeout(function () { button.disabled = false; }, 800);
       }

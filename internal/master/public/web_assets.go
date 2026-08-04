@@ -157,16 +157,18 @@ func loadWebAssets(root string) (*webAssets, error) {
 }
 
 func buildStaticManifest(staticFS fs.FS) (map[string]string, template.JS, error) {
-	entries, err := fs.ReadDir(staticFS, ".")
+	names := make([]string, 0)
+	err := fs.WalkDir(staticFS, ".", func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path != "." && entry.Type().IsRegular() {
+			names = append(names, strings.TrimPrefix(path, "./"))
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, "", err
-	}
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.Type().IsRegular() {
-			continue
-		}
-		names = append(names, entry.Name())
 	}
 	sort.Strings(names)
 	manifest := make(map[string]string, len(names))

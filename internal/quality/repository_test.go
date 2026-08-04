@@ -21,6 +21,7 @@ func TestTextFilesAreUTF8AndMaintainedFilesStaySmall(t *testing.T) {
 		filepath.Clean("configs/config.example.yaml"):                   true,
 		filepath.Clean("internal/config/templates/config.example.yaml"): true,
 	}
+	translationDirectory := filepath.Join("web", "public", "static", "i18n") + string(os.PathSeparator)
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -40,7 +41,7 @@ func TestTextFilesAreUTF8AndMaintainedFilesStaySmall(t *testing.T) {
 		if !utf8.Valid(content) {
 			t.Errorf("文本文件不是有效 UTF-8：%s", relative)
 		}
-		if extension != ".md" && countLines(content) > 250 && !allowLong[relative] {
+		if extension != ".md" && countLines(content) > 250 && !allowLong[relative] && !strings.HasPrefix(relative, translationDirectory) {
 			t.Errorf("非 Markdown 文件超过 250 行：%s", relative)
 		}
 		return nil

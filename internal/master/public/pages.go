@@ -38,7 +38,8 @@ func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 	sponsors := buildSponsorPage(loadSponsors(), requestedSponsorPage(r.URL.Query().Get("sponsor_page")), sponsorPageSize)
 	s.renderPage(w, pageData{Title: "关于本项目", BrowserTitle: "关于本项目 - 枫源镜像", BodyClass: "page-about",
 		Subtitle: "关于枫源镜像，和为本站做出贡献的朋友们",
-		Body:     aboutBody(sponsors, s.staticURL), Styles: []string{"/static/public/about.css"}})
+		Body:     aboutBody(sponsors, s.staticURL), Styles: []string{"/static/public/about.css"},
+		Scripts: []string{"/static/public/about.js"}})
 }
 
 func (s Server) nodesPage(w http.ResponseWriter, r *http.Request) {
@@ -112,4 +113,23 @@ func stateText(value string) string {
 	default:
 		return value
 	}
+}
+
+func stateHTML(value string) string {
+	key := ""
+	switch strings.ToLower(value) {
+	case "online", "syncing", "ready":
+		key = "stats.state.online"
+	case "offline":
+		key = "stats.state.offline"
+	case "disabled":
+		key = "stats.state.disabled"
+	case "pending":
+		key = "stats.state.pending"
+	}
+	label := esc(stateText(value))
+	if key == "" {
+		return label
+	}
+	return `<span data-i18n="` + key + `">` + label + `</span>`
 }
