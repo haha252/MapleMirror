@@ -15,8 +15,16 @@
     return !!project[legacyField];
   }
 
+  function architectureLabel(value, i18n) {
+    const raw = String(value || "").trim();
+    return raw || (i18n ? i18n.t("system.unidentified") : "未识别");
+  }
+
   function create(project, options) {
     const card = options.template.content.firstElementChild.cloneNode(true);
+    const i18n = window.MirrorI18n;
+    const text = (key, fallback, params) => i18n ? i18n.t(key, params) : fallback;
+    if (i18n) i18n.apply(card);
     const assets = Array.isArray(project.assets) ? project.assets : [];
     const versions = selectors.uniqueVersions(assets);
     const defaultVersion = project.default_version || versions[0] || "";
@@ -24,7 +32,7 @@
     const icon = card.querySelector(".project-card__icon");
     const link = card.querySelector(".project-link");
     icon.src = project.icon_url;
-    icon.alt = project.display_name + " 图标";
+    icon.alt = text("project.icon", project.display_name + " 图标", {value: project.display_name});
     icon.tabIndex = 0;
     icon.addEventListener("click", () => { window.location.href = projectHref; });
     icon.addEventListener("keydown", (event) => {
@@ -32,11 +40,16 @@
     });
     link.href = projectHref;
     card.querySelector(".project-name").textContent = project.display_name;
-    card.querySelector(".version-badge").textContent =
-      defaultVersion ? "最新版本：" + defaultVersion : "暂无版本";
+    const latestVersionText = defaultVersion ? "最新版本：" + defaultVersion : "暂无版本";
+    card.querySelector(".version-badge").textContent = i18n ?
+      text(defaultVersion ? "catalog.latestVersion" : "catalog.noVersion", latestVersionText,
+        {value: defaultVersion}) : latestVersionText;
     card.querySelector(".project-repository").textContent = project.repository;
+    const updated = project.latest_published_at ?
+      (i18n ? i18n.formatDate(project.latest_published_at) : project.latest_published_at) :
+      text("catalog.noVersion", "暂无");
     card.querySelector(".project-updated").textContent =
-      "最近更新：" + (project.latest_published_at || "暂无");
+      text("download.projectUpdated", "最近更新：" + updated, {value: updated});
     renderTags(card.querySelector(".project-tags"), project.tags, options);
 
     const versionField = card.querySelector(".version-field");
@@ -72,10 +85,10 @@
         selectors.preferredAsset(assets.filter((item) => item.version === versionSelect.value));
       selectedAsset = selected || null;
       if (!selected) {
-        sizeText.textContent = "暂无可下载文件";
+        sizeText.textContent = text("project.noFile", "暂无可下载文件");
         sizeText.className = "project-card__size warn";
         button.disabled = true;
-        button.textContent = "暂不可下载";
+        button.textContent = text("download.unavailable", "暂不可下载");
         delete button.dataset.assetId;
         delete button.dataset.downloadPath;
         button.removeAttribute("title");
@@ -84,7 +97,9 @@
       sizeText.textContent = selectors.bytesText(selected.size_bytes);
       sizeText.className = "project-card__size " + (selected.available ? "muted" : "warn");
       button.disabled = !selected.available;
-      button.textContent = selected.available ? "下载" : "暂不可下载";
+      const availabilityText = selected.available ? "下载" : "暂不可下载";
+      button.textContent = i18n ? text(selected.available ? "download.download" :
+        "download.unavailable", availabilityText) : availabilityText;
       button.dataset.assetId = selected.asset_id;
       button.dataset.downloadPath = selected.download_path || "";
       if (selected.unavailable_reason) button.title = selected.unavailable_reason;
@@ -107,7 +122,7 @@
       list.forEach((item) => {
         const option = document.createElement("option");
         option.value = item.asset_id;
-        option.textContent = String(item.architecture || "").trim() || "None";
+        option.textContent = architectureLabel(item.architecture, i18n);
         option.selected = !!choice && choice.asset_id === item.asset_id;
         archSelect.appendChild(option);
       });
@@ -138,7 +153,7 @@
 
     function startAssetDownload(asset) {
       if (!asset || !asset.available || !asset.asset_id || !asset.download_path) {
-        options.status("下载资产缺失，请刷新后重试。", "warn");
+        options.status(text("download.assetMissing", "下载资产缺失，请刷新后重试。"), "warn");
         return;
       }
       window.location.href = homeDownloadHref(asset.download_path);
@@ -172,7 +187,7 @@
     }));
     button.addEventListener("click", () => {
       if (!button.dataset.assetId || !button.dataset.downloadPath) {
-        options.status("下载资产缺失，请刷新后重试。", "warn");
+        options.status(text("download.assetMissing", "下载资产缺失，请刷新后重试。"), "warn");
         return;
       }
       window.location.href = homeDownloadHref(button.dataset.downloadPath);

@@ -12,7 +12,8 @@
       !suggestionsSection || !suggestionsTitle || !cardTemplate || !projectSentinel ||
       !suggestionSentinel || !window.DownloadCardRenderer || !window.DownloadFilters ||
       !window.DownloadLazyLoader) return;
-
+  const i18n = window.MirrorI18n;
+  const text = (key, fallback, params) => i18n ? i18n.t(key, params) : fallback;
   const configuredRows = Number.parseInt(results.dataset.catalogBatchRows, 10);
   const batchRows = Number.isInteger(configuredRows) && configuredRows > 0 ?
     configuredRows : 4;
@@ -34,7 +35,6 @@
     )
   };
   const lazyLoader = window.DownloadLazyLoader.create(batchRows, remainingRows, loadMore);
-
   function createSection(kind, container, sentinel) {
     const section = {
       kind: kind, container: container, sentinel: sentinel,
@@ -45,7 +45,6 @@
     section.button.addEventListener("click", function () { loadMore(section); });
     return section;
   }
-
   function setStatus(message, level, retry) {
     statusBox.replaceChildren();
     statusBox.className = "status " + (level || "muted");
@@ -55,17 +54,21 @@
     if (retry) {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = "重试";
+      button.textContent = text("catalog.retry", "重试");
       button.addEventListener("click", loadCatalog);
       statusBox.append(document.createTextNode(" "), button);
     }
   }
-
+  function localizeControls() {
+    const clear = document.querySelector("#catalog-filter-clear span");
+    const filter = document.querySelector("#catalog-filter-button > span:first-of-type");
+    if (clear) clear.textContent = text("catalog.clear", "取消全部");
+    if (filter) filter.textContent = text("catalog.filter", "筛选器");
+  }
   function scheduleLoad() {
     window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(loadCatalog, 300);
   }
-
   function catalogURL(cursor, pageSize) {
     const params = new URLSearchParams();
     const search = filters.search();
@@ -75,7 +78,6 @@
     if (cursor) params.set("cursor", cursor);
     return "/api/public/v1/catalog?" + params.toString();
   }
-
   async function loadCatalog() {
     window.clearTimeout(debounceTimer);
     const sequence = ++requestSequence;
@@ -83,7 +85,7 @@
     projectsContainer.replaceChildren();
     suggestionsContainer.replaceChildren();
     suggestionsSection.hidden = true;
-    setStatus("正在更新项目列表...", "muted");
+    setStatus(text("catalog.refreshing", "正在更新项目列表..."), "muted");
     initialController = window.MirrorCompat.createAbortController();
     try {
       const catalog = await requestCatalog("", initialController.signal,
@@ -101,14 +103,12 @@
       showInitialError(error);
     }
   }
-
   async function requestCatalog(cursor, signal, pageSize) {
     const requestOptions = window.MirrorCompat.withAbortSignal({cache: "default"}, signal);
     const response = await fetch(catalogURL(cursor, pageSize), requestOptions);
     if (!response.ok) throw await responseError(response);
     return response.json();
   }
-
   async function responseError(response) {
     const error = new Error("catalog request failed");
     error.status = response.status;
@@ -116,12 +116,12 @@
     try {
       const body = await response.json();
       error.code = body.code || "";
+      error.message = body.message || error.message;
     } catch (_) {
       error.code = "";
     }
     return error;
   }
-
   function renderInitial(catalog) {
     const projects = arrayValue(catalog.projects);
     const suggestions = arrayValue(catalog.suggested_projects);
@@ -132,19 +132,20 @@
     setSectionCursor(
       sections.suggested_projects, catalog.next_suggested_projects_cursor, suggestionCards
     );
+    // Legacy fallback: "您可能还在找：" : "没有严格匹配的项，但你可能在找："
     suggestionsTitle.textContent = projects.length ?
-      "您可能还在找：" : "没有严格匹配的项，但你可能在找：";
+      text("catalog.suggestionsShort", "您可能还在找：") :
+      text("catalog.suggestions", "没有严格匹配的项，但你可能在找：");
     suggestionsSection.hidden = suggestions.length === 0 &&
       !sections.suggested_projects.cursor;
     if (projects.length || suggestions.length) {
       setStatus("", "muted");
     } else if (filters.search() || filters.selectedFilters().length) {
-      setStatus("没有找到符合当前搜索和筛选条件的项目。", "muted");
+      setStatus(text("catalog.noMatch", "没有找到符合当前搜索和筛选条件的项目。"), "muted");
     } else {
-      setStatus("暂无可展示项目。", "muted");
+      setStatus(text("catalog.noProjects", "暂无可展示项目。"), "muted");
     }
   }
-
   async function loadMore(section) {
     if (section.loading || !section.cursor) return;
     const sequence = requestSequence;
@@ -152,7 +153,7 @@
     section.loading = true;
     section.failed = false;
     section.controller = window.MirrorCompat.createAbortController();
-    updateSentinel(section, "正在加载更多...");
+    updateSentinel(section, text("catalog.loadingMore", "正在加载更多..."));
     try {
       const catalog = await requestCatalog(cursor, section.controller.signal,
         lazyLoader.batchSize(section.container));
@@ -174,18 +175,16 @@
       }
       section.failed = true;
       const wait = error.status === 429 && error.retryAfter ?
-        "，请在 " + error.retryAfter + " 秒后重试" : "";
-      updateSentinel(section, "加载更多失败" + wait + "。");
+        text("catalog.wait", "，请在 " + error.retryAfter + " 秒后重试", {seconds: error.retryAfter}) : "";
+      updateSentinel(section, text("catalog.loadFailed", "加载更多失败" + wait + "。", {wait: wait}));
     }
   }
-
   function cardOptions() {
     return {
       template: cardTemplate, selectedTags: filters.selectedTags(),
       tagLabels: filters.tagLabels(), search: filters.search(), status: setStatus
     };
   }
-
   function renderCards(container, projects, options, append) {
     const fragment = document.createDocumentFragment();
     const cards = [];
@@ -198,7 +197,6 @@
     else container.replaceChildren(fragment);
     return cards;
   }
-
   function setSectionCursor(section, cursor, cards) {
     section.cursor = typeof cursor === "string" ? cursor : "";
     section.loading = false;
@@ -206,19 +204,18 @@
     section.batchCards = cards || [];
     updateSentinel(section, "");
   }
-
   function updateSentinel(section, message) {
     lazyLoader.unwatch(section);
     const active = Boolean(section.cursor || section.loading || section.failed);
     section.sentinel.hidden = !active;
     section.message.textContent = message || "";
-    section.button.textContent = section.failed ? "重试加载" :
-      (section.kind === "projects" ? "加载更多项目" : "加载更多建议");
+    section.button.textContent = section.failed ? text("catalog.retryLoad", "重试加载") :
+      (section.kind === "projects" ? text("catalog.loadProjects", "加载更多项目") :
+        text("catalog.loadSuggestions", "加载更多建议"));
     section.button.hidden = lazyLoader.supported && !section.failed;
     section.button.disabled = section.loading;
     lazyLoader.watch(section);
   }
-
   function resetRequests() {
     if (initialController) initialController.abort();
     Object.values(sections).forEach((section) => {
@@ -230,19 +227,20 @@
       updateSentinel(section, "");
     });
   }
-
   function showInitialError(error) {
     if (error.status === 429) {
-      const wait = error.retryAfter ? "，请在 " + error.retryAfter + " 秒后重试" : "";
-      setStatus("搜索或筛选请求过于频繁" + wait + "。", "warn", true);
+      const wait = error.retryAfter ?
+        text("catalog.wait", "，请在 " + error.retryAfter + " 秒后重试", {seconds: error.retryAfter}) : "";
+      setStatus(text("catalog.rateLimited", "搜索或筛选请求过于频繁" + wait + "。", {wait: wait}), "warn", true);
     } else {
-      setStatus("项目列表加载失败，请稍后重试。", "warn", true);
+      setStatus(i18n ? i18n.errorMessage(error, "error.catalog") :
+        "项目列表加载失败，请稍后重试。", "warn", true);
     }
   }
-
   function arrayValue(value) {
     return Array.isArray(value) ? value : [];
   }
-
+  localizeControls();
+  if (i18n) i18n.onChange(function () { localizeControls(); loadCatalog(); });
   loadCatalog();
 })();

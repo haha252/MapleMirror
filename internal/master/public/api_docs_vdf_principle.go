@@ -1,30 +1,30 @@
 package public
 
 const apiVDFPrincipleDetails = `<details id="api-vdf-principle" class="api-details api-principle-details">
-  <summary>展开了解 RSA repeated-squaring 的计算原理</summary>
+  <summary data-i18n="api.vdfSummary">展开了解 RSA repeated-squaring 的计算原理</summary>
   <div class="api-details-actions">
-    <button type="button" class="button-link api-copy-markdown" data-copy-markdown="api-vdf-principle-markdown" aria-describedby="api-vdf-copy-status">复制原理Markdown</button>
+    <button type="button" class="button-link api-copy-markdown" data-copy-markdown="api-vdf-principle-markdown" aria-describedby="api-vdf-copy-status" data-i18n="api.copyButton">复制原理Markdown</button>
     <span id="api-vdf-copy-status" class="api-copy-status" role="status" aria-live="polite"></span>
   </div>
   <div class="api-principle-content">
-    <p>这一步计算的是顺序工作量证明，不是普通密码哈希。挑战给出 RSA 模数 <code>N</code>、起始值 <code>base</code> 和最终迭代数 <code>iterations</code>；客户端只能按顺序使用前一次结果继续模平方。</p>
-    <h4>计算过程</h4>
+    <p data-i18n="api.vdfIntro">这一步计算的是顺序工作量证明，不是普通密码哈希。挑战给出 RSA 模数 N、起始值 base 和最终迭代数 iterations；客户端只能按顺序使用前一次结果继续模平方。</p>
+    <h4 data-i18n="api.vdfProcess">计算过程</h4>
     <pre><code>y = decode_unsigned_big_endian(base)
 重复 iterations 次：
     y = (y × y) mod N
 solution = base64url_no_padding(unsigned_big_endian_384(y))</code></pre>
-    <p><code>modulus</code>、<code>base</code> 和 <code>solution</code> 都必须是恰好 384 字节的无符号大端整数，再编码成无填充 base64url，因此线上字符串长度固定为 512。即使结果前面是零，也不能删掉前导零字节。</p>
-    <h4>为什么必须顺序执行</h4>
-    <p>第 i+1 次平方依赖第 i 次的完整结果。数学上最终值等于 <code>base^(2^iterations) mod N</code>，但客户端不知道 RSA 模数的陷门，不能把指数按欧拉函数化简；直接构造 <code>2^iterations</code> 也不能绕过这些依赖。多线程拆分不同区间后无法独立合并，所以应使用单条顺序循环。</p>
-    <h4>服务端如何确认结果</h4>
-    <p>主节点持有只存在于内存中的 RSA 陷门，可以快速得到同一最终值，并在创建挑战时保存定长结果的摘要。授权时服务端先检查挑战版本、算法、来源、资产、客户端前缀、有效期和一次性状态，再校验 <code>0 &lt; solution &lt; N</code> 以及结果摘要。RSA 陷门和预期答案不会发送给客户端或写入 PoW 遥测。</p>
-    <h4>实现时最容易出错的地方</h4>
+    <p data-i18n="api.vdfEncoding">modulus、base 和 solution 都必须是恰好 384 字节的无符号大端整数，再编码成无填充 base64url，因此线上字符串长度固定为 512。即使结果前面是零，也不能删掉前导零字节。</p>
+    <h4 data-i18n="api.vdfSequentialTitle">为什么必须顺序执行</h4>
+    <p data-i18n="api.vdfSequential">第 i+1 次平方依赖第 i 次的完整结果。数学上最终值等于 base^(2^iterations) mod N，但客户端不知道 RSA 模数的陷门，不能把指数按欧拉函数化简；直接构造 2^iterations 也不能绕过这些依赖。多线程拆分不同区间后无法独立合并，所以应使用单条顺序循环。</p>
+    <h4 data-i18n="api.vdfServerTitle">服务端如何确认结果</h4>
+    <p data-i18n="api.vdfServer">主节点持有只存在于内存中的 RSA 陷门，可以快速得到同一最终值，并在创建挑战时保存定长结果的摘要。授权时服务端先检查挑战版本、算法、来源、资产、客户端前缀、有效期和一次性状态，再校验 0 &lt; solution &lt; N 以及结果摘要。RSA 陷门和预期答案不会发送给客户端或写入 PoW 遥测。</p>
+    <h4 data-i18n="api.vdfPitfallsTitle">实现时最容易出错的地方</h4>
     <ul class="api-principle-points">
-      <li>循环次数必须正好等于响应里的最终 <code>iterations</code>，不能使用本地默认值。</li>
-      <li>每轮都必须先平方再对 <code>N</code> 取模，不能改成哈希、乘以 base 或并行 nonce 搜索。</li>
-      <li>解码和编码都使用无符号大端；输出必须左侧补零到 384 字节。</li>
-      <li>base64url 使用 <code>-</code>、<code>_</code> 且不带 <code>=</code> padding。</li>
-      <li>挑战有有效期并绑定资产和客户端来源；失败后应重新创建挑战，不要跨资产或跨 API 版本复用。</li>
+      <li data-i18n="api.vdfPitfallIterations">循环次数必须正好等于响应里的最终 iterations，不能使用本地默认值。</li>
+      <li data-i18n="api.vdfPitfallSquare">每轮都必须先平方再对 N 取模，不能改成哈希、乘以 base 或并行 nonce 搜索。</li>
+      <li data-i18n="api.vdfPitfallEncoding">解码和编码都使用无符号大端；输出必须左侧补零到 384 字节。</li>
+      <li data-i18n="api.vdfPitfallBase64">base64url 使用 -、_ 且不带 = padding。</li>
+      <li data-i18n="api.vdfPitfallBinding">挑战有有效期并绑定资产和客户端来源；失败后应重新创建挑战，不要跨资产或跨 API 版本复用。</li>
     </ul>
   </div>
   <pre id="api-vdf-principle-markdown" hidden># Mirror Server API V2 repeated-squaring 原理

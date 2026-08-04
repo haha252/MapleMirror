@@ -1,3 +1,18 @@
+{{define "public-theme-tools"}}
+<div class="theme-tools">
+  <button type="button" id="mode-toggle" class="icon-button" data-i18n-aria-label="theme.mode" data-i18n-title="theme.mode" aria-label="切换明暗模式" title="切换明暗模式"></button>
+  <button type="button" id="palette-toggle" class="icon-button" data-i18n-aria-label="theme.palette" data-i18n-title="theme.palette" aria-label="选择主题色" title="选择主题色">
+    <svg aria-hidden="true">
+      <use href="{{staticURL "icons.svg#palette"}}"></use>
+    </svg>
+  </button>
+  <div id="palette-menu" class="palette-menu" hidden></div>
+  <button type="button" id="language-toggle" class="icon-button" data-i18n-aria-label="language.select" data-i18n-title="language.select" aria-label="选择语言" title="选择语言" aria-expanded="false">
+    <svg aria-hidden="true"><use href="{{staticURL "icons.svg#language"}}"></use></svg>
+  </button>
+  <div id="language-menu" class="palette-menu language-menu" hidden></div>
+</div>
+{{end}}
 <!doctype html>
 <html lang="zh-CN">
 <head>
@@ -32,46 +47,49 @@
 {{end}}
 <script>window.MirrorStatic = {{.StaticJSON}};</script>
 <script src="{{staticURL "compat.js"}}" defer></script>
+<script src="{{staticURL "i18n/zh-CN.js"}}" defer></script>
+<script src="{{staticURL "i18n/en.js"}}" defer></script>
+<script src="{{staticURL "i18n.js"}}" defer></script>
 </head>
 <body class="{{.BodyClass}}">
 <div id="page-loading-bar" class="page-loading-bar" aria-hidden="true"></div>
 {{if not .HideHeader}}
 <header class="site-header">
   <div class="site-header__left">
-    <div class="site-brand" aria-label="枫源镜像">
+    <div class="site-brand" data-i18n-aria-label="brand.name" aria-label="枫源镜像">
       <img src="{{staticURL "logo.webp"}}" alt="">
       <span class="site-brand__primary">枫源</span><span class="site-brand__secondary">镜像</span>
     </div>
-    <nav class="site-nav" aria-label="主导航">
-      <a href="/" aria-label="首页" title="首页">
+    <nav class="site-nav" data-i18n-aria-label="nav.main" aria-label="主导航">
+      <a href="/" data-i18n-aria-label="nav.home" data-i18n-title="nav.home" aria-label="首页" title="首页">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#home"}}"></use>
         </svg>
-        <span>首页</span>
+        <span data-i18n="nav.home">首页</span>
       </a>
-      <a href="/stats" aria-label="数据统计" title="数据统计">
+      <a href="/stats" data-i18n-aria-label="nav.stats" data-i18n-title="nav.stats" aria-label="数据统计" title="数据统计">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#stats"}}"></use>
         </svg>
-        <span>数据统计</span>
+        <span data-i18n="nav.stats">数据统计</span>
       </a>
-      <a href="/api-docs" aria-label="API 文档" title="API 文档">
+      <a href="/api-docs" data-i18n-aria-label="nav.docs" data-i18n-title="nav.docs" aria-label="API 文档" title="API 文档">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#docs"}}"></use>
         </svg>
-        <span>API 文档</span>
+        <span data-i18n="nav.docs">API 文档</span>
       </a>
-      <a href="/changelog" aria-label="更新日志" title="更新日志">
+      <a href="/changelog" data-i18n-aria-label="nav.changelog" data-i18n-title="nav.changelog" aria-label="更新日志" title="更新日志">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#changelog"}}"></use>
         </svg>
-        <span>更新日志</span>
+        <span data-i18n="nav.changelog">更新日志</span>
       </a>
-      <a href="/about" aria-label="关于" title="关于">
+      <a href="/about" data-i18n-aria-label="nav.about" data-i18n-title="nav.about" aria-label="关于" title="关于">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#about"}}"></use>
         </svg>
-        <span>关于</span>
+        <span data-i18n="nav.about">关于</span>
       </a>
     </nav>
   </div>
@@ -79,29 +97,22 @@
     {{if .CatalogSearch}}<label class="site-header__catalog" for="catalog-search-desktop">
       <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
       <input id="catalog-search-desktop" type="search" autocomplete="off"
-        maxlength="100" placeholder="搜索项目、ID 或标签">
+        maxlength="100" data-i18n-placeholder="search.catalog" placeholder="搜索项目、ID 或标签">
     </label>{{else if .ChangelogSearch}}<label class="site-header__catalog" for="changelog-search-desktop">
       <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
       <input id="changelog-search-desktop" type="search" autocomplete="off"
-        maxlength="100" placeholder="搜索更新标题或描述">
+          maxlength="100" data-i18n-placeholder="search.changelog" placeholder="搜索更新标题或描述">
     </label>{{end}}
-    <div class="theme-tools">
-      <button type="button" id="mode-toggle" class="icon-button" aria-label="切换明暗模式" title="切换明暗模式"></button>
-      <button type="button" id="palette-toggle" class="icon-button" aria-label="选择主题色" title="选择主题色">
-        <svg aria-hidden="true">
-          <use href="{{staticURL "icons.svg#palette"}}"></use>
-        </svg>
-      </button>
-      <div id="palette-menu" class="palette-menu" hidden></div>
-    </div>
+    {{template "public-theme-tools" .}}
   </div>
 </header>
 {{end}}
+{{if .HideHeader}}<div class="minimal-public-tools">{{template "public-theme-tools" .}}</div>{{end}}
 <div class="site-scroll-region">
 <main class="site-main">
   <div class="page-title-row">
-    <h1>{{.Title}}</h1>
-    {{if .Subtitle}}<p class="page-subtitle">{{.Subtitle}}</p>{{end}}
+    <h1 data-i18n-page-title="true">{{.Title}}</h1>
+    {{if .Subtitle}}<p class="page-subtitle" data-i18n-page-subtitle="true">{{.Subtitle}}</p>{{end}}
   </div>
   {{if .BeforeNotices}}<div class="page-notices">
     {{range .BeforeNotices}}<div class="page-notice page-notice--{{.Level}}" role="status" aria-live="polite">{{.Message}}</div>{{end}}
@@ -115,14 +126,14 @@
 <footer class="site-footer">
   <div class="site-footer__meta">
     <span class="site-footer__built">
-      Built with
+      <span data-i18n="footer.built">Built with</span>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <use href="{{staticURL "icons.svg#heart"}}"></use>
       </svg>
-      by Frostlynx
+      <span data-i18n="footer.by">by Frostlynx</span>
     </span>
     <span class="site-footer__sep">|</span>
-    <span class="site-footer__contact">联系我们（贡献节点/请求收录项目/安全报告）：<a href="mailto:frostlynx@qq.com">frostlynx@qq.com</a></span>
+    <span class="site-footer__contact"><span data-i18n="footer.contact">联系我们（贡献节点/请求收录项目/安全报告）：</span><a href="mailto:frostlynx@qq.com">frostlynx@qq.com</a></span>
   </div>
   <span class="site-footer__filing">
     <a href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">渝ICP备2024044523号-1</a>

@@ -24,6 +24,10 @@
     <circle cx="10" cy="7.5" r="1"/>
     <circle cx="14" cy="7.5" r="1"/>
   </symbol>
+  <symbol id="language" viewBox="0 0 24 24">
+    <path d="M4 5h8M8 3v2c0 4-2 7-5 9M5 9c1.5 1.5 3.5 2.5 6 3"/>
+    <path d="M15 18h7m-3.5-7-4 10m2.5-3h5"/>
+  </symbol>
   <symbol id="heart" viewBox="0 0 24 24">
     <path d="M20.8 4.6a5.4 5.4 0 0 0-7.6 0L12 5.8l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.8a5.4 5.4 0 0 0 0-7.6Z"/>
   </symbol>

@@ -3,7 +3,7 @@
     <div class="download-pow panel-card">
       {{with .Verification}}
       <form class="download-pow__verification-options" method="post" action="/api/public/v1/web/verifications">
-        <p class="download-pow__compatibility-warning" role="alert">如果你能看到下方这几个按钮，说明你的浏览器大概率不支持本站人机验证。也不要点击任何按钮，这很有可能导致AI误判从而被封禁。请考虑使用最新版 Microsoft Edge 或 Firefox 浏览器。</p>
+        <p class="download-pow__compatibility-warning" data-i18n="pow.compatibility" role="alert">如果你能看到下方这几个按钮，说明你的浏览器大概率不支持本站人机验证。也不要点击任何按钮，这很有可能导致AI误判从而被封禁。请考虑使用最新版 Microsoft Edge 或 Firefox 浏览器。</p>
         <input class="download-pow__verification-value" name="verification_token" value="{{.Token}}" readonly autocomplete="off" tabindex="-1">
         <input class="download-pow__verification-value" name="asset_id" value="{{.AssetID}}" readonly autocomplete="off" tabindex="-1">
         <div class="download-pow__verification-actions">
@@ -20,30 +20,30 @@
         </div>
         <div id="download-pow-status" class="status muted" role="status" aria-live="polite">
           <span class="download-pow__status-copy">
-            <span class="download-pow__status-message">正在准备挑战...</span>
+            <span class="download-pow__status-message" data-i18n="pow.preparing">正在准备挑战...</span>
             <span class="download-pow__status-percent" hidden>0%</span>
           </span>
           <span class="download-pow__status-copy download-pow__status-copy--complete" aria-hidden="true">
-            <span class="download-pow__status-message">正在准备挑战...</span>
+            <span class="download-pow__status-message" data-i18n="pow.preparing">正在准备挑战...</span>
             <span class="download-pow__status-percent" hidden>0%</span>
           </span>
         </div>
         <div class="download-pow__support">
           <div class="download-pow__support-copy">
             <div class="download-pow__actions">
-              <button type="button" id="download-pow-retry" class="button-link button-link--primary" hidden>重试</button>
+              <button type="button" id="download-pow-retry" class="button-link button-link--primary" data-i18n="pow.retry" hidden>重试</button>
               {{if .FromHome}}
-              <a class="button-link button-link--primary" href="/">返回枫源镜像</a>
+              <a class="button-link button-link--primary" href="/" data-i18n="pow.backHome">返回枫源镜像</a>
               {{else}}
-              <a class="button-link" href="/">前往枫源镜像</a>
-              <button type="button" class="button-link button-link--primary download-pow__back">返回来源页</button>
+              <a class="button-link" href="/" data-i18n="pow.goHome">前往枫源镜像</a>
+              <button type="button" class="button-link button-link--primary download-pow__back" data-i18n="pow.backSource">返回来源页</button>
               {{end}}
             </div>
-            <p>下载站费用高昂，如有能力，欢迎捐赠！</p>
+            <p data-i18n="pow.donate">下载站费用高昂，如有能力，欢迎捐赠！</p>
           </div>
-          <div class="download-pow__sponsors" aria-label="赞助二维码">
-            <img src="{{staticURL "wechat.png"}}" alt="微信赞助二维码">
-            <img src="{{staticURL "alipay.png"}}" alt="支付宝赞助二维码">
+          <div class="download-pow__sponsors" data-i18n-aria-label="pow.sponsors" aria-label="赞助二维码">
+            <img src="{{staticURL "wechat.png"}}" data-i18n-alt="pow.wechat" alt="微信赞助二维码">
+            <img src="{{staticURL "alipay.png"}}" data-i18n-alt="pow.alipay" alt="支付宝赞助二维码">
           </div>
         </div>
       </div>

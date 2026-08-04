@@ -5,21 +5,21 @@
       {{if .Notices}}<div class="page-notices catalog-page-notices">
         {{range .Notices}}<div class="page-notice page-notice--{{.Level}}" role="status" aria-live="polite">{{.Message}}</div>{{end}}
       </div>{{end}}
-      <aside id="catalog-filters" class="catalog-filters" aria-label="项目筛选器">
+      <aside id="catalog-filters" class="catalog-filters" data-i18n-aria-label="catalog.filter" aria-label="项目筛选器">
         <div class="catalog-filters__mobile-head">
-          <h2>筛选器</h2>
+          <h2 data-i18n="catalog.filter">筛选器</h2>
           <div class="catalog-filters__mobile-actions">
             <button id="catalog-filter-clear" type="button" disabled>
               <svg aria-hidden="true"><use href="{{staticURL "icons.svg#broom"}}"></use></svg>
               <span>取消全部</span>
             </button>
-            <button id="catalog-filter-close" type="button" aria-label="关闭筛选器">
+            <button id="catalog-filter-close" type="button" data-i18n-aria-label="catalog.close" aria-label="关闭筛选器">
               <svg aria-hidden="true"><use href="{{staticURL "icons.svg#close"}}"></use></svg>
             </button>
           </div>
         </div>
         <div id="catalog-filter-groups" class="catalog-filter-groups">
-          <p class="muted">正在加载筛选器...</p>
+          <p class="muted" data-i18n="catalog.loadingFilters">正在加载筛选器...</p>
         </div>
       </aside>
     </div>
@@ -27,10 +27,10 @@
       <label class="catalog-search" for="catalog-search-mobile">
         <svg aria-hidden="true"><use href="{{staticURL "icons.svg#search"}}"></use></svg>
         <input id="catalog-search-mobile" type="search" autocomplete="off"
-          maxlength="100" placeholder="搜索项目、ID 或标签">
+          maxlength="100" data-i18n-placeholder="search.catalog" placeholder="搜索项目、ID 或标签">
       </label>
       <button id="catalog-filter-button" class="catalog-filter-button" type="button"
-        aria-controls="catalog-filters" aria-expanded="false">
+        data-i18n-aria-label="catalog.filterButton" aria-label="打开筛选器" aria-controls="catalog-filters" aria-expanded="false">
         <svg aria-hidden="true"><use href="{{staticURL "icons.svg#filter"}}"></use></svg>
         <span>筛选器</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
       </button>
@@ -38,17 +38,17 @@
     <section class="catalog-results" aria-live="polite"
       data-catalog-batch-rows="{{.CatalogBatchRows}}"
       data-catalog-prefetch-remaining-rows="{{.CatalogPrefetchRemainingRows}}">
-      <div id="download-status" class="status muted">正在加载项目列表...</div>
+      <div id="download-status" class="status muted" data-i18n="catalog.loadingProjects">正在加载项目列表...</div>
       <div id="project-cards" class="project-grid" data-project-grid></div>
       <div id="project-load-more" class="catalog-load-more" hidden>
-        <button type="button">加载更多项目</button>
+        <button type="button" data-i18n="catalog.loadProjects">加载更多项目</button>
         <span role="status" aria-live="polite"></span>
       </div>
       <section id="catalog-suggestions" class="catalog-suggestions" hidden>
-        <h2><span id="catalog-suggestions-title">没有严格匹配的项，但你可能在找：</span></h2>
+        <h2><span id="catalog-suggestions-title" data-i18n="catalog.suggestions">没有严格匹配的项，但你可能在找：</span></h2>
         <div id="suggested-project-cards" class="project-grid" data-project-grid></div>
         <div id="suggested-project-load-more" class="catalog-load-more" hidden>
-          <button type="button">加载更多建议</button>
+          <button type="button" data-i18n="catalog.loadSuggestions">加载更多建议</button>
           <span role="status" aria-live="polite"></span>
         </div>
       </section>
@@ -58,7 +58,7 @@
     <section class="project-card panel-card">
       <div class="project-card__head">
         <div class="project-card__meta">
-          <img class="project-card__icon" alt="">
+          <img class="project-card__icon" data-i18n-alt="brand.name" alt="">
           <div class="project-card__title">
             <h2><a class="project-link" href=""><span class="project-name"></span></a></h2>
             <div class="project-card__identity">
@@ -66,37 +66,37 @@
                 <p class="muted version-badge"></p>
                 <p class="muted project-repository"></p>
               </div>
-              <div class="selection-mode" role="group" aria-label="文件选择方式">
+              <div class="selection-mode" role="group" data-i18n-aria-label="selection.group" aria-label="文件选择方式">
                 <button type="button" data-selection-mode="selectors" aria-pressed="true"
-                  aria-label="条件选择" title="条件选择">
+                  data-i18n-aria-label="selection.conditions" data-i18n-title="selection.conditions" aria-label="条件选择" title="条件选择">
                   <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
                 </button>
                 <button type="button" data-selection-mode="file" aria-pressed="false"
-                  aria-label="文件选择" title="文件选择">
+                  data-i18n-aria-label="selection.files" data-i18n-title="selection.files" aria-label="文件选择" title="文件选择">
                   <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
                 </button>
               </div>
             </div>
             <p class="muted project-updated"></p>
-            <div class="project-tags" aria-label="项目标签"></div>
+            <div class="project-tags" data-i18n-aria-label="catalog.projectTags" aria-label="项目标签"></div>
           </div>
         </div>
       </div>
       <div class="project-card__body">
-        <div class="field version-field"><label>版本</label><select class="version-select"></select></div>
-        <div class="field system-field" hidden><label>系统</label><select class="system-select"></select></div>
-        <div class="field architecture-field" hidden><label>架构</label><select class="architecture-select"></select></div>
+        <div class="field version-field"><label data-i18n="field.version">版本</label><select class="version-select"></select></div>
+        <div class="field system-field" hidden><label data-i18n="field.system">系统</label><select class="system-select"></select></div>
+        <div class="field architecture-field" hidden><label data-i18n="field.architecture">架构</label><select class="architecture-select"></select></div>
         <div class="file-browser" data-folder-icon="{{staticURL "icons.svg#selection-files"}}" hidden>
           <section class="file-browser__level file-browser__level--versions">
-            <p class="file-browser__title">版本文件夹</p>
-            <div class="file-browser__versions" role="group" aria-label="版本"></div>
+            <p class="file-browser__title" data-i18n="file.versionFolder">版本文件夹</p>
+            <div class="file-browser__versions" role="group" data-i18n-aria-label="field.version" aria-label="版本"></div>
           </section>
           <section class="file-browser__level file-browser__level--files" hidden>
             <div class="file-browser__toolbar">
-              <button class="file-browser__back" type="button">← 返回版本列表</button>
+              <button class="file-browser__back" type="button" data-i18n="file.backVersions">← 返回版本列表</button>
               <p class="file-browser__path"></p>
             </div>
-            <div class="file-browser__files" role="group" aria-label="文件"></div>
+            <div class="file-browser__files" role="group" data-i18n-aria-label="field.file" aria-label="文件"></div>
           </section>
         </div>
         <div class="project-card__actions">

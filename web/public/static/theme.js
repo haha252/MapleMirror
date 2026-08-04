@@ -4,14 +4,25 @@
   const accentKey = "mirror-accent";
   const media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
   const themes = [
-    ["rose", "玫瑰红", "#F5276C"],
-    ["orange", "活力橙", "#F54927"],
-    ["maple", "枫叶黄", "#FFA436"],
-    ["sprout", "嫩芽黄", "#D3F527"],
-    ["cyan", "水玉青", "#27F5B0"],
-    ["blue", "大海蓝", "#276CF5"],
-    ["purple", "基佬紫", "#B027F5"]
+    ["rose", "theme.rose", "#F5276C"],
+    ["orange", "theme.orange", "#F54927"],
+    ["maple", "theme.maple", "#FFA436"],
+    ["sprout", "theme.sprout", "#D3F527"],
+    ["cyan", "theme.cyan", "#27F5B0"],
+    ["blue", "theme.blue", "#276CF5"],
+    ["purple", "theme.purple", "#B027F5"]
   ];
+
+  function text(key, fallback) {
+    return window.MirrorI18n ? window.MirrorI18n.t(key) : fallback;
+  }
+
+  function updateBrand() {
+    const primary = document.querySelector(".site-brand__primary");
+    const secondary = document.querySelector(".site-brand__secondary");
+    if (primary) primary.textContent = text("brand.primary", "枫源");
+    if (secondary) secondary.textContent = text("brand.secondary", "镜像");
+  }
 
   function saved(key) {
     try { return window.localStorage ? localStorage.getItem(key) : ""; }
@@ -49,13 +60,17 @@
     button.innerHTML = dark
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a7 7 0 1 0 11.5 11.5Z"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+    const label = dark ? text("theme.toLight", "切换到浅色模式") : text("theme.toDark", "切换到深色模式");
+    button.setAttribute("aria-label", label);
+    button.title = label;
   }
 
   function buildPalette() {
     const menu = document.getElementById("palette-menu");
     if (!menu) return;
     menu.innerHTML = "";
-    themes.forEach(([name, label, color]) => {
+    themes.forEach(([name, key, color]) => {
+      const label = text(key, key);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "palette-choice";
@@ -82,6 +97,7 @@
   applyAccent(saved(accentKey) || "maple");
 
   document.addEventListener("DOMContentLoaded", function () {
+    updateBrand();
     buildPalette();
     const mode = document.getElementById("mode-toggle");
     const palette = document.getElementById("palette-toggle");
@@ -94,6 +110,11 @@
     });
     if (palette && menu) palette.addEventListener("click", function () {
       menu.hidden = !menu.hidden;
+    });
+    if (window.MirrorI18n) window.MirrorI18n.onChange(function () {
+      updateBrand();
+      buildPalette();
+      updateModeIcon();
     });
     document.addEventListener("click", function (event) {
       const link = event.target.closest && event.target.closest("a[href]");

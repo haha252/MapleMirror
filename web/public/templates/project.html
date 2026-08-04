@@ -1,11 +1,11 @@
-<section class="project-page" data-project-id="{{.ProjectID}}">
-  <a class="project-back" href="/" aria-label="返回枫源镜像">
+<section class="project-page" data-project-id="{{.ProjectID}}" data-project-name="{{.DisplayName}}">
+  <a class="project-back" href="/" data-i18n-aria-label="project.back" aria-label="返回枫源镜像">
     <span class="project-back__icon" aria-hidden="true">
       <svg viewBox="0 0 24 24">
         <path d="M15 5 8 12l7 7"></path>
       </svg>
     </span>
-    <span>返回枫源镜像</span>
+    <span data-i18n="project.back">返回枫源镜像</span>
   </a>
 
   <section class="project-layout">
@@ -18,72 +18,73 @@
         <div class="project-title-wrap">
           <h2>{{.DisplayName}}</h2>
           <p class="muted">{{.Repository}}</p>
-          {{if .LatestPublishedAt}}<p class="muted">最近更新：{{.LatestPublishedAt}}</p>{{end}}
+          {{if .LatestPublishedAt}}<p class="muted project-updated" data-updated-at="{{.LatestPublishedAt}}">最近更新：{{.LatestPublishedAt}}</p>{{end}}
         </div>
         {{if .HomepageURL}}
-        <a class="project-homepage" href="{{.HomepageURL}}" target="_blank" rel="noopener noreferrer">
+        <a class="project-homepage" href="{{.HomepageURL}}" target="_blank" rel="noopener noreferrer"
+          data-i18n-aria-label="project.homepage" data-i18n-title="project.homepage" aria-label="转到官网" title="转到官网">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M14 4h6v6"></path>
             <path d="M10 14 20 4"></path>
             <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path>
           </svg>
-          <span>转到官网</span>
+          <span data-i18n="project.homepage">转到官网</span>
         </a>
         {{end}}
       </div>
 
-      <div class="selection-mode project-selection-mode" role="group" aria-label="文件选择方式">
+      <div class="selection-mode project-selection-mode" role="group" data-i18n-aria-label="selection.group" aria-label="文件选择方式">
         <button type="button" data-selection-mode="selectors" aria-pressed="true"
-          aria-label="条件选择" title="条件选择">
+          data-i18n-aria-label="selection.conditions" data-i18n-title="selection.conditions" aria-label="条件选择" title="条件选择">
           <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
         </button>
         <button type="button" data-selection-mode="file" aria-pressed="false"
-          aria-label="文件选择" title="文件选择">
+          data-i18n-aria-label="selection.files" data-i18n-title="selection.files" aria-label="文件选择" title="文件选择">
           <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
         </button>
       </div>
 
       <section class="project-download">
         <div class="project-download__summary">
-          <p id="project-download-status">正在加载下载组件...</p>
+          <p id="project-download-status" data-i18n="download.loading">正在加载下载组件...</p>
         </div>
         <div class="project-download__controls">
           <label class="field" id="project-version-field">
-            <span>版本</span>
+            <span data-i18n="field.version">版本</span>
             <select id="project-version"></select>
           </label>
           <label class="field" id="project-system-field" hidden>
-            <span>系统</span>
+            <span data-i18n="field.system">系统</span>
             <select id="project-system"></select>
           </label>
           <label class="field" id="project-architecture-field" hidden>
-            <span>架构</span>
+            <span data-i18n="field.architecture">架构</span>
             <select id="project-architecture"></select>
           </label>
           <div class="file-browser" id="project-file-browser"
             data-folder-icon="{{staticURL "icons.svg#selection-files"}}" hidden>
             <section class="file-browser__level file-browser__level--versions">
-              <p class="file-browser__title">版本文件夹</p>
-              <div class="file-browser__versions" role="group" aria-label="版本"></div>
+              <p class="file-browser__title" data-i18n="file.versionFolder">版本文件夹</p>
+              <div class="file-browser__versions" role="group" data-i18n-aria-label="field.version" aria-label="版本"></div>
             </section>
             <section class="file-browser__level file-browser__level--files" hidden>
               <div class="file-browser__toolbar">
-                <button class="file-browser__back" type="button">← 返回版本列表</button>
+                <button class="file-browser__back" type="button" data-i18n="file.backVersions">← 返回版本列表</button>
                 <p class="file-browser__path"></p>
               </div>
-              <div class="file-browser__files" role="group" aria-label="文件"></div>
+              <div class="file-browser__files" role="group" data-i18n-aria-label="field.file" aria-label="文件"></div>
             </section>
           </div>
         </div>
         <div class="project-download__asset">
           <div>
-            <p id="project-file-name">暂无可下载文件</p>
+            <p id="project-file-name" data-i18n="project.noFile">暂无可下载文件</p>
             <div class="project-file-subline">
               <p id="project-file-meta"></p>
               <p id="project-availability" class="project-availability"></p>
             </div>
           </div>
-          <button id="project-download-button" class="download-button" type="button" disabled>下载</button>
+          <button id="project-download-button" class="download-button" data-i18n="download.download" type="button" disabled>下载</button>
         </div>
       </section>
     </div>
@@ -91,7 +92,7 @@
 
   {{if .Description}}
   <section class="project-description panel-card">
-    <h2>项目描述</h2>
+    <h2 data-i18n="project.description">项目描述</h2>
     <p>{{.Description}}</p>
   </section>
   {{end}}

@@ -18,6 +18,8 @@
   }
 
   function create(root, items, options) {
+    const i18n = window.MirrorI18n;
+    const text = (key, fallback, params) => i18n ? i18n.t(key, params) : fallback;
     const versionsView = root.querySelector(".file-browser__level--versions");
     const filesView = root.querySelector(".file-browser__level--files");
     const versionsBox = root.querySelector(".file-browser__versions");
@@ -41,7 +43,7 @@
     }
 
     function fileMeta(item) {
-      const status = item.available ? "" : " · 暂不可下载";
+      const status = item.available ? "" : " · " + text("download.unavailable", "暂不可下载");
       return options.bytesText(item.size_bytes) + status;
     }
 
@@ -57,7 +59,7 @@
         const button = actionButton(className, "");
         const name = document.createElement("span");
         name.className = "file-browser__file-name";
-        name.textContent = item.file_name || "未命名文件";
+        name.textContent = item.file_name || text("project.unnamedFile", "未命名文件");
         const meta = document.createElement("span");
         meta.className = "file-browser__file-meta " + (item.available ? "muted" : "warn");
         const size = document.createElement("span");
@@ -67,6 +69,7 @@
           const tag = document.createElement("span");
           tag.className = "file-browser__recommendation";
           tag.textContent = "推荐下载";
+          if (i18n) tag.textContent = text("file.recommended", tag.textContent);
           meta.appendChild(tag);
         }
         button.appendChild(name);
@@ -80,7 +83,7 @@
       if (!files.length) {
         const empty = document.createElement("p");
         empty.className = "file-browser__empty muted";
-        empty.textContent = "该版本暂无文件";
+        empty.textContent = text("file.noVersion", "该版本暂无文件");
         filesBox.appendChild(empty);
       }
     }
@@ -90,7 +93,7 @@
       renderVersions();
       versionsView.hidden = true;
       filesView.hidden = false;
-      pathText.textContent = "版本 / " + currentVersion;
+      pathText.textContent = text("file.versionPath", "版本 / " + currentVersion, {value: currentVersion});
       options.onVersion(currentVersion);
       renderFiles();
     }
@@ -114,6 +117,11 @@
 
     backButton.addEventListener("click", function () {
       showVersions(null, currentVersion);
+    });
+    if (i18n) i18n.onChange(function () {
+      renderVersions();
+      if (!filesView.hidden) renderFiles();
+      if (!filesView.hidden) pathText.textContent = text("file.versionPath", "版本 / " + currentVersion, {value: currentVersion});
     });
     showVersions(options.asset || null, options.version || "");
     return {
