@@ -9,7 +9,7 @@ usage() {
 说明:
   默认统计 Git 跟踪的源码和常见文本资源文件，排除图片、SVG、docs/ 里的文档，
   以及 go.mod / go.sum / .gitignore / .gitattributes / sponsor.example.json 这类元数据。
-  --max-per-file 只约束普通源码和前端资源；配置文件和数据库版本升级器不参与单文件行数上限。
+  --max-per-file 只约束普通源码和前端资源；配置文件、i18n 词表和数据库版本升级器不参与单文件行数上限。
 
 选项:
   --root PATH        指定仓库根目录，默认自动从当前脚本位置向上查找 Git 根目录
@@ -127,6 +127,9 @@ skip_line_limit() {
   file=$1
   case "$file" in
     configs/*.yaml|configs/*.yml|configs/**/*.yaml|configs/**/*.yml)
+      return 0
+      ;;
+    web/public/static/i18n/*.js)
       return 0
       ;;
     internal/config/templates/*.yaml|internal/config/templates/*.yml|internal/config/templates/**/*.yaml|internal/config/templates/**/*.yml)
