@@ -159,7 +159,7 @@ func main() {
 	if regionClassifier != nil {
 		defer regionClassifier.Close()
 	}
-	publicServer, err := newPublicServer(cfg, quota, notices, projects, filters,
+	publicServer, err := newPublicServer(cfg, *path, quota, notices, projects, filters,
 		*projectsPath, *filtersPath, *noticesPath, *changelogPath, location, database, runtime,
 		logger, regionClassifier, tokenSigner, archive, statsBuffer)
 	if err != nil {

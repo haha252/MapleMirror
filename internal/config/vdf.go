@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -55,25 +56,8 @@ func applyVDFDefaults(c *Master, warn WarnFunc) {
 }
 
 func validateVDF(c Master) error {
-	if len(c.VDFSizeTiers) == 0 {
-		return errors.New("vdf_size_tiers 至少需要一个分档")
-	}
-	previous := int64(-1)
-	for index, tier := range c.VDFSizeTiers {
-		value, err := ParseBytes(fmt.Sprintf("vdf_size_tiers[%d].min_size", index), tier.MinSize, true)
-		if err != nil {
-			return err
-		}
-		if index == 0 && value != 0 {
-			return errors.New("vdf_size_tiers 第一档 min_size 必须为 0 B")
-		}
-		if value <= previous {
-			return errors.New("vdf_size_tiers 的 min_size 必须严格递增")
-		}
-		if tier.Iterations == 0 || tier.Iterations > VDFIterationsHardLimit {
-			return fmt.Errorf("配置字段 vdf_size_tiers[%d].iterations 超出有效范围", index)
-		}
-		previous = value
+	if err := validateVDFSizeTiers(c.VDFSizeTiers); err != nil {
+		return err
 	}
 	if c.VDF.MaxIterations == 0 || c.VDF.MaxIterations > VDFIterationsHardLimit {
 		return errors.New("vdf.max_iterations 超出有效范围")
@@ -90,6 +74,47 @@ func validateVDF(c Master) error {
 		return errors.New("vdf.key_rotation_interval 必须大于 vdf.challenge_ttl")
 	}
 	return nil
+}
+
+func validateVDFSizeTiers(tiers []VDFSizeTier) error {
+	if len(tiers) == 0 {
+		return errors.New("vdf_size_tiers 至少需要一个分档")
+	}
+	previous := int64(-1)
+	for index, tier := range tiers {
+		value, err := ParseBytes(fmt.Sprintf("vdf_size_tiers[%d].min_size", index), tier.MinSize, true)
+		if err != nil {
+			return err
+		}
+		if index == 0 && value != 0 {
+			return errors.New("vdf_size_tiers 第一档 min_size 必须为 0 B")
+		}
+		if value <= previous {
+			return errors.New("vdf_size_tiers 的 min_size 必须严格递增")
+		}
+		if tier.Iterations == 0 || tier.Iterations > VDFIterationsHardLimit {
+			return fmt.Errorf("配置字段 vdf_size_tiers[%d].iterations 超出有效范围", index)
+		}
+		previous = value
+	}
+	return nil
+}
+
+func LoadVDFSizeTiers(path string) ([]VDFSizeTier, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("读取主节点配置失败：%w", err)
+	}
+	var partial struct {
+		VDFSizeTiers []VDFSizeTier `yaml:"vdf_size_tiers"`
+	}
+	if err := yaml.Unmarshal(data, &partial); err != nil {
+		return nil, fmt.Errorf("解析 YAML 配置失败：%w", err)
+	}
+	if err := validateVDFSizeTiers(partial.VDFSizeTiers); err != nil {
+		return nil, err
+	}
+	return append([]VDFSizeTier(nil), partial.VDFSizeTiers...), nil
 }
 
 func migrateVDFChallengeTTL(doc *yaml.Node) (bool, bool) {

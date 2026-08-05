@@ -66,3 +66,33 @@ func (p vdfPolicy) parameters(sizeBytes int64, level abuseLevel) (uint64, int) {
 	}
 	return iterations, multiplier
 }
+
+func (s *vdfService) currentPolicy() vdfPolicy {
+	s.policyMu.RLock()
+	defer s.policyMu.RUnlock()
+	return s.policy
+}
+
+func (s *vdfService) setPolicy(policy vdfPolicy) {
+	s.policyMu.Lock()
+	s.policy = policy
+	s.policyMu.Unlock()
+}
+
+func (s *vdfService) parameters(sizeBytes int64, level abuseLevel) (uint64, int) {
+	return s.currentPolicy().parameters(sizeBytes, level)
+}
+
+func equalVDFPolicies(left, right vdfPolicy) bool {
+	if left.elevatedMultiplier != right.elevatedMultiplier ||
+		left.severeMultiplier != right.severeMultiplier ||
+		left.maxIterations != right.maxIterations || len(left.tiers) != len(right.tiers) {
+		return false
+	}
+	for index, tier := range left.tiers {
+		if tier != right.tiers[index] {
+			return false
+		}
+	}
+	return true
+}

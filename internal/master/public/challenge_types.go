@@ -3,6 +3,7 @@ package public
 import (
 	"io"
 	"math/big"
+	"sync"
 )
 
 type Challenge struct {
@@ -28,6 +29,7 @@ type Challenge struct {
 
 type vdfService struct {
 	keys      *vdfKeyManager
+	policyMu  sync.RWMutex
 	policy    vdfPolicy
 	semaphore chan struct{}
 	random    io.Reader

@@ -46,6 +46,7 @@ type Server struct {
 	CatalogCache                 *catalogResultCache
 	changelog                    *changelogStore
 	VDFKeys                      *vdfKeyManager
+	vdfPolicyReloader            *vdfPolicyReloader
 	PowTelemetry                 PoWTelemetryWriter
 	TelemetryWarnings            *telemetryWarningLimiter
 	CatalogBatchRows             int
@@ -64,6 +65,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	apiV1Enabled bool, quota config.Quota, loc *time.Location, trusted []string,
 	projects config.Projects, filters config.Filters,
 	projectsPath, filtersPath, noticesPath, changelogPath string, notices []config.PublicNotice,
+	vdfConfigPath string,
 	runtime *mastercontrol.RuntimeStore,
 	regionClassifier geoip.Classifier,
 	logger *logging.Logger, publicProbeNetworkFailures int,
@@ -94,6 +96,8 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	}
 	challenges := newChallengeMemory(quota.ChallengeLimits)
 	challenges.startCleanup(minDuration(vdfTTL, apiTTL, time.Minute))
+	vdf := &vdfService{keys: keys, policy: vdfPolicy,
+		semaphore: make(chan struct{}, vdfConfig.MaxParallelCreations)}
 	blocklist := newBlocklistPolicy(quota, logger)
 	blocklist.start()
 	abuseTracker := newAbuseTracker(quota.AbuseControl)
@@ -104,11 +108,10 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	webVerifications.startCleanup()
 	catalogCache := newCatalogResultCache(filters.CacheBytes)
 	catalogIndex := newCatalogIndex(projects, filters, projectsPath, filtersPath, catalogCache, logger)
-	return Server{
+	server := Server{
 		Store: Store{DB: db, Quota: newQuotaPolicy(quota), Location: loc,
 			Challenges: challenges, PoWDifficulty: powDifficulty,
-			VDF: &vdfService{keys: keys, policy: vdfPolicy,
-				semaphore: make(chan struct{}, vdfConfig.MaxParallelCreations)},
+			VDF:        vdf,
 			MaxBytes:   newMaxBytesPolicy(quota),
 			RangeLimit: quota.RangeConcurrencyLimit, Runtime: runtime,
 			RegionClassifier:           regionClassifier,
@@ -143,7 +146,9 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 		VDFKeys:                      keys,
 		CatalogBatchRows:             catalogBatchRows,
 		CatalogPrefetchRemainingRows: &catalogPrefetchRemainingRows,
-	}, nil
+	}
+	server.vdfPolicyReloader = newVDFPolicyReloader(vdf, vdfConfigPath, vdfConfig, logger)
+	return server, nil
 }
 
 type noticeView struct {

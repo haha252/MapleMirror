@@ -59,6 +59,9 @@ func (s Server) Handler() http.Handler {
 }
 
 func (s Server) Close() {
+	if s.vdfPolicyReloader != nil {
+		s.vdfPolicyReloader.close()
+	}
 	if s.Store.Challenges != nil {
 		s.Store.Challenges.Close()
 	}

@@ -40,7 +40,7 @@ func (s *Store) CreateVDFChallenge(ctx context.Context, source, assetID, prefix 
 		return Challenge{}, err
 	}
 	key := s.VDF.keys.current()
-	iterations, multiplier := s.VDF.policy.parameters(sizeBytes, level)
+	iterations, multiplier := s.VDF.parameters(sizeBytes, level)
 	base, solution, err := s.createVDFExpected(key, iterations)
 	if err != nil {
 		return Challenge{}, err
