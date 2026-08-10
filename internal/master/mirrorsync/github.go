@@ -26,7 +26,10 @@ type HTTPGitHubClient struct {
 
 const DefaultGitHubClientTimeout = 2 * time.Minute
 
-var errGitHubNotFound = errors.New("GitHub 资源不存在")
+var (
+	errGitHubNotFound    = errors.New("GitHub 资源不存在")
+	errGitHubRateLimited = errors.New("GitHub 限频或拒绝访问")
+)
 
 type GitHubRelease struct {
 	ID          int64
@@ -63,6 +66,16 @@ type githubReleasePayload struct {
 }
 
 func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitHubRelease, error) {
+	return c.listReleasesWithLimit(ctx, repo, 0)
+}
+
+func (c HTTPGitHubClient) ListReleasesLimited(ctx context.Context, repo string,
+	maxReleases int) ([]GitHubRelease, error) {
+	return c.listReleasesWithLimit(ctx, repo, maxReleases)
+}
+
+func (c HTTPGitHubClient) listReleasesWithLimit(ctx context.Context, repo string,
+	maxReleases int) ([]GitHubRelease, error) {
 	timeout := c.requestTimeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -103,7 +116,13 @@ func (c HTTPGitHubClient) ListReleases(ctx context.Context, repo string) ([]GitH
 		c.logProbeWarning(ctx, repo, "GitHub Release Atom 探测失败，使用 REST API 结果", fed.err)
 		return listed.releases, nil
 	}
-	releases, recovered, hydrateErr := c.appendFeedReleases(ctx, client, repo, listed.releases, fed.tags)
+	// A rate-limited API cannot hydrate Atom entries either. Avoid turning one
+	// rejected list request into one rejected request per feed entry.
+	if errors.Is(listed.err, errGitHubRateLimited) {
+		return nil, listed.err
+	}
+	releases, recovered, hydrateErr := c.appendFeedReleases(ctx, client, repo,
+		listed.releases, fed.tags, maxReleases)
 	if listed.err != nil {
 		if recovered == 0 || hydrateErr != nil {
 			return nil, errors.Join(listed.err, hydrateErr)
@@ -130,7 +149,7 @@ func (c HTTPGitHubClient) listReleases(ctx context.Context, client *http.Client,
 }
 
 func (c HTTPGitHubClient) appendFeedReleases(ctx context.Context, client *http.Client, repo string,
-	releases []GitHubRelease, tags []string) ([]GitHubRelease, int, error) {
+	releases []GitHubRelease, tags []string, maxReleases int) ([]GitHubRelease, int, error) {
 	seenTags := make(map[string]struct{}, len(releases))
 	seenIDs := make(map[int64]struct{}, len(releases))
 	for _, release := range releases {
@@ -138,8 +157,13 @@ func (c HTTPGitHubClient) appendFeedReleases(ctx context.Context, client *http.C
 		seenIDs[release.ID] = struct{}{}
 	}
 	recovered := 0
+	existingReleases := len(releases)
+	hydrateAttempts := 0
 	var hydrateErr error
 	for _, tag := range tags {
+		if maxReleases > 0 && existingReleases+hydrateAttempts >= maxReleases {
+			break
+		}
 		name := strings.TrimSpace(tag)
 		if name == "" {
 			continue
@@ -148,9 +172,13 @@ func (c HTTPGitHubClient) appendFeedReleases(ctx context.Context, client *http.C
 			continue
 		}
 		seenTags[name] = struct{}{}
+		hydrateAttempts++
 		release, ok, err := c.releaseByTag(ctx, client, repo, name)
 		if err != nil {
 			hydrateErr = errors.Join(hydrateErr, fmt.Errorf("补取 GitHub Release %q 失败：%w", name, err))
+			if errors.Is(err, errGitHubRateLimited) {
+				break
+			}
 			continue
 		}
 		if !ok {
@@ -183,7 +211,7 @@ func (c HTTPGitHubClient) getJSON(ctx context.Context, client *http.Client, endp
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-		return fmt.Errorf("GitHub 限频或拒绝访问：%s", resp.Status)
+		return fmt.Errorf("%w：%s", errGitHubRateLimited, resp.Status)
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		return errGitHubNotFound
@@ -213,11 +241,4 @@ func convertGitHubReleases(raw []githubReleasePayload) []GitHubRelease {
 		items = append(items, rel)
 	}
 	return items
-}
-
-func (c HTTPGitHubClient) requestTimeout() time.Duration {
-	if c.Timeout > 0 {
-		return c.Timeout
-	}
-	return DefaultGitHubClientTimeout
 }

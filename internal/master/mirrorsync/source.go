@@ -18,6 +18,10 @@ type GitHubReleaseSource struct {
 	Client GitHubClient
 }
 
+type limitedGitHubClient interface {
+	ListReleasesLimited(ctx context.Context, repo string, maxReleases int) ([]GitHubRelease, error)
+}
+
 type ResourceVersion struct {
 	SourceType       string
 	SourceReleaseKey string
@@ -44,7 +48,13 @@ func (s GitHubReleaseSource) ListResourceVersions(ctx context.Context, project c
 	if s.Client == nil {
 		return nil, fmt.Errorf("GitHub Release 来源未配置客户端")
 	}
-	releases, err := s.Client.ListReleases(ctx, project.Repository)
+	var releases []GitHubRelease
+	var err error
+	if client, ok := s.Client.(limitedGitHubClient); ok {
+		releases, err = client.ListReleasesLimited(ctx, project.Repository, project.RetainVersions)
+	} else {
+		releases, err = s.Client.ListReleases(ctx, project.Repository)
+	}
 	if err != nil {
 		return nil, err
 	}

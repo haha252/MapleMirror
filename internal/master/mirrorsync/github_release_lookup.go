@@ -5,7 +5,15 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"time"
 )
+
+func (c HTTPGitHubClient) requestTimeout() time.Duration {
+	if c.Timeout > 0 {
+		return c.Timeout
+	}
+	return DefaultGitHubClientTimeout
+}
 
 func (c HTTPGitHubClient) releaseByTag(ctx context.Context, client *http.Client,
 	repo, tag string) (GitHubRelease, bool, error) {
