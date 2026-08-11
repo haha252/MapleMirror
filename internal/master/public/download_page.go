@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"mirror-server/internal/config"
 )
@@ -98,7 +99,7 @@ func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, ass
 		ArchitectureSelectorEnabled: assetConfig.ArchitectureSelectorEnabled,
 		SystemSelectorEnabled:       assetConfig.SystemSelectorEnabled,
 		DefaultSelectionMode:        normalizedDefaultSelectionMode(assetConfig.DefaultSelectionMode),
-		LatestPublishedAt:           displayDate(project.LatestPublishedAt),
+		LatestPublishedAt:           displayDateTime(project.LatestPublishedAt),
 		Assets:                      make([]downloadAssetUI, 0, len(assets)),
 	}
 	if len(assets) > 0 {
@@ -157,12 +158,13 @@ func (s Server) catalogPrefetchRemainingRows() int {
 	return 1
 }
 
-func displayDate(value string) string {
-	if strings.TrimSpace(value) == "" {
+func displayDateTime(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return ""
 	}
 	if parsed, err := parseTime(value); err == nil {
-		return parsed.Format("2006/1/2")
+		return parsed.Format(time.RFC3339Nano)
 	}
 	return value
 }
