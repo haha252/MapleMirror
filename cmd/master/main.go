@@ -25,7 +25,7 @@ import (
 	"mirror-server/internal/storage"
 )
 
-var version = "寮€鍙戠増"
+var version = "开发版"
 
 func main() {
 	path := flag.String("config", "config.yaml", "主节点配置文件路径")
