@@ -15,7 +15,7 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	seedRoutableAsset(t, db)
 	srv := Server{Store: Store{DB: db}, Notices: []config.PublicNotice{
 		{Level: "info", Message: "第一条公告"},
-		{Level: "warn", Message: "备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！"},
+		{Level: "warn", Message: "这是一个示例公告，请根据实际情况修改。"},
 	}}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -35,7 +35,7 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	first := strings.Index(body, `page-notice page-notice--info`)
 	second := strings.Index(body, `page-notice page-notice--warn`)
 	if first < 0 || second < 0 || first >= second || !strings.Contains(body, `第一条公告`) ||
-		!strings.Contains(body, `备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！`) {
+		!strings.Contains(body, `这是一个示例公告，请根据实际情况修改。`) {
 		t.Fatalf("expected test notice in page: %s", body)
 	}
 	filters, mobileSearch := strings.Index(body, `id="catalog-filters"`), strings.Index(body, `id="catalog-search-mobile"`)

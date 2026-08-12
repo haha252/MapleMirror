@@ -75,8 +75,8 @@ func TestSaveNodeFirstRunPersistsInteractiveAnswers(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.Node.Name = "华东下载节点"
-	cfg.Master.ControlAddress = "https://162.14.72.24:10001"
-	cfg.Master.EnrollmentAddress = "https://162.14.72.24:10002"
+	cfg.Master.ControlAddress = "https://192.0.2.10:10001"
+	cfg.Master.EnrollmentAddress = "https://192.0.2.10:10002"
 	cfg.TLS.ServerName = "master.example.com"
 	if err := SaveNodeFirstRun(nodePath, cfg); err != nil {
 		t.Fatal(err)

@@ -33,7 +33,7 @@ func TestNodesHideRawControlTimeoutFromPublicReason(t *testing.T) {
 	seedRoutableAsset(t, db)
 	mustExec(t, db, `UPDATE nodes SET state = 'offline' WHERE id = 'node-1'`)
 	mustExec(t, db, `UPDATE node_control_sessions SET disconnected_at = '2026-01-01T00:00:10Z',
-		close_reason = 'read tcp 10.6.0.7:10001->38.49.217.144:53280: i/o timeout'
+		close_reason = 'read tcp 192.0.2.10:10001->198.51.100.20:53280: i/o timeout'
 		WHERE id = 'sess-seed'`)
 	store := Store{DB: db}
 

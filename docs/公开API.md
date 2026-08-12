@@ -401,7 +401,7 @@ TXT 示例：
 
 ```txt
 # [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3, 封禁时间: 2026-06-21T12:00:00Z
-2.59.169.232
+192.0.2.123
 ```
 
 JSON 示例：
@@ -414,7 +414,7 @@ JSON 示例：
     "cache_expires_at": "2026-06-21T12:01:00Z",
     "blocks": [
       {
-        "entry": "2.59.169.232",
+        "entry": "192.0.2.123",
         "reason": "traffic_limit_exceeded",
         "attempts_after_block": 3,
         "blocked_at": "2026-06-21T12:00:00Z"

@@ -11,7 +11,7 @@ func TestNodesExposeDownloadReadyReasonWhenPublicProbeBlocked(t *testing.T) {
 	seedRoutableAsset(t, db)
 	mustExec(t, db, `UPDATE nodes SET public_probe_network_failures = 5,
 		last_public_probe_result = 'network_error',
-		last_public_probe_error = 'read tcp 10.6.0.7:10001->38.49.217.144:35290: i/o timeout'
+		last_public_probe_error = 'read tcp 192.0.2.10:10001->198.51.100.20:35290: i/o timeout'
 		WHERE id = 'node-1'`)
 	store := Store{DB: db, PublicProbeNetworkFailures: 5}
 

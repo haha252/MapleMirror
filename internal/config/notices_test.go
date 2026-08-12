@@ -17,7 +17,7 @@ func TestLoadNoticesExample(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(c.Notices) != 1 || c.Notices[0].Level != "warn" ||
-		!strings.Contains(c.Notices[0].Message, "备案已经完成") {
+		!strings.Contains(c.Notices[0].Message, "示例公告") {
 		t.Fatalf("公告示例配置缺失：%+v", c.Notices)
 	}
 }
@@ -34,7 +34,7 @@ func TestLoadNoticesRejectsInvalidNotices(t *testing.T) {
 			text := strings.Replace(string(NoticesExample),
 				`level: "warn"
     # 公告正文。
-    message: "备案已经完成，我们正在执行迁移！最近一段时间，服务质量将会有所下降，部分时间段内会不可用！"`,
+    message: "这是一个示例公告，请根据实际情况修改。"`,
 				replacement, 1)
 			path := filepath.Join(t.TempDir(), "notices.yaml")
 			_ = os.WriteFile(path, []byte(text), 0o600)

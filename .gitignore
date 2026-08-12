@@ -16,3 +16,27 @@
 /问题列表.txt
 /问题列表.txt
 /问题列表.txt
+
+# 密钥、凭据与证书
+secrets/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# 本地数据库与日志文件
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.log
+*.log.*

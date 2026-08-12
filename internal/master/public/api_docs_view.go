@@ -189,13 +189,13 @@ Range: bytes=1048576-2097151</code></pre>
     <p data-i18n="api.blocklistDescription">返回当前生效的公共下载封禁列表。内容包含 quota.yaml 静态黑名单和本站手动/自动封禁记录，不包含远程订阅源快照，响应在服务端缓存 60 秒。</p>
     <p class="api-label" data-i18n="api.txtExampleResponse">TXT Example Response</p>
     <pre><code># [枫源镜像封禁] 封禁原因: traffic_limit_exceeded, 来源: local_auto_ban, 封禁后尝试次数: 3
-2.59.169.232</code></pre>
+192.0.2.123</code></pre>
     <p class="api-label" data-i18n="api.jsonExampleResponse">JSON Example Response</p>
     <pre><code>{
   "status": "success",
   "data": {
     "blocks": [
-      {"entry": "2.59.169.232", "reason": "traffic_limit_exceeded", "attempts_after_block": 3, "blocked_at": "2026-06-21T12:00:00Z"}
+      {"entry": "192.0.2.123", "reason": "traffic_limit_exceeded", "attempts_after_block": 3, "blocked_at": "2026-06-21T12:00:00Z"}
     ]
   }
 }</code></pre>
