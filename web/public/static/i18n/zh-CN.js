@@ -47,6 +47,8 @@
       "page.subtitle.page-changelog": "记录枫源镜像的功能、维护与重要变更",
       "page.subtitle.page-about": "关于枫源镜像，和为本站做出贡献的朋友们",
       "about.intro": "项目简介",
+      "about.repositoryPrefix": "本项目开源地址：",
+      "about.repositoryLabel": "GitHub 仓库",
       "about.sponsorSupport": "赞助支持",
       "about.sponsorNote": "请备注昵称后，展示页会展示你的昵称！如不备注则默认为 <None>。",
       "about.supportPrefix": "您的支持将会",

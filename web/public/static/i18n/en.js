@@ -47,6 +47,8 @@
       "page.subtitle.page-changelog": "Features, maintenance and important changes to Maple Mirror",
       "page.subtitle.page-about": "About Maple Mirror and the people who support it",
       "about.intro": "About the project",
+      "about.repositoryPrefix": "Open-source repository: ",
+      "about.repositoryLabel": "GitHub repository",
       "about.sponsorSupport": "Sponsorship",
       "about.sponsorNote": "Add a nickname to have it shown on the sponsor page. Without one, it defaults to <None>.",
       "about.supportPrefix": "Your support goes",

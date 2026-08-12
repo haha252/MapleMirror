@@ -3,8 +3,17 @@ package public
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestAboutBodyIncludesRepositoryLink(t *testing.T) {
+	body := string(aboutBody(sponsorPage{}, nil))
+	want := `<a href="` + mirrorRepositoryURL + `" rel="noopener noreferrer" target="_blank">` + mirrorRepositoryURL + `</a>`
+	if !strings.Contains(body, want) {
+		t.Fatalf("expected project repository link %q in about page: %s", want, body)
+	}
+}
 
 func TestLoadSponsorsFromFilesUsesFirstExistingFile(t *testing.T) {
 	dir := t.TempDir()

@@ -14,7 +14,15 @@
     const cards = root.querySelectorAll(":scope > .about-card");
     if (cards[0]) {
       setText(cards[0].querySelector(".about-card__title h2"), "about.intro");
-      setText(cards[0].querySelector("p"), "page.subtitle.page-download");
+      const paragraph = cards[0].querySelector("p");
+      const repository = paragraph && paragraph.querySelector("a");
+      if (paragraph && repository) {
+        repository.textContent = repository.getAttribute("href") || t("about.repositoryLabel");
+        paragraph.replaceChildren(document.createTextNode(t("page.subtitle.page-download")),
+          document.createElement("br"), document.createTextNode(t("about.repositoryPrefix")), repository);
+      } else {
+        setText(paragraph, "page.subtitle.page-download");
+      }
     }
     if (cards[1]) {
       setText(cards[1].querySelector(".about-card__title h2"), "about.sponsorSupport");
