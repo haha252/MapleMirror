@@ -27,6 +27,7 @@ type Server struct {
 	APIV1Enabled                 *bool
 	TokenLifetime                TokenLifetime
 	TrustedCIDRs                 []string
+	Version                      string
 	Logger                       *logging.Logger
 	WebAssets                    *webAssets
 	ProjectAssets                map[string]projectAssetConfig
@@ -52,13 +53,11 @@ type Server struct {
 	CatalogBatchRows             int
 	CatalogPrefetchRemainingRows *int
 }
-
 type TokenLifetime struct {
 	FirstConnectionTimeout time.Duration
 	IdleTimeout            time.Duration
 	MaxDuration            time.Duration
 }
-
 func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	tokenLifetime TokenLifetime,
 	powSizeTiers []config.PoWSizeTier, vdfSizeTiers []config.VDFSizeTier, vdfConfig config.VDF,
@@ -66,7 +65,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	projects config.Projects, filters config.Filters,
 	projectsPath, filtersPath, noticesPath, changelogPath string, notices []config.PublicNotice,
 	vdfConfigPath string,
-	runtime *mastercontrol.RuntimeStore,
+	runtime *mastercontrol.RuntimeStore, version string,
 	regionClassifier geoip.Classifier,
 	logger *logging.Logger, publicProbeNetworkFailures int,
 	catalogBatchRows, catalogPrefetchRemainingRows int,
@@ -125,6 +124,7 @@ func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 		APIV1Enabled:                 &apiV1Enabled,
 		TokenLifetime:                tokenLifetime,
 		TrustedCIDRs:                 trusted,
+		Version:                      version,
 		Logger:                       logger,
 		WebAssets:                    assets,
 		ProjectAssets:                projectAssetMap(projects),

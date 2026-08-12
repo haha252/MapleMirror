@@ -27,7 +27,7 @@ fi
 go test ./...
 
 REV=$(git rev-parse --short HEAD 2>/dev/null || printf '%s' unknown)
-VERSION="dev-$REV"
+VERSION="$REV"
 export GOOS=windows
 export GOARCH=amd64
 export CGO_ENABLED=0

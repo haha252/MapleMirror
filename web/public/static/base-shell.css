@@ -187,6 +187,7 @@
 }
 .site-footer__meta,
 .site-footer__built,
+.site-footer__version,
 .site-footer__contact {
   display: inline-flex;
   align-items: center;
@@ -194,6 +195,9 @@
   min-width: 0;
 }
 .site-footer__contact a {
+  overflow-wrap: anywhere;
+}
+.site-footer__version {
   overflow-wrap: anywhere;
 }
 .site-footer svg {

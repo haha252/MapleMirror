@@ -15,6 +15,7 @@ type pageData struct {
 	Description     string
 	BodyClass       string
 	HideHeader      bool
+	Version         string
 	CatalogSearch   bool
 	ChangelogSearch bool
 	Body            template.HTML
@@ -44,6 +45,7 @@ func (s Server) renderPage(w http.ResponseWriter, data pageData) {
 	if data.StatusCode == 0 {
 		data.StatusCode = http.StatusOK
 	}
+	data.Version = s.Version
 	w.WriteHeader(data.StatusCode)
 	_ = assets.pageTemplate.Execute(w, data)
 }

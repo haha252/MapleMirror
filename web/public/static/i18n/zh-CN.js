@@ -31,6 +31,7 @@
       "theme.purple": "紫罗兰",
       "footer.built": "Built with",
       "footer.by": "by Frostlynx",
+      "footer.version": "版本：",
       "footer.contact": "联系我们（贡献节点/请求收录项目/安全报告）：",
       "page.title.page-download": "枫源镜像",
       "page.title.page-stats": "数据统计",

@@ -31,6 +31,7 @@
       "theme.purple": "Violet",
       "footer.built": "Built with",
       "footer.by": "by Frostlynx",
+      "footer.version": "Version: ",
       "footer.contact": "Contact us (contribute a node, request a project, or report security issues):",
       "page.title.page-download": "Maple Mirror",
       "page.title.page-stats": "Statistics",

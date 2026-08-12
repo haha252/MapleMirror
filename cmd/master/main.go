@@ -161,7 +161,7 @@ func main() {
 	}
 	publicServer, err := newPublicServer(cfg, *path, quota, notices, projects, filters,
 		*projectsPath, *filtersPath, *noticesPath, *changelogPath, location, database, runtime,
-		logger, regionClassifier, tokenSigner, archive, statsBuffer)
+		version, logger, regionClassifier, tokenSigner, archive, statsBuffer)
 	if err != nil {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)

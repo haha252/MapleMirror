@@ -77,6 +77,7 @@
     width: 100%;
   }
   .site-footer__built,
+  .site-footer__version,
   .site-footer__contact {
     display: flex;
     align-items: center;

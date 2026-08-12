@@ -21,7 +21,7 @@ import (
 func newPublicServer(cfg config.Master, configPath string, quota config.Quota, notices config.Notices,
 	projects config.Projects, filters config.Filters,
 	projectsPath, filtersPath, noticesPath, changelogPath string, loc *time.Location,
-	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger,
+	db *sql.DB, runtime *mastercontrol.RuntimeStore, version string, logger *logging.Logger,
 	regionClassifier geoip.Classifier, signer downloadtoken.Signer, archive *accountingarchive.Writer,
 	statsBuffer *statbuffer.Buffer) (public.Server, error) {
 	vdfTTL, _ := time.ParseDuration(cfg.VDF.ChallengeTTL)
@@ -39,7 +39,7 @@ func newPublicServer(cfg config.Master, configPath string, quota config.Quota, n
 		cfg.PoWSizeTiers, cfg.VDFSizeTiers, cfg.VDF,
 		cfg.APIPoW.V1Enabled != nil && *cfg.APIPoW.V1Enabled, quota, loc,
 		cfg.Proxy.TrustedCIDRs, projects, filters, projectsPath, filtersPath,
-		noticesPath, changelogPath, notices.Notices, configPath, runtime, regionClassifier, logger,
+		noticesPath, changelogPath, notices.Notices, configPath, runtime, version, regionClassifier, logger,
 		cfg.Node.PublicProbeNetworkFailures, *cfg.Server.CatalogBatchRows,
 		*cfg.Server.CatalogPrefetchRemainingRows, archive, statsBuffer)
 	if err != nil {
