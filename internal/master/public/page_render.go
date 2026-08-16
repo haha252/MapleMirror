@@ -13,6 +13,8 @@ type pageData struct {
 	BeforeNotices   []noticeView
 	AfterNotices    []noticeView
 	Description     string
+	CanonicalURL    string
+	Robots          string
 	BodyClass       string
 	HideHeader      bool
 	Version         string

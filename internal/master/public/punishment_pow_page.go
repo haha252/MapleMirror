@@ -51,6 +51,7 @@ func (s Server) renderPunishmentPage(w http.ResponseWriter, r *http.Request, dec
 		Title:        "访问受限验证",
 		BrowserTitle: "访问受限验证 - 枫源镜像",
 		Description:  "访问受限验证页面",
+		Robots:       noIndexRobots,
 		BodyClass:    "page-punishment-pow",
 		HideHeader:   true,
 		Body:         rendered,

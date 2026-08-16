@@ -12,10 +12,11 @@ import (
 )
 
 type Scanner struct {
-	Store  Store
-	GitHub GitHubClient
-	Source ResourceSource
-	Logger *logging.Logger
+	Store    Store
+	GitHub   GitHubClient
+	Source   ResourceSource
+	Logger   *logging.Logger
+	Notifier PublicChangeNotifier
 }
 
 func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, requestID string) (ScanSummary, error) {
@@ -23,6 +24,7 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 	if err != nil {
 		return ScanSummary{}, err
 	}
+	before := s.publicFingerprints(ctx)
 	summary := ScanSummary{ScanID: scanID, ProjectID: projectID, RequestID: requestID}
 	err = s.scan(ctx, projects, projectID, &summary)
 	errText := ""
@@ -32,6 +34,9 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 	stateCtx, cancel := scanStateContext(ctx)
 	defer cancel()
 	_ = s.Store.FinishScan(stateCtx, scanID, summary, errText)
+	if err == nil {
+		s.notifyPublicChanges(ctx, before)
+	}
 	return summary, err
 }
 

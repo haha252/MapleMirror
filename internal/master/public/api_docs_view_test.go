@@ -18,7 +18,7 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, body)
 	}
-	if !strings.Contains(body, `<title>API 文档 - 枫源镜像</title>`) {
+	if !strings.Contains(body, `<title>枫源镜像公共下载 API 文档</title>`) {
 		t.Fatalf("expected API docs browser title in page: %s", body)
 	}
 	for _, want := range []string{

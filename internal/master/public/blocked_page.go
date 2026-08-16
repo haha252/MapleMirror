@@ -31,6 +31,7 @@ func (s Server) renderBlockedPage(w http.ResponseWriter, r *http.Request, _ bloc
 		Title:        "访问已被限制",
 		BrowserTitle: "访问已被限制 - 枫源镜像",
 		Description:  "访问受限提示页面",
+		Robots:       noIndexRobots,
 		BodyClass:    "page-punishment-pow",
 		HideHeader:   true,
 		Body:         rendered,

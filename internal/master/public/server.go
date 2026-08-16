@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
-	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -25,6 +24,7 @@ type Server struct {
 	VDFTTL                       time.Duration
 	APITTL                       time.Duration
 	APIV1Enabled                 *bool
+	PublicBaseURL, IndexNowKey   string
 	TokenLifetime                TokenLifetime
 	TrustedCIDRs                 []string
 	Version                      string
@@ -58,6 +58,7 @@ type TokenLifetime struct {
 	IdleTimeout            time.Duration
 	MaxDuration            time.Duration
 }
+
 func New(db *sql.DB, signer downloadtoken.Signer, vdfTTL, apiTTL time.Duration,
 	tokenLifetime TokenLifetime,
 	powSizeTiers []config.PoWSizeTier, vdfSizeTiers []config.VDFSizeTier, vdfConfig config.VDF,
@@ -243,8 +244,4 @@ func (s Server) staticURL(name string) string {
 		return staticURLFunc(nil)(name)
 	}
 	return staticURLFunc(assets.staticManifest)(name)
-}
-
-func noContent(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusNoContent)
 }

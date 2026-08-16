@@ -16,6 +16,7 @@ type Master struct {
 	Stats         Stats          `yaml:"stats"`
 	Archive       Archive        `yaml:"archive"`
 	Scan          Scan           `yaml:"scan"`
+	IndexNow      IndexNow       `yaml:"indexnow"`
 	PoWSizeTiers  []PoWSizeTier  `yaml:"pow_size_tiers"`
 	VDFSizeTiers  []VDFSizeTier  `yaml:"vdf_size_tiers"`
 	VDF           VDF            `yaml:"vdf"`
@@ -27,15 +28,12 @@ type Master struct {
 
 type MasterServer struct {
 	PublicListen                 string `yaml:"public_listen"`
+	PublicBaseURL                string `yaml:"public_base_url"`
 	ManagementListen             string `yaml:"management_listen"`
 	ControlListen                string `yaml:"control_listen"`
 	EnrollmentListen             string `yaml:"enrollment_listen"`
 	CatalogBatchRows             *int   `yaml:"catalog_batch_rows"`
 	CatalogPrefetchRemainingRows *int   `yaml:"catalog_prefetch_remaining_rows"`
-}
-type RequestID struct {
-	ResponseHeader string `yaml:"response_header"`
-	ParentHeader   string `yaml:"parent_header"`
 }
 type Proxy struct {
 	TrustedCIDRs []string `yaml:"trusted_cidrs"`
@@ -117,10 +115,10 @@ func LoadMaster(path string, warn WarnFunc) (Master, error) {
 	}
 	return c, writeRepairedYAML(path, data, repaired)
 }
-
 func applyMasterDefaults(c *Master, warn WarnFunc) {
 	applyLoggingDefaults(&c.Logging, "logs/master", warn)
 	setString(&c.Server.ManagementListen, "127.0.0.1:9080", "server.management_listen", warn)
+	applySEOIndexNowDefaults(c, warn)
 	applyCatalogDefaults(&c.Server, warn)
 	applyDatabaseDefaults(c, warn)
 	setString(&c.RequestID.ResponseHeader, "X-Request-ID", "request_id.response_header", warn)
@@ -218,6 +216,9 @@ func validateMaster(c Master) error {
 		return err
 	}
 	if err := validateScanSocks5(c.Scan.Socks5); err != nil {
+		return err
+	}
+	if err := validateSEOIndexNow(c); err != nil {
 		return err
 	}
 	if err := validatePoWSizeTiers(c.PoWSizeTiers); err != nil {

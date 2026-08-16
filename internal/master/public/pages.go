@@ -9,7 +9,9 @@ import (
 
 func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
-	s.renderPage(w, pageData{Title: "数据统计", BrowserTitle: "数据统计 - 枫源镜像", BodyClass: "page-stats",
+	s.renderPage(w, pageData{Title: "数据统计", BrowserTitle: "镜像节点与下载数据统计 - 枫源镜像",
+		Description:  "查看枫源镜像的下载量、传输流量、访问量、镜像节点可用性与服务运行统计，了解公共镜像服务近期的访问趋势、下载表现和节点健康状态。",
+		CanonicalURL: s.canonicalURL("/stats"), BodyClass: "page-stats",
 		Body: statsShellBody(), Styles: []string{"/static/public/stats.css"},
 		Scripts: []string{"/static/public/stats-sources.js", "/static/public/stats.js"}})
 }
@@ -21,8 +23,9 @@ func (s Server) changelogPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.trackPageView(w, r)
 	s.renderPage(w, pageData{
-		Title: "更新日志", BrowserTitle: "更新日志 - 枫源镜像",
-		Subtitle:  "记录枫源镜像的功能、维护与重要变更",
+		Title: "更新日志", BrowserTitle: "枫源镜像更新日志 - 功能与维护记录",
+		Description:  "查看枫源镜像的功能更新、版本发布、维护记录、服务调整与重要变更，了解镜像下载、公共 API、节点管理和安全策略的最新改进。",
+		CanonicalURL: s.canonicalURL("/changelog"), Subtitle: "记录枫源镜像的功能、维护与重要变更",
 		BodyClass: "page-changelog", ChangelogSearch: true, Body: changelogShellBody(s.staticURL),
 		Styles: []string{
 			"/static/public/download-filters.css",
@@ -36,7 +39,9 @@ func (s Server) changelogPage(w http.ResponseWriter, r *http.Request) {
 func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
 	sponsors := buildSponsorPage(loadSponsors(), requestedSponsorPage(r.URL.Query().Get("sponsor_page")), sponsorPageSize)
-	s.renderPage(w, pageData{Title: "关于本项目", BrowserTitle: "关于本项目 - 枫源镜像", BodyClass: "page-about",
+	s.renderPage(w, pageData{Title: "关于本项目", BrowserTitle: "关于枫源镜像 - 公益镜像服务与开源项目",
+		Description:  "了解枫源镜像的公益镜像目标、服务范围、开源代码、赞助方式和问题反馈渠道，查看项目维护说明，并参与共同建设稳定、透明、可靠的下载服务。",
+		CanonicalURL: s.canonicalURL("/about"), BodyClass: "page-about",
 		Subtitle: "关于枫源镜像，和为本站做出贡献的朋友们",
 		Body:     aboutBody(sponsors, s.staticURL), Styles: []string{"/static/public/about.css"},
 		Scripts: []string{"/static/public/about.js"}})
@@ -50,7 +55,7 @@ func (s Server) nodesPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := nodesTable(nodes)
-	s.renderPage(w, pageData{Title: "节点状态", BodyClass: "page-nodes", Body: template.HTML(body)})
+	s.renderPage(w, pageData{Title: "节点状态", Robots: noIndexRobots, BodyClass: "page-nodes", Body: template.HTML(body)})
 }
 
 func renderDetail(label, value string) string {

@@ -27,7 +27,7 @@ func (s Server) sitemap(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "PUBLIC_INTERNAL_ERROR", "站点地图生成失败")
 		return
 	}
-	origin := sitemapOrigin(r)
+	origin := s.publicOrigin(r)
 	paths := []string{"/", "/stats", "/api-docs", "/changelog", "/about"}
 	for _, project := range projects {
 		if strings.TrimSpace(project.ProjectID) == "" || strings.Contains(project.ProjectID, "/") {
@@ -63,7 +63,14 @@ func (s Server) robotsTXT(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("User-agent: *\nAllow: /\nSitemap: " + sitemapOrigin(r) + "/sitemap.xml\n"))
+	_, _ = w.Write([]byte("User-agent: *\nAllow: /\nSitemap: " + s.publicOrigin(r) + "/sitemap.xml\n"))
+}
+
+func (s Server) publicOrigin(r *http.Request) string {
+	if origin := strings.TrimRight(strings.TrimSpace(s.PublicBaseURL), "/"); origin != "" {
+		return origin
+	}
+	return sitemapOrigin(r)
 }
 
 func sitemapOrigin(r *http.Request) string {

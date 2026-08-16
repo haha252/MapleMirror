@@ -154,7 +154,10 @@ func main() {
 		StatsBuffer:                statsBuffer,
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
-	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger)
+	indexNow := startIndexNow(cfg, version, logger)
+	if indexNow != nil {
+		defer indexNow.Close()
+	}
 	regionClassifier := startCountryIPManager(cfg, logger)
 	if regionClassifier != nil {
 		defer regionClassifier.Close()
@@ -166,6 +169,12 @@ func main() {
 		logger.Error(context.Background(), "公共下载链路初始化失败", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	publicServer.PublicBaseURL = cfg.Server.PublicBaseURL
+	if indexNow != nil {
+		publicServer.IndexNowKey = indexNow.Key()
+	}
+	bootstrapIndexNow(indexNow, projects, version)
+	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger, indexNow)
 	defer publicServer.Close()
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, projectLoader, &publicServer, logger)

@@ -17,7 +17,7 @@ func TestChangelogPageIncludesTimelineControlsAndNavigation(t *testing.T) {
 		t.Fatalf("更新日志页面失败：status=%d body=%s", rec.Code, body)
 	}
 	for _, want := range []string{
-		`<title>更新日志 - 枫源镜像</title>`,
+		`<title>枫源镜像更新日志 - 功能与维护记录</title>`,
 		`class="page-changelog"`,
 		`class="site-scroll-region"`,
 		`id="changelog-search-desktop"`,

@@ -25,6 +25,9 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/static/project-icons/", s.projectIcon)
 	mux.HandleFunc("/downloads/", s.downloadMisrouted)
 	mux.HandleFunc("/favicon.ico", s.favicon)
+	if s.IndexNowKey != "" {
+		mux.HandleFunc(s.indexNowKeyPath(), s.indexNowKeyTXT)
+	}
 	mux.HandleFunc("/robots.txt", s.robotsTXT)
 	mux.HandleFunc("/sitemap.xml", s.sitemap)
 	mux.HandleFunc("/stats", s.statsPage)
@@ -56,6 +59,22 @@ func (s Server) Handler() http.Handler {
 		return s.ResourceLimiter.middleware(mux, s.TrustedCIDRs)
 	}
 	return mux
+}
+
+func (s Server) indexNowKeyPath() string {
+	return "/" + s.IndexNowKey + ".txt"
+}
+
+func (s Server) indexNowKeyTXT(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(s.IndexNowKey))
 }
 
 func (s Server) Close() {

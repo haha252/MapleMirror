@@ -82,6 +82,7 @@ func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, as
 		Title:        "下载验证",
 		BrowserTitle: "下载验证 - 枫源镜像",
 		Description:  "枫源镜像下载验证页",
+		Robots:       noIndexRobots,
 		BodyClass:    "page-download-pow",
 		HideHeader:   true,
 		AfterNotices: s.currentNotices(),

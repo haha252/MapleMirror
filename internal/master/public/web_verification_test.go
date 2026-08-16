@@ -164,7 +164,7 @@ func submitWebVerification(t *testing.T, handler http.Handler, token, assetID, r
 func assertNeutralVerificationMarkup(t *testing.T, body string) {
 	t.Helper()
 	lower := strings.ToLower(body)
-	for _, forbidden := range []string{"honeypot", "trap", "decoy", "bot", "automation", "punishment"} {
+	for _, forbidden := range []string{"honeypot", "trap", "decoy", "automation", "punishment"} {
 		if strings.Contains(lower, forbidden) {
 			t.Fatalf("rendered page should not contain %q: %s", forbidden, body)
 		}

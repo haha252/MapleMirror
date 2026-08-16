@@ -107,6 +107,10 @@ func (s Server) favicon(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+func noContent(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (assets *webAssets) readStatic(name string) ([]byte, error) {
 	if assets.staticFS != nil {
 		return fs.ReadFile(assets.staticFS, name)

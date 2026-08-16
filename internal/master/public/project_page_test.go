@@ -23,8 +23,8 @@ func TestProjectPageRendersOptionalHomepageAndDescription(t *testing.T) {
 		t.Fatalf("project page status=%d body=%s", rec.Code, body)
 	}
 	for _, want := range []string{
-		`<title>项目一下载 - 枫源镜像</title>`,
-		`<meta name="description" content="项目描述正文 枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供，免费、纯净、高速且稳定的下载服务，获取到软件的最新版本。">`,
+		`<title>项目一 版本与文件下载 - 枫源镜像</title>`,
+		`<meta name="description" content="项目一：项目描述正文 在枫源镜像查看 GitHub Release 版本、文件列表、发布日期与镜像下载状态。">`,
 		`class="site-header"`,
 		`class="project-back"`,
 		`<path d="M15 5 8 12l7 7">`,
@@ -75,7 +75,7 @@ func TestProjectPageUsesServiceDescriptionWhenProjectDescriptionIsEmpty(t *testi
 	if rec.Code != http.StatusOK {
 		t.Fatalf("project page status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	want := `<meta name="description" content="枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供，免费、纯净、高速且稳定的下载服务，获取到软件的最新版本。">`
+	want := `<meta name="description" content="项目一 的 GitHub Release 版本与文件下载页面，查看最新版本、历史版本、文件列表、发布日期与镜像可用状态。">`
 	if !strings.Contains(rec.Body.String(), want) {
 		t.Fatalf("expected service description, body=%s", rec.Body.String())
 	}

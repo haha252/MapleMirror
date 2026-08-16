@@ -44,8 +44,9 @@ func (s Server) maybeProjectPage(w http.ResponseWriter, r *http.Request) bool {
 	s.trackPageView(w, r)
 	s.renderPage(w, pageData{
 		Title:        project.DisplayName,
-		BrowserTitle: project.DisplayName + "下载 - 枫源镜像",
-		Description:  projectPageDescription(project.Description),
+		BrowserTitle: project.DisplayName + " 版本与文件下载 - 枫源镜像",
+		Description:  projectMetaDescription(project.DisplayName, project.Description),
+		CanonicalURL: s.canonicalURL("/" + url.PathEscape(project.ProjectID) + "/"),
 		BodyClass:    "page-project",
 		Body:         body,
 		Styles:       []string{"/static/public/project.css", "/static/public/project-responsive.css"},

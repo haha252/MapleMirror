@@ -18,7 +18,7 @@ func TestPageViewCookieCountsVisitorOncePerDay(t *testing.T) {
 	}
 
 	aboutBody := first.Body.String()
-	if !strings.Contains(aboutBody, `<title>关于本项目 - 枫源镜像</title>`) {
+	if !strings.Contains(aboutBody, `<title>关于枫源镜像 - 公益镜像服务与开源项目</title>`) {
 		t.Fatalf("expected about browser title: %s", aboutBody)
 	}
 
@@ -26,7 +26,7 @@ func TestPageViewCookieCountsVisitorOncePerDay(t *testing.T) {
 	secondReq.AddCookie(cookies[0])
 	statsRec := httptest.NewRecorder()
 	srv.statsPage(statsRec, secondReq)
-	if !strings.Contains(statsRec.Body.String(), `<title>数据统计 - 枫源镜像</title>`) {
+	if !strings.Contains(statsRec.Body.String(), `<title>镜像节点与下载数据统计 - 枫源镜像</title>`) {
 		t.Fatalf("expected stats browser title: %s", statsRec.Body.String())
 	}
 

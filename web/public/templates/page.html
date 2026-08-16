@@ -20,6 +20,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if .BrowserTitle}}{{.BrowserTitle}}{{else}}{{.Title}}{{end}}</title>
 {{if .Description}}<meta name="description" content="{{.Description}}">{{end}}
+{{if .CanonicalURL}}<link rel="canonical" href="{{.CanonicalURL}}">{{end}}
+{{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
 <script>
 (function () {
   var root = document.documentElement;
@@ -57,7 +59,7 @@
 <header class="site-header">
   <div class="site-header__left">
     <div class="site-brand" data-i18n-aria-label="brand.name" aria-label="枫源镜像">
-      <img src="{{staticURL "logo.webp"}}" alt="">
+      <img src="{{staticURL "logo.webp"}}" alt="" aria-hidden="true">
       <span class="site-brand__primary">枫源</span><span class="site-brand__secondary">镜像</span>
     </div>
     <nav class="site-nav" data-i18n-aria-label="nav.main" aria-label="主导航">

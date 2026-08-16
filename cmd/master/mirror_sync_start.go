@@ -14,7 +14,8 @@ import (
 )
 
 func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader,
-	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger) mirrorsync.Service {
+	db *sql.DB, runtime *mastercontrol.RuntimeStore, logger *logging.Logger,
+	notifier mirrorsync.PublicChangeNotifier) mirrorsync.Service {
 	interval, _ := time.ParseDuration(cfg.Scan.Interval)
 	token := ""
 	if cfg.Scan.GitHubTokenEnv != "" {
@@ -33,7 +34,7 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader,
 				Token:   token,
 				Timeout: githubTimeout,
 				Logger:  logger,
-			}, Logger: logger,
+			}, Logger: logger, Notifier: notifier,
 		},
 		Projects: projects, Interval: interval, Logger: logger,
 	}
