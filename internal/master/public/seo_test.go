@@ -13,14 +13,14 @@ func TestPublicPagesUseFyhubApexSEOMetadata(t *testing.T) {
 	srv := Server{Store: Store{DB: db}, PublicBaseURL: "https://fyhub.cn"}
 	handler := srv.Handler()
 	cases := []struct {
-		path, title, canonical string
+		path, title, canonical, pageTitle string
 	}{
-		{"/", "枫源镜像 - GitHub Release 镜像下载", "https://fyhub.cn/"},
-		{"/stats", "镜像节点与下载数据统计 - 枫源镜像", "https://fyhub.cn/stats"},
-		{"/api-docs", "枫源镜像公共下载 API 文档", "https://fyhub.cn/api-docs"},
-		{"/changelog", "枫源镜像更新日志 - 功能与维护记录", "https://fyhub.cn/changelog"},
-		{"/about", "关于枫源镜像 - 公益镜像服务与开源项目", "https://fyhub.cn/about"},
-		{"/p1/", "项目一 版本与文件下载 - 枫源镜像", "https://fyhub.cn/p1/"},
+		{"/", "枫源镜像 - GitHub Release 镜像下载", "https://fyhub.cn/", "枫源镜像"},
+		{"/stats", "镜像节点与下载数据统计 - 枫源镜像", "https://fyhub.cn/stats", "数据统计"},
+		{"/api-docs", "枫源镜像公共下载 API 文档", "https://fyhub.cn/api-docs", "API 文档"},
+		{"/changelog", "枫源镜像更新日志 - 功能与维护记录", "https://fyhub.cn/changelog", "更新日志"},
+		{"/about", "关于枫源镜像 - 公益镜像服务与开源项目", "https://fyhub.cn/about", "关于本项目"},
+		{"/p1/", "项目一 版本与文件下载 - 枫源镜像", "https://fyhub.cn/p1/", "项目一"},
 	}
 	for _, item := range cases {
 		t.Run(item.path, func(t *testing.T) {
@@ -31,6 +31,7 @@ func TestPublicPagesUseFyhubApexSEOMetadata(t *testing.T) {
 				t.Fatalf("status=%d body=%s", rec.Code, body)
 			}
 			if !strings.Contains(body, "<title>"+item.title+"</title>") ||
+				!strings.Contains(body, `<h1 data-i18n-page-title="true">`+item.pageTitle+`</h1>`) ||
 				!strings.Contains(body, `<meta name="description" content="`) ||
 				!strings.Contains(body, `<link rel="canonical" href="`+item.canonical+`">`) {
 				t.Fatalf("missing SEO metadata: %s", body)
@@ -46,6 +47,29 @@ func TestPublicPagesUseFyhubApexSEOMetadata(t *testing.T) {
 	if !strings.Contains(home.Body.String(), `data-i18n-alt="project.iconFallback" alt="项目图标"`) ||
 		!strings.Contains(home.Body.String(), `alt="" aria-hidden="true"`) {
 		t.Fatalf("content and decorative image ALT markup missing: %s", home.Body.String())
+	}
+}
+
+func TestPageTitleTranslationsKeepHeadingSeparateFromBrowserTitle(t *testing.T) {
+	i18n := publicStaticBody(t, "i18n.js")
+	for _, want := range []string{
+		`"page.browserTitle." + page`,
+		`"page.browserProjectTitle"`,
+		`title.textContent = titleValue`,
+	} {
+		if !strings.Contains(i18n, want) {
+			t.Fatalf("i18n page title handling missing %q: %s", want, i18n)
+		}
+	}
+	zh := publicStaticBody(t, "i18n/zh-CN.js")
+	for _, want := range []string{
+		`"page.title.page-download": "枫源镜像"`,
+		`"page.browserTitle.page-download": "枫源镜像 - GitHub Release 镜像下载"`,
+		`"page.title.page-stats": "数据统计"`,
+	} {
+		if !strings.Contains(zh, want) {
+			t.Fatalf("Chinese page title translations missing %q: %s", want, zh)
+		}
 	}
 }
 

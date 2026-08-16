@@ -35,9 +35,6 @@ func validateSEOIndexNow(c Master) error {
 		base.Path != "" && base.Path != "/" || base.RawQuery != "" || base.Fragment != "" {
 		return errors.New("配置字段 server.public_base_url 必须是没有路径、查询参数和片段的 http/https URL")
 	}
-	if !strings.EqualFold(base.Hostname(), "fyhub.cn") {
-		return errors.New("配置字段 server.public_base_url 必须使用 fyhub.cn，不支持其他主机名或 www.fyhub.cn")
-	}
 	if c.IndexNow.Enabled == nil || !*c.IndexNow.Enabled {
 		return nil
 	}

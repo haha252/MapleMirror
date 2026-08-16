@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -24,10 +23,9 @@ func TestSEOIndexNowDefaultsUseFyhubApexDomain(t *testing.T) {
 	}
 }
 
-func TestSEOIndexNowRejectsWwwHostname(t *testing.T) {
-	cfg := Master{Server: MasterServer{PublicBaseURL: "https://www.fyhub.cn"}}
-	err := validateSEOIndexNow(cfg)
-	if err == nil || !strings.Contains(err.Error(), "www.fyhub.cn") {
-		t.Fatalf("www hostname should be rejected: %v", err)
+func TestSEOIndexNowAllowsConfiguredHostname(t *testing.T) {
+	cfg := Master{Server: MasterServer{PublicBaseURL: "https://mirror.example.com"}}
+	if err := validateSEOIndexNow(cfg); err != nil {
+		t.Fatalf("configured public hostname should be accepted: %v", err)
 	}
 }

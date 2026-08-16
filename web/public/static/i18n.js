@@ -129,13 +129,14 @@
     if (title) {
       var originalTitle = title.getAttribute("data-i18n-original") || title.textContent;
       title.setAttribute("data-i18n-original", originalTitle);
-      var projectTitleNode = document.querySelector(".project-main h2");
-      var projectName = page === "page-project" && projectTitleNode ? projectTitleNode.textContent : "";
-      var titleKey = page === "page-project" && projectName ?
-        "page.projectTitle" : "page.title." + page;
-      var titleValue = t(titleKey, {
+      var titleKey = page === "page-project" && projectName ? "page.projectTitle" : "page.title." + page;
+      var browserTitleKey = page === "page-project" && projectName ? "page.browserProjectTitle" : "page.browserTitle." + page;
+      var titleValue = t(browserTitleKey, {
         title: projectName || originalTitle
       });
+      if (titleValue === browserTitleKey) {
+        titleValue = t(titleKey, {title: projectName || originalTitle});
+      }
       title.textContent = titleValue === titleKey ? originalTitle : titleValue;
       document.title = title.textContent;
     }

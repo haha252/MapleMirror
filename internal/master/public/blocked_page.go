@@ -32,7 +32,7 @@ func (s Server) renderBlockedPage(w http.ResponseWriter, r *http.Request, _ bloc
 		BrowserTitle: "访问已被限制 - 枫源镜像",
 		Description:  "访问受限提示页面",
 		Robots:       noIndexRobots,
-		BodyClass:    "page-punishment-pow",
+		BodyClass:    "page-blocked page-punishment-pow",
 		HideHeader:   true,
 		Body:         rendered,
 		Styles:       []string{"/static/public/download-pow.css", "/static/public/punishment-pow.css"},

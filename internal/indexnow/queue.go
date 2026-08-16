@@ -31,16 +31,26 @@ func (m *Manager) run() {
 				if len(batch) == 0 {
 					break
 				}
-				if err := m.submitWithRetry(batch); err != nil {
+				result, err := m.submitWithRetry(batch)
+				if err != nil {
 					var permanent *permanentSubmissionError
-					if !errors.As(err, &permanent) {
+					retryScheduled := !errors.As(err, &permanent)
+					failureKind := "retry_exhausted"
+					if permanent != nil {
+						failureKind = "permanent_error"
+					}
+					if retryScheduled {
 						m.requeue(batch)
 						time.AfterFunc(time.Minute, m.signal)
 					}
-					m.logWarn(context.Background(), "IndexNow URL 提交失败", slog.String("error", err.Error()))
+					attrs := submissionAttrs(len(batch), result, retryScheduled)
+					attrs = append(attrs, slog.String("failure_kind", failureKind), slog.String("error", err.Error()))
+					m.logError(context.Background(), "IndexNow URL 批次最终失败", attrs...)
 					break
 				}
 				m.markSubmitted(batch)
+				m.logInfo(context.Background(), "IndexNow URL 提交成功",
+					submissionAttrs(len(batch), result, false)...)
 			}
 		}
 	}
@@ -108,30 +118,48 @@ func (m *Manager) normalizePath(path string) (string, bool) {
 	return parsed.EscapedPath(), true
 }
 
-func (m *Manager) submitWithRetry(urls []string) error {
+type submissionResult struct {
+	Attempts int
+	Status   int
+	Duration time.Duration
+}
+
+func submissionAttrs(urlCount int, result submissionResult, retryScheduled bool) []slog.Attr {
+	return []slog.Attr{
+		slog.Int("url_count", urlCount), slog.Int("attempts", result.Attempts),
+		slog.Int("status", result.Status), slog.Int64("duration_ms", result.Duration.Milliseconds()),
+		slog.Bool("retry_scheduled", retryScheduled),
+	}
+}
+
+func (m *Manager) submitWithRetry(urls []string) (result submissionResult, err error) {
+	started := time.Now()
+	defer func() { result.Duration = time.Since(started) }()
 	payload, err := json.Marshal(requestPayload{Host: m.host, Key: m.key, KeyLocation: m.keyURL, URLList: urls})
 	if err != nil {
-		return err
+		return result, err
 	}
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		result.Attempts = attempt
 		request, err := http.NewRequest(http.MethodPost, m.endpoint, strings.NewReader(string(payload)))
 		if err != nil {
-			return err
+			return result, err
 		}
 		request.Header.Set("Content-Type", "application/json; charset=utf-8")
 		response, err := m.client.Do(request)
 		if err == nil {
-			body, readErr := io.ReadAll(io.LimitReader(response.Body, 512))
+			result.Status = response.StatusCode
+			_, readErr := io.Copy(io.Discard, io.LimitReader(response.Body, 512))
 			_ = response.Body.Close()
 			if readErr != nil {
 				lastErr = readErr
 			} else if response.StatusCode == http.StatusOK || response.StatusCode == http.StatusAccepted {
-				return nil
+				return result, nil
 			} else {
-				lastErr = fmt.Errorf("HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+				lastErr = fmt.Errorf("IndexNow endpoint 返回 HTTP %d", response.StatusCode)
 				if response.StatusCode < 500 && response.StatusCode != http.StatusTooManyRequests {
-					return &permanentSubmissionError{err: lastErr}
+					return result, &permanentSubmissionError{err: lastErr}
 				}
 			}
 		} else {
@@ -145,11 +173,11 @@ func (m *Manager) submitWithRetry(urls []string) error {
 				if !timer.Stop() {
 					<-timer.C
 				}
-				return context.Canceled
+				return result, context.Canceled
 			}
 		}
 	}
-	return lastErr
+	return result, lastErr
 }
 
 func (m *Manager) signal() {
@@ -168,5 +196,11 @@ func (m *Manager) logInfo(ctx context.Context, message string, attrs ...slog.Att
 func (m *Manager) logWarn(ctx context.Context, message string, attrs ...slog.Attr) {
 	if m.logger != nil {
 		m.logger.Warn(ctx, message, attrs...)
+	}
+}
+
+func (m *Manager) logError(ctx context.Context, message string, attrs ...slog.Attr) {
+	if m.logger != nil {
+		m.logger.Error(ctx, message, attrs...)
 	}
 }

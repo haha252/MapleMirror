@@ -93,6 +93,22 @@ func TestNotifyPathsDeduplicatesAndRetriesTransientErrors(t *testing.T) {
 	}
 }
 
+func TestConfiguredBaseURLControlsIndexNowHost(t *testing.T) {
+	requests := make(chan requestPayload, 1)
+	transport := &recordingTransport{statuses: []int{http.StatusAccepted}, payloads: requests}
+	manager, err := New(Options{BaseURL: "https://mirror.example.com", Endpoint: "https://api.indexnow.test/indexnow",
+		KeyFile: filepath.Join(t.TempDir(), "key"), HTTPClient: &http.Client{Transport: transport}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.NotifyPaths(context.Background(), []string{"/about"})
+	payload := waitPayload(t, requests)
+	manager.Close()
+	if payload.Host != "mirror.example.com" || payload.KeyLocation != "https://mirror.example.com/"+manager.Key()+".txt" {
+		t.Fatalf("configured base URL was not used: %+v", payload)
+	}
+}
+
 func waitPayload(t *testing.T, requests <-chan requestPayload) requestPayload {
 	t.Helper()
 	select {
@@ -105,9 +121,11 @@ func waitPayload(t *testing.T, requests <-chan requestPayload) requestPayload {
 }
 
 type recordingTransport struct {
-	statuses []int
-	payloads chan<- requestPayload
-	attempts int
+	statuses       []int
+	responseBodies []string
+	roundTripErr   error
+	payloads       chan<- requestPayload
+	attempts       int
 }
 
 func (t *recordingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -125,5 +143,12 @@ func (t *recordingTransport) RoundTrip(request *http.Request) (*http.Response, e
 	if t.attempts <= len(t.statuses) {
 		status = t.statuses[t.attempts-1]
 	}
-	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header), Request: request}, nil
+	responseBody := ""
+	if t.attempts <= len(t.responseBodies) {
+		responseBody = t.responseBodies[t.attempts-1]
+	}
+	if t.roundTripErr != nil {
+		return nil, t.roundTripErr
+	}
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(responseBody)), Header: make(http.Header), Request: request}, nil
 }

@@ -154,7 +154,10 @@ func main() {
 		StatsBuffer:                statsBuffer,
 	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
-	indexNow := startIndexNow(cfg, version, logger)
+	indexNow, indexNowLogger := startIndexNow(cfg, location, logger)
+	if indexNowLogger != nil {
+		defer indexNowLogger.Close()
+	}
 	if indexNow != nil {
 		defer indexNow.Close()
 	}
