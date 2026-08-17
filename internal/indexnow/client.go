@@ -160,7 +160,7 @@ func (m *Manager) NotifyPaths(_ context.Context, paths []string) {
 	if queued == 0 {
 		return
 	}
-	m.logInfo(context.Background(), "IndexNow 内容变更已排队", slog.Int("url_count", queued))
+	m.logInfo(context.Background(), "IndexNow URL 已排队", slog.Int("url_count", queued))
 	m.signal()
 }
 

@@ -19,6 +19,8 @@ type publicFingerprint struct {
 	Hash    string
 }
 
+var publicIndexNowPaths = []string{"/", "/about", "/api-docs", "/stats", "/changelog"}
+
 func (s Store) publicFingerprints(ctx context.Context) map[string]publicFingerprint {
 	if s.DB == nil {
 		return nil
@@ -92,10 +94,28 @@ func (s Scanner) notifyPublicChanges(ctx context.Context, before map[string]publ
 		}
 		return
 	}
-	paths := changedPublicPaths(before, after)
-	if len(paths) > 0 {
-		s.Notifier.NotifyPaths(ctx, paths)
+	s.Notifier.NotifyPaths(ctx, fullPublicPaths(before, after))
+}
+
+func fullPublicPaths(before, after map[string]publicFingerprint) []string {
+	paths := make(map[string]struct{}, len(publicIndexNowPaths)+len(after))
+	for _, path := range publicIndexNowPaths {
+		paths[path] = struct{}{}
 	}
+	for id, fingerprint := range after {
+		if fingerprint.Enabled {
+			paths["/"+url.PathEscape(id)+"/"] = struct{}{}
+		}
+	}
+	for _, path := range changedPublicPaths(before, after) {
+		paths[path] = struct{}{}
+	}
+	result := make([]string, 0, len(paths))
+	for path := range paths {
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func changedPublicPaths(before, after map[string]publicFingerprint) []string {

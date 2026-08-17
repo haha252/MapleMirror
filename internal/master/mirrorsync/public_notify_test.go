@@ -49,6 +49,28 @@ func TestChangedPublicPathsEscapesProjectIDAndIgnoresDisabledOnlyChanges(t *test
 	}
 }
 
+func TestFullPublicPathsIncludesStaticPagesAndEveryEnabledProject(t *testing.T) {
+	before := map[string]publicFingerprint{
+		"old":      {Enabled: true, Hash: "old"},
+		"disabled": {Enabled: false, Hash: "old"},
+	}
+	after := map[string]publicFingerprint{
+		"old":      {Enabled: true, Hash: "same"},
+		"new":      {Enabled: true, Hash: "new"},
+		"disabled": {Enabled: false, Hash: "new"},
+	}
+	got := fullPublicPaths(before, after)
+	want := []string{"/", "/about", "/api-docs", "/changelog", "/new/", "/old/", "/stats"}
+	if len(got) != len(want) {
+		t.Fatalf("full public paths=%v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("full public paths=%v want %v", got, want)
+		}
+	}
+}
+
 type publicNotifierRecorder struct {
 	calls [][]string
 }
@@ -57,7 +79,7 @@ func (r *publicNotifierRecorder) NotifyPaths(_ context.Context, paths []string) 
 	r.calls = append(r.calls, append([]string(nil), paths...))
 }
 
-func TestScannerNotifiesOnlyWhenPublicProjectContentChanges(t *testing.T) {
+func TestScannerNotifiesAllPublicPagesAfterSuccessfulScan(t *testing.T) {
 	wal := true
 	db, err := storage.OpenMaster(config.Database{
 		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
@@ -75,26 +97,26 @@ func TestScannerNotifiesOnlyWhenPublicProjectContentChanges(t *testing.T) {
 	if _, err := scanner.Scan(context.Background(), projects, "", "first"); err != nil {
 		t.Fatal(err)
 	}
-	assertPublicNotification(t, recorder, []string{"/", "/p1/"})
+	fullPaths := []string{"/", "/about", "/api-docs", "/changelog", "/p1/", "/stats"}
+	assertPublicNotification(t, recorder, fullPaths)
 	recorder.calls = nil
 	if _, err := scanner.Scan(context.Background(), projects, "", "same"); err != nil {
 		t.Fatal(err)
 	}
-	if len(recorder.calls) != 0 {
-		t.Fatalf("unchanged project should not notify: %v", recorder.calls)
-	}
+	assertPublicNotification(t, recorder, fullPaths)
+	recorder.calls = nil
 
 	project.Description = "changed"
 	projects.Projects[0] = project
 	if _, err := scanner.Scan(context.Background(), projects, "", "updated"); err != nil {
 		t.Fatal(err)
 	}
-	assertPublicNotification(t, recorder, []string{"/", "/p1/"})
+	assertPublicNotification(t, recorder, fullPaths)
 	recorder.calls = nil
 	if _, err := scanner.Scan(context.Background(), config.Projects{}, "", "removed"); err != nil {
 		t.Fatal(err)
 	}
-	assertPublicNotification(t, recorder, []string{"/", "/p1/"})
+	assertPublicNotification(t, recorder, fullPaths)
 }
 
 func assertPublicNotification(t *testing.T, recorder *publicNotifierRecorder, want []string) {
