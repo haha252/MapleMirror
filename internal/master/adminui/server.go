@@ -27,6 +27,9 @@ type Server struct {
 	sync      interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
+	indexNow interface {
+		TriggerFullPublicNotification(context.Context) (int, error)
+	}
 	users                 map[string]userRecord
 	store                 loginStore
 	trustedCIDRs          []string
@@ -43,6 +46,9 @@ type Options struct {
 	Signer   func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
 	Sync     interface {
 		Trigger(context.Context, string, string) (string, error)
+	}
+	IndexNow interface {
+		TriggerFullPublicNotification(context.Context) (int, error)
 	}
 	TrustedCIDRs          []string
 	Timezone              string
@@ -89,7 +95,7 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 	}
 	return &Server{
 		repo: repo, syncStore: syncStore, projects: opts.Projects,
-		signer: opts.Signer, sync: opts.Sync, users: users,
+		signer: opts.Signer, sync: opts.Sync, indexNow: opts.IndexNow, users: users,
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
 		trustedCIDRs:          opts.TrustedCIDRs,
 		timeLocation:          timeLocation,
@@ -121,6 +127,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/api/nodes", s.requireSession(s.nodesAPI))
 	mux.HandleFunc("/admin/api/nodes/", s.requireSession(s.nodeActionAPI))
 	mux.HandleFunc("/admin/api/sync/scans", s.requireSession(s.scanAPI))
+	mux.HandleFunc("/admin/api/indexnow/submit", s.requireSession(s.indexNowAPI))
 	mux.HandleFunc("/admin/api/sync/scans/latest", s.requireSession(s.latestScanAPI))
 	mux.HandleFunc("/admin/api/sync/tasks", s.requireSession(s.syncTasksAPI))
 	mux.HandleFunc("/admin/api/stats/overview", s.requireSession(s.statsOverviewAPI))

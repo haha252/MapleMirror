@@ -34,7 +34,7 @@ func startMirrorSync(cfg config.Master, projects *mirrorsync.ProjectLoader,
 				Token:   token,
 				Timeout: githubTimeout,
 				Logger:  logger,
-			}, Logger: logger, Notifier: notifier,
+			}, Logger: logger, Notifier: notifier, SEORevision: publicSEORevision,
 		},
 		Projects: projects, Interval: interval, Logger: logger,
 	}

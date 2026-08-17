@@ -66,6 +66,22 @@
     });
   }
 
+  var indexNowButton = document.getElementById("indexnow-submit");
+  if (indexNowButton) {
+    indexNowButton.addEventListener("click", function () {
+      a.confirmAction("立即提交 IndexNow", "确认立即提交全量公开 URL？", function () {
+        indexNowButton.disabled = true;
+        a.api("/admin/api/indexnow/submit", { method: "POST", body: "{}" })
+          .then(function (data) {
+            a.setStatus((data.message || "IndexNow 全量 URL 已排队") +
+              "（新增 " + (data.url_count || 0) + " 条）");
+          })
+          .catch(function (err) { a.setStatus(err.message); })
+          .then(function () { indexNowButton.disabled = false; });
+      });
+    });
+  }
+
   loadOverview();
   a.autoRefresh(loadOverview, 15000);
 })();

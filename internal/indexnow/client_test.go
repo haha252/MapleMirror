@@ -24,6 +24,7 @@ func TestBootstrapPayloadUsesApexHostAndPublicPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.Bootstrap([]string{"p1", "p2"}, "revision-1")
+	manager.flushPending()
 	payload := waitPayload(t, requests)
 	manager.Close()
 
@@ -76,6 +77,7 @@ func TestNotifyPathsDeduplicatesAndRetriesTransientErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.NotifyPaths(context.Background(), []string{"/about", "/about", "/stats"})
+	manager.flushPending()
 	var last requestPayload
 	for i := 0; i < 3; i++ {
 		last = waitPayload(t, requests)
@@ -102,10 +104,30 @@ func TestConfiguredBaseURLControlsIndexNowHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.NotifyPaths(context.Background(), []string{"/about"})
+	manager.flushPending()
 	payload := waitPayload(t, requests)
 	manager.Close()
 	if payload.Host != "mirror.example.com" || payload.KeyLocation != "https://mirror.example.com/"+manager.Key()+".txt" {
 		t.Fatalf("configured base URL was not used: %+v", payload)
+	}
+}
+
+func TestNotifyPathsNowFlushesWithoutWaitingForDebounce(t *testing.T) {
+	requests := make(chan requestPayload, 1)
+	transport := &recordingTransport{statuses: []int{http.StatusAccepted}, payloads: requests}
+	manager, err := New(Options{BaseURL: "https://fyhub.cn", Endpoint: "https://api.indexnow.test/indexnow",
+		KeyFile: filepath.Join(t.TempDir(), "key"), HTTPClient: &http.Client{Transport: transport}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queued := manager.NotifyPathsNow(context.Background(), []string{"/", "/about"})
+	if queued != 2 {
+		t.Fatalf("immediate queued count=%d want 2", queued)
+	}
+	payload := waitPayload(t, requests)
+	manager.Close()
+	if len(payload.URLList) != 2 {
+		t.Fatalf("immediate URL count=%d want 2", len(payload.URLList))
 	}
 }
 

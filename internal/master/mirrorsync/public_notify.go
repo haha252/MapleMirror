@@ -4,14 +4,23 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"sort"
 	"strings"
+
+	"mirror-server/internal/config"
+	"mirror-server/internal/indexnow"
 )
 
 type PublicChangeNotifier interface {
-	NotifyPaths(context.Context, []string)
+	NotifyChanges(context.Context, []indexnow.PageChange)
+}
+
+type ImmediatePublicChangeNotifier interface {
+	NotifySnapshotNow(context.Context, indexnow.Snapshot) int
 }
 
 type publicFingerprint struct {
@@ -21,9 +30,9 @@ type publicFingerprint struct {
 
 var publicIndexNowPaths = []string{"/", "/about", "/api-docs", "/stats", "/changelog"}
 
-func (s Store) publicFingerprints(ctx context.Context) map[string]publicFingerprint {
+func (s Store) publicFingerprints(ctx context.Context) (map[string]publicFingerprint, error) {
 	if s.DB == nil {
-		return nil
+		return nil, errors.New("公开页面数据库未配置")
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT p.id, p.name, p.repository,
 		COALESCE(p.description, ''), COALESCE(p.homepage_url, ''), p.enabled,
@@ -38,7 +47,7 @@ func (s Store) publicFingerprints(ctx context.Context) map[string]publicFingerpr
 		LEFT JOIN assets a ON a.release_id = r.id AND a.service_state = 'candidate'
 		ORDER BY p.id, r.published_at DESC, r.id, a.file_name, a.id`)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 	builders := map[string]*strings.Builder{}
@@ -52,7 +61,7 @@ func (s Store) publicFingerprints(ctx context.Context) map[string]publicFingerpr
 		if err := rows.Scan(&id, &name, &repository, &description, &homepage, &projectEnabled,
 			&releaseID, &tag, &prerelease, &published, &fileName, &architecture, &system,
 			&variant, &displayLabel, &priority, &size, &digest, &labels); err != nil {
-			return nil
+			return nil, err
 		}
 		builder := builders[id]
 		if builder == nil {
@@ -66,83 +75,137 @@ func (s Store) publicFingerprints(ctx context.Context) map[string]publicFingerpr
 			variant, displayLabel, priority, size, digest, labels)
 	}
 	if err := rows.Err(); err != nil {
-		return nil
+		return nil, err
 	}
 	result := make(map[string]publicFingerprint, len(builders))
 	for id, builder := range builders {
 		sum := sha256.Sum256([]byte(builder.String()))
 		result[id] = publicFingerprint{Enabled: enabled[id], Hash: hex.EncodeToString(sum[:])}
 	}
-	return result
+	return result, nil
 }
 
-func (s Scanner) publicFingerprints(ctx context.Context) map[string]publicFingerprint {
-	if s.Notifier == nil {
-		return nil
+func (s Scanner) publicSnapshot(ctx context.Context, projects config.Projects) (indexnow.Snapshot, error) {
+	return s.publicSnapshotWithConfig(ctx, projects, true)
+}
+
+func (s Scanner) storedPublicSnapshot(ctx context.Context, projects config.Projects) (indexnow.Snapshot, error) {
+	return s.publicSnapshotWithConfig(ctx, projects, false)
+}
+
+func (s Scanner) publicSnapshotWithConfig(ctx context.Context, projects config.Projects, applyConfig bool) (indexnow.Snapshot, error) {
+	fingerprints, err := s.Store.publicFingerprints(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return s.Store.publicFingerprints(ctx)
+	configured := make(map[string]struct{}, len(projects.Projects))
+	for _, project := range projects.Projects {
+		configured[project.ID] = struct{}{}
+		if current, ok := fingerprints[project.ID]; ok {
+			if applyConfig {
+				current.Enabled = project.Enabled
+			}
+			fingerprints[project.ID] = current
+		} else {
+			fingerprints[project.ID] = publicFingerprint{Enabled: project.Enabled,
+				Hash: configProjectFingerprint(project)}
+		}
+	}
+	if applyConfig && len(projects.Projects) > 0 {
+		for id, current := range fingerprints {
+			if _, ok := configured[id]; !ok {
+				current.Enabled = false
+				fingerprints[id] = current
+			}
+		}
+	}
+
+	snapshot := make(indexnow.Snapshot, len(publicIndexNowPaths)+len(fingerprints))
+	for _, path := range publicIndexNowPaths {
+		snapshot[path] = indexnow.Page{Path: path, Fingerprint: staticFingerprint(s.SEORevision, path), Present: true}
+	}
+	ids := make([]string, 0, len(fingerprints))
+	for id, fingerprint := range fingerprints {
+		if fingerprint.Enabled {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	var homepage strings.Builder
+	fmt.Fprintf(&homepage, "revision|%s\n", s.SEORevision)
+	for _, id := range ids {
+		fingerprint := fingerprints[id].Hash
+		fmt.Fprintf(&homepage, "%s|%s\n", id, fingerprint)
+		path := "/" + url.PathEscape(id) + "/"
+		snapshot[path] = indexnow.Page{Path: path, Fingerprint: "sha256:" + fingerprint, Present: true}
+	}
+	snapshot["/"] = indexnow.Page{Path: "/", Fingerprint: digestFingerprint(homepage.String()), Present: true}
+	return snapshot, nil
 }
 
-func (s Scanner) notifyPublicChanges(ctx context.Context, before map[string]publicFingerprint) {
+func configProjectFingerprint(project config.Project) string {
+	return digestFingerprint("config|" + projectHash(project))
+}
+
+func staticFingerprint(revision, path string) string {
+	return digestFingerprint("static|" + strings.TrimSpace(revision) + "|" + path)
+}
+
+func digestFingerprint(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func (s Scanner) PublicSnapshot(ctx context.Context, projects config.Projects) (indexnow.Snapshot, error) {
+	return s.publicSnapshot(ctx, projects)
+}
+
+func publicPageChanges(before, after indexnow.Snapshot) []indexnow.PageChange {
+	paths := make(map[string]struct{}, len(before)+len(after))
+	for path := range before {
+		paths[path] = struct{}{}
+	}
+	for path := range after {
+		paths[path] = struct{}{}
+	}
+	ordered := make([]string, 0, len(paths))
+	for path := range paths {
+		ordered = append(ordered, path)
+	}
+	sort.Strings(ordered)
+	changes := make([]indexnow.PageChange, 0, len(ordered))
+	for _, path := range ordered {
+		previous, previousOK := before[path]
+		current, currentOK := after[path]
+		if previousOK && currentOK && previous.Fingerprint == current.Fingerprint && previous.Present == current.Present {
+			continue
+		}
+		if currentOK && current.Present {
+			current.Path = path
+			changes = append(changes, current)
+			continue
+		}
+		if previousOK {
+			changes = append(changes, indexnow.PageChange{Path: path,
+				Fingerprint: digestFingerprint("deleted|" + previous.Fingerprint), Present: false})
+		}
+	}
+	return changes
+}
+
+func (s Scanner) notifyPublicChanges(ctx context.Context, before indexnow.Snapshot, projects config.Projects) {
 	if s.Notifier == nil || before == nil {
 		return
 	}
-	after := s.Store.publicFingerprints(ctx)
-	if after == nil {
+	after, err := s.publicSnapshot(ctx, projects)
+	if err != nil {
 		if s.Logger != nil {
-			s.Logger.Warn(ctx, "公开页面指纹读取失败，跳过 IndexNow 通知")
+			s.Logger.Warn(ctx, "公开页面快照读取失败，跳过 IndexNow 通知", slog.String("error", err.Error()))
 		}
 		return
 	}
-	s.Notifier.NotifyPaths(ctx, fullPublicPaths(before, after))
-}
-
-func fullPublicPaths(before, after map[string]publicFingerprint) []string {
-	paths := make(map[string]struct{}, len(publicIndexNowPaths)+len(after))
-	for _, path := range publicIndexNowPaths {
-		paths[path] = struct{}{}
+	changes := publicPageChanges(before, after)
+	if len(changes) > 0 {
+		s.Notifier.NotifyChanges(ctx, changes)
 	}
-	for id, fingerprint := range after {
-		if fingerprint.Enabled {
-			paths["/"+url.PathEscape(id)+"/"] = struct{}{}
-		}
-	}
-	for _, path := range changedPublicPaths(before, after) {
-		paths[path] = struct{}{}
-	}
-	result := make([]string, 0, len(paths))
-	for path := range paths {
-		result = append(result, path)
-	}
-	sort.Strings(result)
-	return result
-}
-
-func changedPublicPaths(before, after map[string]publicFingerprint) []string {
-	ids := map[string]struct{}{}
-	for id := range before {
-		ids[id] = struct{}{}
-	}
-	for id := range after {
-		ids[id] = struct{}{}
-	}
-	paths := map[string]struct{}{}
-	for id := range ids {
-		previous, previousOK := before[id]
-		current, currentOK := after[id]
-		if previousOK && currentOK && previous == current {
-			continue
-		}
-		if !((previousOK && previous.Enabled) || (currentOK && current.Enabled)) {
-			continue
-		}
-		paths["/"] = struct{}{}
-		paths["/"+url.PathEscape(id)+"/"] = struct{}{}
-	}
-	result := make([]string, 0, len(paths))
-	for path := range paths {
-		result = append(result, path)
-	}
-	sort.Strings(result)
-	return result
 }

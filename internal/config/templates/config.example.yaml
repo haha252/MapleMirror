@@ -98,13 +98,13 @@ scan:
 
 # IndexNow 内容更新通知配置；无需注册 IndexNow 账号。
 indexnow:
-  # 是否在公开内容变化后自动通知 Bing 等参与搜索引擎。
+  # 是否在公开内容变化后自动通知 Bing 等参与搜索引擎；变化会合并 5 分钟后批量提交。
   enabled: true
   # IndexNow 批量提交接口。
   endpoint: "https://api.indexnow.org/indexnow"
   # 本地持久化密钥；不存在时主节点会自动生成。
   key_file: "secrets/indexnow.key"
-  # 记录首次同步和公共页面版本，避免重启重复提交。
+  # 记录每个公开页面最后一次成功提交的指纹，避免重启重复提交。
   state_file: "secrets/indexnow.state"
   # 单次 IndexNow HTTP 请求超时。
   timeout: "10s"

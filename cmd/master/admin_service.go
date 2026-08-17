@@ -96,6 +96,7 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 		Projects:              projectLoader,
 		Signer:                loaded.Sign,
 		Sync:                  syncService,
+		IndexNow:              syncService,
 		TrustedCIDRs:          cfg.Proxy.TrustedCIDRs,
 		Timezone:              cfg.Stats.Timezone,
 		ResetResourceLimiter:  resetResourceLimiter,

@@ -8,15 +8,17 @@ import (
 	"time"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/indexnow"
 	"mirror-server/internal/logging"
 )
 
 type Scanner struct {
-	Store    Store
-	GitHub   GitHubClient
-	Source   ResourceSource
-	Logger   *logging.Logger
-	Notifier PublicChangeNotifier
+	Store       Store
+	GitHub      GitHubClient
+	Source      ResourceSource
+	Logger      *logging.Logger
+	Notifier    PublicChangeNotifier
+	SEORevision string
 }
 
 func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, requestID string) (ScanSummary, error) {
@@ -24,7 +26,10 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 	if err != nil {
 		return ScanSummary{}, err
 	}
-	before := s.publicFingerprints(ctx)
+	var before indexnow.Snapshot
+	if s.Notifier != nil {
+		before, _ = s.storedPublicSnapshot(ctx, projects)
+	}
 	summary := ScanSummary{ScanID: scanID, ProjectID: projectID, RequestID: requestID}
 	err = s.scan(ctx, projects, projectID, &summary)
 	errText := ""
@@ -35,7 +40,7 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 	defer cancel()
 	_ = s.Store.FinishScan(stateCtx, scanID, summary, errText)
 	if err == nil {
-		s.notifyPublicChanges(ctx, before)
+		s.notifyPublicChanges(ctx, before, projects)
 	}
 	return summary, err
 }

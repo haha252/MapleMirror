@@ -24,6 +24,7 @@ func TestSubmissionSuccessLogContainsStatisticsWithoutResponseBody(t *testing.T)
 	}
 	logger, manager, directory := newLoggedManager(t, transport)
 	manager.NotifyPaths(context.Background(), []string{"/about", "/about", "/stats"})
+	manager.flushPending()
 	for i := 0; i < 3; i++ {
 		waitPayload(t, requests)
 	}
@@ -56,6 +57,7 @@ func TestPermanentSubmissionFailureLogDoesNotRetryForever(t *testing.T) {
 	transport := &recordingTransport{statuses: []int{http.StatusBadRequest}, responseBodies: []string{"secret-400"}, payloads: requests}
 	logger, manager, directory := newLoggedManager(t, transport)
 	manager.NotifyPaths(context.Background(), []string{"/about"})
+	manager.flushPending()
 	waitPayload(t, requests)
 	manager.Close()
 	if err := logger.Close(); err != nil {
@@ -86,6 +88,7 @@ func TestTransientSubmissionFailureLogRecordsScheduledRetry(t *testing.T) {
 	}
 	logger, manager, directory := newLoggedManager(t, transport)
 	manager.NotifyPaths(context.Background(), []string{"/stats"})
+	manager.flushPending()
 	for i := 0; i < 4; i++ {
 		waitPayload(t, requests)
 	}
@@ -112,6 +115,7 @@ func TestNetworkSubmissionFailureLogRecordsRetryExhaustion(t *testing.T) {
 	transport := &recordingTransport{roundTripErr: errors.New("network unavailable"), payloads: requests}
 	logger, manager, directory := newLoggedManager(t, transport)
 	manager.NotifyPaths(context.Background(), []string{"/stats"})
+	manager.flushPending()
 	for i := 0; i < maxAttempts; i++ {
 		waitPayload(t, requests)
 	}
@@ -135,6 +139,7 @@ func TestBootstrapLogContainsCountWithoutURLList(t *testing.T) {
 	transport := &recordingTransport{statuses: []int{http.StatusAccepted}, payloads: requests}
 	logger, manager, directory := newLoggedManager(t, transport)
 	manager.Bootstrap([]string{"p1", "p2"}, "revision-1")
+	manager.flushPending()
 	waitPayload(t, requests)
 	manager.Close()
 	if err := logger.Close(); err != nil {

@@ -2,84 +2,161 @@ package mirrorsync
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 
 	"mirror-server/internal/config"
+	"mirror-server/internal/indexnow"
 	"mirror-server/internal/storage"
 )
 
-func TestChangedPublicPathsIncludesChangedEnabledProjectsAndHome(t *testing.T) {
-	before := map[string]publicFingerprint{
-		"same":     {Enabled: true, Hash: "same"},
-		"updated":  {Enabled: true, Hash: "old"},
-		"disabled": {Enabled: false, Hash: "old"},
-		"removed":  {Enabled: true, Hash: "old"},
+func TestPublicPageChangesIncludesOnlyChangedAddedAndDeletedPages(t *testing.T) {
+	before := indexnow.Snapshot{
+		"/":        {Path: "/", Fingerprint: "home-old", Present: true},
+		"/about":   {Path: "/about", Fingerprint: "about", Present: true},
+		"/old/":    {Path: "/old/", Fingerprint: "old", Present: true},
+		"/same/":   {Path: "/same/", Fingerprint: "same", Present: true},
+		"/update/": {Path: "/update/", Fingerprint: "old", Present: true},
 	}
-	after := map[string]publicFingerprint{
-		"same":     {Enabled: true, Hash: "same"},
-		"updated":  {Enabled: true, Hash: "new"},
-		"disabled": {Enabled: false, Hash: "new"},
-		"new":      {Enabled: true, Hash: "new"},
+	after := indexnow.Snapshot{
+		"/":        {Path: "/", Fingerprint: "home-new", Present: true},
+		"/about":   {Path: "/about", Fingerprint: "about", Present: true},
+		"/new/":    {Path: "/new/", Fingerprint: "new", Present: true},
+		"/same/":   {Path: "/same/", Fingerprint: "same", Present: true},
+		"/update/": {Path: "/update/", Fingerprint: "new", Present: true},
 	}
-	got := changedPublicPaths(before, after)
-	want := []string{"/", "/new/", "/removed/", "/updated/"}
+	changes := publicPageChanges(before, after)
+	got := make([]string, 0, len(changes))
+	for _, change := range changes {
+		got = append(got, change.Path)
+	}
+	want := []string{"/", "/new/", "/old/", "/update/"}
 	if len(got) != len(want) {
-		t.Fatalf("changed paths=%v want %v", got, want)
+		t.Fatalf("changed pages=%v want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("changed paths=%v want %v", got, want)
+			t.Fatalf("changed pages=%v want %v", got, want)
 		}
+	}
+	if changes[2].Present {
+		t.Fatal("deleted page should be marked absent")
 	}
 }
 
-func TestChangedPublicPathsEscapesProjectIDAndIgnoresDisabledOnlyChanges(t *testing.T) {
-	before := map[string]publicFingerprint{
-		"disabled": {Enabled: false, Hash: "old"},
+func TestPublicSnapshotContainsStaticPagesAndEnabledProjects(t *testing.T) {
+	db := openPublicTestDB(t)
+	defer db.Close()
+	scanner := Scanner{Store: Store{DB: db}, SEORevision: "seo-test"}
+	projects := config.Projects{Projects: []config.Project{
+		testProject("p1", "owner/repo", true),
+		testProject("disabled", "owner/disabled", false),
+	}}
+	snapshot, err := scanner.PublicSnapshot(context.Background(), projects)
+	if err != nil {
+		t.Fatal(err)
 	}
-	after := map[string]publicFingerprint{
-		"disabled":    {Enabled: false, Hash: "new"},
-		"new project": {Enabled: true, Hash: "new"},
-	}
-	got := changedPublicPaths(before, after)
-	want := []string{"/", "/new%20project/"}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
-		t.Fatalf("changed paths=%v want %v", got, want)
-	}
-}
-
-func TestFullPublicPathsIncludesStaticPagesAndEveryEnabledProject(t *testing.T) {
-	before := map[string]publicFingerprint{
-		"old":      {Enabled: true, Hash: "old"},
-		"disabled": {Enabled: false, Hash: "old"},
-	}
-	after := map[string]publicFingerprint{
-		"old":      {Enabled: true, Hash: "same"},
-		"new":      {Enabled: true, Hash: "new"},
-		"disabled": {Enabled: false, Hash: "new"},
-	}
-	got := fullPublicPaths(before, after)
-	want := []string{"/", "/about", "/api-docs", "/changelog", "/new/", "/old/", "/stats"}
-	if len(got) != len(want) {
-		t.Fatalf("full public paths=%v want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("full public paths=%v want %v", got, want)
+	for _, path := range []string{"/", "/about", "/api-docs", "/stats", "/changelog", "/p1/"} {
+		if page, ok := snapshot[path]; !ok || !page.Present || page.Fingerprint == "" {
+			t.Fatalf("snapshot missing public page %q: %+v", path, snapshot)
 		}
+	}
+	if _, ok := snapshot["/disabled/"]; ok {
+		t.Fatalf("disabled project should not be public: %+v", snapshot)
 	}
 }
 
 type publicNotifierRecorder struct {
-	calls [][]string
+	changes   [][]indexnow.PageChange
+	snapshots []indexnow.Snapshot
 }
 
-func (r *publicNotifierRecorder) NotifyPaths(_ context.Context, paths []string) {
-	r.calls = append(r.calls, append([]string(nil), paths...))
+func (r *publicNotifierRecorder) NotifyChanges(_ context.Context, changes []indexnow.PageChange) {
+	r.changes = append(r.changes, append([]indexnow.PageChange(nil), changes...))
 }
 
-func TestScannerNotifiesAllPublicPagesAfterSuccessfulScan(t *testing.T) {
+func (r *publicNotifierRecorder) NotifySnapshotNow(_ context.Context, snapshot indexnow.Snapshot) int {
+	r.snapshots = append(r.snapshots, snapshot)
+	return len(snapshot)
+}
+
+func TestServiceTriggerFullPublicNotificationQueuesCurrentPages(t *testing.T) {
+	db := openPublicTestDB(t)
+	defer db.Close()
+	scanner := Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: testReleases()},
+		Notifier: &publicNotifierRecorder{}, SEORevision: "seo-test"}
+	projects := config.Projects{Projects: []config.Project{testProject("p1", "owner/repo", true)}}
+	if _, err := scanner.Scan(context.Background(), projects, "", "seed"); err != nil {
+		t.Fatal(err)
+	}
+	recorder := scanner.Notifier.(*publicNotifierRecorder)
+	recorder.changes = nil
+	queued, err := (Service{Scanner: scanner}).TriggerFullPublicNotification(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queued != 6 || len(recorder.snapshots) != 1 {
+		t.Fatalf("queued=%d snapshots=%d want 6/1", queued, len(recorder.snapshots))
+	}
+	for _, path := range []string{"/", "/about", "/api-docs", "/changelog", "/p1/", "/stats"} {
+		if _, ok := recorder.snapshots[0][path]; !ok {
+			t.Fatalf("manual snapshot missing %q: %+v", path, recorder.snapshots[0])
+		}
+	}
+}
+
+func TestScannerNotifiesOnlyChangedPublicPages(t *testing.T) {
+	db := openPublicTestDB(t)
+	defer db.Close()
+	recorder := &publicNotifierRecorder{}
+	scanner := Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: testReleases()},
+		Notifier: recorder, SEORevision: "seo-test"}
+	project := testProject("p1", "owner/repo", true)
+	projects := config.Projects{Projects: []config.Project{project}}
+
+	if _, err := scanner.Scan(context.Background(), projects, "", "first"); err != nil {
+		t.Fatal(err)
+	}
+	assertChangePaths(t, recorder, []string{"/", "/p1/"})
+	recorder.changes = nil
+	if _, err := scanner.Scan(context.Background(), projects, "", "same"); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorder.changes) != 0 {
+		t.Fatalf("unchanged scan notified=%v", recorder.changes)
+	}
+
+	project.Description = "changed"
+	projects.Projects[0] = project
+	if _, err := scanner.Scan(context.Background(), projects, "", "updated"); err != nil {
+		t.Fatal(err)
+	}
+	assertChangePaths(t, recorder, []string{"/", "/p1/"})
+	recorder.changes = nil
+	if _, err := scanner.Scan(context.Background(), config.Projects{}, "", "removed"); err != nil {
+		t.Fatal(err)
+	}
+	assertChangePaths(t, recorder, []string{"/", "/p1/"})
+	if recorder.changes[0][1].Present {
+		t.Fatalf("removed project should be absent: %+v", recorder.changes)
+	}
+}
+
+func assertChangePaths(t *testing.T, recorder *publicNotifierRecorder, want []string) {
+	t.Helper()
+	if len(recorder.changes) != 1 || len(recorder.changes[0]) != len(want) {
+		t.Fatalf("notifications=%v want one call %v", recorder.changes, want)
+	}
+	for i, path := range want {
+		if recorder.changes[0][i].Path != path {
+			t.Fatalf("notification=%v want %v", recorder.changes[0], want)
+		}
+	}
+}
+
+func openPublicTestDB(t *testing.T) *sql.DB {
+	t.Helper()
 	wal := true
 	db, err := storage.OpenMaster(config.Database{
 		Path: filepath.Join(t.TempDir(), "master.db"), BusyTimeout: "5s", WAL: &wal,
@@ -87,46 +164,6 @@ func TestScannerNotifiesAllPublicPagesAfterSuccessfulScan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
 	seedNode(t, db)
-	recorder := &publicNotifierRecorder{}
-	scanner := Scanner{Store: Store{DB: db}, GitHub: fakeGitHub{releases: testReleases()}, Notifier: recorder}
-	project := testProject("p1", "owner/repo", true)
-	projects := config.Projects{Projects: []config.Project{project}}
-
-	if _, err := scanner.Scan(context.Background(), projects, "", "first"); err != nil {
-		t.Fatal(err)
-	}
-	fullPaths := []string{"/", "/about", "/api-docs", "/changelog", "/p1/", "/stats"}
-	assertPublicNotification(t, recorder, fullPaths)
-	recorder.calls = nil
-	if _, err := scanner.Scan(context.Background(), projects, "", "same"); err != nil {
-		t.Fatal(err)
-	}
-	assertPublicNotification(t, recorder, fullPaths)
-	recorder.calls = nil
-
-	project.Description = "changed"
-	projects.Projects[0] = project
-	if _, err := scanner.Scan(context.Background(), projects, "", "updated"); err != nil {
-		t.Fatal(err)
-	}
-	assertPublicNotification(t, recorder, fullPaths)
-	recorder.calls = nil
-	if _, err := scanner.Scan(context.Background(), config.Projects{}, "", "removed"); err != nil {
-		t.Fatal(err)
-	}
-	assertPublicNotification(t, recorder, fullPaths)
-}
-
-func assertPublicNotification(t *testing.T, recorder *publicNotifierRecorder, want []string) {
-	t.Helper()
-	if len(recorder.calls) != 1 || len(recorder.calls[0]) != len(want) {
-		t.Fatalf("notifications=%v want one call %v", recorder.calls, want)
-	}
-	for i := range want {
-		if recorder.calls[0][i] != want[i] {
-			t.Fatalf("notification=%v want %v", recorder.calls[0], want)
-		}
-	}
+	return db
 }

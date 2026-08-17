@@ -24,28 +24,51 @@ type Options struct {
 	KeyFile    string
 	StateFile  string
 	Timeout    time.Duration
+	Location   *time.Location
+	Debounce   time.Duration
 	HTTPClient *http.Client
 	Logger     *logging.Logger
 }
 
-type Manager struct {
-	key      string
-	host     string
-	baseURL  string
-	keyURL   string
-	endpoint string
-	state    string
-	client   *http.Client
-	logger   *logging.Logger
+// Page 是一个公开页面快照或一次页面变更。Present=false 表示页面已删除或停用。
+type Page struct {
+	Path        string
+	Fingerprint string
+	Present     bool
+}
 
-	mu                sync.Mutex
-	pending           map[string]struct{}
-	bootstrapPending  map[string]struct{}
-	bootstrapRevision string
-	wake              chan struct{}
-	stop              chan struct{}
-	done              chan struct{}
-	closeOnce         sync.Once
+type PageChange = Page
+
+type Snapshot map[string]Page
+
+type pendingPage struct {
+	Page
+	Force bool
+}
+
+type Manager struct {
+	key       string
+	host      string
+	baseURL   string
+	keyURL    string
+	endpoint  string
+	statePath string
+	state     persistedState
+	client    *http.Client
+	logger    *logging.Logger
+
+	mu              sync.Mutex
+	pending         map[string]pendingPage
+	legacyState     bool
+	bootstrapActive bool
+	location        *time.Location
+	debounce        time.Duration
+	wake            chan struct{}
+	flushNow        chan struct{}
+	stop            chan struct{}
+	done            chan struct{}
+	closeOnce       sync.Once
+	flushMu         sync.Mutex
 }
 
 type requestPayload struct {
@@ -76,16 +99,40 @@ func New(options Options) (*Manager, error) {
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
 	}
+	location := options.Location
+	if location == nil {
+		location = time.Local
+	}
+	debounce := options.Debounce
+	if debounce <= 0 {
+		debounce = 5 * time.Minute
+	}
+	loaded, legacy, stateErr := loadState(options.StateFile)
+	state := emptyState(material.Value)
+	if !legacy && loaded.Key == material.Value {
+		state = loaded
+	} else if !legacy && loaded.Key != "" {
+		legacy = true
+		stateErr = errors.New("IndexNow state 的 key 与当前 key 不一致")
+	}
 	keyURL := strings.TrimRight(base.String(), "/") + "/" + material.Value + ".txt"
 	m := &Manager{
 		key: material.Value, host: base.Hostname(), baseURL: strings.TrimRight(base.String(), "/"),
-		keyURL: keyURL, endpoint: endpoint.String(), state: options.StateFile, client: client,
-		logger: options.Logger, pending: map[string]struct{}{}, bootstrapPending: map[string]struct{}{},
-		wake: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{}),
+		keyURL: keyURL, endpoint: endpoint.String(), statePath: options.StateFile, state: state,
+		client: client, logger: options.Logger, pending: make(map[string]pendingPage),
+		legacyState: legacy, location: location, debounce: debounce,
+		wake: make(chan struct{}, 1), flushNow: make(chan struct{}, 1),
+		stop: make(chan struct{}), done: make(chan struct{}),
 	}
 	go m.run()
 	if material.Created {
 		m.logInfo(context.Background(), "IndexNow key 已自动生成", slog.String("key_file", options.KeyFile))
+	}
+	if stateErr != nil {
+		m.logWarn(context.Background(), "IndexNow state 读取异常，已要求首次全量同步",
+			slog.String("error", stateErr.Error()))
+	} else if legacy {
+		m.logInfo(context.Background(), "IndexNow 旧状态需要首次全量同步")
 	}
 	return m, nil
 }
@@ -104,65 +151,6 @@ func (m *Manager) Key() string { return m.key }
 func (m *Manager) Host() string { return m.host }
 
 func (m *Manager) KeyPath() string { return "/" + m.key + ".txt" }
-
-func (m *Manager) Bootstrap(projectIDs []string, revision string) {
-	paths := []string{"/", "/about", "/api-docs", "/stats", "/changelog"}
-	for _, projectID := range projectIDs {
-		projectID = strings.Trim(strings.TrimSpace(projectID), "/")
-		if projectID != "" && !strings.Contains(projectID, "/") {
-			paths = append(paths, "/"+url.PathEscape(projectID)+"/")
-		}
-	}
-	normalizedPaths := make([]string, 0, len(paths))
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		normalized, ok := m.normalizePath(path)
-		if !ok {
-			continue
-		}
-		if _, exists := seen[normalized]; exists {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		normalizedPaths = append(normalizedPaths, normalized)
-	}
-	state := readState(m.state)
-	if state.Key == m.key && state.Revision == revision {
-		m.logInfo(context.Background(), "IndexNow bootstrap 已跳过",
-			slog.String("reason", "state_already_current"), slog.String("revision", revision))
-		return
-	}
-	m.mu.Lock()
-	m.bootstrapRevision = revision
-	m.bootstrapPending = map[string]struct{}{}
-	for _, normalized := range normalizedPaths {
-		m.pending[normalized] = struct{}{}
-		m.bootstrapPending[normalized] = struct{}{}
-	}
-	m.mu.Unlock()
-	m.logInfo(context.Background(), "IndexNow bootstrap 已排队",
-		slog.Int("url_count", len(normalizedPaths)), slog.String("revision", revision))
-	m.signal()
-}
-
-func (m *Manager) NotifyPaths(_ context.Context, paths []string) {
-	m.mu.Lock()
-	queued := 0
-	for _, path := range paths {
-		if normalized, ok := m.normalizePath(path); ok {
-			if _, exists := m.pending[normalized]; !exists {
-				queued++
-			}
-			m.pending[normalized] = struct{}{}
-		}
-	}
-	m.mu.Unlock()
-	if queued == 0 {
-		return
-	}
-	m.logInfo(context.Background(), "IndexNow URL 已排队", slog.Int("url_count", queued))
-	m.signal()
-}
 
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {

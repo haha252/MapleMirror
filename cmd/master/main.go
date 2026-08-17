@@ -176,8 +176,8 @@ func main() {
 	if indexNow != nil {
 		publicServer.IndexNowKey = indexNow.Key()
 	}
-	bootstrapIndexNow(indexNow, projects, version)
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger, indexNow)
+	bootstrapIndexNow(indexNow, syncService.Scanner, projects, logger)
 	defer publicServer.Close()
 	startControlServices(cfg, repo, logger)
 	startAdminService(cfg, repo, syncService, projectLoader, &publicServer, logger)
