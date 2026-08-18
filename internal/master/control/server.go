@@ -54,6 +54,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 		}
 		return
 	}
+	controlConn := &serializedConn{Conn: tlsConn}
 	fp := controltls.Fingerprint(state.PeerCertificates[0])
 	if s.Logger != nil {
 		s.Logger.Debug(context.Background(), "控制会话开始",
@@ -92,7 +93,8 @@ func (s ControlServer) Handle(conn net.Conn) {
 			slog.String("fingerprint", fp),
 			slog.String("remote_addr", remote))
 	}
-	if err := s.readHello(conn, session, reqID); err != nil {
+	frameReader := protocol.NewFrameReader(protocol.MaxFrameBytes)
+	if err := s.readHello(controlConn, session, reqID, frameReader); err != nil {
 		closeReason = "hello 交换失败: " + err.Error()
 		return
 	}
@@ -105,7 +107,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 			slog.Int("heartbeat_timeout_seconds", int(s.HeartbeatTimeout.Seconds())))
 	}
 	for {
-		msg, wakeDispatched, err := s.readControlFrameOrDispatchWake(conn, session, reqID)
+		msg, wakeDispatched, err := s.readControlFrameOrDispatchWake(controlConn, session, reqID, frameReader)
 		if err != nil {
 			closeReason = controlReadCloseReason(err)
 			if s.Logger != nil {
@@ -129,7 +131,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 		}
 		if msg.NodeID != session.NodeID {
 			closeReason = "节点标识不匹配"
-			s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
+			s.writeProtocolError(controlConn, session.NodeID, reqID, msg.MessageID,
 				"NODE_ID_MISMATCH", closeReason)
 			if s.Logger != nil {
 				s.Logger.Warn(context.Background(), "控制消息节点标识不匹配",
@@ -142,7 +144,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 		}
 		if err := msg.Validate(protocol.Control); err != nil {
 			closeReason = "控制消息无效: " + err.Error()
-			s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
+			s.writeProtocolError(controlConn, session.NodeID, reqID, msg.MessageID,
 				"CONTROL_PROTOCOL_ERROR", closeReason)
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "控制消息校验失败",
@@ -165,7 +167,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 		result, err := s.handleMessage(session, msg)
 		if err != nil {
 			closeReason = err.Error()
-			s.writeProtocolError(conn, session.NodeID, reqID, msg.MessageID,
+			s.writeProtocolError(controlConn, session.NodeID, reqID, msg.MessageID,
 				"CONTROL_MESSAGE_ERROR", err.Error())
 			if s.Logger != nil {
 				s.Logger.Debug(context.Background(), "控制消息处理失败",
@@ -217,7 +219,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 					slog.Uint64("accepted_sequence", result.AcceptedSequence))
 			}
 		}
-		dispatched, err := s.writeResponsesAfterMessage(conn, session, reqID, msg, result)
+		dispatched, err := s.writeResponsesAfterMessage(controlConn, session, reqID, msg, result, frameReader)
 		if err != nil {
 			closeReason = "控制响应发送失败: " + err.Error()
 			if s.Logger != nil {

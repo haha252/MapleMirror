@@ -10,8 +10,9 @@ import (
 	"mirror-server/internal/protocol"
 )
 
-func (s ControlServer) readHello(conn net.Conn, session Session, reqID string) error {
-	msg, err := readControlFrame(conn, s.HeartbeatTimeout)
+func (s ControlServer) readHello(conn net.Conn, session Session, reqID string,
+	readers ...*protocol.FrameReader) error {
+	msg, err := readControlFrame(conn, s.HeartbeatTimeout, readers...)
 	if err != nil {
 		return err
 	}

@@ -22,6 +22,18 @@ type interruptingReader struct {
 	interrupted bool
 }
 
+type shortWriter struct {
+	buf   bytes.Buffer
+	limit int
+}
+
+func (w *shortWriter) Write(p []byte) (int, error) {
+	if len(p) > w.limit {
+		p = p[:w.limit]
+	}
+	return w.buf.Write(p)
+}
+
 func (r *interruptingReader) Read(p []byte) (int, error) {
 	if !r.interrupted && r.offset >= r.interruptAt {
 		r.interrupted = true
@@ -88,6 +100,23 @@ func TestFrameReaderResumesAfterPartialReadTimeout(t *testing.T) {
 				t.Fatalf("resumed frame = %+v", got)
 			}
 		})
+	}
+}
+
+func TestWriteFrameHandlesShortWrites(t *testing.T) {
+	source := Envelope{ProtocolVersion: Version, MessageID: "short-write",
+		MessageType: TypeHeartbeat, SentAt: time.Now().UTC(), NodeID: "node-1",
+		RequestID: "req-1", Sequence: 1, Payload: json.RawMessage(`{"ok":true}`)}
+	w := &shortWriter{limit: 2}
+	if err := WriteFrame(w, source); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadFrame(&w.buf, MaxFrameBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MessageID != source.MessageID {
+		t.Fatalf("message id=%q want %q", got.MessageID, source.MessageID)
 	}
 }
 

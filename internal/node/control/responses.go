@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"sync"
 	"time"
 
 	"mirror-server/internal/protocol"
@@ -13,9 +14,31 @@ import (
 
 const controlAckTimeout = 3 * time.Second
 
+type serializedConn struct {
+	net.Conn
+	writeMu sync.Mutex
+}
+
+func (c *serializedConn) Write(p []byte) (int, error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return c.Conn.Write(p)
+}
+
+func (c *serializedConn) writeFrame(envelope protocol.Envelope) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return protocol.WriteFrame(c.Conn, envelope)
+}
+
 func (c Client) writeFrame(conn net.Conn, envelope protocol.Envelope) error {
 	_ = conn.SetWriteDeadline(time.Now().Add(controlIOTimeout))
-	err := protocol.WriteFrame(conn, envelope)
+	var err error
+	if serialized, ok := conn.(*serializedConn); ok {
+		err = serialized.writeFrame(envelope)
+	} else {
+		err = protocol.WriteFrame(conn, envelope)
+	}
 	_ = conn.SetWriteDeadline(time.Time{})
 	return err
 }

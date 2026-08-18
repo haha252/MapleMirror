@@ -11,16 +11,16 @@ import (
 const controlWakeReadPoll = 200 * time.Millisecond
 
 func (s ControlServer) readControlFrameOrDispatchWake(conn net.Conn,
-	session Session, reqID string) (protocol.Envelope, int, error) {
+	session Session, reqID string, readers ...*protocol.FrameReader) (protocol.Envelope, int, error) {
 	deadline := time.Now().Add(s.sessionReadTimeout())
 	for {
 		if s.Repo.runtime().ConsumeSyncTaskWake(session.NodeID) {
-			auths, err := s.dispatchDownloadAuthorizations(conn, session, reqID)
+			auths, err := s.dispatchDownloadAuthorizations(conn, session, reqID, readers...)
 			if err != nil {
 				return protocol.Envelope{}, auths, err
 			}
 			dispatched, _, err := s.dispatchSyncTasksInteractively(conn, session, reqID,
-				controlMessageResult{DispatchSyncTasks: true})
+				controlMessageResult{DispatchSyncTasks: true}, readers...)
 			if err != nil {
 				return protocol.Envelope{}, auths + dispatched, err
 			}
@@ -40,7 +40,7 @@ func (s ControlServer) readControlFrameOrDispatchWake(conn net.Conn,
 		if timeout > controlWakeReadPoll {
 			timeout = controlWakeReadPoll
 		}
-		msg, err := readControlFrame(conn, timeout)
+		msg, err := readControlFrame(conn, timeout, readers...)
 		if err == nil {
 			return msg, 0, nil
 		}

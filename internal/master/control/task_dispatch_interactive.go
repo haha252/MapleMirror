@@ -9,7 +9,7 @@ import (
 )
 
 func (s ControlServer) dispatchSyncTasksInteractively(conn net.Conn, session Session,
-	reqID string, result controlMessageResult) (int, controlMessageResult, error) {
+	reqID string, result controlMessageResult, readers ...*protocol.FrameReader) (int, controlMessageResult, error) {
 	if !result.DispatchSyncTasks {
 		return 0, result, nil
 	}
@@ -32,7 +32,7 @@ func (s ControlServer) dispatchSyncTasksInteractively(conn net.Conn, session Ses
 		dispatched++
 		outstanding++
 		for {
-			ack, ackResult, err := s.readInterleavedControlMessage(conn, session, reqID)
+			ack, ackResult, err := s.readInterleavedControlMessage(conn, session, reqID, readers...)
 			if err != nil {
 				return dispatched, result, err
 			}
@@ -55,8 +55,8 @@ func isSyncTaskResponse(messageType string) bool {
 }
 
 func (s ControlServer) readInterleavedControlMessage(conn net.Conn, session Session,
-	reqID string) (protocol.Envelope, controlMessageResult, error) {
-	msg, err := readControlFrame(conn, s.sessionReadTimeout())
+	reqID string, readers ...*protocol.FrameReader) (protocol.Envelope, controlMessageResult, error) {
+	msg, err := readControlFrame(conn, s.sessionReadTimeout(), readers...)
 	if err != nil {
 		return protocol.Envelope{}, controlMessageResult{}, err
 	}
@@ -71,15 +71,15 @@ func (s ControlServer) readInterleavedControlMessage(conn net.Conn, session Sess
 }
 
 func (s ControlServer) writeResponsesAfterMessage(conn net.Conn, session Session, reqID string,
-	msg protocol.Envelope, result controlMessageResult) (int, error) {
+	msg protocol.Envelope, result controlMessageResult, readers ...*protocol.FrameReader) (int, error) {
 	dispatched := 0
-	auths, err := s.dispatchDownloadAuthorizations(conn, session, reqID)
+	auths, err := s.dispatchDownloadAuthorizations(conn, session, reqID, readers...)
 	if err != nil {
 		return auths, err
 	}
 	dispatched += auths
 	if result.DispatchSyncTasks && shouldDispatchNextTask(msg.MessageType) {
-		dispatched, result, err = s.dispatchSyncTasksInteractively(conn, session, reqID, result)
+		dispatched, result, err = s.dispatchSyncTasksInteractively(conn, session, reqID, result, readers...)
 		if err != nil {
 			return dispatched, err
 		}

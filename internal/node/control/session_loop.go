@@ -7,11 +7,13 @@ import (
 
 const controlIdleRead = 200 * time.Millisecond
 const controlWakePoll = 10 * time.Millisecond
+const trafficReplayBurstLimit = 20
 
 type sessionLoopState struct {
-	sequence         uint64
-	nextHeartbeat    time.Time
-	pendingInventory *pendingInventoryReport
+	sequence           uint64
+	nextHeartbeat      time.Time
+	pendingInventory   *pendingInventoryReport
+	trafficReplayBurst int
 }
 
 func (c *Client) sendSessionReports(conn net.Conn, reqID string,
@@ -142,18 +144,41 @@ func (c *Client) sendNextControlWork(conn net.Conn, reqID string,
 		state.sequence = next
 		return sent, err
 	}
+	if state.trafficReplayBurst < trafficReplayBurstLimit {
+		next, sent, err = c.sendNextTrafficEvent(conn, reqID, state.sequence)
+		if err != nil || sent {
+			state.sequence = next
+			if sent {
+				state.trafficReplayBurst++
+			}
+			return sent, err
+		}
+		state.trafficReplayBurst = 0
+	}
 	next, sent, err = c.sendNextInventoryReportChunk(conn, reqID, state.sequence,
 		&state.pendingInventory)
 	if err != nil || sent {
 		state.sequence = next
-		return sent, err
-	}
-	next, sent, err = c.sendNextTrafficEvent(conn, reqID, state.sequence)
-	if err != nil || sent {
-		state.sequence = next
+		if sent {
+			state.trafficReplayBurst = 0
+		}
 		return sent, err
 	}
 	next, sent, err = c.sendNextAuthorizationStatusEvent(conn, reqID, state.sequence)
+	if err != nil || sent {
+		state.sequence = next
+		if sent {
+			state.trafficReplayBurst = 0
+		}
+		return sent, err
+	}
+	if state.trafficReplayBurst >= trafficReplayBurstLimit {
+		state.trafficReplayBurst = 0
+		next, sent, err = c.sendNextTrafficEvent(conn, reqID, state.sequence)
+		if sent {
+			state.trafficReplayBurst = 1
+		}
+	}
 	state.sequence = next
 	return sent, err
 }

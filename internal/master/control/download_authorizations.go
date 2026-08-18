@@ -14,7 +14,7 @@ import (
 const maxAuthorizationDispatchPerWake = 20
 
 func (s ControlServer) dispatchDownloadAuthorizations(conn net.Conn,
-	session Session, reqID string) (int, error) {
+	session Session, reqID string, readers ...*protocol.FrameReader) (int, error) {
 	dispatched := 0
 	for dispatched < maxAuthorizationDispatchPerWake {
 		auth, ok, err := s.Repo.NextDownloadAuthorization(context.Background(), session.NodeID)
@@ -29,7 +29,7 @@ func (s ControlServer) dispatchDownloadAuthorizations(conn net.Conn,
 		}); err != nil {
 			return dispatched, err
 		}
-		msg, err := readControlFrame(conn, s.sessionReadTimeout())
+		msg, err := readControlFrame(conn, s.sessionReadTimeout(), readers...)
 		if err != nil {
 			return dispatched, err
 		}

@@ -82,13 +82,14 @@ func (c *Client) RunOnce() (time.Duration, error) {
 		return 0, err
 	}
 	defer conn.Close()
+	controlConn := &serializedConn{Conn: conn}
 	c.frameReader = protocol.NewFrameReader(protocol.MaxFrameBytes)
 	defer func() { c.frameReader = nil }()
 	reqID, _ := requestid.New()
-	if err := c.hello(conn, reqID); err != nil {
+	if err := c.hello(controlConn, reqID); err != nil {
 		return 0, err
 	}
-	welcome, err := c.readWelcome(conn)
+	welcome, err := c.readWelcome(controlConn)
 	if err != nil {
 		return 0, err
 	}
@@ -99,7 +100,7 @@ func (c *Client) RunOnce() (time.Duration, error) {
 		slog.Int("heartbeat_timeout_seconds", welcome.HeartbeatTimeoutSecond),
 		slog.String("managed_state", welcome.ManagedState),
 		slog.Bool("routing_ready", welcome.RoutingReady))
-	if err := c.sendSessionReports(conn, reqID, interval); err != nil {
+	if err := c.sendSessionReports(controlConn, reqID, interval); err != nil {
 		return interval, err
 	}
 	return interval, nil

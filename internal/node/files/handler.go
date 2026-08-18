@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
@@ -126,17 +126,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	target := h.rateLimitedResponseWriter(r, w)
 	counter := &limitCountingWriter{ResponseWriter: target, handler: h,
 		authorizationID: claims.AuthorizationID, claims: claims, limit: limit,
-		sent: sent, timing: timing}
+		sent: sent, timing: timing, assetID: asset.AssetID,
+		nodeRequestID: requestid.FromContext(r.Context()), lastCheckpointAt: time.Now().UTC(),
+		requestContext: r.Context()}
 	http.ServeContent(counter, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
-	if counter.bytes > 0 {
-		if err := h.recordTraffic(claims, asset.AssetID, requestid.FromContext(r.Context()), counter.bytes); err != nil && h.Logger != nil {
-			h.Logger.Warn(r.Context(), "下载流量事件记录失败",
-				slog.String("request_id", requestid.FromContext(r.Context())),
-				slog.String("authorization_id", claims.AuthorizationID),
-				slog.String("asset_id", asset.AssetID),
-				slog.String("error", err.Error()))
-		}
-	}
+	counter.flushTrafficCheckpoint(true)
 }
 
 func (h *Handler) servePublicProbe(w http.ResponseWriter, r *http.Request) {

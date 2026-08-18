@@ -1,6 +1,7 @@
 package files
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -45,5 +46,29 @@ func TestClaimAuthorizationBytesSharesBudget(t *testing.T) {
 	}
 	if got := handler.claimAuthorizationBytes("auth-1", 4, 0, 1); got != 0 {
 		t.Fatalf("exhausted claim = %d, want 0", got)
+	}
+}
+
+func TestLimitCountingWriterSplitsTrafficCheckpoints(t *testing.T) {
+	db, _, _ := prepareNodeFile(t)
+	handler := &Handler{DB: db}
+	claims := downloadtoken.Claims{AuthorizationID: "auth-1", RequestID: "master-req-1"}
+	counter := &limitCountingWriter{
+		ResponseWriter: httptest.NewRecorder(), handler: handler,
+		authorizationID: claims.AuthorizationID, claims: claims,
+		limit: trafficCheckpointBytes*2 + 1, assetID: "asset-1",
+		nodeRequestID: "node-req-1", lastCheckpointAt: time.Now().UTC(),
+	}
+	if _, err := counter.Write(bytes.Repeat([]byte{'x'}, int(trafficCheckpointBytes)+1)); err != nil {
+		t.Fatal(err)
+	}
+	counter.flushTrafficCheckpoint(true)
+	var events, total int64
+	if err := db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(sent_bytes), 0)
+		FROM pending_traffic_events`).Scan(&events, &total); err != nil {
+		t.Fatal(err)
+	}
+	if events != 2 || total != trafficCheckpointBytes+1 {
+		t.Fatalf("checkpoint events=%d bytes=%d", events, total)
 	}
 }
