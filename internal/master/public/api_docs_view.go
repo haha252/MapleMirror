@@ -13,10 +13,10 @@ func (s Server) apiDocsPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
 	s.renderPage(w, pageData{
 		Title:        "API 文档",
-		BrowserTitle: "枫源镜像公共下载 API 文档",
-		Description:  "枫源镜像公共下载 API 文档，介绍项目与文件查询、网页下载、程序下载、PoW 验证、授权令牌和自动更新器接入方式，帮助脚本与客户端稳定获取 GitHub Release 文件。",
+		BrowserTitle: "枫源镜像公共下载 API 文档 - 项目、文件与自动下载接口",
+		Description:  "枫源镜像公共下载 API 文档，介绍项目与文件查询、网页下载、程序下载、PoW 验证、授权令牌和自动更新器接入方式，帮助脚本、客户端、CI 和后端服务稳定获取 GitHub Release 文件，并支持集成方设计稳定的下载流程。",
 		CanonicalURL: s.canonicalURL("/api-docs"),
-		Subtitle:     "面向用户的公共 API",
+		Subtitle:     "面向网页、脚本、客户端与自动更新器的公开下载接口说明。",
 		BodyClass:    "page-api-docs",
 		Body:         template.HTML(apiDocsBody),
 		Styles:       []string{"/static/public/api-docs.css", "/static/public/api-docs-copy.css"},

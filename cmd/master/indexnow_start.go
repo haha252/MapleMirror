@@ -13,7 +13,7 @@ import (
 	"mirror-server/internal/master/mirrorsync"
 )
 
-const publicSEORevision = "seo-2026-08-16-v1"
+const publicSEORevision = "seo-2026-08-24-v2"
 
 func startIndexNow(cfg config.Master, location *time.Location, logger *logging.Logger) (*indexnow.Manager, *logging.Logger) {
 	if location == nil {

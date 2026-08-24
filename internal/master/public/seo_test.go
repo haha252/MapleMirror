@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestPublicPagesUseFyhubApexSEOMetadata(t *testing.T) {
@@ -13,14 +14,15 @@ func TestPublicPagesUseFyhubApexSEOMetadata(t *testing.T) {
 	srv := Server{Store: Store{DB: db}, PublicBaseURL: "https://fyhub.cn"}
 	handler := srv.Handler()
 	cases := []struct {
-		path, title, canonical, pageTitle string
+		path, title, description, canonical, pageTitle, subtitle string
+		staticPage                                               bool
 	}{
-		{"/", "枫源镜像 - GitHub Release 镜像下载", "https://fyhub.cn/", "枫源镜像"},
-		{"/stats", "镜像节点与下载数据统计 - 枫源镜像", "https://fyhub.cn/stats", "数据统计"},
-		{"/api-docs", "枫源镜像公共下载 API 文档", "https://fyhub.cn/api-docs", "API 文档"},
-		{"/changelog", "枫源镜像更新日志 - 功能与维护记录", "https://fyhub.cn/changelog", "更新日志"},
-		{"/about", "关于枫源镜像 - 公益镜像服务与开源项目", "https://fyhub.cn/about", "关于本项目"},
-		{"/p1/", "项目一 版本与文件下载 - 枫源镜像", "https://fyhub.cn/p1/", "项目一"},
+		{"/", "枫源镜像 - GitHub Release 软件版本与文件下载服务", "枫源镜像是面向 GitHub Release 的公益镜像下载服务，提供免费、稳定、快速的软件版本与文件下载，支持项目搜索、版本筛选、镜像节点状态查看、网页验证下载和公共 API 接入，适用于网页用户、脚本工具与自动更新器。", "https://fyhub.cn/", "枫源镜像", "面向 GitHub Release 的公益镜像服务，提供稳定、快速的软件版本与文件下载。", true},
+		{"/stats", "枫源镜像节点状态与下载数据统计 - 访问、流量与 SLA", "查看枫源镜像的访问量、下载量、传输流量、镜像节点在线状态与服务 SLA，了解最近 30 天的访问趋势、下载表现、节点健康状况和公共镜像服务运行情况，并为节点稳定性和下载服务可用性提供公开参考，便于用户了解服务质量。", "https://fyhub.cn/stats", "数据统计", "查看节点状态、访问量、下载量、流量与近 30 日趋势。", true},
+		{"/api-docs", "枫源镜像公共下载 API 文档 - 项目、文件与自动下载接口", "枫源镜像公共下载 API 文档，介绍项目与文件查询、网页下载、程序下载、PoW 验证、授权令牌和自动更新器接入方式，帮助脚本、客户端、CI 和后端服务稳定获取 GitHub Release 文件，并支持集成方设计稳定的下载流程。", "https://fyhub.cn/api-docs", "API 文档", "面向网页、脚本、客户端与自动更新器的公开下载接口说明。", true},
+		{"/changelog", "枫源镜像更新日志 - 版本发布、功能改进与服务维护", "查看枫源镜像的版本发布、功能更新、维护记录、服务调整与重要变更，了解镜像下载、公共 API、节点管理、安全策略和站点体验的最新改进，并按时间跟踪服务的持续变化与近期维护重点，帮助用户掌握服务演进方向。", "https://fyhub.cn/changelog", "更新日志", "按时间查看版本发布、功能更新、服务维护与重要变更。", true},
+		{"/about", "关于枫源镜像 - 公益镜像服务、开源代码与赞助支持", "了解枫源镜像的公益目标、服务范围、开源代码、维护方式、赞助支持和问题反馈渠道，查看项目如何提供稳定、透明、可靠的 GitHub Release 下载服务，并参与共同建设，也欢迎用户参与节点贡献与社区支持。", "https://fyhub.cn/about", "关于本项目", "了解枫源镜像的公益目标、开源项目、维护方式与支持方式。", true},
+		{"/p1/", "项目一 版本与文件下载 - 枫源镜像", "", "https://fyhub.cn/p1/", "项目一", "", false},
 	}
 	for _, item := range cases {
 		t.Run(item.path, func(t *testing.T) {
@@ -35,6 +37,20 @@ func TestPublicPagesUseFyhubApexSEOMetadata(t *testing.T) {
 				!strings.Contains(body, `<meta name="description" content="`) ||
 				!strings.Contains(body, `<link rel="canonical" href="`+item.canonical+`">`) {
 				t.Fatalf("missing SEO metadata: %s", body)
+			}
+			if item.description != "" && !strings.Contains(body, `<meta name="description" content="`+item.description+`">`) {
+				t.Fatalf("unexpected description metadata: %s", body)
+			}
+			if item.staticPage {
+				if got := utf8.RuneCountInString(item.title); got < 25 || got > 80 {
+					t.Fatalf("title rune length=%d, want 25..80: %q", got, item.title)
+				}
+				if got := utf8.RuneCountInString(item.description); got < 100 || got > 160 {
+					t.Fatalf("description rune length=%d, want 100..160: %q", got, item.description)
+				}
+				if !strings.Contains(body, `<p class="page-subtitle" data-i18n-page-subtitle="true">`+item.subtitle+`</p>`) {
+					t.Fatalf("missing SSR page subtitle: %s", body)
+				}
 			}
 			if strings.Contains(body, "www.fyhub.cn") {
 				t.Fatalf("SEO output must not mention www.fyhub.cn: %s", body)
@@ -64,11 +80,23 @@ func TestPageTitleTranslationsKeepHeadingSeparateFromBrowserTitle(t *testing.T) 
 	zh := publicStaticBody(t, "i18n/zh-CN.js")
 	for _, want := range []string{
 		`"page.title.page-download": "枫源镜像"`,
-		`"page.browserTitle.page-download": "枫源镜像 - GitHub Release 镜像下载"`,
+		`"page.browserTitle.page-download": "枫源镜像 - GitHub Release 软件版本与文件下载服务"`,
 		`"page.title.page-stats": "数据统计"`,
+		`"page.browserTitle.page-stats": "枫源镜像节点状态与下载数据统计 - 访问、流量与 SLA"`,
+		`"page.subtitle.page-stats": "查看节点状态、访问量、下载量、流量与近 30 日趋势。"`,
 	} {
 		if !strings.Contains(zh, want) {
 			t.Fatalf("Chinese page title translations missing %q: %s", want, zh)
+		}
+	}
+	en := publicStaticBody(t, "i18n/en.js")
+	for _, want := range []string{
+		`"page.browserTitle.page-download": "Maple Mirror - GitHub Release Software Downloads"`,
+		`"page.browserTitle.page-stats": "Maple Mirror Node Status and Download Statistics - Traffic, Visits and SLA"`,
+		`"page.subtitle.page-stats": "View node status, visits, downloads, traffic and the last 30 days of trends."`,
+	} {
+		if !strings.Contains(en, want) {
+			t.Fatalf("English page title translations missing %q: %s", want, en)
 		}
 	}
 }

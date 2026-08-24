@@ -9,8 +9,9 @@ import (
 
 func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
-	s.renderPage(w, pageData{Title: "数据统计", BrowserTitle: "镜像节点与下载数据统计 - 枫源镜像",
-		Description:  "查看枫源镜像的下载量、传输流量、访问量、镜像节点可用性与服务运行统计，了解公共镜像服务近期的访问趋势、下载表现和节点健康状态。",
+	s.renderPage(w, pageData{Title: "数据统计", BrowserTitle: "枫源镜像节点状态与下载数据统计 - 访问、流量与 SLA",
+		Description:  "查看枫源镜像的访问量、下载量、传输流量、镜像节点在线状态与服务 SLA，了解最近 30 天的访问趋势、下载表现、节点健康状况和公共镜像服务运行情况，并为节点稳定性和下载服务可用性提供公开参考，便于用户了解服务质量。",
+		Subtitle:     "查看节点状态、访问量、下载量、流量与近 30 日趋势。",
 		CanonicalURL: s.canonicalURL("/stats"), BodyClass: "page-stats",
 		Body: statsShellBody(), Styles: []string{"/static/public/stats.css"},
 		Scripts: []string{"/static/public/stats-sources.js", "/static/public/stats.js"}})
@@ -23,9 +24,9 @@ func (s Server) changelogPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.trackPageView(w, r)
 	s.renderPage(w, pageData{
-		Title: "更新日志", BrowserTitle: "枫源镜像更新日志 - 功能与维护记录",
-		Description:  "查看枫源镜像的功能更新、版本发布、维护记录、服务调整与重要变更，了解镜像下载、公共 API、节点管理和安全策略的最新改进。",
-		CanonicalURL: s.canonicalURL("/changelog"), Subtitle: "记录枫源镜像的功能、维护与重要变更",
+		Title: "更新日志", BrowserTitle: "枫源镜像更新日志 - 版本发布、功能改进与服务维护",
+		Description:  "查看枫源镜像的版本发布、功能更新、维护记录、服务调整与重要变更，了解镜像下载、公共 API、节点管理、安全策略和站点体验的最新改进，并按时间跟踪服务的持续变化与近期维护重点，帮助用户掌握服务演进方向。",
+		CanonicalURL: s.canonicalURL("/changelog"), Subtitle: "按时间查看版本发布、功能更新、服务维护与重要变更。",
 		BodyClass: "page-changelog", ChangelogSearch: true, Body: changelogShellBody(s.staticURL),
 		Styles: []string{
 			"/static/public/download-filters.css",
@@ -39,10 +40,10 @@ func (s Server) changelogPage(w http.ResponseWriter, r *http.Request) {
 func (s Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 	s.trackPageView(w, r)
 	sponsors := buildSponsorPage(loadSponsors(), requestedSponsorPage(r.URL.Query().Get("sponsor_page")), sponsorPageSize)
-	s.renderPage(w, pageData{Title: "关于本项目", BrowserTitle: "关于枫源镜像 - 公益镜像服务与开源项目",
-		Description:  "了解枫源镜像的公益镜像目标、服务范围、开源代码、赞助方式和问题反馈渠道，查看项目维护说明，并参与共同建设稳定、透明、可靠的下载服务。",
+	s.renderPage(w, pageData{Title: "关于本项目", BrowserTitle: "关于枫源镜像 - 公益镜像服务、开源代码与赞助支持",
+		Description:  "了解枫源镜像的公益目标、服务范围、开源代码、维护方式、赞助支持和问题反馈渠道，查看项目如何提供稳定、透明、可靠的 GitHub Release 下载服务，并参与共同建设，也欢迎用户参与节点贡献与社区支持。",
 		CanonicalURL: s.canonicalURL("/about"), BodyClass: "page-about",
-		Subtitle: "关于枫源镜像，和为本站做出贡献的朋友们",
+		Subtitle: "了解枫源镜像的公益目标、开源项目、维护方式与支持方式。",
 		Body:     aboutBody(sponsors, s.staticURL), Styles: []string{"/static/public/about.css"},
 		Scripts: []string{"/static/public/about.js"}})
 }

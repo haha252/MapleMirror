@@ -67,6 +67,30 @@ func TestPublicSnapshotContainsStaticPagesAndEnabledProjects(t *testing.T) {
 	}
 }
 
+func TestPublicSEORevisionChangesOnlyStaticPages(t *testing.T) {
+	db := openPublicTestDB(t)
+	defer db.Close()
+	projects := config.Projects{Projects: []config.Project{testProject("p1", "owner/repo", true)}}
+	oldSnapshot, err := (Scanner{Store: Store{DB: db}, SEORevision: "seo-old"}).PublicSnapshot(context.Background(), projects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newSnapshot, err := (Scanner{Store: Store{DB: db}, SEORevision: "seo-new"}).PublicSnapshot(context.Background(), projects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := publicPageChanges(oldSnapshot, newSnapshot)
+	want := []string{"/", "/about", "/api-docs", "/changelog", "/stats"}
+	if len(changes) != len(want) {
+		t.Fatalf("SEO revision changes=%v want %v", changes, want)
+	}
+	for i, path := range want {
+		if changes[i].Path != path || !changes[i].Present {
+			t.Fatalf("SEO revision changes=%v want present paths %v", changes, want)
+		}
+	}
+}
+
 type publicNotifierRecorder struct {
 	changes   [][]indexnow.PageChange
 	snapshots []indexnow.Snapshot

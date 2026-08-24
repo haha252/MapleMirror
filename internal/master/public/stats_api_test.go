@@ -94,7 +94,7 @@ func TestStatsPageRendersShellWithoutInitialSnapshot(t *testing.T) {
 		!strings.Contains(body, `/static/public/stats.js?v=`) {
 		t.Fatalf("expected JS-first stats shell: %s", body)
 	}
-	if strings.Contains(body, "4,653") || strings.Contains(body, "近 30 日") {
+	if strings.Contains(body, "4,653") {
 		t.Fatalf("stats shell should not inline live snapshot: %s", body)
 	}
 }

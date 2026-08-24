@@ -68,9 +68,9 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.renderPage(w, pageData{
 		Title:         "枫源镜像",
-		BrowserTitle:  "枫源镜像 - GitHub Release 镜像下载",
-		Subtitle:      mirrorDescription,
-		Description:   "枫源镜像是面向 GitHub Release 的公益镜像服务，为用户提供免费、稳定、快速的软件版本与文件下载，支持项目搜索、版本筛选、镜像节点状态查看和公共 API 接入。",
+		BrowserTitle:  "枫源镜像 - GitHub Release 软件版本与文件下载服务",
+		Subtitle:      "面向 GitHub Release 的公益镜像服务，提供稳定、快速的软件版本与文件下载。",
+		Description:   "枫源镜像是面向 GitHub Release 的公益镜像下载服务，提供免费、稳定、快速的软件版本与文件下载，支持项目搜索、版本筛选、镜像节点状态查看、网页验证下载和公共 API 接入，适用于网页用户、脚本工具与自动更新器。",
 		CanonicalURL:  s.canonicalURL("/"),
 		BodyClass:     "page-download",
 		CatalogSearch: true,

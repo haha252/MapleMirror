@@ -22,14 +22,14 @@ func TestDownloadPageIncludesButtonForAvailableAsset(t *testing.T) {
 	rec := httptest.NewRecorder()
 	srv.downloadPage(rec, req)
 	body := rec.Body.String()
-	if !strings.Contains(body, `<title>枫源镜像 - GitHub Release 镜像下载</title>`) {
+	if !strings.Contains(body, `<title>枫源镜像 - GitHub Release 软件版本与文件下载服务</title>`) {
 		t.Fatalf("expected mirror title in page: %s", body)
 	}
 	if !strings.Contains(body, `class="site-brand__primary">枫源</span>`) ||
 		!strings.Contains(body, `class="site-brand__secondary">镜像</span>`) {
 		t.Fatalf("expected split brand text in page: %s", body)
 	}
-	if !strings.Contains(body, `<meta name="description" content="枫源镜像是面向 GitHub Release 的公益镜像服务，为用户提供免费、稳定、快速的软件版本与文件下载，支持项目搜索、版本筛选、镜像节点状态查看和公共 API 接入。">`) {
+	if !strings.Contains(body, `<meta name="description" content="枫源镜像是面向 GitHub Release 的公益镜像下载服务，提供免费、稳定、快速的软件版本与文件下载，支持项目搜索、版本筛选、镜像节点状态查看、网页验证下载和公共 API 接入，适用于网页用户、脚本工具与自动更新器。">`) {
 		t.Fatalf("expected mirror description meta in page: %s", body)
 	}
 	first := strings.Index(body, `page-notice page-notice--info`)
