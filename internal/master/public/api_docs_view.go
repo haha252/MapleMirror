@@ -202,6 +202,7 @@ Range: bytes=1048576-2097151</code></pre>
   }
 }</code></pre>
   </section>
+` + apiDeveloperSyncDetails + `
 
   <section class="api-endpoint" id="changelog-api">
     <h2 data-i18n="nav.changelog">更新日志</h2>

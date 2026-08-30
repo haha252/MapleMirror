@@ -49,6 +49,10 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/static/public/api-docs.js`,
 		`/api/public/v1/blocklist.txt`,
 		`/api/public/v1/blocklist.json`,
+		`项目开发者更新检测`,
+		`/api/developer/v1/projects/{project_id}/sync`,
+		`Authorization: Bearer &lt;project_token&gt;`,
+		`X-RateLimit-Remaining`,
 		`/api/public/v1/changelog`,
 		`/{project_id}/{version}/{file_name}`,
 		`download_url`,
@@ -58,6 +62,13 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected API docs page to include %q: %s", want, body)
 		}
+	}
+	blocklist := strings.Index(body, `id="blocklist-feed"`)
+	developerSync := strings.Index(body, `id="developer-sync-api"`)
+	changelog := strings.Index(body, `id="changelog-api"`)
+	if blocklist < 0 || developerSync < 0 || changelog < 0 ||
+		!(blocklist < developerSync && developerSync < changelog) {
+		t.Fatalf("expected developer sync API after blocklist and before changelog: %s", body)
 	}
 	if strings.Contains(body, "/api/admin/v1") {
 		t.Fatalf("API docs page must not document admin API: %s", body)
