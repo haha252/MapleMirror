@@ -31,6 +31,14 @@ func TestAcceptAuthorizationStatusEventUpdatesAuthorization(t *testing.T) {
 	if status != "expired_idle" {
 		t.Fatalf("status=%q", status)
 	}
+	var historyStatus, reason string
+	if err := repo.DB.QueryRow(`SELECT status, status_reason FROM download_history
+		WHERE authorization_id = 'auth-1'`).Scan(&historyStatus, &reason); err != nil {
+		t.Fatal(err)
+	}
+	if historyStatus != "expired_idle" || reason != "expired_idle" {
+		t.Fatalf("history status=%q reason=%q", historyStatus, reason)
+	}
 }
 
 func TestAcceptAuthorizationStatusEventRejectsWrongNode(t *testing.T) {
@@ -83,6 +91,15 @@ func seedAuthorizationStatusAuth(t *testing.T, repo Repository, nodeID string) {
 		 max_bytes, range_limit, status, request_id)
 		VALUES ('auth-1', 'asset-1', ?, '192.0.2.1/32', ?, ?, 10, 2, 'issued', 'req-1')`,
 		nodeID, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DB.Exec(`INSERT INTO download_history
+		(authorization_id, client_prefix_key, source_kind, project_id, project_name,
+		asset_id, file_name, version, system, architecture, node_id, node_name,
+		issued_at, expires_at, status, request_id, updated_at)
+		VALUES ('auth-1', '192.0.2.1/32', 'web', 'p1', '项目一', 'asset-1',
+		'a.zip', 'v1', '', 'amd64', ?, '节点一', ?, ?, 'issued', 'req-1', ?)`,
+		nodeID, now, now, now); err != nil {
 		t.Fatal(err)
 	}
 }

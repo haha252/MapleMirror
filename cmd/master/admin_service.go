@@ -95,15 +95,16 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 		resetClientBlockCache = publicServer.ResetClientBlockCache
 	}
 	ui, err := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
-		Projects:              projectLoader,
-		DeveloperAPI:          developerStore,
-		Signer:                loaded.Sign,
-		Sync:                  syncService,
-		IndexNow:              syncService,
-		TrustedCIDRs:          cfg.Proxy.TrustedCIDRs,
-		Timezone:              cfg.Stats.Timezone,
-		ResetResourceLimiter:  resetResourceLimiter,
-		ResetClientBlockCache: resetClientBlockCache,
+		Projects:                     projectLoader,
+		DeveloperAPI:                 developerStore,
+		Signer:                       loaded.Sign,
+		Sync:                         syncService,
+		IndexNow:                     syncService,
+		TrustedCIDRs:                 cfg.Proxy.TrustedCIDRs,
+		Timezone:                     cfg.Stats.Timezone,
+		DownloadHistoryRetentionDays: cfg.History.DownloadRetentionDays,
+		ResetResourceLimiter:         resetResourceLimiter,
+		ResetClientBlockCache:        resetClientBlockCache,
 	})
 	if err != nil {
 		return nil, err

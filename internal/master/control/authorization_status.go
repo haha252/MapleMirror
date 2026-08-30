@@ -53,6 +53,10 @@ func (r Repository) AcceptAuthorizationStatusEvent(ctx context.Context, session 
 	if err != nil {
 		return HeartbeatResult{}, err
 	}
+	if err := updateDownloadHistoryStatus(ctx, tx, event.AuthorizationID,
+		event.Status, event.Reason, occurred.Format(time.RFC3339Nano)); err != nil {
+		return HeartbeatResult{}, err
+	}
 	if err := r.updateSequence(session, seq); err != nil {
 		return HeartbeatResult{}, err
 	}

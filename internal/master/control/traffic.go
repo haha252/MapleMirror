@@ -69,6 +69,9 @@ func (r Repository) AcceptTrafficEvent(ctx context.Context, session Session, seq
 		}
 		info.StartedIncrement = 1
 	}
+	if err := updateDownloadHistoryTraffic(ctx, tx, event.AuthorizationID, event.SentBytes, now); err != nil {
+		return HeartbeatResult{}, err
+	}
 	if err := updateTrafficStats(ctx, tx, info, event.SentBytes, now, r.StatsBuffer == nil); err != nil {
 		return HeartbeatResult{}, err
 	}

@@ -2,6 +2,11 @@ package config
 
 import "errors"
 
+type Archive struct {
+	Enabled *bool  `yaml:"enabled"`
+	Root    string `yaml:"root"`
+}
+
 func applyArchiveDefaults(c *Master, warn WarnFunc) {
 	if c.Archive.Enabled == nil {
 		value := true

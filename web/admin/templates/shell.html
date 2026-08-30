@@ -121,6 +121,7 @@
 <script src="/static/admin/admin-controls.js" defer></script>
 <script src="/static/admin/admin-pairing.js" defer></script>
 {{if eq .Page.ID "sync"}}<script src="/static/admin/sync-cards.js" defer></script>{{end}}
+{{if eq .Page.ID "security"}}<script src="/static/admin/download-history.js" defer></script>{{end}}
 <script src="/static/admin/{{.Page.Script}}" defer></script>
 </body>
 </html>

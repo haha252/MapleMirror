@@ -85,7 +85,7 @@ func runDailyDataMaintenance(cfg config.Master, db *sql.DB, logger *logging.Logg
 		next := time.Date(now.Year(), now.Month(), now.Day()+1, 4, 0, 0, 0, now.Location())
 		time.Sleep(time.Until(next))
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		err := maintainOnlineData(ctx, db)
+		err := maintainOnlineData(ctx, db, cfg.History.DownloadRetentionDays)
 		cancel()
 		if err != nil {
 			logger.Warn(context.Background(), "每日数据库维护失败", slog.String("error", err.Error()))
@@ -98,12 +98,19 @@ func runDailyDataMaintenance(cfg config.Master, db *sql.DB, logger *logging.Logg
 	}
 }
 
-func maintainOnlineData(ctx context.Context, db *sql.DB) error {
+func maintainOnlineData(ctx context.Context, db *sql.DB, downloadHistoryRetentionDays int) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	if downloadHistoryRetentionDays <= 0 {
+		downloadHistoryRetentionDays = 7
+	}
+	historyCutoff := time.Now().UTC().AddDate(0, 0, -downloadHistoryRetentionDays).Format(time.RFC3339Nano)
+	if _, err := tx.ExecContext(ctx, `DELETE FROM download_history WHERE issued_at < ?`, historyCutoff); err != nil {
+		return err
+	}
 	statements := []string{
 		`WITH ranked AS (SELECT id, ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY connected_at DESC, id DESC) rn FROM node_control_sessions) DELETE FROM node_control_sessions WHERE id IN (SELECT id FROM ranked WHERE rn > 1)`,
 		`WITH ranked AS (SELECT id, ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY reported_at DESC, revision DESC, id DESC) rn FROM node_inventory_reports) DELETE FROM node_inventory_reports WHERE id IN (SELECT id FROM ranked WHERE rn > 1)`,

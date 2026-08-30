@@ -125,6 +125,9 @@ func (s *Store) issueAuthorization(ctx context.Context, c Challenge, lifetime To
 	if err := insertReservation(ctx, tx, authID, day, trafficLimit, reservationStatus, now, scopes); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
 	}
+	if err := insertDownloadHistory(ctx, tx, authID, c, asset, issued, expires, reqID); err != nil {
+		return IssuedAuthorization{}, AuthorizationDebug{}, "", err
+	}
 	webAuth, apiAuth := authorizationSourceIncrements(c.SourceKind)
 	if err := upsertProjectStats(ctx, tx, day, asset.ProjectID, 1, webAuth, apiAuth, 0, 0); err != nil {
 		return IssuedAuthorization{}, AuthorizationDebug{}, "", err

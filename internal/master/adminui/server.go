@@ -32,15 +32,16 @@ type Server struct {
 	indexNow interface {
 		TriggerFullPublicNotification(context.Context) (int, error)
 	}
-	users                 map[string]userRecord
-	store                 loginStore
-	trustedCIDRs          []string
-	timeLocation          *time.Location
-	templates             *template.Template
-	adminFS               fs.FS
-	publicFS              fs.FS
-	resetResourceLimiter  func(string)
-	resetClientBlockCache func(string)
+	users                        map[string]userRecord
+	store                        loginStore
+	trustedCIDRs                 []string
+	timeLocation                 *time.Location
+	downloadHistoryRetentionDays int
+	templates                    *template.Template
+	adminFS                      fs.FS
+	publicFS                     fs.FS
+	resetResourceLimiter         func(string)
+	resetClientBlockCache        func(string)
 }
 
 type Options struct {
@@ -53,10 +54,11 @@ type Options struct {
 	IndexNow interface {
 		TriggerFullPublicNotification(context.Context) (int, error)
 	}
-	TrustedCIDRs          []string
-	Timezone              string
-	ResetResourceLimiter  func(string)
-	ResetClientBlockCache func(string)
+	TrustedCIDRs                 []string
+	Timezone                     string
+	DownloadHistoryRetentionDays int
+	ResetResourceLimiter         func(string)
+	ResetClientBlockCache        func(string)
 }
 
 func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mirrorsync.Store, opts Options) (*Server, error) {
@@ -100,10 +102,11 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		repo: repo, syncStore: syncStore, projects: opts.Projects, developerAPI: opts.DeveloperAPI,
 		signer: opts.Signer, sync: opts.Sync, indexNow: opts.IndexNow, users: users,
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
-		trustedCIDRs:          opts.TrustedCIDRs,
-		timeLocation:          timeLocation,
-		resetResourceLimiter:  opts.ResetResourceLimiter,
-		resetClientBlockCache: opts.ResetClientBlockCache,
+		trustedCIDRs:                 opts.TrustedCIDRs,
+		timeLocation:                 timeLocation,
+		downloadHistoryRetentionDays: opts.DownloadHistoryRetentionDays,
+		resetResourceLimiter:         opts.ResetResourceLimiter,
+		resetClientBlockCache:        opts.ResetClientBlockCache,
 		store: loginStore{db: repo.DB, secret: secret, window: window,
 			limit: cfg.Web.LoginFailureLimit, banDuration: banDuration, sessionTTL: sessionTTL},
 	}, nil
@@ -144,6 +147,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/api/security/blocks", s.requireSession(s.securityBlocksAPI))
 	mux.HandleFunc("/admin/api/security/blocks/", s.requireSession(s.securityBlockActionAPI))
 	mux.HandleFunc("/admin/api/security/audit-events", s.requireSession(s.auditEventsAPI))
+	mux.HandleFunc("/admin/api/security/download-history", s.requireSession(s.downloadHistoryAPI))
 	mux.HandleFunc("/admin/", s.requireSession(s.shell))
 	return adminSecurityHeaders(mux)
 }

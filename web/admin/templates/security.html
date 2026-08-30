@@ -11,7 +11,13 @@
 </section>
 
 <section class="panel-card admin-panel admin-extra">
-  <div class="admin-panel__head"><div><h2>当前封禁</h2><p class="muted">默认显示原因、范围与到期时间；展开后查看升级和技术细节。</p></div><button id="blocks-delete-selected" class="admin-secondary" type="button">解除选中</button></div>
+  <div class="admin-panel__head"><div><h2>当前封禁</h2><p class="muted">默认显示原因、范围与到期时间；支持按单个 IP 或前缀快速定位。</p></div><button id="blocks-delete-selected" class="admin-secondary" type="button">解除选中</button></div>
+  <div class="security-query security-block-search">
+    <input id="blocks-search" type="text" inputmode="text" placeholder="搜索 IP，例如 192.0.2.10">
+    <button id="blocks-search-button" class="admin-secondary" type="button">搜索</button>
+    <button id="blocks-search-clear" class="admin-secondary" type="button">清空</button>
+    <span id="blocks-search-scope" class="muted">显示全部活跃封禁</span>
+  </div>
   <details class="security-create">
     <summary>添加手动封禁</summary>
     <div class="security-form">
@@ -34,16 +40,17 @@
 </section>
 
 <details class="panel-card admin-panel admin-extra security-advanced">
-  <summary><strong>高级排障</strong><span class="muted">按授权 ID 查询流量记账事件</span></summary>
+  <summary><strong>高级排障</strong><span class="muted">按 IP 查询近期令牌签发与实际下载流量</span></summary>
   <div class="security-advanced__body">
-    <div class="traffic-filter">
-      <input id="authorization-id" type="text" placeholder="授权 ID">
-      <button id="authorization-query" class="admin-secondary" type="button">查询</button>
-      <button id="authorization-clear" class="admin-secondary" type="button">查看最近事件</button>
-      <span id="traffic-scope" class="muted">最近事件</span>
+    <div class="security-query download-history-filter">
+      <input id="download-history-ip" type="text" inputmode="text" placeholder="单个 IPv4 / IPv6，例如 192.0.2.10">
+      <button id="download-history-query" class="admin-secondary" type="button">查询</button>
+      <button id="download-history-clear" class="admin-secondary" type="button">清空</button>
+      <span class="muted">每条记录代表一次下载令牌签发；Range 和重试流量会合并到同一条。</span>
     </div>
-    <div id="traffic-events" class="admin-table-wrap"></div>
-    <div id="traffic-pager" class="admin-pager"></div>
+    <div id="download-history-summary" class="download-history-summary"></div>
+    <div id="download-history-list" class="admin-record-list"></div>
+    <div id="download-history-pager" class="admin-pager"></div>
   </div>
 </details>
 {{end}}

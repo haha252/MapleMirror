@@ -77,6 +77,11 @@ archive:
   # 归档根目录；程序会写入 traffic/、authorization/ 和 authorization_status/ 子目录。
   root: "logs"
 
+# 短期后台查询历史。
+history:
+  # 单次下载授权历史保留天数；用于管理后台按 IP 排障，默认保留 7 天。
+  download_retention_days: 7
+
 # GitHub Release 扫描配置。
 scan:
   # 单个启用项目的自动扫描间隔；项目配置变化后会尽快扫描。

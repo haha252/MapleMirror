@@ -11,69 +11,40 @@ import (
 
 func (s *Server) listBlocks(r *http.Request, page pagination) ([]map[string]any, int, error) {
 	now := nowText()
-	var total int
-	err := s.repo.DB.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM (
-		SELECT ip_key FROM admin_ip_blocks WHERE expires_at > ?
-		UNION ALL SELECT client_prefix_key FROM client_blocks WHERE expires_at > ?)`,
-		now, now).Scan(&total)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	items, total, err := s.queryStoredBlocks(r.Context(), now, page, query)
 	if err != nil {
 		return nil, 0, err
 	}
-	memoryBlocks := []memoryBlockItem{}
-	if s.store.memory != nil {
-		memoryBlocks = s.store.memory.activeBlocks(now)
-		total += len(memoryBlocks)
+	if s.store.memory == nil {
+		return items, total, nil
 	}
-	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT kind, block_key,
-		display_ip, masked_ip, reason, source, blocked_at, expires_at, attempts_after_block,
-		escalation_level, punishment_active, last_attempt_at FROM (
-		SELECT 'admin' AS kind, ip_key AS block_key,
-		COALESCE(NULLIF(display_ip, ''), masked_ip) AS display_ip, masked_ip, reason,
-		'管理登录' AS source, blocked_at, expires_at, attempts_after_block,
-		0 AS escalation_level, 0 AS punishment_active, last_attempt_at FROM admin_ip_blocks WHERE expires_at > ?
-		UNION ALL
-		SELECT 'client' AS kind, client_prefix_key AS block_key,
-		client_prefix_key AS display_ip, client_prefix_key AS masked_ip, reason, source, blocked_at, expires_at,
-		attempts_after_block, escalation_level, punishment_active, last_attempt_at FROM client_blocks WHERE expires_at > ?
-		) ORDER BY blocked_at DESC LIMIT ? OFFSET ?`,
-		now, now, page.PageSize, page.offset())
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-	items := []map[string]any{}
-	for rows.Next() {
-		var kind, key, display, masked, reason, source, blocked, expires, last string
-		var attempts int
-		var escalation int
-		var punishment int
-		if err := rows.Scan(&kind, &key, &display, &masked, &reason, &source, &blocked,
-			&expires, &attempts, &escalation, &punishment, &last); err != nil {
-			return nil, 0, err
-		}
-		items = append(items, map[string]any{"kind": kind, "key": key,
-			"display_ip": display, "masked_ip": masked, "reason": reason, "source": source,
-			"blocked_at": s.displayTime(blocked), "expires_at": s.displayTime(expires),
-			"attempts_after_block": attempts, "escalation_level": escalation,
-			"punishment_active": punishment == 1, "last_attempt_at": s.displayTime(last)})
-	}
-	if page.Page == 1 {
-		for _, block := range memoryBlocks {
-			if len(items) >= page.PageSize {
-				break
-			}
-			items = append(items, map[string]any{"kind": "admin", "key": block.Key,
-				"display_ip": block.DisplayIP, "masked_ip": block.MaskedIP,
-				"reason": "admin_login_failed", "source": "管理登录",
-				"blocked_at":           s.displayTime(block.BlockedAt),
-				"expires_at":           s.displayTime(block.ExpiresAt),
-				"attempts_after_block": block.AttemptsAfterBlock,
-				"escalation_level":     0,
-				"punishment_active":    false,
-				"last_attempt_at":      s.displayTime(block.LastAttemptAt)})
+	memoryBlocks := s.store.memory.activeBlocks(now)
+	matches := make([]memoryBlockItem, 0, len(memoryBlocks))
+	for _, block := range memoryBlocks {
+		if blockMatchesSearch(block, query) {
+			matches = append(matches, block)
 		}
 	}
-	return items, total, rows.Err()
+	total += len(matches)
+	if page.Page != 1 {
+		return items, total, nil
+	}
+	for _, block := range matches {
+		if len(items) >= page.PageSize {
+			break
+		}
+		items = append(items, map[string]any{"kind": "admin", "key": block.Key,
+			"display_ip": block.DisplayIP, "masked_ip": block.MaskedIP,
+			"reason": "admin_login_failed", "source": "管理登录",
+			"blocked_at":           s.displayTime(block.BlockedAt),
+			"expires_at":           s.displayTime(block.ExpiresAt),
+			"attempts_after_block": block.AttemptsAfterBlock,
+			"escalation_level":     0,
+			"punishment_active":    false,
+			"last_attempt_at":      s.displayTime(block.LastAttemptAt)})
+	}
+	return items, total, nil
 }
 
 func (s *Server) createBlock(r *http.Request, kind, key, reason, duration string) error {

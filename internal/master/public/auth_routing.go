@@ -16,6 +16,7 @@ type routableAssetInfo struct {
 	Region        geoip.Region
 	LastHeartbeat string
 	ProjectID     string
+	ProjectName   string
 	Version       string
 	FileName      string
 	DownloadURL   string
@@ -31,7 +32,7 @@ func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string,
 	args := append(s.routableAssetReplicaArgs(), assetID)
 	rows, err := tx.QueryContext(ctx, `SELECT n.id, n.public_name, n.download_priority,
 		COALESCE(n.region, 'unknown'),
-		COALESCE(n.last_heartbeat_at, ''), r.project_id,
+		COALESCE(n.last_heartbeat_at, ''), r.project_id, p.name,
 		r.tag_name, a.file_name, n.public_download_base_url, COALESCE(NULLIF(p.download_multiplier, 0), 1),
 		a.size_bytes, a.architecture, a.system FROM assets a
 		JOIN releases r ON r.id = a.release_id
@@ -48,7 +49,7 @@ func (s Store) routableAssetTx(ctx context.Context, tx *sql.Tx, assetID string,
 		var item routableAssetInfo
 		var downloadBaseURL string
 		if err := rows.Scan(&item.NodeID, &item.NodeName, &item.Priority, &item.Region,
-			&item.LastHeartbeat, &item.ProjectID,
+			&item.LastHeartbeat, &item.ProjectID, &item.ProjectName,
 			&item.Version, &item.FileName, &downloadBaseURL, &item.Multiplier,
 			&item.SizeBytes, &item.Architecture, &item.System); err != nil {
 			return out, err

@@ -15,6 +15,7 @@ type Master struct {
 	Proxy         Proxy          `yaml:"proxy"`
 	Stats         Stats          `yaml:"stats"`
 	Archive       Archive        `yaml:"archive"`
+	History       History        `yaml:"history"`
 	Scan          Scan           `yaml:"scan"`
 	IndexNow      IndexNow       `yaml:"indexnow"`
 	PoWSizeTiers  []PoWSizeTier  `yaml:"pow_size_tiers"`
@@ -40,10 +41,6 @@ type Proxy struct {
 }
 type Stats struct {
 	Timezone string `yaml:"timezone"`
-}
-type Archive struct {
-	Enabled *bool  `yaml:"enabled"`
-	Root    string `yaml:"root"`
 }
 type Scan struct {
 	Interval       string      `yaml:"interval"`
@@ -125,6 +122,7 @@ func applyMasterDefaults(c *Master, warn WarnFunc) {
 	setString(&c.RequestID.ParentHeader, "X-Request-ID", "request_id.parent_header", warn)
 	setString(&c.Stats.Timezone, "Asia/Shanghai", "stats.timezone", warn)
 	applyArchiveDefaults(c, warn)
+	applyHistoryDefaults(c, warn)
 	setString(&c.Scan.Interval, "15m", "scan.interval", warn)
 	setString(&c.Scan.GitHubTimeout, "2m", "scan.github_timeout", warn)
 	applyVDFDefaults(c, warn)
@@ -213,6 +211,9 @@ func validateMaster(c Master) error {
 		return fmt.Errorf("统计时区 stats.timezone 无效：%w", err)
 	}
 	if err := validateArchive(c.Archive); err != nil {
+		return err
+	}
+	if err := validateHistory(c.History); err != nil {
 		return err
 	}
 	if err := validateScanSocks5(c.Scan.Socks5); err != nil {
