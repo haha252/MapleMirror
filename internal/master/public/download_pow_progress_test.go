@@ -64,6 +64,10 @@ func TestDownloadPowProgressAssetsDeclareVDFBehavior(t *testing.T) {
 		"100 * message.completed / message.iterations",
 		`postJSON("/api/public/v2/web/challenges"`,
 		`postJSON("/api/public/v2/web/authorizations"`,
+		`const successTemplate = document.getElementById("download-pow-success-template");`,
+		`window.history.replaceState(null, "", successPath);`,
+		`asset.success_path`,
+		`stack.replaceChildren(successTemplate.content.cloneNode(true));`,
 		`setStatus("正在计算验证答案...", "muted", 0);`,
 		`setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);`,
 	})

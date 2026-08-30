@@ -6,6 +6,7 @@
   const statusBox = document.getElementById("download-pow-status");
   const copies = statusBox && statusBox.querySelectorAll(".download-pow__status-copy");
   const retry = document.getElementById("download-pow-retry");
+  const successTemplate = document.getElementById("download-pow-success-template");
   const returnButton = document.querySelector(".download-pow__back");
   if (!source || !title || !meta || !statusBox || !copies || copies.length !== 2 || !retry) return;
 
@@ -128,6 +129,19 @@
     return target.toString();
   }
 
+  function showSuccess() {
+    const stack = document.querySelector(".download-pow-stack");
+    const successPath = String(asset.success_path || "").trim();
+    if (!stack || !successTemplate || !successPath) {
+      throw new Error(text("error.successPageMissing", "成功页面地址缺失"));
+    }
+    window.history.replaceState(null, "", successPath);
+    stack.replaceChildren(successTemplate.content.cloneNode(true));
+    document.body.classList.remove("page-download-pow");
+    document.body.classList.add("page-download-success", "page-download-pow");
+    if (i18n) i18n.apply(document);
+  }
+
   async function start() {
     if (running) return;
     stopWorker(); retry.hidden = true;
@@ -156,7 +170,8 @@
       });
       const data = authorization.data || {};
       if (!data.download_url || !data.download_token) throw new Error(text("error.authorizationMissing", "授权数据缺失"));
-      setStatus(text("error.tokenReady", "令牌签发完成，正在开始下载。"), "ok");
+      stopWorker();
+      showSuccess();
       window.location.assign(downloadURL(data));
     } catch (error) {
       stopWorker();

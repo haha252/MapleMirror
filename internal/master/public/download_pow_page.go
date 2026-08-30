@@ -16,6 +16,9 @@ type downloadPowAssetUI struct {
 	AssetID           string `json:"asset_id"`
 	ProjectName       string `json:"project_name"`
 	Version           string `json:"version"`
+	DownloadPath      string `json:"download_path"`
+	SuccessPath       string `json:"success_path"`
+	RetryPath         string `json:"retry_path"`
 	Architecture      string `json:"architecture"`
 	System            string `json:"system"`
 	SizeBytes         int64  `json:"size_bytes"`
@@ -28,6 +31,8 @@ type downloadPowVerificationUI struct {
 	AssetID string
 	Buttons []webVerificationButton
 }
+
+const downloadSuccessPrefix = "/download/success/"
 
 func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -48,6 +53,28 @@ func (s Server) downloadPowPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderDownloadPowPage(w, r, asset)
+}
+
+func (s Server) downloadSuccessPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, r, http.StatusMethodNotAllowed, "INVALID_REQUEST", "请求方法不支持")
+		return
+	}
+	value := strings.TrimPrefix(r.URL.EscapedPath(), downloadSuccessPrefix)
+	if value == "" || value == r.URL.EscapedPath() {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := assetpath.ParsePublicPath("/" + value); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := s.Store.DownloadAssetByPath(r.Context(), "/"+value)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.renderDownloadPowPageState(w, r, asset, true)
 }
 
 func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) {
@@ -71,19 +98,36 @@ func (s Server) downloadReadablePowPage(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, asset DownloadAssetSummary) {
+	s.renderDownloadPowPageState(w, r, asset, false)
+}
+
+func (s Server) renderDownloadPowPageState(w http.ResponseWriter, r *http.Request,
+	asset DownloadAssetSummary, success bool) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	s.trackPageView(w, r)
-	body, err := s.renderDownloadPowBody(r, asset, downloadPowFromHome(r))
+	fromHome := downloadPowFromHome(r)
+	body, err := s.renderDownloadPowBody(r, asset, fromHome, success)
 	if err != nil {
 		http.Error(w, "下载验证页面渲染失败", http.StatusInternalServerError)
 		return
 	}
+	title, browserTitle, bodyClass := "下载验证", "下载验证 - 枫源镜像", "page-download-pow"
+	if success {
+		title, browserTitle = "下载已开始", "下载已开始 - 枫源镜像"
+		bodyClass = "page-download-success page-download-pow"
+	}
+	scripts := []string{"/static/public/vdf-fallback.js", "/static/public/download-pow.js"}
+	staticNames := []string{"vdf-worker.js"}
+	if success {
+		scripts = nil
+		staticNames = []string{}
+	}
 	s.renderPage(w, pageData{
-		Title:        "下载验证",
-		BrowserTitle: "下载验证 - 枫源镜像",
+		Title:        title,
+		BrowserTitle: browserTitle,
 		Description:  "枫源镜像下载验证页",
 		Robots:       noIndexRobots,
-		BodyClass:    "page-download-pow",
+		BodyClass:    bodyClass,
 		HideHeader:   true,
 		AfterNotices: s.currentNotices(),
 		Body:         body,
@@ -91,23 +135,37 @@ func (s Server) renderDownloadPowPage(w http.ResponseWriter, r *http.Request, as
 			"/static/public/download-pow.css",
 			"/static/public/download-verification.css",
 		},
-		Scripts: []string{"/static/public/vdf-fallback.js",
-			"/static/public/download-pow.js"},
-		StaticNames: []string{"vdf-worker.js"},
+		Scripts:     scripts,
+		StaticNames: staticNames,
 	})
 }
 
-func (s Server) renderDownloadPowBody(r *http.Request, asset DownloadAssetSummary, fromHome bool) (template.HTML, error) {
+func (s Server) renderDownloadPowBody(r *http.Request, asset DownloadAssetSummary,
+	fromHome, success bool) (template.HTML, error) {
+	successPath, err := downloadSuccessPath(asset.DownloadPath)
+	if err != nil {
+		return "", err
+	}
+	var verification *downloadPowVerificationUI
+	if !success {
+		verification = s.downloadPowVerification(r, asset.AssetID)
+	}
 	body := struct {
 		AssetJSON    template.JS
 		FromHome     bool
 		Verification *downloadPowVerificationUI
-	}{AssetJSON: template.JS("{}"), FromHome: fromHome,
-		Verification: s.downloadPowVerification(r, asset.AssetID)}
+		Success      bool
+		RetryPath    string
+	}{AssetJSON: template.JS("{}"), FromHome: fromHome, Success: success,
+		RetryPath:    retryDownloadPath(asset.DownloadPath, fromHome),
+		Verification: verification}
 	data, err := json.Marshal(downloadPowAssetUI{
 		AssetID:           asset.AssetID,
 		ProjectName:       asset.ProjectName,
 		Version:           asset.Version,
+		DownloadPath:      asset.DownloadPath,
+		SuccessPath:       successPath,
+		RetryPath:         retryDownloadPath(asset.DownloadPath, fromHome),
 		Architecture:      asset.Architecture,
 		System:            asset.System,
 		SizeBytes:         asset.SizeBytes,
@@ -119,6 +177,25 @@ func (s Server) renderDownloadPowBody(r *http.Request, asset DownloadAssetSummar
 	}
 	body.AssetJSON = template.JS(string(data))
 	return s.renderTemplateBody("download_pow", body)
+}
+
+func downloadSuccessPath(downloadPath string) (string, error) {
+	if strings.TrimSpace(downloadPath) == "" {
+		return "", nil
+	}
+	parts, err := assetpath.ParsePublicPath(downloadPath)
+	if err != nil {
+		return "", err
+	}
+	canonical := assetpath.PublicPath(parts.ProjectID, parts.Version, parts.FileName)
+	return downloadSuccessPrefix + strings.TrimPrefix(canonical, "/"), nil
+}
+
+func retryDownloadPath(downloadPath string, fromHome bool) string {
+	if fromHome {
+		return downloadPath + "?from=home"
+	}
+	return downloadPath
 }
 
 func (s Server) downloadPowVerification(r *http.Request, assetID string) *downloadPowVerificationUI {

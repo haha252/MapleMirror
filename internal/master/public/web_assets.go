@@ -212,7 +212,7 @@ func staticURLFunc(manifest map[string]string) func(string) string {
 }
 
 func (assets *webAssets) staticJSONFor(names []string) template.JS {
-	if len(names) == 0 {
+	if names == nil {
 		return assets.staticJSON
 	}
 	manifest := make(map[string]string, len(names))

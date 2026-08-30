@@ -34,6 +34,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/changelog", s.changelogPage)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
+	mux.HandleFunc("/download/success/", s.downloadSuccessPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
 	mux.HandleFunc("/api/public/v1/blocklist.txt", s.blocklistTXT)
 	mux.HandleFunc("/api/public/v1/blocklist.json", s.blocklistJSON)

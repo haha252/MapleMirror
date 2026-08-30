@@ -32,6 +32,8 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`"asset_id":"asset-1"`,
 		`"project_name":"项目一"`,
 		`"version":"v1"`,
+		`"success_path":"/download/success/p1/v1/a.zip"`,
+		`"retry_path":"/p1/v1/a.zip?from=home"`,
 		`"architecture":"amd64"`,
 		`"size_bytes":12`,
 		`/static/public/vdf-fallback.js`,
@@ -63,7 +65,6 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`完成浏览器验证后将自动开始下载`,
 		`正在准备安全验证`,
 		`<p class="muted">下载验证</p>`,
-		`a.zip`,
 		`返回首页`,
 		`返回来源页`,
 		`download-pow__back`,
@@ -116,9 +117,6 @@ func TestDownloadPowPageFromOtherPageIncludesForwardAndSmartReturnActions(t *tes
 			t.Fatalf("expected download verification page to include %q: %s", want, body)
 		}
 	}
-	if strings.Contains(body, `返回枫源镜像`) {
-		t.Fatalf("other-page download verification page should not include home-return action: %s", body)
-	}
 }
 
 func TestReadableDownloadPowPageIncludesAssetPayload(t *testing.T) {
@@ -151,7 +149,6 @@ func TestReadableDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`完成浏览器验证后将自动开始下载`,
 		`正在准备安全验证`,
 		`<p class="muted">下载验证</p>`,
-		`a.zip`,
 	} {
 		if strings.Contains(body, unwanted) {
 			t.Fatalf("readable download verification page should not include %q: %s", unwanted, body)

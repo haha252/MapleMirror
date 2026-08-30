@@ -1,5 +1,32 @@
+{{define "download-pow-success-content"}}
+<div class="download-pow download-pow--success panel-card">
+  <div class="download-pow__content">
+    <div class="download-pow__head">
+      <h2 data-i18n="pow.successTitle">验证成功</h2>
+      <p class="muted" data-i18n="pow.successLead">下载已开始。关闭或重新打开浏览器不会再次自动下载。</p>
+    </div>
+    <div class="status status--strong muted" role="status" aria-live="polite" data-i18n="pow.successStatus">验证已通过，下载已开始。</div>
+    <div class="download-pow__support">
+      <div class="download-pow__support-copy">
+        <div class="download-pow__actions">
+          <a class="button-link button-link--primary" href="{{.RetryPath}}" data-i18n="pow.retryDownload">重新下载</a>
+          <a class="button-link" href="/" data-i18n="pow.backHome">返回枫源镜像</a>
+        </div>
+        <p data-i18n="pow.donate">下载站费用高昂，如有能力，欢迎捐赠！</p>
+      </div>
+      <div class="download-pow__sponsors" data-i18n-aria-label="pow.sponsors" aria-label="赞助二维码">
+        <img src="{{staticURL "wechat.png"}}" data-i18n-alt="pow.wechat" alt="微信赞助二维码">
+        <img src="{{staticURL "alipay.png"}}" data-i18n-alt="pow.alipay" alt="支付宝赞助二维码">
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
 <section class="download-pow-page">
   <div class="download-pow-stack">
+    {{if .Success}}
+    {{template "download-pow-success-content" .}}
+    {{else}}
     <div class="download-pow panel-card">
       {{with .Verification}}
       <form class="download-pow__verification-options" method="post" action="/api/public/v1/web/verifications">
@@ -48,6 +75,12 @@
         </div>
       </div>
     </div>
+    <template id="download-pow-success-template">
+      {{template "download-pow-success-content" .}}
+    </template>
+    {{end}}
   </div>
+  {{if not .Success}}
   <script id="download-pow-asset" type="application/json">{{.AssetJSON}}</script>
+  {{end}}
 </section>
