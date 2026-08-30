@@ -1,8 +1,6 @@
 package adminui
 
-import (
-	"net/http"
-)
+import "net/http"
 
 func (s *Server) latestScanAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -14,7 +12,9 @@ func (s *Server) latestScanAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "扫描记录不存在"})
 		return
 	}
-	writeJSON(w, http.StatusOK, s.scanSummaryResponse(item))
+	out := s.scanSummaryResponse(item)
+	out["project_name"] = s.projectNames(r.Context())[item.ProjectID]
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) syncTasksAPI(w http.ResponseWriter, r *http.Request) {
@@ -29,17 +29,24 @@ func (s *Server) syncTasksAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	page := paginationFrom(r, 20)
 	var total int
-	if err := s.repo.DB.QueryRowContext(r.Context(), `SELECT COUNT(*)
-		FROM node_tasks WHERE node_id = ?`, nodeID).Scan(&total); err != nil {
+	if err := s.repo.DB.QueryRowContext(r.Context(),
+		"SELECT COUNT(*) FROM node_tasks WHERE node_id = ?", nodeID).Scan(&total); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务查询失败"})
 		return
 	}
-	rows, err := s.repo.DB.QueryContext(r.Context(), `SELECT id, node_id, task_type,
-		COALESCE(asset_id, ''), state, request_id, created_at, COALESCE(completed_at, ''),
-		COALESCE(error_message, ''), attempts, COALESCE(updated_at, ''),
-		COALESCE(retry_after, ''), COALESCE(lease_expires_at, '')
-		FROM node_tasks WHERE node_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		nodeID, page.PageSize, page.offset())
+	query := "SELECT t.id, t.node_id, t.task_type, COALESCE(t.asset_id, ''), t.state, " +
+		"t.request_id, t.created_at, COALESCE(t.completed_at, ''), COALESCE(t.error_message, ''), " +
+		"t.attempts, COALESCE(t.updated_at, ''), COALESCE(t.retry_after, ''), " +
+		"COALESCE(t.lease_expires_at, ''), COALESCE(a.file_name, ''), " +
+		"COALESCE(a.architecture, ''), COALESCE(a.system, ''), COALESCE(a.size_bytes, 0), " +
+		"COALESCE(r.project_id, ''), COALESCE(r.tag_name, ''), COALESCE(p.name, ''), " +
+		"COALESCE(n.public_name, '') FROM node_tasks t " +
+		"LEFT JOIN assets a ON a.id = t.asset_id " +
+		"LEFT JOIN releases r ON r.id = a.release_id " +
+		"LEFT JOIN projects p ON p.id = r.project_id " +
+		"LEFT JOIN nodes n ON n.id = t.node_id " +
+		"WHERE t.node_id = ? ORDER BY t.created_at DESC LIMIT ? OFFSET ?"
+	rows, err := s.repo.DB.QueryContext(r.Context(), query, nodeID, page.PageSize, page.offset())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务查询失败"})
 		return
@@ -47,21 +54,25 @@ func (s *Server) syncTasksAPI(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var id, node, typ, asset, state, req, created, completed string
-		var errText, updated, retry, lease string
+		var id, node, typ, asset, state, req, created, completed, errText string
+		var updated, retry, lease, fileName, arch, system, projectID, version, projectName, nodeName string
 		var attempts int
+		var size int64
 		if err := rows.Scan(&id, &node, &typ, &asset, &state, &req, &created,
-			&completed, &errText, &attempts, &updated, &retry, &lease); err != nil {
+			&completed, &errText, &attempts, &updated, &retry, &lease, &fileName,
+			&arch, &system, &size, &projectID, &version, &projectName, &nodeName); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务读取失败"})
 			return
 		}
-		items = append(items, map[string]any{"task_id": id, "node_id": node,
-			"task_type": typ, "asset_id": asset, "state": state,
-			"request_id": req, "created_at": s.displayTime(created),
-			"completed_at":  s.displayTime(completed),
-			"error_message": errText, "attempts": attempts,
-			"updated_at": s.displayTime(updated), "retry_after": s.displayTime(retry),
-			"lease_expires_at": s.displayTime(lease)})
+		items = append(items, map[string]any{
+			"task_id": id, "node_id": node, "node_name": nodeName, "task_type": typ,
+			"asset_id": asset, "file_name": fileName, "project_id": projectID,
+			"project_name": projectName, "version": version, "architecture": arch,
+			"system": system, "size_bytes": size, "state": state, "request_id": req,
+			"created_at": s.displayTime(created), "completed_at": s.displayTime(completed),
+			"error_message": errText, "attempts": attempts, "updated_at": s.displayTime(updated),
+			"retry_after": s.displayTime(retry), "lease_expires_at": s.displayTime(lease),
+		})
 	}
 	if err := rows.Err(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务读取失败"})

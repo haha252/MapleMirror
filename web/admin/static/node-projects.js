@@ -75,11 +75,11 @@
       return;
     }
     body.innerHTML = projects.map(function (item) {
-      return '<tr><td><input type="checkbox" data-project-id="' + a.esc(item.project_id) +
+      return '<tr><td data-label="分配"><input type="checkbox" data-project-id="' + a.esc(item.project_id) +
         '"' + (item.assigned ? " checked" : "") + (auto ? " disabled" : "") +
-        ' aria-label="分配项目"></td><td><strong>' + a.esc(item.name || item.project_id) +
-        '</strong><span class="sub">' + a.esc(item.project_id) + '</span></td><td>' +
-        a.esc(item.score || 0) + '</td><td>' + a.esc(item.last_changed_at || "暂无") +
+        ' aria-label="分配项目"></td><td data-label="项目"><strong>' + a.esc(item.name || item.project_id) +
+        '</strong><span class="sub">' + a.esc(item.project_id) + '</span></td><td data-label="30 天下载量">' +
+        a.esc(item.score || 0) + '</td><td data-label="最近变化">' + a.esc(item.last_changed_at || "暂无") +
         "</td></tr>";
     }).join("");
   }

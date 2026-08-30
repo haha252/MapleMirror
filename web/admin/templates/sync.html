@@ -1,16 +1,17 @@
 {{define "sync"}}
-<section class="admin-grid">
-  <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>项目扫描</h2><button id="scan-all" class="admin-secondary" type="button">触发全部扫描</button></div>
-    <div class="admin-table-wrap"><table><thead><tr><th>项目</th><th>启用</th><th>状态</th><th>下次扫描</th><th>操作</th></tr></thead><tbody id="scans-body"></tbody></table></div>
-  </article>
+<section class="panel-card admin-panel">
+  <div class="admin-panel__head">
+    <div><h2>项目扫描</h2><p class="muted">扫描中属于正常运行状态；只有扫描失败才作为异常提示。</p></div>
+    <button id="scan-all" class="admin-secondary" type="button">触发全部扫描</button>
+  </div>
+  <div id="scans-list" class="admin-record-list admin-record-grid"></div>
 </section>
 <section class="panel-card admin-panel admin-extra">
   <div class="admin-panel__head">
-    <h2>节点同步任务</h2>
+    <div><h2>节点同步任务</h2><p class="muted">下载、删除和对账中的任务均属于同步过程；失败任务才标记为异常。</p></div>
     <div class="sync-task-actions"><select id="task-node-select" class="admin-select"></select><button id="tasks-refresh" class="admin-secondary" type="button">刷新</button></div>
   </div>
-  <div class="admin-table-wrap"><table><thead><tr><th>任务</th><th>资产</th><th>状态</th><th>重试</th><th>错误</th><th>操作</th></tr></thead><tbody id="tasks-body"></tbody></table></div>
+  <div id="tasks-list" class="admin-record-list"></div>
   <div id="tasks-pager" class="admin-pager"></div>
 </section>
 {{end}}

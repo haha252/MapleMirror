@@ -18,7 +18,7 @@ func (s *Server) scanAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "扫描状态查询失败"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"projects": s.scanStatesResponse(items)})
+		writeJSON(w, http.StatusOK, map[string]any{"projects": s.scanStatesResponse(r.Context(), items)})
 	case http.MethodPost:
 		if _, ok := s.requireHighRisk(w, r); !ok {
 			return

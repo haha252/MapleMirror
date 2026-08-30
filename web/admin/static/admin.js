@@ -74,9 +74,9 @@
 
   function badgeClass(value) {
     var state = String(value || "").toLowerCase();
-    if (/在线|就绪|启用|成功|success|ready|online|syncing|succeeded/.test(state)) return "admin-badge--ok";
-    if (/失败|异常|禁用|拒绝|删除|failed|disabled|rejected|mismatch/.test(state)) return "admin-badge--bad";
-    if (/等待|重试|未|暂无|pending|retry|offline|unknown/.test(state)) return "admin-badge--warn";
+    if (/在线|就绪|启用|成功|正常|完成|同步中|扫描中|对账中|success|ready|online|syncing|succeeded/.test(state)) return "admin-badge--ok";
+    if (/失败|异常|离线|拒绝|删除|failed|rejected|mismatch/.test(state)) return "admin-badge--bad";
+    if (/等待|重试|关注|惩罚|未|暂无|pending|retry|unknown/.test(state)) return "admin-badge--warn";
     return "admin-badge--neutral";
   }
 

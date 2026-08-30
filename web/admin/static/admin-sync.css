@@ -4,15 +4,28 @@
   gap: 10px;
   align-items: center;
 }
-.sync-task-actions .admin-control {
-  min-height: 36px;
-}
+.sync-task-actions .admin-control,
 .sync-task-actions .admin-secondary {
   min-height: 36px;
 }
-@media (max-width: 560px) {
+.sync-error-preview {
+  display: -webkit-box;
+  max-height: 3.2em;
+  margin: 9px 0 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.admin-record__management {
+  justify-content: flex-start;
+}
+@media (max-width: 620px) {
   .sync-task-actions {
     width: 100%;
     grid-template-columns: 1fr auto;
   }
+}
+@media (max-width: 430px) {
+  .sync-task-actions { grid-template-columns: 1fr; }
+  .sync-task-actions .admin-secondary { width: 100%; }
 }

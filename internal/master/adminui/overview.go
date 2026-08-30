@@ -50,9 +50,10 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 		}
 	}
 	out.Nodes = s.nodeSummaries(ctx, nodes)
+	projectNames := s.projectNames(ctx)
 	for _, item := range scans {
 		out.Scans = append(out.Scans, map[string]any{
-			"project_id": item.ProjectID, "enabled": item.Enabled,
+			"project_id": item.ProjectID, "project_name": projectNames[item.ProjectID], "enabled": item.Enabled,
 			"last_scan_state": item.LastScanState, "next_scan_at": s.displayTime(item.NextScanAt),
 			"last_error_message": item.LastErrorMessage,
 			"updated_at":         s.displayTime(item.UpdatedAt),

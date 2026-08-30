@@ -13,42 +13,35 @@
     ];
     box.innerHTML = rows.map(function (row) {
       return '<div class="summary-item"><span>' + a.esc(row[0]) +
-        '</span><strong>' + a.esc(row[1]) + "</strong></div>";
+        '</span><strong>' + a.esc(row[1]) + '</strong></div>';
     }).join("");
   }
 
-  function renderScanAlerts(scans) {
-    var body = document.getElementById("scan-alerts-body");
-    if (!body) return;
-    var alerts = (scans || []).filter(function (item) {
-      return item.last_scan_state === "failed" || item.last_error_message;
+  function attentionCard(title, subtitle, state, href, action) {
+    return '<article class="admin-record"><div class="admin-record__summary">' +
+      '<div class="admin-record__identity"><strong>' + a.esc(title) +
+      '</strong><span class="sub">' + a.esc(subtitle) + '</span></div>' +
+      '<div class="admin-record__state">' + a.badge(state) + '</div>' +
+      '<div class="admin-record__actions"><a class="admin-secondary admin-link-button" href="' +
+      a.esc(href) + '">' + a.esc(action) + '</a></div></div></article>';
+  }
+
+  function renderAttention(nodes, scans) {
+    var list = document.getElementById("overview-attention");
+    var cards = [];
+    (nodes || []).forEach(function (node) {
+      var state = String(node.connection_state || node.state || "").toLowerCase();
+      if (state !== "offline") return;
+      cards.push(attentionCard(node.public_name || node.node_id,
+        "最近心跳 " + (node.last_heartbeat_at || "暂无"), "离线", "/admin/nodes", "查看节点"));
     });
-    if (!alerts.length) {
-      body.innerHTML = '<tr><td colspan="3" class="muted">暂无扫描异常</td></tr>';
-      return;
-    }
-    body.innerHTML = alerts.map(function (item) {
-      return "<tr><td><strong>" + a.esc(item.project_id) + "</strong></td><td>" +
-        a.badge(item.last_scan_state || "未知") + "</td><td>" +
-        a.esc(item.last_error_message || "无错误摘要") + "</td></tr>";
-    }).join("");
-  }
-
-  function renderNodes(nodes) {
-    var body = document.getElementById("overview-nodes-body");
-    if (!body) return;
-    if (!nodes || !nodes.length) {
-      body.innerHTML = '<tr><td colspan="4" class="muted">暂无节点</td></tr>';
-      return;
-    }
-    body.innerHTML = nodes.map(function (node) {
-      var state = node.connection_state || node.state;
-      return "<tr><td><strong>" + a.esc(node.public_name || node.node_id) +
-        '</strong><span class="sub">' + a.esc(node.node_id) + "</span></td><td>" +
-        a.badge(a.connectionLabel(state)) + "</td><td>" +
-        '<span class="metric-inline">' + a.esc(a.bandwidthText(node)) + "</span></td><td>" +
-        a.pressureMeter(node) + "</td></tr>";
-    }).join("");
+    (scans || []).forEach(function (scan) {
+      if (scan.last_scan_state !== "failed" && !scan.last_error_message) return;
+      cards.push(attentionCard(scan.project_name || scan.project_id,
+        scan.last_error_message || "上次扫描失败", "扫描失败", "/admin/sync", "查看同步"));
+    });
+    list.innerHTML = cards.length ? cards.join("") :
+      '<div class="security-attention-empty">当前没有需要处理的问题。</div>';
   }
 
   function loadOverview() {
@@ -58,8 +51,7 @@
       a.text("metric-daily", a.bytes(data.stats.daily_sent_bytes));
       a.text("metric-total", a.bytes(data.stats.total_sent_bytes));
       renderNodeStats(data.node_stat || {});
-      renderNodes(data.nodes || []);
-      renderScanAlerts(data.scans || []);
+      renderAttention(data.nodes || [], data.scans || []);
       a.setStatus("");
     }).catch(function (err) {
       a.setStatus(err.message || "管理总览加载失败");
@@ -71,7 +63,7 @@
     indexNowButton.addEventListener("click", function () {
       a.confirmAction("立即提交 IndexNow", "确认立即提交全量公开 URL？", function () {
         indexNowButton.disabled = true;
-        a.api("/admin/api/indexnow/submit", { method: "POST", body: "{}" })
+        a.api("/admin/api/indexnow/submit", {method: "POST", body: "{}"})
           .then(function (data) {
             a.setStatus((data.message || "IndexNow 全量 URL 已排队") +
               "（新增 " + (data.url_count || 0) + " 条）");

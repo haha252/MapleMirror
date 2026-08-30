@@ -2,150 +2,164 @@
   var a = window.admin;
   if (!a || a.page() !== "nodes") return;
   var currentNode = "";
+  var nodeCache = {};
 
-  function routeLabel(node) {
-    var state = String(node.connection_state || node.state || "").toLowerCase();
-    if (state === "offline" || state === "disabled") return "不路由";
-    return node.routing_ready ? "全量就绪" : "未全量就绪";
-  }
-
-  function regionLabel(region) {
-    switch (String(region || "unknown")) {
-    case "mainland_china": return "中国大陆";
-    case "outside_mainland_china": return "非中国大陆";
-    default: return "未设置";
-    }
-  }
-
-  function renderNodes(nodes) {
-    var body = document.getElementById("nodes-body");
-    if (!body) return;
-    if (!nodes || !nodes.length) {
-      body.innerHTML = '<tr><td colspan="9" class="muted">暂无节点</td></tr>';
-      currentNode = "";
-      return;
-    }
-    var hasCurrent = false;
-    body.innerHTML = nodes.map(function (node) {
-      var state = node.connection_state || node.state;
-      if (node.node_id === currentNode) hasCurrent = true;
-      return '<tr data-node-row="' + a.esc(node.node_id) + '"><td><strong>' +
-        a.esc(node.public_name || node.node_id) +
-        '</strong><span class="sub">' + a.esc(node.node_id) + "</span></td><td>" +
-        a.badge(a.connectionLabel(state)) + "</td><td>" +
-        a.badge(routeLabel(node)) + "</td><td>" +
-        '<span class="metric-inline">' + a.esc(a.bandwidthText(node)) + "</span></td><td>" +
-        a.pressureMeter(node) + "</td><td>" +
-        '<span data-node-priority-value="' + a.esc(node.node_id) + '">' +
-        a.esc(node.download_priority == null ? 50 : node.download_priority) + "</span></td><td>" +
-        a.esc(regionLabel(node.region)) + "</td><td>" +
-        a.esc(node.last_heartbeat_at || "暂无") + '</td><td><div class="admin-actions">' +
-        '<button class="admin-secondary" type="button" data-node-action="detail" data-node="' +
-        a.esc(node.node_id) + '" aria-expanded="' + (node.node_id === currentNode ? "true" : "false") + '">详情</button>' +
-        '<a class="admin-secondary admin-link-button" href="/admin/nodes/' + encodeURIComponent(node.node_id) +
-        '/management">管理</a>' +
-        '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + a.esc(node.node_id) + '">重置</button>' +
-        '<button class="admin-secondary" data-node-action="' + (node.state === "disabled" ? "enable" : "disable") +
-        '" data-node="' + a.esc(node.node_id) + '">' + (node.state === "disabled" ? "启用" : "禁用") +
-        '</button><button class="admin-secondary admin-danger" data-node-action="delete" data-node="' +
-        a.esc(node.node_id) + '">删除</button></div></td></tr>';
-    }).join("");
-    a.text("node-summary", nodes.length + " 个节点");
-    if (currentNode && hasCurrent) {
-      renderDetail(currentNode);
-    } else {
-      currentNode = "";
-    }
-  }
-
-  function detailRow() {
-    return document.querySelector("[data-node-detail-row]");
-  }
-
-  function nodeRow(nodeID) {
-    var rows = document.querySelectorAll("[data-node-row]");
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].getAttribute("data-node-row") === nodeID) return rows[i];
+  function nodeCard(nodeID) {
+    var cards = document.querySelectorAll("[data-node-card]");
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute("data-node-card") === nodeID) return cards[i];
     }
     return null;
   }
 
-  function setDetailButtons() {
-    document.querySelectorAll('[data-node-action="detail"]').forEach(function (button) {
-      button.setAttribute("aria-expanded", button.getAttribute("data-node") === currentNode ? "true" : "false");
-    });
+  function connectionLabel(node) {
+    var state = String(node.connection_state || node.state || "").toLowerCase();
+    if (state === "offline") return "离线";
+    if (state === "disabled") return "已禁用";
+    return "在线";
   }
 
-  function clearDetail() {
-    var row = detailRow();
-    if (row) row.remove();
-    setDetailButtons();
+  function readinessLabel(node) {
+    var state = String(node.connection_state || node.state || "").toLowerCase();
+    if (state === "offline" || state === "disabled") return "";
+    return node.routing_ready ? "全量就绪" : "同步准备中";
   }
 
-  function detailBox(nodeID, html) {
-    var row = detailRow();
-    if (!row || row.getAttribute("data-node-detail-row") !== nodeID) {
-      clearDetail();
-      var anchor = nodeRow(nodeID);
-      if (!anchor) return null;
-      row = document.createElement("tr");
-      row.className = "admin-inline-detail-row";
-      row.setAttribute("data-node-detail-row", nodeID);
-      row.innerHTML = '<td colspan="9"><div class="admin-inline-detail detail-stack"></div></td>';
-      anchor.insertAdjacentElement("afterend", row);
-    }
-    var box = row.querySelector(".admin-inline-detail");
-    if (box && html != null) box.innerHTML = html;
-    return box;
-  }
-
-  function toggleDetail(nodeID) {
-    if (currentNode === nodeID) {
+  function renderNodes(nodes) {
+    var list = document.getElementById("nodes-list");
+    nodeCache = {};
+    if (!nodes || !nodes.length) {
+      list.innerHTML = '<div class="admin-record muted">暂无节点</div>';
       currentNode = "";
-      clearDetail();
+      a.text("node-summary", "0 个节点");
       return;
     }
-    currentNode = nodeID;
-    renderDetail(nodeID);
+    list.innerHTML = nodes.map(function (node) {
+      nodeCache[node.node_id] = node;
+      var ready = readinessLabel(node);
+      var open = currentNode === node.node_id;
+      var meta = a.regionLabel(node.region) + " · 压力 " + a.pressureText(node) +
+        " · 心跳 " + (node.last_heartbeat_at || "暂无");
+      return '<article class="admin-record node-record" data-node-card="' + a.esc(node.node_id) + '">' +
+        '<div class="admin-record__summary"><div class="admin-record__identity"><strong>' +
+        a.esc(node.public_name || node.node_id) + '</strong><span class="sub">' + a.esc(meta) +
+        '</span></div><div class="admin-record__state">' + a.badge(connectionLabel(node)) +
+        (ready ? a.badge(ready) : "") + '<span class="admin-record__meta">' +
+        a.esc(a.bandwidthText(node)) + '</span></div><div class="admin-record__actions">' +
+        '<button class="admin-secondary" type="button" data-node-action="detail" data-node="' +
+        a.esc(node.node_id) + '" aria-expanded="' + open + '">' + (open ? "收起" : "查看详情") +
+        '</button></div></div><div class="admin-record__detail" data-node-detail' +
+        (open ? "" : " hidden") + '></div></article>';
+    }).join("");
+    a.text("node-summary", nodes.length + " 个节点");
+    if (currentNode && nodeCache[currentNode]) renderDetail(currentNode);
+    if (currentNode && !nodeCache[currentNode]) currentNode = "";
+  }
+
+  function syncHeadline(sync) {
+    var state = String(sync.connection_state || "").toLowerCase();
+    if (sync.error) return "状态读取失败";
+    if (state === "offline") return "节点离线";
+    if (state === "disabled") return "节点已禁用";
+    if (Number(sync.failed_tasks || 0) > 0) return "同步失败";
+    if (Number(sync.mismatched_assets || 0) > 0) return "文件校验异常";
+    return a.syncPhaseLabel(sync.sync_phase);
+  }
+
+  function reasonClass(sync) {
+    if (sync.error || sync.connection_state === "offline" || Number(sync.failed_tasks || 0) > 0 ||
+        Number(sync.mismatched_assets || 0) > 0) return " admin-record__message--bad";
+    if (sync.sync_phase === "retry_wait") return " admin-record__message--warn";
+    return "";
   }
 
   function renderDetail(nodeID) {
-    var box = detailBox(nodeID, '<div class="muted">加载中...</div>');
-    setDetailButtons();
-    if (!box) return;
+    var card = nodeCard(nodeID);
+    if (!card) return;
+    var box = card.querySelector("[data-node-detail]");
+    box.hidden = false;
+    box.innerHTML = '<div class="muted">正在读取节点详情...</div>';
     Promise.all([
       a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/sync-status").catch(function (err) { return { error: err.message }; }),
       a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/reports").catch(function (err) { return { error: err.message }; }),
       a.api("/admin/api/nodes/" + encodeURIComponent(nodeID) + "/sla").catch(function (err) { return { error: err.message }; })
     ]).then(function (items) {
-      var sync = items[0], reports = items[1], sla = items[2];
-      var pressure = reports.pressure || reports.heartbeat || {};
-      var slaText = (sla.windows || []).map(function (w) {
-        var pct = (Number(w.availability_ratio || 0) * 100).toFixed(2) + "%";
-        return w.window + ": " + (w.insufficient_samples ? "样本不足" : pct);
-      }).join(" / ");
       if (currentNode !== nodeID) return;
-      box = detailBox(nodeID);
-      if (!box) return;
-      box.innerHTML =
-        '<div class="detail-split">' +
-        '<section class="detail-pane"><h3>同步诊断</h3>' + a.compactKv({
-          "同步阶段": sync.sync_phase || sync.error || "未知",
-          "必需资产": sync.required_assets || 0,
-          "已验证资产": sync.verified_assets || 0,
-          "缺失资产": sync.missing_assets || 0,
-          "失败任务": sync.failed_tasks || 0,
-          "就绪原因": sync.routing_ready_reason || ""
-        }, "detail-plain") + '</section>' +
-        '<section class="detail-pane"><h3>最近报告</h3>' + a.compactKv({
-          "心跳": (reports.heartbeat && reports.heartbeat.reported_at) || "暂无",
-          "库存": (reports.inventory && reports.inventory.reported_at) || "暂无",
-          "压力": pressure.reported_at || "暂无",
-          "目标带宽": pressure.target_bandwidth_bps ? a.bytes(pressure.target_bandwidth_bps) + "/s" : "未上报",
-          "实际带宽": pressure.actual_bandwidth_bps ? a.bytes(pressure.actual_bandwidth_bps) + "/s" : "暂无采样",
-          "压力比": pressure.pressure_ratio != null ? (Number(pressure.pressure_ratio) * 100).toFixed(1) + "%" : "暂无"
-        }, "detail-plain") + '</section></div><h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") +
-        '</p>';
+      card = nodeCard(nodeID);
+      if (!card) return;
+      box = card.querySelector("[data-node-detail]");
+      var sync = items[0], reports = items[1], sla = items[2];
+      var node = nodeCache[nodeID] || {};
+      var pressure = reports.pressure || reports.heartbeat || {};
+      var free = Number(pressure.free_bytes || 0) > 0 ? a.bytes(pressure.free_bytes) : "节点暂未上报";
+      var slaText = (sla.windows || []).map(function (w) {
+        return w.window + " " + (w.insufficient_samples ? "样本不足" :
+          (Number(w.availability_ratio || 0) * 100).toFixed(2) + "%");
+      }).join(" · ");
+      var reason = sync.error || (sync.routing_ready ? "" : (sync.routing_ready_reason || ""));
+      box.innerHTML = '<div class="admin-record__state"><strong>同步状态</strong>' +
+        a.badge(syncHeadline(sync)) + '</div>' +
+        (reason ? '<p class="admin-record__message' + reasonClass(sync) + '">' + a.esc(reason) + '</p>' : "") +
+        '<div class="detail-split"><section class="detail-pane"><h3>同步概况</h3>' +
+        a.compactKv({"目标文件": sync.required_assets || 0, "已验证": sync.verified_assets || 0,
+          "待同步": sync.missing_assets || 0, "执行中": sync.running_tasks || 0,
+          "等待重试": sync.retry_wait_tasks || 0, "失败任务": sync.failed_tasks || 0}, "detail-plain") +
+        '</section><section class="detail-pane"><h3>运行概况</h3>' +
+        a.compactKv({"当前带宽": a.bandwidthText(node), "压力": a.pressureText(node),
+          "可用磁盘": free, "活动下载": pressure.active_downloads || 0,
+          "最近报告": pressure.reported_at || "暂无", "地区": a.regionLabel(node.region)}, "detail-plain") +
+        '</section></div><div><h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") + '</p></div>' +
+        '<div class="admin-record__actions admin-record__management">' +
+        '<a class="admin-secondary admin-link-button" href="/admin/nodes/' + encodeURIComponent(nodeID) + '/management">管理项目与调度</a>' +
+        '<button class="admin-secondary" data-node-action="sync-reset" data-node="' + a.esc(nodeID) + '">重置同步</button>' +
+        '<button class="admin-secondary" data-node-action="' + (node.state === "disabled" ? "enable" : "disable") +
+        '" data-node="' + a.esc(nodeID) + '">' + (node.state === "disabled" ? "启用节点" : "禁用节点") + '</button>' +
+        '<button class="admin-secondary admin-danger" data-node-action="delete" data-node="' + a.esc(nodeID) + '">删除节点</button></div>' +
+        '<details class="admin-tech-details"><summary>显示技术信息</summary>' +
+        a.compactKv({"Node ID": nodeID, "软件版本": node.software_version || "未知",
+          "路由详情": sync.routing_ready_detail || "", "库存 revision": sync.latest_inventory_revision || 0}, "detail-plain") +
+        '</details>';
+    });
+  }
+
+  function toggleDetail(nodeID) {
+    var previous = currentNode;
+    currentNode = previous === nodeID ? "" : nodeID;
+    if (previous) {
+      var old = nodeCard(previous);
+      if (old) {
+        old.querySelector("[data-node-detail]").hidden = true;
+        var oldButton = old.querySelector('[data-node-action="detail"]');
+        if (oldButton) { oldButton.textContent = "查看详情"; oldButton.setAttribute("aria-expanded", "false"); }
+      }
+    }
+    if (!currentNode) return;
+    var card = nodeCard(nodeID);
+    if (card) {
+      var button = card.querySelector('[data-node-action="detail"]');
+      if (button) { button.textContent = "收起"; button.setAttribute("aria-expanded", "true"); }
+    }
+    renderDetail(nodeID);
+  }
+
+  function nodeAction(button) {
+    var nodeID = button.getAttribute("data-node");
+    var action = button.getAttribute("data-node-action");
+    if (action === "detail") return toggleDetail(nodeID);
+    var node = nodeCache[nodeID] || {};
+    var name = node.public_name || nodeID;
+    var labels = {"sync-reset": "重置同步状态", disable: "禁用", enable: "启用", delete: "删除"};
+    var message = action === "delete" ? "确认删除节点「" + name + "」？节点运行数据、任务、库存和授权记录会被清理。"
+      : "确认对「" + name + "」执行“" + labels[action] + "”？";
+    a.confirmAction("节点操作", message, function () {
+      var path = "/admin/api/nodes/" + encodeURIComponent(nodeID);
+      var options = {method: "DELETE", body: "{}"};
+      if (action !== "delete") { path += "/" + action; options.method = "POST"; }
+      a.api(path, options).then(function (data) {
+        a.setStatus(data.message || "操作已完成");
+        if (action === "delete") currentNode = "";
+        loadNodes();
+      }).catch(function (err) { a.setStatus(err.message); });
     });
   }
 
@@ -156,53 +170,17 @@
   }
 
   document.addEventListener("click", function (event) {
-    var nodeButton = event.target.closest("[data-node-action]");
-    if (nodeButton) return nodeAction(nodeButton);
+    var button = event.target.closest("[data-node-action]");
+    if (button) nodeAction(button);
   });
-
-  function nodeAction(button) {
-    var node = button.getAttribute("data-node");
-    var action = button.getAttribute("data-node-action");
-    if (action === "detail") return toggleDetail(node);
-    var labels = { "sync-reset": "重置同步状态", "disable": "禁用", "enable": "启用", "delete": "删除" };
-    var text = action === "delete" ? "确认删除节点 " + node + "？该操作会清理该节点的运行数据、任务、库存和授权记录。"
-      : "确认对节点 " + node + " 执行 " + labels[action] + "？";
-    a.confirmAction("节点操作", text, function () {
-      var path = "/admin/api/nodes/" + encodeURIComponent(node);
-      var options = { method: "DELETE", body: "{}" };
-      if (action !== "delete") {
-        path += "/" + action;
-        options.method = "POST";
-      }
-      a.api(path, options)
-        .then(function (data) {
-          a.setStatus(data.message || "操作已完成");
-          if (action === "delete") {
-            if (currentNode === node) {
-              currentNode = "";
-              clearDetail();
-            }
-            return loadNodes();
-          }
-          currentNode = node;
-          loadNodes();
-        })
+  var pairing = document.getElementById("pairing-create");
+  if (pairing) pairing.addEventListener("click", function () {
+    a.confirmAction("创建配对码", "确认创建一个 5 分钟有效的一次性配对码？", function () {
+      a.api("/admin/api/pairing-codes", {method: "POST", body: JSON.stringify({ttl_seconds: 300})})
+        .then(function (data) { a.infoDialog("配对码已创建", "过期时间：" + data.expires_at, data.pairing_code); })
         .catch(function (err) { a.setStatus(err.message); });
     });
-  }
-
-  var pairingCreate = document.getElementById("pairing-create");
-  if (pairingCreate) {
-    pairingCreate.addEventListener("click", function () {
-      a.confirmAction("创建配对码", "确认创建一个 5 分钟有效的一次性配对码？", function () {
-        a.api("/admin/api/pairing-codes", { method: "POST", body: JSON.stringify({ ttl_seconds: 300 }) })
-          .then(function (data) {
-            a.infoDialog("配对码已创建", "过期时间：" + data.expires_at, data.pairing_code);
-          }).catch(function (err) { a.setStatus(err.message); });
-      });
-    });
-  }
-
+  });
   loadNodes();
-  a.autoRefresh(loadNodes, 3000);
+  a.autoRefresh(loadNodes, 10000);
 })();

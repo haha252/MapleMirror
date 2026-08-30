@@ -13,18 +13,14 @@
 </section>
 <section class="admin-extra">
   <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>IndexNow</h2><button id="indexnow-submit" class="admin-primary" type="button">立即提交全量 URL</button></div>
-    <p class="muted">页面变化会合并 5 分钟后自动通知；手动提交会立即排队发送首页、公共页面和全部启用项目页。</p>
+    <div class="admin-panel__head"><div><h2>需要关注</h2><p class="muted">只显示离线节点和失败扫描；同步中、对账中不会被列为异常。</p></div></div>
+    <div id="overview-attention" class="admin-record-list"></div>
   </article>
 </section>
-<section class="admin-extra overview-extra">
+<section class="admin-extra">
   <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>节点信息</h2><a class="admin-secondary" href="/admin/nodes">查看节点</a></div>
-    <div class="admin-table-wrap"><table><thead><tr><th>节点</th><th>状态</th><th>带宽</th><th>压力</th></tr></thead><tbody id="overview-nodes-body"></tbody></table></div>
-  </article>
-  <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>扫描异常</h2><a class="admin-secondary" href="/admin/sync">查看同步</a></div>
-    <div class="admin-table-wrap"><table><thead><tr><th>项目</th><th>状态</th><th>摘要</th></tr></thead><tbody id="scan-alerts-body"></tbody></table></div>
+    <div class="admin-panel__head"><h2>IndexNow</h2><button id="indexnow-submit" class="admin-primary" type="button">立即提交全量 URL</button></div>
+    <p class="muted">页面变化会合并 5 分钟后自动通知；手动提交会立即排队发送首页、公共页面和全部启用项目页。</p>
   </article>
 </section>
 {{end}}

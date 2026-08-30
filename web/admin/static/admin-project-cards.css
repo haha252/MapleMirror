@@ -1,0 +1,61 @@
+.project-card__quick {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+.project-card__quick strong {
+  color: var(--text);
+}
+.project-card__more {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.project-card__more[hidden] {
+  display: none;
+}
+.project-card__more .admin-record__management {
+  justify-content: flex-start;
+}
+.project-developer__head,
+.project-developer__usage,
+.project-developer__endpoint {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.project-developer__endpoint code {
+  flex: 1 1 240px;
+}
+.project-developer__actions {
+  justify-content: flex-start;
+}
+@media (max-width: 680px) {
+  .project-card__quick {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .project-developer__head,
+  .project-developer__usage,
+  .project-developer__endpoint {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .project-developer__endpoint code {
+    width: 100%;
+    flex-basis: auto;
+  }
+  .project-developer__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+  .project-developer__actions .admin-secondary,
+  .project-developer__actions .admin-primary {
+    width: 100%;
+  }
+}

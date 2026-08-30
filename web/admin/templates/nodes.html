@@ -1,10 +1,8 @@
 {{define "nodes"}}
 <section class="admin-grid">
   <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>节点列表</h2><span id="node-summary" class="muted">加载中</span></div>
-    <div class="admin-table-wrap">
-      <table><thead><tr><th>节点</th><th>状态</th><th>路由</th><th>带宽</th><th>压力</th><th>优先级</th><th>地区</th><th>最近心跳</th><th>操作</th></tr></thead><tbody id="nodes-body"></tbody></table>
-    </div>
+    <div class="admin-panel__head"><div><h2>节点</h2><p class="muted">默认只显示运行概况；展开后查看同步、磁盘、SLA 与管理操作。</p></div><span id="node-summary" class="muted">加载中</span></div>
+    <div id="nodes-list" class="admin-record-list"></div>
   </article>
 </section>
 {{end}}
@@ -37,6 +35,6 @@
     <label class="admin-check"><input id="node-project-auto" type="checkbox"> 自动分配</label>
     <span id="node-project-limit" class="muted"></span>
   </div>
-  <div class="admin-table-wrap"><table><thead><tr><th>分配</th><th>项目</th><th>30 天下载量</th><th>最近变化</th></tr></thead><tbody id="node-project-body"></tbody></table></div>
+  <div class="admin-table-wrap"><table class="admin-responsive-table"><thead><tr><th>分配</th><th>项目</th><th>30 天下载量</th><th>最近变化</th></tr></thead><tbody id="node-project-body"></tbody></table></div>
 </section>
 {{end}}

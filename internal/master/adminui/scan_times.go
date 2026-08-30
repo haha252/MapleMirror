@@ -1,12 +1,17 @@
 package adminui
 
-import "mirror-server/internal/master/mirrorsync"
+import (
+	"context"
 
-func (s *Server) scanStatesResponse(items []mirrorsync.ProjectScanState) []map[string]any {
+	"mirror-server/internal/master/mirrorsync"
+)
+
+func (s *Server) scanStatesResponse(ctx context.Context, items []mirrorsync.ProjectScanState) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
+	names := s.projectNames(ctx)
 	for _, item := range items {
 		out = append(out, map[string]any{
-			"project_id": item.ProjectID, "enabled": item.Enabled,
+			"project_id": item.ProjectID, "project_name": names[item.ProjectID], "enabled": item.Enabled,
 			"last_scan_started_at":   s.displayTime(item.LastScanStartedAt),
 			"last_scan_completed_at": s.displayTime(item.LastScanCompletedAt),
 			"last_scan_id":           item.LastScanID,

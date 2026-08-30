@@ -140,6 +140,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/api/pairing-codes", s.requireSession(s.pairingCodesAPI))
 	mux.HandleFunc("/admin/api/pairing-requests", s.requireSession(s.pairingRequestsAPI))
 	mux.HandleFunc("/admin/api/pairing-requests/", s.requireSession(s.pairingRequestActionAPI))
+	mux.HandleFunc("/admin/api/security/summary", s.requireSession(s.securitySummaryAPI))
 	mux.HandleFunc("/admin/api/security/blocks", s.requireSession(s.securityBlocksAPI))
 	mux.HandleFunc("/admin/api/security/blocks/", s.requireSession(s.securityBlockActionAPI))
 	mux.HandleFunc("/admin/api/security/audit-events", s.requireSession(s.auditEventsAPI))
