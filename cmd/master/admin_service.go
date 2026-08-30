@@ -13,13 +13,15 @@ import (
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/adminui"
 	mastercontrol "mirror-server/internal/master/control"
+	"mirror-server/internal/master/developerapi"
 	"mirror-server/internal/master/mirrorsync"
 	"mirror-server/internal/master/public"
 	"mirror-server/internal/requestid"
 )
 
 func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service,
-	projectLoader *mirrorsync.ProjectLoader, publicServer *public.Server, logger *logging.Logger) {
+	projectLoader *mirrorsync.ProjectLoader, developerStore *developerapi.Store,
+	publicServer *public.Server, logger *logging.Logger) {
 	httpsEnabled := adminWebHTTPSEnabled(cfg)
 	if httpsEnabled && (cfg.Admin.TLS.CertFile == "" || cfg.Admin.TLS.KeyFile == "") {
 		logger.Warn(context.Background(), "管理面板 TLS 材料未配置，管理服务未启动")
@@ -36,7 +38,7 @@ func startAdminService(cfg config.Master, repo mastercontrol.Repository, syncSer
 		logger.Error(context.Background(), "节点证书签发器初始化失败", slog.String("error", err.Error()))
 		return
 	}
-	handler, err := adminHandler(cfg, repo, syncService, projectLoader, publicServer, logger, loaded)
+	handler, err := adminHandler(cfg, repo, syncService, projectLoader, developerStore, publicServer, logger, loaded)
 	if err != nil {
 		logger.Error(context.Background(), "管理面板初始化失败", slog.String("error", err.Error()))
 		return
@@ -84,7 +86,7 @@ func serveAdmin(server *http.Server, httpsEnabled bool) error {
 }
 
 func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService mirrorsync.Service,
-	projectLoader *mirrorsync.ProjectLoader, publicServer *public.Server,
+	projectLoader *mirrorsync.ProjectLoader, developerStore *developerapi.Store, publicServer *public.Server,
 	logger *logging.Logger, loaded mastercontrol.CertificateSigner) (http.Handler, error) {
 	var resetResourceLimiter func(string)
 	var resetClientBlockCache func(string)
@@ -94,6 +96,7 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 	}
 	ui, err := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
 		Projects:              projectLoader,
+		DeveloperAPI:          developerStore,
 		Signer:                loaded.Sign,
 		Sync:                  syncService,
 		IndexNow:              syncService,

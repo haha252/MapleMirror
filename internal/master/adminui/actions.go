@@ -40,6 +40,14 @@ func (s *Server) scanAPI(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) projectActionAPI(w http.ResponseWriter, r *http.Request) {
 	projectID, action := splitAdminPath(r.URL.Path, "/admin/api/projects/")
+	if action == "developer-api" && r.Method == http.MethodGet {
+		s.projectDeveloperAPIInfo(w, r, projectID)
+		return
+	}
+	if action == "developer-api/token" && r.Method == http.MethodPost {
+		s.rotateProjectDeveloperToken(w, r, projectID)
+		return
+	}
 	if r.Method != http.MethodPost || action != "reset" {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
 		return

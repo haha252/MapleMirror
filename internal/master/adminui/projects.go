@@ -53,6 +53,16 @@ func (s *Server) saveProjects(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "项目配置已保存，同步运行状态更新失败"})
 		return
 	}
+	if s.developerAPI != nil {
+		keep := make(map[string]struct{}, len(loaded.Projects))
+		for _, project := range loaded.Projects {
+			keep[project.ID] = struct{}{}
+		}
+		if err := s.developerAPI.RevokeMissing(r.Context(), keep); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "项目配置已保存，Developer API Token 清理失败"})
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"message": "项目配置已保存", "projects": loaded.Projects})
 }
 

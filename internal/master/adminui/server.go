@@ -12,6 +12,7 @@ import (
 
 	"mirror-server/internal/config"
 	mastercontrol "mirror-server/internal/master/control"
+	"mirror-server/internal/master/developerapi"
 	"mirror-server/internal/master/mirrorsync"
 	"mirror-server/web"
 )
@@ -20,11 +21,12 @@ const sessionCookie = "mirror_admin_session"
 const adminAPIWriteBodyLimit int64 = 1 << 20
 
 type Server struct {
-	repo      mastercontrol.Repository
-	syncStore mirrorsync.Store
-	projects  *mirrorsync.ProjectLoader
-	signer    func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
-	sync      interface {
+	repo         mastercontrol.Repository
+	syncStore    mirrorsync.Store
+	projects     *mirrorsync.ProjectLoader
+	developerAPI *developerapi.Store
+	signer       func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
+	sync         interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
 	indexNow interface {
@@ -42,9 +44,10 @@ type Server struct {
 }
 
 type Options struct {
-	Projects *mirrorsync.ProjectLoader
-	Signer   func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
-	Sync     interface {
+	Projects     *mirrorsync.ProjectLoader
+	DeveloperAPI *developerapi.Store
+	Signer       func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
+	Sync         interface {
 		Trigger(context.Context, string, string) (string, error)
 	}
 	IndexNow interface {
@@ -94,7 +97,7 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		return nil, err
 	}
 	return &Server{
-		repo: repo, syncStore: syncStore, projects: opts.Projects,
+		repo: repo, syncStore: syncStore, projects: opts.Projects, developerAPI: opts.DeveloperAPI,
 		signer: opts.Signer, sync: opts.Sync, indexNow: opts.IndexNow, users: users,
 		templates: templates, adminFS: adminFS, publicFS: publicFS,
 		trustedCIDRs:          opts.TrustedCIDRs,

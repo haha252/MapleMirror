@@ -18,6 +18,7 @@ import (
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
 	mastercontrol "mirror-server/internal/master/control"
+	"mirror-server/internal/master/developerapi"
 	"mirror-server/internal/master/health"
 	"mirror-server/internal/master/mirrorsync"
 	"mirror-server/internal/master/statbuffer"
@@ -177,12 +178,17 @@ func main() {
 		publicServer.IndexNowKey = indexNow.Key()
 	}
 	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger, indexNow)
+	developerStore := developerapi.NewStore(database, location, cfg.Server.PublicBaseURL)
+	developerHandler := developerapi.NewHandler(developerStore, projectLoader, syncService,
+		cfg.Proxy.TrustedCIDRs, logger)
 	bootstrapIndexNow(indexNow, syncService.Scanner, projects, logger)
 	defer publicServer.Close()
 	startControlServices(cfg, repo, logger)
-	startAdminService(cfg, repo, syncService, projectLoader, &publicServer, logger)
+	startAdminService(cfg, repo, syncService, projectLoader, developerStore, &publicServer, logger)
 
 	mux := http.NewServeMux()
+	mux.Handle("/api/developer/v1/", requestid.Middleware(developerHandler,
+		cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Ready: databaseWatchdog.Ready, Version: version,
 	}, cfg.RequestID.ResponseHeader, cfg.RequestID.ParentHeader))
