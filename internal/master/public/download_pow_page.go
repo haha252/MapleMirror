@@ -134,6 +134,7 @@ func (s Server) renderDownloadPowPageState(w http.ResponseWriter, r *http.Reques
 		Styles: []string{
 			"/static/public/download-pow.css",
 			"/static/public/download-verification.css",
+			"/static/public/download-pow-mascot.css",
 		},
 		Scripts:     scripts,
 		StaticNames: staticNames,
