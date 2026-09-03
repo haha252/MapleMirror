@@ -16,7 +16,7 @@ func TestSponsorsCardRendersExpandableMonthlyGroup(t *testing.T) {
 		`<details class="sponsor-group">`,
 		`<summary class="sponsor-row">`,
 		`本月 2 次`,
-		`<span>2 次</span>`,
+		`data-i18n="about.sponsorCount" data-i18n-params='{"count":2}'>2 次</span>`,
 		`<article class="sponsor-donation">`,
 	} {
 		if !strings.Contains(body, expected) {
@@ -50,10 +50,10 @@ func TestSponsorsCardRendersPinnedSectionAndPager(t *testing.T) {
 	body := sponsorsCard(buildSponsorPage(sponsors, 1, 10))
 
 	for _, expected := range []string{
-		`<h3 id="sponsor-featured-title">特别感谢</h3>`,
+		`id="sponsor-featured-title" data-i18n="about.sponsorFeatured">特别感谢</h3>`,
 		`aria-label="赞助记录分页"`,
-		`aria-disabled="true">上一页</span>`,
-		`href="/about?sponsor_page=2#sponsors">下一页</a>`,
+		`data-i18n="about.previous" aria-disabled="true">上一页</span>`,
+		`href="?sponsor_page=2#sponsors">下一页</a>`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("missing %q in %s", expected, body)

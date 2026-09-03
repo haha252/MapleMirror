@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"mirror-server/internal/publiclocale"
 )
 
 func TestLocalizedPublicPagesHaveStableSSRSEO(t *testing.T) {
@@ -18,11 +20,11 @@ func TestLocalizedPublicPagesHaveStableSSRSEO(t *testing.T) {
 		zhTitle string
 		enTitle string
 	}{
-		{"/", "枫源镜像 - GitHub Release 软件版本与文件下载服务", englishPublicPageMeta["/"].BrowserTitle},
-		{"/stats", "枫源镜像节点状态与下载数据统计 - 访问、流量与 SLA", englishPublicPageMeta["/stats"].BrowserTitle},
-		{"/api-docs", "枫源镜像公共下载 API 文档 - 项目、文件与自动下载接口", englishPublicPageMeta["/api-docs"].BrowserTitle},
-		{"/changelog", "枫源镜像更新日志 - 版本发布、功能改进与服务维护", englishPublicPageMeta["/changelog"].BrowserTitle},
-		{"/about", "关于枫源镜像 - 公益镜像服务、开源代码与赞助支持", englishPublicPageMeta["/about"].BrowserTitle},
+		{"/", "枫源镜像 - GitHub Release 软件版本与文件下载服务", publicPresentationByLocale["en"].Pages["/"].BrowserTitle},
+		{"/stats", "枫源镜像节点状态与下载数据统计 - 访问、流量与 SLA", publicPresentationByLocale["en"].Pages["/stats"].BrowserTitle},
+		{"/api-docs", "枫源镜像公共下载 API 文档 - 项目、文件与自动下载接口", publicPresentationByLocale["en"].Pages["/api-docs"].BrowserTitle},
+		{"/changelog", "枫源镜像更新日志 - 版本发布、功能改进与服务维护", publicPresentationByLocale["en"].Pages["/changelog"].BrowserTitle},
+		{"/about", "关于枫源镜像 - 公益镜像服务、开源代码与赞助支持", publicPresentationByLocale["en"].Pages["/about"].BrowserTitle},
 	}
 
 	for _, item := range cases {
@@ -40,10 +42,10 @@ func TestLocalizedPublicPagesHaveStableSSRSEO(t *testing.T) {
 			for _, want := range []string{
 				"<html lang=\"zh-CN\"",
 				"<title>" + item.zhTitle + "</title>",
-				"<link rel=\"canonical\" href=\"https://fyhub.cn" + item.path + "\">",
-				"<link rel=\"alternate\" hreflang=\"zh-CN\" href=\"https://fyhub.cn" + item.path + "\">",
-				"<link rel=\"alternate\" hreflang=\"en\" href=\"https://fyhub.cn" + localizedPublicPath(publicLocaleEN, item.path) + "\">",
-				"<link rel=\"alternate\" hreflang=\"x-default\" href=\"https://fyhub.cn" + item.path + "\">",
+				"<link rel=\"canonical\" href=\"https://fyhub.cn" + item.path + "\"",
+				"<link rel=\"alternate\" hreflang=\"zh-CN\" href=\"https://fyhub.cn" + item.path + "\"",
+				"<link rel=\"alternate\" hreflang=\"en\" href=\"https://fyhub.cn" + publiclocale.LocalizedPath("en", item.path) + "\"",
+				"<link rel=\"alternate\" hreflang=\"x-default\" href=\"https://fyhub.cn" + item.path + "\"",
 			} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("Chinese page missing %q: %s", want, body)
@@ -52,7 +54,7 @@ func TestLocalizedPublicPagesHaveStableSSRSEO(t *testing.T) {
 		})
 
 		t.Run("en_"+item.path, func(t *testing.T) {
-			enPath := localizedPublicPath(publicLocaleEN, item.path)
+			enPath := publiclocale.LocalizedPath("en", item.path)
 			req := httptest.NewRequest(http.MethodGet, enPath, nil)
 			req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
 			rec := httptest.NewRecorder()
@@ -65,10 +67,10 @@ func TestLocalizedPublicPagesHaveStableSSRSEO(t *testing.T) {
 			for _, want := range []string{
 				"<html lang=\"en\"",
 				"<title>" + item.enTitle + "</title>",
-				"<link rel=\"canonical\" href=\"https://fyhub.cn" + enPath + "\">",
-				"<link rel=\"alternate\" hreflang=\"zh-CN\" href=\"https://fyhub.cn" + item.path + "\">",
-				"<link rel=\"alternate\" hreflang=\"en\" href=\"https://fyhub.cn" + enPath + "\">",
-				"<link rel=\"alternate\" hreflang=\"x-default\" href=\"https://fyhub.cn" + item.path + "\">",
+				"<link rel=\"canonical\" href=\"https://fyhub.cn" + enPath + "\"",
+				"<link rel=\"alternate\" hreflang=\"zh-CN\" href=\"https://fyhub.cn" + item.path + "\"",
+				"<link rel=\"alternate\" hreflang=\"en\" href=\"https://fyhub.cn" + enPath + "\"",
+				"<link rel=\"alternate\" hreflang=\"x-default\" href=\"https://fyhub.cn" + item.path + "\"",
 			} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("English page missing %q: %s", want, body)
@@ -108,9 +110,9 @@ func TestLocalizedProjectPageAndEnglishRootRedirect(t *testing.T) {
 	for _, want := range []string{
 		"<html lang=\"en\"",
 		"<title>项目一 Releases and File Downloads - Maple Mirror</title>",
-		"<link rel=\"canonical\" href=\"https://fyhub.cn/en/p1/\">",
-		"<link rel=\"alternate\" hreflang=\"zh-CN\" href=\"https://fyhub.cn/p1/\">",
-		"<link rel=\"alternate\" hreflang=\"en\" href=\"https://fyhub.cn/en/p1/\">",
+		"<link rel=\"canonical\" href=\"https://fyhub.cn/en/p1/\"",
+		"<link rel=\"alternate\" hreflang=\"zh-CN\" href=\"https://fyhub.cn/p1/\"",
+		"<link rel=\"alternate\" hreflang=\"en\" href=\"https://fyhub.cn/en/p1/\"",
 	} {
 		if !strings.Contains(en.Body.String(), want) {
 			t.Fatalf("English project page missing %q: %s", want, en.Body.String())

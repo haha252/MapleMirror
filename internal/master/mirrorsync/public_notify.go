@@ -13,6 +13,7 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/indexnow"
+	"mirror-server/internal/publiclocale"
 )
 
 type PublicChangeNotifier interface {
@@ -120,9 +121,10 @@ func (s Scanner) publicSnapshotWithConfig(ctx context.Context, projects config.P
 		}
 	}
 
-	snapshot := make(indexnow.Snapshot, len(publicIndexNowPaths)+len(fingerprints))
+	localeCount := len(publiclocale.All())
+	snapshot := make(indexnow.Snapshot, (len(publicIndexNowPaths)+len(fingerprints))*localeCount)
 	for _, path := range publicIndexNowPaths {
-		snapshot[path] = indexnow.Page{Path: path, Fingerprint: staticFingerprint(s.SEORevision, path), Present: true}
+		addLocalizedSnapshotPages(snapshot, path, staticFingerprint(s.SEORevision, path))
 	}
 	ids := make([]string, 0, len(fingerprints))
 	for id, fingerprint := range fingerprints {
@@ -137,10 +139,18 @@ func (s Scanner) publicSnapshotWithConfig(ctx context.Context, projects config.P
 		fingerprint := fingerprints[id].Hash
 		fmt.Fprintf(&homepage, "%s|%s\n", id, fingerprint)
 		path := "/" + url.PathEscape(id) + "/"
-		snapshot[path] = indexnow.Page{Path: path, Fingerprint: "sha256:" + fingerprint, Present: true}
+		addLocalizedSnapshotPages(snapshot, path, "sha256:"+fingerprint)
 	}
-	snapshot["/"] = indexnow.Page{Path: "/", Fingerprint: digestFingerprint(homepage.String()), Present: true}
+	addLocalizedSnapshotPages(snapshot, "/", digestFingerprint(homepage.String()))
 	return snapshot, nil
+}
+
+func addLocalizedSnapshotPages(snapshot indexnow.Snapshot, path, fingerprint string) {
+	for _, localizedPath := range publiclocale.Paths(path) {
+		snapshot[localizedPath] = indexnow.Page{
+			Path: localizedPath, Fingerprint: fingerprint, Present: true,
+		}
+	}
 }
 
 func configProjectFingerprint(project config.Project) string {

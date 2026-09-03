@@ -2,6 +2,9 @@ package public
 
 import (
 	"net/http"
+	"strings"
+
+	"mirror-server/internal/publiclocale"
 )
 
 func (s Server) Handler() http.Handler {
@@ -34,10 +37,17 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/changelog", s.changelogPage)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
-	mux.Handle("/en/", s.englishPagesHandler())
-	mux.HandleFunc("/en", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/en/", http.StatusPermanentRedirect)
-	})
+	for _, locale := range publiclocale.All() {
+		prefix := strings.Trim(locale.PathPrefix, "/")
+		if locale.Default || prefix == "" {
+			continue
+		}
+		basePath := "/" + prefix
+		mux.Handle(basePath+"/", s.localizedPagesHandler(locale))
+		mux.HandleFunc(basePath, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, basePath+"/", http.StatusPermanentRedirect)
+		})
+	}
 	mux.HandleFunc("/download/success/", s.downloadSuccessPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
 	mux.HandleFunc("/api/public/v1/blocklist.txt", s.blocklistTXT)

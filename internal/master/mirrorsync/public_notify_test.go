@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/indexnow"
+	"mirror-server/internal/publiclocale"
 	"mirror-server/internal/storage"
 )
 
@@ -57,13 +59,23 @@ func TestPublicSnapshotContainsStaticPagesAndEnabledProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/", "/about", "/api-docs", "/stats", "/changelog", "/p1/"} {
-		if page, ok := snapshot[path]; !ok || !page.Present || page.Fingerprint == "" {
-			t.Fatalf("snapshot missing public page %q: %+v", path, snapshot)
+	for _, logicalPath := range []string{"/", "/about", "/api-docs", "/stats", "/changelog", "/p1/"} {
+		for _, path := range publiclocale.Paths(logicalPath) {
+			if page, ok := snapshot[path]; !ok || !page.Present || page.Fingerprint == "" {
+				t.Fatalf("snapshot missing public page %q: %+v", path, snapshot)
+			}
 		}
 	}
-	if _, ok := snapshot["/disabled/"]; ok {
-		t.Fatalf("disabled project should not be public: %+v", snapshot)
+	for _, path := range publiclocale.Paths("/disabled/") {
+		if _, ok := snapshot[path]; ok {
+			t.Fatalf("disabled project should not be public: %+v", snapshot)
+		}
+	}
+	for _, logicalPath := range []string{"/", "/p1/"} {
+		paths := publiclocale.Paths(logicalPath)
+		if len(paths) < 2 || snapshot[paths[0]].Fingerprint != snapshot[paths[1]].Fingerprint {
+			t.Fatalf("localized fingerprints differ for %q: %+v", logicalPath, snapshot)
+		}
 	}
 }
 
@@ -80,7 +92,7 @@ func TestPublicSEORevisionChangesOnlyStaticPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	changes := publicPageChanges(oldSnapshot, newSnapshot)
-	want := []string{"/", "/about", "/api-docs", "/changelog", "/stats"}
+	want := localizedChangePaths([]string{"/", "/about", "/api-docs", "/changelog", "/stats"})
 	if len(changes) != len(want) {
 		t.Fatalf("SEO revision changes=%v want %v", changes, want)
 	}
@@ -120,10 +132,11 @@ func TestServiceTriggerFullPublicNotificationQueuesCurrentPages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if queued != 6 || len(recorder.snapshots) != 1 {
-		t.Fatalf("queued=%d snapshots=%d want 6/1", queued, len(recorder.snapshots))
+	wantPaths := localizedChangePaths([]string{"/", "/about", "/api-docs", "/changelog", "/p1/", "/stats"})
+	if queued != len(wantPaths) || len(recorder.snapshots) != 1 {
+		t.Fatalf("queued=%d snapshots=%d want %d/1", queued, len(recorder.snapshots), len(wantPaths))
 	}
-	for _, path := range []string{"/", "/about", "/api-docs", "/changelog", "/p1/", "/stats"} {
+	for _, path := range wantPaths {
 		if _, ok := recorder.snapshots[0][path]; !ok {
 			t.Fatalf("manual snapshot missing %q: %+v", path, recorder.snapshots[0])
 		}
@@ -142,7 +155,7 @@ func TestScannerNotifiesOnlyChangedPublicPages(t *testing.T) {
 	if _, err := scanner.Scan(context.Background(), projects, "", "first"); err != nil {
 		t.Fatal(err)
 	}
-	assertChangePaths(t, recorder, []string{"/", "/p1/"})
+	assertChangePaths(t, recorder, localizedChangePaths([]string{"/", "/p1/"}))
 	recorder.changes = nil
 	if _, err := scanner.Scan(context.Background(), projects, "", "same"); err != nil {
 		t.Fatal(err)
@@ -156,15 +169,31 @@ func TestScannerNotifiesOnlyChangedPublicPages(t *testing.T) {
 	if _, err := scanner.Scan(context.Background(), projects, "", "updated"); err != nil {
 		t.Fatal(err)
 	}
-	assertChangePaths(t, recorder, []string{"/", "/p1/"})
+	assertChangePaths(t, recorder, localizedChangePaths([]string{"/", "/p1/"}))
 	recorder.changes = nil
 	if _, err := scanner.Scan(context.Background(), config.Projects{}, "", "removed"); err != nil {
 		t.Fatal(err)
 	}
-	assertChangePaths(t, recorder, []string{"/", "/p1/"})
-	if recorder.changes[0][1].Present {
-		t.Fatalf("removed project should be absent: %+v", recorder.changes)
+	assertChangePaths(t, recorder, localizedChangePaths([]string{"/", "/p1/"}))
+	byPath := make(map[string]indexnow.PageChange, len(recorder.changes[0]))
+	for _, change := range recorder.changes[0] {
+		byPath[change.Path] = change
 	}
+	for _, path := range publiclocale.Paths("/p1/") {
+		change, ok := byPath[path]
+		if !ok || change.Present {
+			t.Fatalf("removed localized project should be absent: path=%s changes=%+v", path, recorder.changes)
+		}
+	}
+}
+
+func localizedChangePaths(logicalPaths []string) []string {
+	var paths []string
+	for _, path := range logicalPaths {
+		paths = append(paths, publiclocale.Paths(path)...)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 func assertChangePaths(t *testing.T, recorder *publicNotifierRecorder, want []string) {

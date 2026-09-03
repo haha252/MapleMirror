@@ -1,5 +1,5 @@
 <section class="project-page" data-project-id="{{.ProjectID}}" data-project-name="{{.DisplayName}}">
-  <a class="project-back" href="/" data-i18n-aria-label="project.back" aria-label="返回枫源镜像">
+  <a class="project-back" href="{{.BackPath}}" data-i18n-aria-label="project.back" aria-label="返回枫源镜像">
     <span class="project-back__icon" aria-hidden="true">
       <svg viewBox="0 0 24 24">
         <path d="M15 5 8 12l7 7"></path>
@@ -10,7 +10,7 @@
 
   <section class="project-layout">
     <div class="project-art">
-      <img class="project-hero__icon" src="{{.IconURL}}" alt="{{.DisplayName}} 图标">
+      <img class="project-hero__icon" src="{{.IconURL}}" data-i18n-alt="project.icon" data-i18n-params='{"value":"{{.DisplayName}}"}' alt="{{.DisplayName}} 图标">
     </div>
 
     <div class="project-main">
@@ -18,7 +18,7 @@
         <div class="project-title-wrap">
           <h2>{{.DisplayName}}</h2>
           <p class="muted">{{.Repository}}</p>
-          {{if .LatestPublishedAt}}<p class="muted project-updated" data-updated-at="{{.LatestPublishedAt}}">最近更新：{{.LatestPublishedAt}}</p>{{end}}
+          {{if .LatestPublishedAt}}<p class="muted project-updated" data-updated-at="{{.LatestPublishedAt}}" data-i18n="download.projectUpdated" data-i18n-params='{"value":"{{.LatestPublishedAt}}"}'>最近更新：{{.LatestPublishedAt}}</p>{{end}}
         </div>
         {{if .HomepageURL}}
         <a class="project-homepage" href="{{.HomepageURL}}" target="_blank" rel="noopener noreferrer"

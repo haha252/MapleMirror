@@ -24,7 +24,7 @@ func assertDownloadCardLayout(t *testing.T, body string) {
 		previous = position
 	}
 	if strings.Contains(body, `class="project-availability"`) ||
-		!strings.Contains(body, `class="download-button" disabled>暂不可下载</button>`) {
+		!strings.Contains(body, `class="download-button" data-i18n="download.unavailable" disabled>暂不可下载</button>`) {
 		t.Fatalf("卡片应仅通过下载按钮表达当前文件是否可下载：%s", body)
 	}
 }

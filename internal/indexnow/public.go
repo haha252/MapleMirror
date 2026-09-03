@@ -7,24 +7,30 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+
+	"mirror-server/internal/publiclocale"
 )
 
 func (m *Manager) Bootstrap(projectIDs []string, revision string) {
-	paths := []string{"/", "/about", "/api-docs", "/stats", "/changelog"}
+	logicalPaths := []string{"/", "/about", "/api-docs", "/stats", "/changelog"}
 	for _, projectID := range projectIDs {
 		projectID = strings.Trim(strings.TrimSpace(projectID), "/")
 		if projectID != "" && !strings.Contains(projectID, "/") {
-			paths = append(paths, "/"+url.PathEscape(projectID)+"/")
+			logicalPaths = append(logicalPaths, "/"+url.PathEscape(projectID)+"/")
 		}
 	}
-	changes := make([]PageChange, 0, len(paths))
-	for _, path := range paths {
-		normalized, ok := m.normalizePath(path)
-		if !ok {
-			continue
+	changes := make([]PageChange, 0, len(logicalPaths)*len(publiclocale.All()))
+	for _, path := range logicalPaths {
+		fingerprint := revisionFingerprint(revision, path)
+		for _, localizedPath := range publiclocale.Paths(path) {
+			normalized, ok := m.normalizePath(localizedPath)
+			if !ok {
+				continue
+			}
+			changes = append(changes, PageChange{
+				Path: normalized, Fingerprint: fingerprint, Present: true,
+			})
 		}
-		changes = append(changes, PageChange{Path: normalized,
-			Fingerprint: revisionFingerprint(revision, normalized), Present: true})
 	}
 	queued := m.reconcileChanges(changes, false)
 	if queued > 0 {

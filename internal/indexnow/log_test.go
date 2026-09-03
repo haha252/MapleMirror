@@ -14,6 +14,7 @@ import (
 
 	"mirror-server/internal/config"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/publiclocale"
 )
 
 func TestSubmissionSuccessLogContainsStatisticsWithoutResponseBody(t *testing.T) {
@@ -148,7 +149,7 @@ func TestBootstrapLogContainsCountWithoutURLList(t *testing.T) {
 
 	entries, raw := readIndexNowLog(t, directory)
 	entry := findLogEntry(t, entries, "IndexNow bootstrap 已排队")
-	if entry["url_count"] != float64(7) || strings.Contains(raw, "https://fyhub.cn/") {
+	if entry["url_count"] != float64(7*len(publiclocale.All())) || strings.Contains(raw, "https://fyhub.cn/") {
 		t.Fatalf("bootstrap log should contain only count: entry=%v raw=%s", entry, raw)
 	}
 }

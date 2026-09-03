@@ -82,9 +82,20 @@ func TestBrowserLocaleCannotRewriteIndexablePageSEO(t *testing.T) {
 		`window.location.assign(url);`,
 		`window.location.replace(url);`,
 		`saved === "auto" ? browserLocale() : canonicalize(saved)`,
+		`getAttribute("data-locale-routes")`,
+		`JSON.parse(raw)`,
 	} {
 		if !strings.Contains(routing, want) {
 			t.Fatalf("locale URL routing missing %q: %s", want, routing)
+		}
+	}
+	for _, forbidden := range []string{
+		`data-locale-en-path`,
+		`data-locale-zh-path`,
+		`next === "en"`,
+	} {
+		if strings.Contains(routing, forbidden) {
+			t.Fatalf("locale routing must be registry-driven, found %q: %s", forbidden, routing)
 		}
 	}
 	for _, forbidden := range []string{

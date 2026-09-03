@@ -147,7 +147,7 @@
   function displayBeijingTime(value) {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return value || "";
-    const parts = new Intl.DateTimeFormat(i18n ? i18n.getLocale() : "zh-CN", {
+    const parts = new Intl.DateTimeFormat(i18n ? i18n.getLocale() : (document.documentElement.lang || undefined), {
       timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit",
       day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
     }).formatToParts(parsed);

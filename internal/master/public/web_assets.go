@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"html/template"
 	"io/fs"
 	"os"
@@ -29,6 +28,7 @@ type webAssets struct {
 	placeholder       []byte
 	staticManifest    map[string]string
 	staticJSON        template.JS
+	localeMessages    map[string]map[string]string
 }
 
 var (
@@ -50,6 +50,10 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 		return nil, err
 	}
 	manifest, staticJSON, err := buildStaticManifest(staticFS)
+	if err != nil {
+		return nil, err
+	}
+	localeMessages, err := loadPublicLocaleMessages(staticFS)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +97,7 @@ func loadEmbeddedWebAssets() (*webAssets, error) {
 		placeholder:       placeholder,
 		staticManifest:    manifest,
 		staticJSON:        staticJSON,
+		localeMessages:    localeMessages,
 	}, nil
 }
 
@@ -109,6 +114,10 @@ func loadWebAssets(root string) (*webAssets, error) {
 	staticDir := filepath.Join(root, "static")
 	staticFS := os.DirFS(staticDir)
 	manifest, staticJSON, err := buildStaticManifest(staticFS)
+	if err != nil {
+		return nil, err
+	}
+	localeMessages, err := loadPublicLocaleMessages(staticFS)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +162,7 @@ func loadWebAssets(root string) (*webAssets, error) {
 		placeholder:       placeholder,
 		staticManifest:    manifest,
 		staticJSON:        staticJSON,
+		localeMessages:    localeMessages,
 	}, nil
 }
 
@@ -223,27 +233,4 @@ func (assets *webAssets) staticJSONFor(names []string) template.JS {
 	}
 	data, _ := json.Marshal(manifest)
 	return template.JS(data)
-}
-
-func findRepoResource(parts ...string) (string, error) {
-	candidates := []string{}
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, cwd)
-	}
-	if exe, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Dir(exe))
-	}
-	for _, start := range candidates {
-		for dir := start; ; dir = filepath.Dir(dir) {
-			target := filepath.Join(append([]string{dir}, parts...)...)
-			if info, err := os.Stat(target); err == nil && info.IsDir() {
-				return target, nil
-			}
-			next := filepath.Dir(dir)
-			if next == dir {
-				break
-			}
-		}
-	}
-	return "", errors.New("未找到 web/public 资源目录")
 }

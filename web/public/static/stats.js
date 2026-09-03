@@ -17,7 +17,7 @@
   const metricNames = [["stats.views", "stats.visits", false], ["stats.downloads", "stats.downloadCount", false], ["stats.traffic", "", true]];
   const sourceTools = window.MirrorStatsSources;
   function fmt(value) {
-    return i18n ? i18n.formatNumber(value) : new Intl.NumberFormat("zh-CN").format(value || 0);
+    return i18n ? i18n.formatNumber(value) : new Intl.NumberFormat(document.documentElement.lang || undefined).format(value || 0);
   }
   function bytes(value) {
     if (value < 1024 * 1024) return fmt(value) + " B";

@@ -17,7 +17,7 @@ func changelogShellBody(staticURL func(string) string) template.HTML {
           <div class="catalog-filters__mobile-actions">
             <button id="changelog-filter-clear" type="button" disabled>
               <svg aria-hidden="true"><use href="__ICONS__#broom"></use></svg>
-              <span>取消全部</span>
+              <span data-i18n="catalog.clear">取消全部</span>
             </button>
             <button id="changelog-filter-close" type="button" data-i18n-aria-label="catalog.close" aria-label="关闭筛选器">
               <svg aria-hidden="true"><use href="__ICONS__#close"></use></svg>
@@ -32,13 +32,13 @@ func changelogShellBody(staticURL func(string) string) template.HTML {
             </summary>
             <div class="catalog-filter-options">
               <label class="catalog-filter-option"><input type="radio"
-                name="changelog-minimum-level" value="info" checked><span>展示全部</span></label>
+                name="changelog-minimum-level" value="info" checked><span data-i18n="changelog.all">展示全部</span></label>
               <label class="catalog-filter-option"><input type="radio"
-                name="changelog-minimum-level" value="notice"><span>公告及以上</span></label>
+                name="changelog-minimum-level" value="notice"><span data-i18n="changelog.notice">公告及以上</span></label>
               <label class="catalog-filter-option"><input type="radio"
-                name="changelog-minimum-level" value="warn"><span>警告及以上</span></label>
+                name="changelog-minimum-level" value="warn"><span data-i18n="changelog.warn">警告及以上</span></label>
               <label class="catalog-filter-option"><input type="radio"
-                name="changelog-minimum-level" value="critical"><span>事故</span></label>
+                name="changelog-minimum-level" value="critical"><span data-i18n="changelog.critical">事故</span></label>
             </div>
           </details>
         </div>
@@ -60,7 +60,7 @@ func changelogShellBody(staticURL func(string) string) template.HTML {
       </div>
       <div id="changelog-timeline" class="changelog-timeline" role="list"></div>
       <div id="changelog-load-more" class="changelog-load-more">
-        <button type="button" class="button-link" hidden>加载更多</button>
+        <button type="button" class="button-link" data-i18n="changelog.loadMore" hidden>加载更多</button>
       </div>
       <div id="changelog-status" class="changelog-status muted"
         role="status" aria-live="polite" data-i18n="changelog.loading">正在加载更新记录...</div>

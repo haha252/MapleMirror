@@ -1,10 +1,32 @@
 (function (root) {
   "use strict";
 
-  function localizedPath(next) {
+  function localeRoutes() {
     var page = document.documentElement;
-    if (!page) return "";
-    return page.getAttribute(next === "en" ? "data-locale-en-path" : "data-locale-zh-path") || "";
+    if (!page) return {};
+    var raw = page.getAttribute("data-locale-routes") || "";
+    if (!raw) return {};
+    try {
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function localizedPath(next) {
+    var routes = localeRoutes();
+    return typeof routes[next] === "string" ? routes[next] : "";
+  }
+
+  function localizePath(path) {
+    path = String(path || "");
+    if (!path || path.charAt(0) !== "/") return path;
+    var page = document.documentElement;
+    var prefix = page ? String(page.getAttribute("data-locale-prefix") || "").replace(/^\/+|\/+$/g, "") : "";
+    if (!prefix) return path;
+    if (path === "/") return "/" + prefix + "/";
+    return "/" + prefix + path;
   }
 
   function navigateToLocale(next, replace) {
@@ -25,6 +47,7 @@
   }
 
   root.MirrorLocaleRouting = {
+    localizePath: localizePath,
     navigateToLocale: navigateToLocale,
     syncSavedLocale: syncSavedLocale
   };

@@ -11,7 +11,7 @@
           <div class="catalog-filters__mobile-actions">
             <button id="catalog-filter-clear" type="button" disabled>
               <svg aria-hidden="true"><use href="{{staticURL "icons.svg#broom"}}"></use></svg>
-              <span>取消全部</span>
+              <span data-i18n="catalog.clear">取消全部</span>
             </button>
             <button id="catalog-filter-close" type="button" data-i18n-aria-label="catalog.close" aria-label="关闭筛选器">
               <svg aria-hidden="true"><use href="{{staticURL "icons.svg#close"}}"></use></svg>
@@ -32,7 +32,7 @@
       <button id="catalog-filter-button" class="catalog-filter-button" type="button"
         data-i18n-aria-label="catalog.filterButton" aria-label="打开筛选器" aria-controls="catalog-filters" aria-expanded="false">
         <svg aria-hidden="true"><use href="{{staticURL "icons.svg#filter"}}"></use></svg>
-        <span>筛选器</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
+        <span data-i18n="catalog.filter">筛选器</span><span id="catalog-filter-count" class="catalog-filter-count" hidden></span>
       </button>
     </div>
     <section class="catalog-results" aria-live="polite"
@@ -101,7 +101,7 @@
         </div>
         <div class="project-card__actions">
           <span class="project-card__size muted"></span>
-          <button type="button" class="download-button" disabled>暂不可下载</button>
+          <button type="button" class="download-button" data-i18n="download.unavailable" disabled>暂不可下载</button>
         </div>
       </div>
     </section>

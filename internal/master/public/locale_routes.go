@@ -2,9 +2,12 @@ package public
 
 import (
 	"net/http"
+	"strings"
+
+	"mirror-server/internal/publiclocale"
 )
 
-func (s Server) englishPagesHandler() http.Handler {
+func (s Server) localizedPagesHandler(locale publiclocale.Locale) http.Handler {
 	pages := http.NewServeMux()
 	pages.HandleFunc("/stats", s.statsPage)
 	pages.HandleFunc("/changelog", s.changelogPage)
@@ -17,5 +20,7 @@ func (s Server) englishPagesHandler() http.Handler {
 		}
 		http.NotFound(w, r)
 	})
-	return withPublicLocale(publicLocaleEN, http.StripPrefix("/en", pages))
+
+	prefix := "/" + strings.Trim(locale.PathPrefix, "/")
+	return withPublicLocale(locale.ID, http.StripPrefix(prefix, pages))
 }

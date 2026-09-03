@@ -4,7 +4,7 @@
   var storageKey = "mirror-locale";
   var locales = window.MirrorI18nLocales || {};
   var order = Object.keys(locales);
-  var defaultLocale = locales["zh-CN"] ? "zh-CN" : (order[0] || "zh-CN");
+  var configuredDefault = document.documentElement.getAttribute("data-default-locale") || "", defaultLocale = locales[configuredDefault] ? configuredDefault : (order[0] || configuredDefault);
   var listeners = [];
   var locale = defaultLocale;
   var errors = {"INVALID_REQUEST":"error.invalid","CATALOG_CHANGED":"catalog.changed","CHANGELOG_CHANGED":"changelog.changed","PUBLIC_INTERNAL_ERROR":"error.generic","ASSET_NOT_FOUND":"error.projectNotFound","DOWNLOAD_TOKEN_INVALID":"error.tokenInvalid","CLIENT_BLOCKED":"blocked.message","CLIENT_RATE_LIMITED":"error.rateLimited","PUBLIC_RESOURCE_RATE_LIMITED":"error.rateLimited","WEB_PROTOCOL_RETIRED":"error.protocolRetired","API_VERSION_RETIRED":"error.apiRetired","INVALID_CLIENT_SOURCE":"error.invalidSource","CHALLENGE_RATE_LIMITED":"error.challengeRateLimited","CHALLENGE_CAPACITY_REACHED":"error.challengeBusy","VDF_BUSY":"error.challengeBusy","NO_ROUTABLE_NODE":"error.noNode","REQUEST_QUOTA_EXHAUSTED":"error.requestQuota","TRAFFIC_LIMIT_EXCEEDED":"error.trafficLimit","CHALLENGE_IN_PROGRESS":"error.challengeInProgress","CHALLENGE_REQUIRED":"error.challengeRequired","CHALLENGE_FAILED":"error.challengeFailed"};
@@ -88,9 +88,7 @@
     if (!value) return "";
     var parsed = new Date(value);
     if (isNaN(parsed.getTime())) return value;
-    return new Intl.DateTimeFormat(locale, {
-      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
-    }).format(parsed);
+    return new Intl.DateTimeFormat(locale, {year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}).format(parsed);
   }
 
   function setRootLocale() {
@@ -146,18 +144,24 @@
     }
   }
 
+  function nodeParams(node) {
+    var raw = node && node.getAttribute("data-i18n-params");
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (_) { return null; }
+  }
+
   function apply(root) {
     root = root || document;
     setRootLocale();
     var nodes = root.querySelectorAll ? root.querySelectorAll("[data-i18n]") : [];
-    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute("data-i18n"));
+    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute("data-i18n"), nodeParams(nodes[i]));
     var attrs = ["title", "aria-label", "placeholder", "alt"];
     var all = root.querySelectorAll ? root.querySelectorAll("*") : [];
     for (var j = 0; j < all.length; j++) {
       for (var k = 0; k < attrs.length; k++) {
         var name = attrs[k];
         var key = all[j].getAttribute("data-i18n-" + name);
-        if (key) all[j].setAttribute(name, t(key));
+        if (key) all[j].setAttribute(name, t(key, nodeParams(all[j])));
       }
     }
     applyPageTitles(root);
@@ -226,12 +230,8 @@
   function onChange(listener) {
     if (typeof listener !== "function") return function () {};
     listeners.push(listener);
-    return function () {
-      var index = listeners.indexOf(listener);
-      if (index >= 0) listeners.splice(index, 1);
-    };
+    return function () { var index = listeners.indexOf(listener); if (index >= 0) listeners.splice(index, 1); };
   }
-
   // The URL/SSR response owns the initial language. Browser language is only
   // consulted after the user explicitly chooses "Follow browser".
   locale = canonical(document.documentElement.lang) || defaultLocale;

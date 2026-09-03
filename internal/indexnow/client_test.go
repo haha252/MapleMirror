@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"mirror-server/internal/publiclocale"
 )
 
 func TestBootstrapPayloadUsesApexHostAndPublicPages(t *testing.T) {
@@ -34,11 +36,11 @@ func TestBootstrapPayloadUsesApexHostAndPublicPages(t *testing.T) {
 	if payload.Key != manager.Key() || payload.KeyLocation != "https://fyhub.cn/"+manager.Key()+".txt" {
 		t.Fatalf("unexpected key fields: %+v", payload)
 	}
-	want := map[string]bool{
-		"https://fyhub.cn/": true, "https://fyhub.cn/about": true,
-		"https://fyhub.cn/api-docs": true, "https://fyhub.cn/stats": true,
-		"https://fyhub.cn/changelog": true,
-		"https://fyhub.cn/p1/":       true, "https://fyhub.cn/p2/": true,
+	want := map[string]bool{}
+	for _, path := range []string{"/", "/about", "/api-docs", "/stats", "/changelog", "/p1/", "/p2/"} {
+		for _, localizedPath := range publiclocale.Paths(path) {
+			want["https://fyhub.cn"+localizedPath] = true
+		}
 	}
 	got := make(map[string]bool, len(payload.URLList))
 	for _, value := range payload.URLList {

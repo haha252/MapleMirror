@@ -28,8 +28,10 @@
     const assets = Array.isArray(project.assets) ? project.assets : [];
     const versions = selectors.uniqueVersions(assets);
     const defaultVersion = project.default_version || versions[0] || "";
-    const localePrefix = document.documentElement.lang === "en" ? "/en" : "";
-    const projectHref = localePrefix + "/" + encodeURIComponent(project.project_id || "") + "/";
+    const logicalProjectPath = "/" + encodeURIComponent(project.project_id || "") + "/";
+    const localeRouting = window.MirrorLocaleRouting;
+    const projectHref = localeRouting && localeRouting.localizePath ?
+      localeRouting.localizePath(logicalProjectPath) : logicalProjectPath;
     const icon = card.querySelector(".project-card__icon");
     const link = card.querySelector(".project-link");
     icon.src = project.icon_url;

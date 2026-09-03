@@ -7,6 +7,7 @@ require gopkg.in/yaml.v3 v3.0.1
 require (
 	github.com/google/uuid v1.6.0
 	go.starlark.net v0.0.0-20260613233743-8ba36ccb83fb
+	golang.org/x/net v0.56.0
 	golang.org/x/sys v0.46.0
 	golang.org/x/time v0.14.0
 	modernc.org/sqlite v1.54.0

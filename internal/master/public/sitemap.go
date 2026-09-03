@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"mirror-server/internal/publiclocale"
 )
 
 type sitemapURLSet struct {
@@ -35,12 +37,12 @@ func (s Server) sitemap(w http.ResponseWriter, r *http.Request) {
 		}
 		paths = append(paths, "/"+url.PathEscape(project.ProjectID)+"/")
 	}
-	urls := make([]sitemapURL, 0, len(paths)*2)
+	locales := publiclocale.All()
+	urls := make([]sitemapURL, 0, len(paths)*len(locales))
 	for _, path := range paths {
-		urls = append(urls,
-			sitemapURL{Loc: origin + localizedPublicPath(publicLocaleZH, path)},
-			sitemapURL{Loc: origin + localizedPublicPath(publicLocaleEN, path)},
-		)
+		for _, locale := range locales {
+			urls = append(urls, sitemapURL{Loc: origin + publiclocale.LocalizedPath(locale.ID, path)})
+		}
 	}
 	body, err := xml.MarshalIndent(sitemapURLSet{
 		Xmlns: "http://www.sitemaps.org/schemas/sitemap/0.9",

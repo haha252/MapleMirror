@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"mirror-server/internal/publiclocale"
 )
 
 const projectPageServiceDescription = "枫源镜像 是一个公益镜像服务，面向 Github Release 设计。我们致力于为所有用户提供，免费、纯净、高速且稳定的下载服务，获取到软件的最新版本。"
@@ -17,6 +19,7 @@ type projectPageBody struct {
 	HomepageURL       string
 	IconURL           string
 	LatestPublishedAt string
+	BackPath          string
 }
 
 func (s Server) maybeProjectPage(w http.ResponseWriter, r *http.Request) bool {
@@ -36,6 +39,7 @@ func (s Server) maybeProjectPage(w http.ResponseWriter, r *http.Request) bool {
 		http.Error(w, "项目页面读取失败", http.StatusInternalServerError)
 		return true
 	}
+	project.BackPath = publiclocale.LocalizedPath(requestPublicLocale(r), "/")
 	body, err := s.renderTemplateBody("project", project)
 	if err != nil {
 		http.Error(w, "项目页面渲染失败", http.StatusInternalServerError)
