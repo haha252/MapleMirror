@@ -44,7 +44,8 @@ func (s Server) authorizationByID(w http.ResponseWriter, r *http.Request, pathPr
 	sent, first, _ := s.Store.AuthorizationBytes(r.Context(), id)
 	writeOK(w, r, http.StatusOK, "查询成功", map[string]any{
 		"authorization_id": auth.AuthorizationID, "asset_id": auth.AssetID,
-		"node_id": auth.NodeName, "state": auth.State, "expires_at": auth.ExpiresAt,
+		"node_name": auth.NodeName, "node_id": auth.NodeName,
+		"state": auth.State, "expires_at": auth.ExpiresAt,
 		"bytes_accounting_enabled": true, "sent_bytes": sent, "first_transfer_at": first,
 	})
 }

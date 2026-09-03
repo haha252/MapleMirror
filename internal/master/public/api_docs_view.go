@@ -34,6 +34,7 @@ const apiDocsBody = `
       <a href="#other-public-apis" data-i18n="api.otherTitle">其他接口</a>
     </div>
   </section>
+` + apiDocsContractDetails + `
 
   <section class="api-endpoint api-flow" id="web-download-flow">
     <h2 data-i18n="api.webTitle">方式一：跳转主站验证页下载</h2>
@@ -41,8 +42,8 @@ const apiDocsBody = `
     <p class="api-note" data-i18n="api.webNote">需要特别注意：这里要跳转的是主站地址，不是下载节点地址。外部前端应该把用户带到主站的验证页面，由主站完成验证、授权和节点选择，最后再跳转到真实下载节点开始下载。</p>
     <div class="api-route"><span class="api-method method-get">GET</span><code>/{project_id}/{version}/{file_name}</code></div>
     <p class="api-label" data-i18n="api.verificationExample">验证页地址示例</p>
-    <pre><code>https://mirror.example.com/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk</code></pre>
-    <p data-i18n="api.webAddress">这里的 https://mirror.example.com 应该是主站公共入口，不是某个节点的 public_download_base_url。</p>
+    <pre><code>https://fyhub.cn/fcl/1.3.0.9/FCL-release-1.3.0.9-arm64-v8a.apk</code></pre>
+    <p data-i18n="api.webAddress">这里的 https://fyhub.cn 就是枫源镜像主站公共入口，不是某个下载节点的 public_download_base_url。</p>
 
     <details class="api-details">
       <summary data-i18n="api.projectLookup">如果不知道项目是哪一个，可以先查询项目列表</summary>
@@ -73,7 +74,7 @@ const apiDocsBody = `
   }
 }</code></pre>
     <p data-i18n="api.webDownloadDescription">前端可以根据这些字段生成下载按钮。用户点击按钮时，跳转到主站验证页：</p>
-    <pre><code>https://mirror.example.com/example/v1.2.3/example-windows-amd64.zip</code></pre>
+    <pre><code>https://fyhub.cn/example/v1.2.3/example-windows-amd64.zip</code></pre>
     <ol class="api-steps">
       <li data-i18n="api.stepShowVerification">展示下载验证页面。</li>
       <li data-i18n="api.stepSolveChallenge">在浏览器中完成下载挑战计算。</li>
@@ -90,7 +91,7 @@ const apiDocsBody = `
 
     <h3 data-i18n="api.step1Title">第一步：查询项目列表</h3>
     <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/projects</code></div>
-    <p data-i18n="api.step1Description">查询已启用且至少存在可展示 Release 的项目列表，拿到后续要使用的 project_id。</p>
+    <p data-i18n="api.step1Description">查询当前已启用的项目列表并取得 project_id。项目即使暂时没有可路由下载资产也可能出现在结果中，应以 available 判断当前是否可下载。</p>
     <table class="api-params"><thead><tr><th data-i18n="api.parameter">参数</th><th data-i18n="api.type">类型</th><th data-i18n="api.description">描述</th></tr></thead><tbody><tr><td colspan="3" class="empty" data-i18n="api.none">无</td></tr></tbody></table>
     <p class="api-label" data-i18n="api.exampleRequest">Example Request</p>
     <pre><code>GET /api/public/v1/projects</code></pre>
@@ -101,7 +102,14 @@ const apiDocsBody = `
   "request_id": "req_...",
   "data": {
     "projects": [
-      {"project_id": "example", "display_name": "示例项目", "available": true}
+      {
+        "project_id": "example",
+        "repository": "owner/example",
+        "display_name": "示例项目",
+        "description": "示例说明",
+        "homepage_url": "https://fyhub.cn",
+        "available": true
+      }
     ]
   }
 }</code></pre>
@@ -117,13 +125,25 @@ const apiDocsBody = `
   "status": "success",
   "data": {
     "assets": [
-      {"asset_id": "asset_123", "file_name": "example.zip", "architecture": "amd64", "system": "win", "available": true}
+      {
+        "asset_id": "asset_123",
+        "version": "v1.2.3",
+        "download_path": "/example/v1.2.3/example.zip",
+        "prerelease": false,
+        "file_name": "example.zip",
+        "architecture": "amd64",
+        "system": "win",
+        "size_bytes": 10485760,
+        "digest_sha256": "0123456789abcdef...",
+        "available": true,
+        "unavailable_reason": ""
+      }
     ]
   }
 }</code></pre>
 
     <h3 data-i18n="api.step3Title">第三步：创建 API V2 顺序工作量挑战</h3>
-    <p class="api-danger-note" role="alert" data-i18n="api.step3Warning">API V1 计算与验证方式弃用提醒：旧版第三步接口 /api/public/v1/api/challenges 和旧版第五步接口 /api/public/v1/api/authorizations 使用 SHA-256 前导零 nonce 搜索，将在后续版本弃用。API V2 已改为 RSA repeated-squaring 顺序模平方并提交 384 字节定长 solution；请求和响应字段也随之改变，不能只替换接口路径。现有 V1 兼容暂时继续可用，但不代表长期可用，后续将会择机停用与删除。新客户端和新集成应直接实现下面的 V2 计算与验证方式。</p>
+    <p class="api-danger-note" role="alert" data-i18n="api.step3Warning">旧版“下载授权协议 V1”弃用提醒：仅 /api/public/v1/api/challenges 与 /api/public/v1/api/authorizations 这两个旧 PoW/授权接口使用 SHA-256 前导零 nonce 搜索，并且当前部署可以直接关闭它们并返回 410 API_VERSION_RETIRED。这里不代表 /api/public/v1/ 下的项目、资产、封禁列表和更新日志接口被弃用。新客户端必须直接实现下面的 V2 repeated-squaring 流程，不能只替换接口路径。</p>
     <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v2/api/challenges</code></div>
     <p data-i18n="api.step3Description">为指定资产创建 3072 位 RSA repeated-squaring 挑战。响应中的 modulus 和 base 是 384 字节无符号大端整数的无填充 base64url 编码。</p>
     <table class="api-params"><thead><tr><th data-i18n="api.parameter">参数</th><th data-i18n="api.type">类型</th><th data-i18n="api.description">描述</th></tr></thead><tbody><tr><td>asset_id</td><td>JSON</td><td data-i18n="api.assetIdentifier">要下载的资产标识</td></tr></tbody></table>
@@ -135,12 +155,14 @@ const apiDocsBody = `
   "status": "success",
   "data": {
     "challenge_id": "challenge_123",
+    "asset_id": "asset_123",
     "algorithm": "rsa-repeated-squaring-v1",
     "modulus_id": "模数标识",
     "modulus": "512 字符 base64url 整数",
     "base": "512 字符 base64url 整数",
     "iterations": 96000,
-    "encoding": "base64url-uint-be-384"
+    "encoding": "base64url-uint-be-384",
+    "expires_at": "2026-09-03T12:05:00Z"
   }
 }</code></pre>
 
@@ -150,8 +172,8 @@ const apiDocsBody = `
 
     <h3 data-i18n="api.step5Title">第五步：提交 solution 并领取下载授权</h3>
     <div class="api-route"><span class="api-method method-post">POST</span><code>/api/public/v2/api/authorizations</code></div>
-    <p data-i18n="api.step5Description">提交顺序工作量结果并领取短时、单节点绑定的下载授权。telemetry 可选且只用于统计，不影响授权。API V1 在配置开启时仍保持原 SHA-256 合同。</p>
-    <table class="api-params"><thead><tr><th data-i18n="api.parameter">参数</th><th data-i18n="api.type">类型</th><th data-i18n="api.description">描述</th></tr></thead><tbody><tr><td>challenge_id</td><td>JSON</td><td data-i18n="api.challengeIdentifier">挑战标识</td></tr><tr><td>asset_id</td><td>JSON</td><td data-i18n="api.assetIdentifier">资产标识</td></tr><tr><td>nonce</td><td>JSON</td><td data-i18n="api.nonceDescription">满足前导零要求的 nonce</td></tr></tbody></table>
+    <p data-i18n="api.step5Description">提交顺序工作量结果并领取短时、单节点绑定的下载授权。challenge_id、asset_id 与 solution 都必须来自同一条 V2 挑战链路。程序 API 当前没有需要客户端上报的 telemetry 字段。</p>
+    <table class="api-params"><thead><tr><th data-i18n="api.parameter">参数</th><th data-i18n="api.type">类型</th><th data-i18n="api.description">描述</th></tr></thead><tbody><tr><td>challenge_id</td><td>JSON</td><td data-i18n="api.challengeIdentifier">挑战标识</td></tr><tr><td>asset_id</td><td>JSON</td><td data-i18n="api.assetIdentifier">资产标识</td></tr><tr><td>solution</td><td>JSON</td><td data-i18n="api.solutionDescription">512 字符的定长 base64url repeated-squaring 结果</td></tr></tbody></table>
     <p class="api-label" data-i18n="api.exampleRequest">Example Request</p>
     <pre><code>POST /api/public/v2/api/authorizations
 {"challenge_id":"challenge_123","asset_id":"asset_123","solution":"512 字符 base64url 整数"}</code></pre>
@@ -160,14 +182,16 @@ const apiDocsBody = `
   "status": "success",
   "data": {
     "authorization_id": "auth_123",
-    "download_url": "https://node.example/example/v1.2.3/example-windows-amd64.zip",
+    "download_url": "由服务端返回的实际下载节点 URL",
     "download_token": "43 字符短时随机令牌",
-    "expires_at": "2026-05-28T12:05:00Z"
+    "expires_at": "2026-09-03T12:05:00Z",
+    "range_concurrency_limit": 32,
+    "max_bytes": 20971520
   }
 }</code></pre>
 
     <h3 data-i18n="api.step6Title">第六步：请求下载节点</h3>
-    <p data-i18n="api.step6Description">程序应直接访问授权响应里的 download_url，并通过请求头携带下载令牌。这里的 download_url 通常指向下载节点；程序调用 API 的这条链路里，下载文件时访问节点地址是正确的。</p>
+    <p data-i18n="api.step6Description">程序应直接访问授权响应里的 download_url，并通过请求头携带 download_token。download_url 通常指向下载节点；授权成功后实际文件请求允许从与挑战阶段不同的出口访问，但令牌属于 Bearer 凭据，泄露后可能被他人使用。客户端还应遵守响应中的 range_concurrency_limit 与 max_bytes。</p>
     <div class="api-route"><span class="api-method method-get">GET</span><code>{download_url}</code></div>
     <p class="api-label" data-i18n="api.exampleRequest">Example Request</p>
     <pre><code>GET {download_url}
@@ -211,22 +235,5 @@ Range: bytes=1048576-2097151</code></pre>
     <pre><code>GET /api/public/v1/changelog?minimum_level=notice&amp;q=下载&amp;limit=20</code></pre>
   </section>
 
-  <section class="api-endpoint">
-    <div class="api-route"><span class="api-method method-get">GET</span><code>/api/public/v1/authorizations/{authorization_id}</code></div>
-    <p data-i18n="api.authorizationDescription">携带对应下载令牌查询授权状态、过期时间、公开节点名和已入账真实发送字节。</p>
-    <table class="api-params"><thead><tr><th data-i18n="api.parameter">参数</th><th data-i18n="api.type">类型</th><th data-i18n="api.description">描述</th></tr></thead><tbody><tr><td>authorization_id</td><td>Path</td><td data-i18n="api.authorizationIdentifier">授权标识</td></tr><tr><td>Authorization</td><td>Header</td><td>Bearer &lt;download_token&gt;</td></tr></tbody></table>
-    <p class="api-label" data-i18n="api.exampleRequest">Example Request</p>
-    <pre><code>GET /api/public/v1/authorizations/auth_123
-Authorization: Bearer &lt;download_token&gt;</code></pre>
-    <p class="api-label" data-i18n="api.exampleResponse">Example Response</p>
-    <pre><code>{
-  "status": "success",
-  "data": {
-    "authorization_id": "auth_123",
-    "state": "issued",
-    "bytes_accounting_enabled": true,
-    "sent_bytes": 1048576
-  }
-}</code></pre>
-  </section>
+` + apiDocsAuthorizationStatusDetails + `
 </div>`

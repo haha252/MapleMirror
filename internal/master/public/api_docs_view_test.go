@@ -34,9 +34,17 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/api/public/v1/projects/{project_id}/assets`,
 		`/api/public/v2/api/challenges`,
 		`/api/public/v2/api/authorizations`,
-		`API V1 计算与验证方式弃用提醒`,
+		`/api/public/v2/authorizations/{authorization_id}`,
+		`接入前先看：稳定性与通用约定`,
+		`站点内部公共端点`,
+		`JSON 响应格式`,
+		`PUBLIC_RESOURCE_RATE_LIMITED`,
+		`Retry-After`,
+		`客户端来源绑定`,
+		`下载授权协议 V1`,
 		`SHA-256 前导零 nonce 搜索`,
 		`不能只替换接口路径`,
+		`410 API_VERSION_RETIRED`,
 		`/api/public/v1/api/challenges`,
 		`/api/public/v1/api/authorizations`,
 		`class="api-danger-note" role="alert"`,
@@ -56,6 +64,10 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 		`/api/public/v1/changelog`,
 		`/{project_id}/{version}/{file_name}`,
 		`download_url`,
+		`range_concurrency_limit`,
+		`max_bytes`,
+		`node_name`,
+		`node_id 为兼容旧客户端暂时保留`,
 		`Authorization: Bearer &lt;download_token&gt;`,
 		`class="api-method method-get"`,
 	} {
@@ -72,6 +84,9 @@ func TestAPIDocsPageOnlyDocumentsPublicAPI(t *testing.T) {
 	}
 	if strings.Contains(body, "/api/admin/v1") {
 		t.Fatalf("API docs page must not document admin API: %s", body)
+	}
+	if strings.Contains(body, "<td>nonce</td>") {
+		t.Fatalf("V2 authorization docs must use solution rather than legacy nonce: %s", body)
 	}
 	home := strings.Index(body, `href="/"`)
 	stats := strings.Index(body, `href="/stats"`)

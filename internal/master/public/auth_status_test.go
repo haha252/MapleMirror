@@ -53,7 +53,7 @@ func TestAuthorizationStatusAllowsMatchingClientPrefix(t *testing.T) {
 	}
 }
 
-func TestAuthorizationStatusReturnsPublicNodeName(t *testing.T) {
+func TestAuthorizationStatusReturnsNodeNameWithLegacyNodeIDAlias(t *testing.T) {
 	server, authID, token := prepareAuthorizationStatus(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/public/v1/authorizations/"+authID, nil)
 	req.RemoteAddr = "192.0.2.1:12345"
@@ -63,8 +63,9 @@ func TestAuthorizationStatusReturnsPublicNodeName(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"node_id":"节点一"`) {
-		t.Fatalf("expected public node name, body=%s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `"node_name":"节点一"`) ||
+		!strings.Contains(rec.Body.String(), `"node_id":"节点一"`) {
+		t.Fatalf("expected node_name plus legacy node_id alias, body=%s", rec.Body.String())
 	}
 	if strings.Contains(rec.Body.String(), "node-1") {
 		t.Fatalf("raw node id should not be exposed, body=%s", rec.Body.String())
