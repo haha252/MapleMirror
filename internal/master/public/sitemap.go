@@ -35,9 +35,12 @@ func (s Server) sitemap(w http.ResponseWriter, r *http.Request) {
 		}
 		paths = append(paths, "/"+url.PathEscape(project.ProjectID)+"/")
 	}
-	urls := make([]sitemapURL, 0, len(paths))
+	urls := make([]sitemapURL, 0, len(paths)*2)
 	for _, path := range paths {
-		urls = append(urls, sitemapURL{Loc: origin + path})
+		urls = append(urls,
+			sitemapURL{Loc: origin + localizedPublicPath(publicLocaleZH, path)},
+			sitemapURL{Loc: origin + localizedPublicPath(publicLocaleEN, path)},
+		)
 	}
 	body, err := xml.MarshalIndent(sitemapURLSet{
 		Xmlns: "http://www.sitemaps.org/schemas/sitemap/0.9",

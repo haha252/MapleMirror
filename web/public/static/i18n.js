@@ -125,21 +125,8 @@
       var value = t("page.subtitle." + page);
       subtitle.textContent = value.indexOf("page.subtitle.") === 0 ? originalSubtitle : value;
     }
-    var title = document.querySelector("title");
-    if (title) {
-      var originalTitle = title.getAttribute("data-i18n-original") || title.textContent;
-      title.setAttribute("data-i18n-original", originalTitle);
-      var titleKey = page === "page-project" && projectName ? "page.projectTitle" : "page.title." + page;
-      var browserTitleKey = page === "page-project" && projectName ? "page.browserProjectTitle" : "page.browserTitle." + page;
-      var titleValue = t(browserTitleKey, {
-        title: projectName || originalTitle
-      });
-      if (titleValue === browserTitleKey) {
-        titleValue = t(titleKey, {title: projectName || originalTitle});
-      }
-      title.textContent = titleValue === titleKey ? originalTitle : titleValue;
-      document.title = title.textContent;
-    }
+    // <title>, description, canonical and hreflang are SSR SEO metadata.
+    // Do not rewrite them from browser locale; one URL must have one stable index language.
   }
 
   function updateLanguageMenu() {
@@ -150,7 +137,7 @@
       button.setAttribute("title", t("language.select"));
     }
     if (!menu) return;
-    var active = savedMode() || "auto";
+    var active = savedMode() || locale;
     var choices = menu.querySelectorAll("[data-locale-mode]");
     for (var i = 0; i < choices.length; i++) {
       var selected = choices[i].getAttribute("data-locale-mode") === active;
@@ -214,16 +201,26 @@
     });
   }
 
+  var localeRouting = window.MirrorLocaleRouting;
   function setLocale(mode) {
     var next = mode === "auto" ? browserLocale() : canonical(mode);
     if (!next) return;
     try {
-      if (mode === "auto") localStorage.removeItem(storageKey);
-      else localStorage.setItem(storageKey, next);
+      localStorage.setItem(storageKey, mode === "auto" ? "auto" : next);
     } catch (_) {}
+
+    if (localeRouting && localeRouting.navigateToLocale(next, false)) return;
+
     locale = next;
     apply(document);
     listeners.slice().forEach(function (listener) { listener(locale); });
+  }
+
+  function syncSavedLocale() {
+    if (!localeRouting) return false;
+    var result = localeRouting.syncSavedLocale(savedMode(), locale, browserLocale, canonical);
+    locale = result.locale;
+    return result.redirected;
   }
 
   function onChange(listener) {
@@ -235,7 +232,9 @@
     };
   }
 
-  locale = canonical(savedMode()) || browserLocale();
+  // The URL/SSR response owns the initial language. Browser language is only
+  // consulted after the user explicitly chooses "Follow browser".
+  locale = canonical(document.documentElement.lang) || defaultLocale;
   window.MirrorI18n = {
     apply: apply, errorMessage: errorMessage, formatDate: formatDate, formatNumber: formatNumber,
     getLocale: function () { return locale; }, onChange: onChange, setLocale: setLocale,
@@ -243,6 +242,7 @@
   };
   setRootLocale();
   document.addEventListener("DOMContentLoaded", function () {
+    if (syncSavedLocale()) return;
     apply(document);
     buildLanguageMenu();
     apply(document);

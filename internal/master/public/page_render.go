@@ -14,6 +14,11 @@ type pageData struct {
 	AfterNotices    []noticeView
 	Description     string
 	CanonicalURL    string
+	AlternateZHURL  string
+	AlternateENURL  string
+	ZHPath          string
+	ENPath          string
+	Lang            string
 	Robots          string
 	BodyClass       string
 	HideHeader      bool
@@ -44,6 +49,9 @@ func (s Server) renderPage(w http.ResponseWriter, data pageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	data.StaticJSON = assets.staticJSONFor(data.StaticNames)
+	if data.Lang == "" {
+		data.Lang = publicLocaleZH
+	}
 	if data.StatusCode == 0 {
 		data.StatusCode = http.StatusOK
 	}

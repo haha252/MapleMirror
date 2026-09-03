@@ -66,37 +66,33 @@ func TestPublicPagesUseFyhubApexSEOMetadata(t *testing.T) {
 	}
 }
 
-func TestPageTitleTranslationsKeepHeadingSeparateFromBrowserTitle(t *testing.T) {
+func TestBrowserLocaleCannotRewriteIndexablePageSEO(t *testing.T) {
 	i18n := publicStaticBody(t, "i18n.js")
 	for _, want := range []string{
-		`"page.browserTitle." + page`,
-		`"page.browserProjectTitle"`,
-		`title.textContent = titleValue`,
+		`locale = canonical(document.documentElement.lang) || defaultLocale;`,
+		`localStorage.setItem(storageKey, mode === "auto" ? "auto" : next);`,
+		`if (syncSavedLocale()) return;`,
 	} {
 		if !strings.Contains(i18n, want) {
-			t.Fatalf("i18n page title handling missing %q: %s", want, i18n)
+			t.Fatalf("stable locale handling missing %q: %s", want, i18n)
 		}
 	}
-	zh := publicStaticBody(t, "i18n/zh-CN.js")
+	routing := publicStaticBody(t, "i18n-routing.js")
 	for _, want := range []string{
-		`"page.title.page-download": "枫源镜像"`,
-		`"page.browserTitle.page-download": "枫源镜像 - GitHub Release 软件版本与文件下载服务"`,
-		`"page.title.page-stats": "数据统计"`,
-		`"page.browserTitle.page-stats": "枫源镜像节点状态与下载数据统计 - 访问、流量与 SLA"`,
-		`"page.subtitle.page-stats": "查看节点状态、访问量、下载量、流量与近 30 日趋势。"`,
+		`window.location.assign(url);`,
+		`window.location.replace(url);`,
+		`saved === "auto" ? browserLocale() : canonicalize(saved)`,
 	} {
-		if !strings.Contains(zh, want) {
-			t.Fatalf("Chinese page title translations missing %q: %s", want, zh)
+		if !strings.Contains(routing, want) {
+			t.Fatalf("locale URL routing missing %q: %s", want, routing)
 		}
 	}
-	en := publicStaticBody(t, "i18n/en.js")
-	for _, want := range []string{
-		`"page.browserTitle.page-download": "Maple Mirror - GitHub Release Software Downloads"`,
-		`"page.browserTitle.page-stats": "Maple Mirror Node Status and Download Statistics - Traffic, Visits and SLA"`,
-		`"page.subtitle.page-stats": "View node status, visits, downloads, traffic and the last 30 days of trends."`,
+	for _, forbidden := range []string{
+		`locale = canonical(savedMode()) || browserLocale();`,
+		`document.title =`,
 	} {
-		if !strings.Contains(en, want) {
-			t.Fatalf("English page title translations missing %q: %s", want, en)
+		if strings.Contains(i18n, forbidden) {
+			t.Fatalf("browser locale must not rewrite indexable SEO metadata, found %q: %s", forbidden, i18n)
 		}
 	}
 }

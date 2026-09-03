@@ -14,13 +14,16 @@
 </div>
 {{end}}
 <!doctype html>
-<html lang="zh-CN">
+<html lang="{{.Lang}}"{{if .ZHPath}} data-locale-zh-path="{{.ZHPath}}"{{end}}{{if .ENPath}} data-locale-en-path="{{.ENPath}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if .BrowserTitle}}{{.BrowserTitle}}{{else}}{{.Title}}{{end}}</title>
 {{if .Description}}<meta name="description" content="{{.Description}}">{{end}}
 {{if .CanonicalURL}}<link rel="canonical" href="{{.CanonicalURL}}">{{end}}
+{{if .AlternateZHURL}}<link rel="alternate" hreflang="zh-CN" href="{{.AlternateZHURL}}">{{end}}
+{{if .AlternateENURL}}<link rel="alternate" hreflang="en" href="{{.AlternateENURL}}">{{end}}
+{{if .AlternateZHURL}}<link rel="alternate" hreflang="x-default" href="{{.AlternateZHURL}}">{{end}}
 {{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
 <script>
 (function () {
@@ -51,6 +54,7 @@
 <script src="{{staticURL "compat.js"}}" defer></script>
 <script src="{{staticURL "i18n/zh-CN.js"}}" defer></script>
 <script src="{{staticURL "i18n/en.js"}}" defer></script>
+<script src="{{staticURL "i18n-routing.js"}}" defer></script>
 <script src="{{staticURL "i18n.js"}}" defer></script>
 </head>
 <body class="{{.BodyClass}}">
@@ -63,31 +67,31 @@
       <span class="site-brand__primary">枫源</span><span class="site-brand__secondary">镜像</span>
     </div>
     <nav class="site-nav" data-i18n-aria-label="nav.main" aria-label="主导航">
-      <a href="/" data-i18n-aria-label="nav.home" data-i18n-title="nav.home" aria-label="首页" title="首页">
+      <a href="{{if eq .Lang "en"}}/en/{{else}}/{{end}}" data-i18n-aria-label="nav.home" data-i18n-title="nav.home" aria-label="首页" title="首页">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#home"}}"></use>
         </svg>
         <span data-i18n="nav.home">首页</span>
       </a>
-      <a href="/stats" data-i18n-aria-label="nav.stats" data-i18n-title="nav.stats" aria-label="数据统计" title="数据统计">
+      <a href="{{if eq .Lang "en"}}/en/stats{{else}}/stats{{end}}" data-i18n-aria-label="nav.stats" data-i18n-title="nav.stats" aria-label="数据统计" title="数据统计">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#stats"}}"></use>
         </svg>
         <span data-i18n="nav.stats">数据统计</span>
       </a>
-      <a href="/api-docs" data-i18n-aria-label="nav.docs" data-i18n-title="nav.docs" aria-label="API 文档" title="API 文档">
+      <a href="{{if eq .Lang "en"}}/en/api-docs{{else}}/api-docs{{end}}" data-i18n-aria-label="nav.docs" data-i18n-title="nav.docs" aria-label="API 文档" title="API 文档">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#docs"}}"></use>
         </svg>
         <span data-i18n="nav.docs">API 文档</span>
       </a>
-      <a href="/changelog" data-i18n-aria-label="nav.changelog" data-i18n-title="nav.changelog" aria-label="更新日志" title="更新日志">
+      <a href="{{if eq .Lang "en"}}/en/changelog{{else}}/changelog{{end}}" data-i18n-aria-label="nav.changelog" data-i18n-title="nav.changelog" aria-label="更新日志" title="更新日志">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#changelog"}}"></use>
         </svg>
         <span data-i18n="nav.changelog">更新日志</span>
       </a>
-      <a href="/about" data-i18n-aria-label="nav.about" data-i18n-title="nav.about" aria-label="关于" title="关于">
+      <a href="{{if eq .Lang "en"}}/en/about{{else}}/about{{end}}" data-i18n-aria-label="nav.about" data-i18n-title="nav.about" aria-label="关于" title="关于">
         <svg aria-hidden="true">
           <use href="{{staticURL "icons.svg#about"}}"></use>
         </svg>

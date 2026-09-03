@@ -4,6 +4,8 @@
   const i18n = window.MirrorI18n;
   const text = (key, fallback, params) => i18n ? i18n.t(key, params) : fallback;
   const projectId = page.dataset.projectId || "";
+  const backLink = page.querySelector(".project-back");
+  if (backLink && document.documentElement.lang === "en") backLink.href = "/en/";
   const statusBox = document.getElementById("project-download-status");
   const statusSummary = statusBox.parentElement;
   const availability = document.getElementById("project-availability");

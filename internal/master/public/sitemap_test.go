@@ -36,12 +36,19 @@ func TestSitemapIncludesPublicPagesAndEnabledProjectPages(t *testing.T) {
 		`<?xml version="1.0" encoding="UTF-8"?>`,
 		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
 		`<loc>https://mirror.example.test/</loc>`,
+		`<loc>https://mirror.example.test/en/</loc>`,
 		`<loc>https://mirror.example.test/stats</loc>`,
+		`<loc>https://mirror.example.test/en/stats</loc>`,
 		`<loc>https://mirror.example.test/api-docs</loc>`,
+		`<loc>https://mirror.example.test/en/api-docs</loc>`,
 		`<loc>https://mirror.example.test/changelog</loc>`,
+		`<loc>https://mirror.example.test/en/changelog</loc>`,
 		`<loc>https://mirror.example.test/about</loc>`,
+		`<loc>https://mirror.example.test/en/about</loc>`,
 		`<loc>https://mirror.example.test/p1/</loc>`,
+		`<loc>https://mirror.example.test/en/p1/</loc>`,
 		`<loc>https://mirror.example.test/p%20two/</loc>`,
+		`<loc>https://mirror.example.test/en/p%20two/</loc>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected sitemap to contain %q: %s", want, body)

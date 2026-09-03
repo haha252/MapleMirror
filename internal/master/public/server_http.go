@@ -34,6 +34,10 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("/changelog", s.changelogPage)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/api-docs", s.apiDocsPage)
+	mux.Handle("/en/", s.englishPagesHandler())
+	mux.HandleFunc("/en", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/en/", http.StatusPermanentRedirect)
+	})
 	mux.HandleFunc("/download/success/", s.downloadSuccessPage)
 	mux.HandleFunc("/download/", s.downloadPowPage)
 	mux.HandleFunc("/api/public/v1/blocklist.txt", s.blocklistTXT)

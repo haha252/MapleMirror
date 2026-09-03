@@ -28,7 +28,8 @@
     const assets = Array.isArray(project.assets) ? project.assets : [];
     const versions = selectors.uniqueVersions(assets);
     const defaultVersion = project.default_version || versions[0] || "";
-    const projectHref = "/" + encodeURIComponent(project.project_id || "") + "/";
+    const localePrefix = document.documentElement.lang === "en" ? "/en" : "";
+    const projectHref = localePrefix + "/" + encodeURIComponent(project.project_id || "") + "/";
     const icon = card.querySelector(".project-card__icon");
     const link = card.querySelector(".project-link");
     icon.src = project.icon_url;

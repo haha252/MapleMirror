@@ -66,12 +66,11 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "下载页面渲染失败", http.StatusInternalServerError)
 		return
 	}
-	s.renderPage(w, pageData{
+	s.renderPage(w, s.localizeIndexablePage(r, "/", pageData{
 		Title:         "枫源镜像",
 		BrowserTitle:  "枫源镜像 - GitHub Release 软件版本与文件下载服务",
 		Subtitle:      "面向 GitHub Release 的公益镜像服务，提供稳定、快速的软件版本与文件下载。",
 		Description:   "枫源镜像是面向 GitHub Release 的公益镜像下载服务，提供免费、稳定、快速的软件版本与文件下载，支持项目搜索、版本筛选、镜像节点状态查看、网页验证下载和公共 API 接入，适用于网页用户、脚本工具与自动更新器。",
-		CanonicalURL:  s.canonicalURL("/"),
 		BodyClass:     "page-download",
 		CatalogSearch: true,
 		Body:          body,
@@ -82,7 +81,7 @@ func (s Server) downloadPage(w http.ResponseWriter, r *http.Request) {
 			"/static/public/download-file-browser.js", "/static/public/download-masonry.js",
 			"/static/public/download-card.js", "/static/public/download-filters.js",
 			"/static/public/download-lazy.js", "/static/public/download.js"},
-	})
+	}))
 }
 
 func buildDownloadProjectView(project ProjectSummary, assets []AssetSummary, assetConfig projectAssetConfig) downloadProjectView {
