@@ -24,11 +24,12 @@ type challengeSubmit struct {
 func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSubmit) {
 	prefix := s.clientPrefix(r)
 	sourceKind := in.SourceKind
+	abuseKind := abuseScope(sourceKind, in.ProtocolVersion)
 	now := time.Now().UTC()
 	loaded, err := s.Store.LoadChallenge(r.Context(), in.ChallengeID)
 	if err != nil {
 		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
-			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+			s.AbuseTracker.record(abuseKind, prefix, s.invalidSolutionWeight(), now)
 		}
 		writeError(w, r, http.StatusNotFound, "CHALLENGE_REQUIRED", "挑战不存在或已失效")
 		return
@@ -36,14 +37,14 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 	if loaded.SourceKind != in.SourceKind || loaded.ProtocolVersion != in.ProtocolVersion ||
 		loaded.Algorithm != in.Algorithm || loaded.AssetID != in.AssetID {
 		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
-			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+			s.AbuseTracker.record(abuseKind, prefix, s.invalidSolutionWeight(), now)
 		}
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与资产不匹配")
 		return
 	}
 	if loaded.ClientPrefixKey != prefix {
 		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
-			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+			s.AbuseTracker.record(abuseKind, prefix, s.invalidSolutionWeight(), now)
 		}
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战与客户端不匹配")
 		return
@@ -54,7 +55,7 @@ func (s Server) authorize(w http.ResponseWriter, r *http.Request, in challengeSu
 	}
 	if !s.validSolution(loaded, solution) {
 		if s.AbuseTracker != nil && s.AbuseTracker.mode != "off" {
-			s.AbuseTracker.record(sourceKind, prefix, s.invalidSolutionWeight(), now)
+			s.AbuseTracker.record(abuseKind, prefix, s.invalidSolutionWeight(), now)
 		}
 		writeError(w, r, http.StatusForbidden, "CHALLENGE_FAILED", "挑战校验失败")
 		return

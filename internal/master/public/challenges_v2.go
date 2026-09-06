@@ -27,7 +27,7 @@ func (s Server) v2Challenge(w http.ResponseWriter, r *http.Request, source strin
 	if !ok {
 		return
 	}
-	level, _, rejected := s.challengeAbuse(w, r, source, prefix)
+	level, _, rejected := s.challengeAbuse(w, r, abuseScope(source, "v2"), prefix)
 	if rejected {
 		return
 	}

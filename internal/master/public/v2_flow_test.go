@@ -111,3 +111,40 @@ func TestV2ChallengeRejectsCrossSourceVersionAndAsset(t *testing.T) {
 		t.Fatalf("rejected cross-boundary submit consumed challenge: %v", err)
 	}
 }
+
+func TestV2WebAndAPIChallengeShareAbuseLevel(t *testing.T) {
+	db := openMaster(t)
+	seedRoutableAsset(t, db)
+	store := testVDFStore(t, db, config.ChallengeLimits{BucketCapacity: 30,
+		BucketFullRefill: "10m", MaxOutstandingExact: 4, MaxOutstandingTotal: 100})
+	cfg := testAbuseControl("enforce", true)
+	cfg.Challenge.Exact.ElevatedBurst = 2
+	server := Server{Store: store, VDFTTL: time.Minute, AbuseTracker: newAbuseTracker(cfg)}
+	handler := server.Handler()
+
+	request := func(path string) uint64 {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"asset_id":"asset-1"}`))
+		req.RemoteAddr = "192.0.2.66:1234"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("%s status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
+		var envelope struct {
+			Data struct {
+				Iterations uint64 `json:"iterations"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		return envelope.Data.Iterations
+	}
+
+	if got := request("/api/public/v2/web/challenges"); got != 8 {
+		t.Fatalf("首个 Web V2 挑战 iterations=%d，期望 8", got)
+	}
+	if got := request("/api/public/v2/api/challenges"); got != 16 {
+		t.Fatalf("第二个 API V2 挑战应继承 Web 统计并升级：iterations=%d，期望 16", got)
+	}
+}

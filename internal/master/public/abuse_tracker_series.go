@@ -11,6 +11,13 @@ type thresholdResult struct {
 	retryAfter time.Duration
 }
 
+func abuseScope(sourceKind, protocolVersion string) string {
+	if strings.EqualFold(strings.TrimSpace(protocolVersion), "v2") {
+		return "download"
+	}
+	return strings.TrimSpace(sourceKind)
+}
+
 func thresholdLevel(burst, rolling, elevatedBurst, elevatedRolling, severeBurst, severeRolling, rejectBurst, rejectRolling int64) thresholdResult {
 	switch {
 	case burst >= rejectBurst || rolling >= rejectRolling:
