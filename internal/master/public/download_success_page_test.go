@@ -30,6 +30,7 @@ func TestDownloadSuccessPageUsesReadablePathAndNoVerificationScripts(t *testing.
 		`href="/p1/v1/a.zip"`,
 		`重新下载`,
 		`返回枫源镜像`,
+		`/static/public/donate-oc.avif`,
 		`/static/public/donate-oc.webp`,
 	} {
 		if !strings.Contains(body, want) {

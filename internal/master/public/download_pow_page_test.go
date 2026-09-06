@@ -43,6 +43,7 @@ func TestDownloadPowPageIncludesAssetPayload(t *testing.T) {
 		`/static/public/alipay.png`,
 		`button-link button-link--primary`,
 		`返回枫源镜像`,
+		`/static/public/donate-oc.avif`,
 		`/static/public/donate-oc.webp`,
 		`下载站费用高昂，如有能力，欢迎捐赠！`,
 		`page-notices page-notices--after`,
