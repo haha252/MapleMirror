@@ -71,6 +71,11 @@ func TestDownloadPowProgressAssetsDeclareVDFBehavior(t *testing.T) {
 		`setStatus("正在计算验证答案...", "muted", 0);`,
 		`setStatus("验证计算完成，正在签发并同步下载令牌...", "muted", 100);`,
 	})
+	assertStaticContains(t, assets.staticFS, "theme.js", []string{
+		`window.addEventListener("beforeunload", function () {`,
+		`document.body.classList.contains("page-download-success")`,
+		`startPageLoading();`,
+	})
 	assertStaticContains(t, assets.staticFS, "vdf-fallback.js", []string{
 		"value = (value * value) % modulus;",
 		"const BYTE_LENGTH = 384;",

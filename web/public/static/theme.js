@@ -123,7 +123,10 @@
       if (url.origin !== window.location.origin || link.target || url.pathname === window.location.pathname && url.search === window.location.search) return;
       startPageLoading();
     });
-    window.addEventListener("beforeunload", startPageLoading);
+    window.addEventListener("beforeunload", function () {
+      if (document.body && document.body.classList.contains("page-download-success")) return;
+      startPageLoading();
+    });
   });
 
   if (media) {
