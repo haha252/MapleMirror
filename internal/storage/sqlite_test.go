@@ -105,7 +105,7 @@ func TestOpenNodeCreatesPendingTrafficStore(t *testing.T) {
 	assertColumn(t, db, "control_identity", "download_token_public_key_pem")
 	assertColumn(t, db, "inventory_report_cursor", "force_report_requested_at")
 	assertColumn(t, db, "local_authorizations", "token_hash")
-	assertDBVersion(t, db, "node", 5)
+	assertDBVersion(t, db, "node", 6)
 }
 
 func TestConfigureSetsWALMaintenancePragmas(t *testing.T) {
