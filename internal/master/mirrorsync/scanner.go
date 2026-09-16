@@ -10,6 +10,7 @@ import (
 	"mirror-server/internal/config"
 	"mirror-server/internal/indexnow"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/master/assetstate"
 )
 
 type Scanner struct {
@@ -81,8 +82,12 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 				slog.String("repository", project.Repository),
 				slog.Int("release_count", len(releases)))
 		}
-		selected := selectReleases(releases, project.IncludePrerelease, project.RetainVersions)
-		missing, err := s.Store.MissingSelectedReleases(ctx, project.ID, selected, project.RetainVersions)
+		observed := observedReleases(releases, project.IncludePrerelease)
+		selected, err := selectReleases(observed, project)
+		if err != nil {
+			return err
+		}
+		missing, err := s.Store.MissingSelectedReleases(ctx, project.ID, selected, observed, project.RetainVersions)
 		if err != nil {
 			return err
 		}
@@ -98,7 +103,7 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 			}
 			return err
 		}
-		projectSummary, err := s.writeProject(ctx, project, selected)
+		projectSummary, err := s.writeProject(ctx, project, selected, observed)
 		if err != nil {
 			return err
 		}
@@ -117,7 +122,7 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 	return nil
 }
 
-func (s Scanner) writeProject(ctx context.Context, project config.Project, releases []ResourceVersion) (ScanSummary, error) {
+func (s Scanner) writeProject(ctx context.Context, project config.Project, releases, observed []ResourceVersion) (ScanSummary, error) {
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return ScanSummary{}, err
@@ -149,7 +154,13 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 	if err != nil {
 		return ScanSummary{}, err
 	}
+	if _, err := reconcileKnownObservedReleases(ctx, tx, project, observed, releases, now, s.Logger); err != nil {
+		return ScanSummary{}, err
+	}
 	if err := supersedeDuplicatePublicPaths(ctx, tx, project.ID); err != nil {
+		return ScanSummary{}, err
+	}
+	if _, err := assetstate.FinalizeReleaseRollout(ctx, tx, project.ID); err != nil {
 		return ScanSummary{}, err
 	}
 	if err := rebuildTargetInventory(ctx, tx, project.ID, now); err != nil {
@@ -181,7 +192,23 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 
 func writeReleases(ctx context.Context, tx *sql.Tx, project config.Project, releases []ResourceVersion, now string, logger *logging.Logger) (ScanSummary, error) {
 	var summary ScanSummary
-	_, _ = tx.ExecContext(ctx, `UPDATE releases SET selected = 0 WHERE project_id = ?`, project.ID)
+	// Preserve a currently serving release while a newly discovered release is still
+	// rolling out. Without this guard a scan can make the old release unselected,
+	// turn its targets into removals and delete every good replica before the first
+	// replacement replica is verified. Releases without a verified required replica
+	// are ordinary stale selections and can be cleared immediately.
+	_, _ = tx.ExecContext(ctx, `UPDATE releases SET selected = 0
+		WHERE project_id = ? AND selected = 1 AND id NOT IN (
+			SELECT DISTINCT r2.id FROM releases r2
+			JOIN assets a ON a.release_id = r2.id
+			JOIN node_inventory ni ON ni.asset_id = a.id
+				AND ni.state = 'verified'
+				AND ni.local_digest_sha256 = a.digest_sha256
+				AND ni.size_bytes = a.size_bytes
+			JOIN target_inventory ti ON ti.node_id = ni.node_id
+				AND ti.asset_id = a.id AND ti.desired_state = 'required'
+			WHERE r2.project_id = ? AND r2.selected = 1
+		)`, project.ID, project.ID)
 	for _, rel := range releases {
 		summary.SelectedReleases++
 		releaseID := fmt.Sprintf("%s:%d", project.ID, rel.NumericID)

@@ -28,6 +28,9 @@ func publishVerifiedProjects(ctx context.Context, tx *sql.Tx, projects map[strin
 		if err := assetstate.ReconcilePublicPaths(ctx, tx, projectID); err != nil {
 			return nil, err
 		}
+		if _, err := assetstate.FinalizeReleaseRollout(ctx, tx, projectID); err != nil {
+			return nil, err
+		}
 		if err := assignment.ReconcileProjectNodes(ctx, tx, projectID, now); err != nil {
 			return nil, err
 		}

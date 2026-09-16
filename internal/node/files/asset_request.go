@@ -1,8 +1,10 @@
 package files
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"mirror-server/internal/assetpath"
@@ -32,5 +34,33 @@ func (h *Handler) requestedAsset(requested assetRequest, claimAssetID string) (l
 	if requested.LegacyAssetID != "" {
 		return h.localAsset(requested.LegacyAssetID)
 	}
-	return h.localAssetByPath(requested.RelativePath, claimAssetID)
+	// The authorization binds the request to an exact asset ID. Modern assets may
+	// use an identity-isolated physical path so multiple generations of a mutable
+	// tag can coexist, but the requested public path must still match that asset.
+	asset, err := h.localAsset(claimAssetID)
+	if err != nil {
+		return localAsset{}, err
+	}
+	if !matchesPublicAssetPath(asset.RelativePath, requested.RelativePath) {
+		return localAsset{}, sql.ErrNoRows
+	}
+	return asset, nil
+}
+
+func matchesPublicAssetPath(localRel, publicRel string) bool {
+	local := filepath.Clean(localRel)
+	public := filepath.Clean(publicRel)
+	if local == public {
+		return true
+	}
+	publicDir, publicFile := filepath.Dir(public), filepath.Base(public)
+	localDir := filepath.Dir(local)
+	if filepath.Base(local) != publicFile {
+		return false
+	}
+	identityDir := filepath.Base(localDir)
+	markerDir := filepath.Dir(localDir)
+	return identityDir != "." && identityDir != "" &&
+		filepath.Base(markerDir) == ".mirror-assets" &&
+		filepath.Dir(markerDir) == publicDir
 }

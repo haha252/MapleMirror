@@ -3,7 +3,6 @@ package syncer
 import (
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type DirectoryCleanupStats struct {
@@ -74,22 +73,32 @@ func cleanProjectDirectories(projectPath string, stats *DirectoryCleanupStats) e
 	return err
 }
 
-// removeEmptyAssetDirectories removes the version directory first and then
-// its project directory. It never removes the storage root and leaves any
-// non-empty directory untouched.
+// removeEmptyAssetDirectories removes empty parents from the asset's physical
+// directory back toward the storage root. Modern assets may have extra internal
+// identity directories, while legacy assets still use project/version/file.
 func removeEmptyAssetDirectories(storage, relativeFile string) error {
 	clean := filepath.Clean(relativeFile)
-	parts := strings.Split(filepath.ToSlash(clean), "/")
-	if filepath.IsAbs(clean) || len(parts) != 3 || clean == "." || relEscapes(clean) {
+	if filepath.IsAbs(clean) || clean == "." || relEscapes(clean) {
 		return nil
 	}
-	versionDir := filepath.Join(storage, parts[0], parts[1])
-	projectDir := filepath.Join(storage, parts[0])
-	if _, err := removeDirectoryWhenEmpty(versionDir); err != nil {
-		return err
+	root, err := filepath.Abs(filepath.Clean(storage))
+	if err != nil {
+		return nil
 	}
-	_, err := removeDirectoryWhenEmpty(projectDir)
-	return err
+	assetPath, err := filepath.Abs(filepath.Join(root, clean))
+	if err != nil || assetPath == root || !sameOrInside(assetPath, root) {
+		return nil
+	}
+	for dir := filepath.Dir(assetPath); dir != root && sameOrInside(dir, root); dir = filepath.Dir(dir) {
+		removed, err := removeDirectoryWhenEmpty(dir)
+		if err != nil {
+			return err
+		}
+		if !removed {
+			return nil
+		}
+	}
+	return nil
 }
 
 func removeDirectoryWhenEmpty(path string) (bool, error) {

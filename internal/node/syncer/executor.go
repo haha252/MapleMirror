@@ -186,7 +186,7 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 		}
 		return taskResultWithPeerFallback(task, "size_mismatch", digest, size, "资产大小不匹配", peerFallbackAttempted)
 	}
-	rel := relativeAssetPath(task.Asset)
+	rel := e.assetRelativePath(task.Asset)
 	finalPath := filepath.Join(e.Storage, rel)
 	result := e.commitAsset(task, tmpPath, finalPath, rel, digest, size)
 	if peerFallbackAttempted {

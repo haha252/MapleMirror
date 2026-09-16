@@ -44,6 +44,15 @@ type ResourceCandidate struct {
 	Metadata       map[string]string
 }
 
+func githubRecoveryCandidateLimit(retain int) int {
+	if retain <= 0 {
+		return 0
+	}
+	// The REST path already returns up to 100 releases. Keep Atom fallback equally
+	// broad so releases rejected by project asset filters do not consume retain slots.
+	return 100
+}
+
 func (s GitHubReleaseSource) ListResourceVersions(ctx context.Context, project config.Project) ([]ResourceVersion, error) {
 	if s.Client == nil {
 		return nil, fmt.Errorf("GitHub Release 来源未配置客户端")
@@ -51,7 +60,7 @@ func (s GitHubReleaseSource) ListResourceVersions(ctx context.Context, project c
 	var releases []GitHubRelease
 	var err error
 	if client, ok := s.Client.(limitedGitHubClient); ok {
-		releases, err = client.ListReleasesLimited(ctx, project.Repository, project.RetainVersions)
+		releases, err = client.ListReleasesLimited(ctx, project.Repository, githubRecoveryCandidateLimit(project.RetainVersions))
 	} else {
 		releases, err = s.Client.ListReleases(ctx, project.Repository)
 	}

@@ -64,7 +64,7 @@ func TestDownloadFallsBackToPeerWhenPrimaryFails(t *testing.T) {
 	if !result.PeerFallbackAttempted {
 		t.Fatalf("successful fallback should report peer attempt: %+v", result)
 	}
-	if _, err := os.Stat(filepath.Join(storageDir, "p1", "v1", "a.zip")); err != nil {
+	if _, err := os.Stat(filepath.Join(storageDir, relativeAssetPath(task.Asset))); err != nil {
 		t.Fatalf("fallback asset should be stored: %v", err)
 	}
 }

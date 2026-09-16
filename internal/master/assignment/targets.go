@@ -13,7 +13,7 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 		JOIN releases r ON r.project_id = npa.project_id AND r.selected = 1
 		JOIN assets a ON a.release_id = r.id
 			WHERE npa.node_id = ? AND npa.assigned = 1
-			AND a.service_state IN ('candidate', 'pending', 'active')
+			AND a.service_state IN ('candidate', 'pending', 'active', 'superseded')
 			ON CONFLICT(node_id, asset_id) DO UPDATE SET
 			desired_state = 'required', updated_at = excluded.updated_at
 			WHERE target_inventory.desired_state != 'required'`,
@@ -30,8 +30,9 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 			JOIN projects p ON p.id = r.project_id
 			LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
 				AND npa.project_id = p.id AND npa.assigned = 1
-			WHERE ti.node_id = ? AND (p.enabled = 0 OR r.selected = 0
-				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
+			WHERE ti.node_id = ? AND (p.enabled = 0
+				OR a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded') OR npa.project_id IS NULL
+				OR (r.selected = 0 AND `+nodeHasSelectedProjectAssetsSQL("ti.node_id", "p.id")+`)))`,
 		now, nodeID)
 	return err
 }
@@ -44,7 +45,7 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 		JOIN releases r ON r.project_id = npa.project_id AND r.selected = 1
 		JOIN assets a ON a.release_id = r.id
 			WHERE npa.project_id = ? AND npa.assigned = 1
-			AND a.service_state IN ('candidate', 'pending', 'active')
+			AND a.service_state IN ('candidate', 'pending', 'active', 'superseded')
 			ON CONFLICT(node_id, asset_id) DO UPDATE SET
 			desired_state = 'required', updated_at = excluded.updated_at
 			WHERE target_inventory.desired_state != 'required'`,
@@ -60,10 +61,31 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 			JOIN releases r ON r.id = a.release_id
 			LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
 				AND npa.project_id = r.project_id AND npa.assigned = 1
-			WHERE r.project_id = ? AND (r.selected = 0
-				OR a.service_state NOT IN ('candidate', 'pending', 'active') OR npa.project_id IS NULL))`,
+			WHERE r.project_id = ? AND (
+				a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded') OR npa.project_id IS NULL
+				OR (r.selected = 0 AND `+nodeHasSelectedProjectAssetsSQL("ti.node_id", "r.project_id")+`)))`,
 		now, projectID)
 	return err
+}
+
+func nodeHasSelectedProjectAssetsSQL(nodeExpr, projectExpr string) string {
+	// Retired-release targets are removed per node only after that node has a
+	// verified copy of every asset in the currently selected release set. This
+	// keeps the old local version available while a slow/offline node rolls
+	// forward, instead of shrinking fleet redundancy as soon as the first node
+	// finishes the new version.
+	return `EXISTS (
+		SELECT 1 FROM releases rr JOIN assets ra ON ra.release_id = rr.id
+		WHERE rr.project_id = ` + projectExpr + ` AND rr.selected = 1
+		AND ra.service_state IN ('candidate', 'pending', 'active', 'superseded')
+	) AND NOT EXISTS (
+		SELECT 1 FROM releases rr JOIN assets ra ON ra.release_id = rr.id
+		LEFT JOIN node_inventory rni ON rni.node_id = ` + nodeExpr + ` AND rni.asset_id = ra.id
+		WHERE rr.project_id = ` + projectExpr + ` AND rr.selected = 1
+		AND ra.service_state IN ('candidate', 'pending', 'active', 'superseded')
+		AND (rni.asset_id IS NULL OR rni.state != 'verified'
+			OR rni.local_digest_sha256 != ra.digest_sha256 OR rni.size_bytes != ra.size_bytes)
+	)`
 }
 
 func CancelObsoleteProjectTasks(ctx context.Context, tx *sql.Tx, projectID, now string) error {
@@ -95,7 +117,7 @@ func obsoleteTaskSQL(extra string) string {
 			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
 				AND ti.asset_id = a.id
 			WHERE ` + extra + `
-			AND (a.service_state NOT IN ('candidate', 'pending', 'active')
+			AND (a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded')
 				OR ti.asset_id IS NULL OR ti.desired_state != 'required'))`
 }
 

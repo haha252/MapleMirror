@@ -44,6 +44,12 @@ func TestScanMarksVerifiedInventoryStaleWhenSameGitHubAssetChanges(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = db.Exec(`INSERT INTO asset_piece_manifests
+		(id,asset_id,asset_size,asset_sha256,piece_layout_version,piece_size,piece_count,piece_hash_blob,status,created_at,updated_at)
+		VALUES('manifest-old','p1:1:1',10,?,1,1048576,1,?,'conflict','now','now')`, good, make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	scanner.GitHub = fakeGitHub{releases: []GitHubRelease{{
 		ID: 1, TagName: "v1", PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -55,4 +61,5 @@ func TestScanMarksVerifiedInventoryStaleWhenSameGitHubAssetChanges(t *testing.T)
 
 	assertInventoryState(t, db, "node-1", "p1:1:1", "stale")
 	assertWhereCount(t, db, "node_tasks", "asset_id = 'p1:1:1' AND state = 'pending'", 1)
+	assertWhereCount(t, db, "asset_piece_manifests", "asset_id = 'p1:1:1'", 0)
 }

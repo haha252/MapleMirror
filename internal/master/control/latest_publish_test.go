@@ -29,16 +29,16 @@ func TestVerifiedPendingLatestPublishesCandidate(t *testing.T) {
 	assertControlAssetState(t, repo, "asset-old", "superseded")
 	assertControlAssetState(t, repo, "asset-new", "candidate")
 	assertTableCount(t, repo, "target_inventory",
-		"node_id = 'node-1' AND asset_id = 'asset-old' AND desired_state = 'remove'", 1)
+		"node_id = 'node-1' AND asset_id = 'asset-old' AND desired_state = 'required'", 1)
 	assertTableCount(t, repo, "target_inventory",
 		"node_id = 'node-1' AND asset_id = 'asset-new' AND desired_state = 'required'", 1)
 	assertTableCount(t, repo, "node_tasks",
-		"node_id = 'node-1' AND asset_id = 'asset-old' AND task_type = 'asset_delete' AND state = 'pending'", 1)
-	if !result.SyncTasksChanged {
-		t.Fatal("发布新版本后应通知节点清理旧资产")
+		"node_id = 'node-1' AND asset_id = 'asset-old' AND task_type = 'asset_delete' AND state = 'pending'", 0)
+	if result.SyncTasksChanged {
+		t.Fatal("retain_versions=2 时发布新版本不应生成旧代删除任务")
 	}
-	if !repo.runtime().ConsumeSyncTaskWake(session.NodeID) {
-		t.Fatal("旧资产删除任务生成后应唤醒在线节点")
+	if repo.runtime().ConsumeSyncTaskWake(session.NodeID) {
+		t.Fatal("未生成同步任务时不应额外唤醒节点")
 	}
 }
 

@@ -37,7 +37,7 @@ func (e Executor) reuseVerifiedAssetRecord(task protocol.SyncTask) (protocol.Syn
 }
 
 func (e Executor) reuseExistingAssetFile(task protocol.SyncTask) (protocol.SyncTaskResult, bool) {
-	rel := relativeAssetPath(task.Asset)
+	rel := e.assetRelativePath(task.Asset)
 	digest, size, err := fileDigest(filepath.Join(e.Storage, rel))
 	if err != nil || digest != task.Asset.DigestSHA256 || size != task.Asset.SizeBytes {
 		return protocol.SyncTaskResult{}, false

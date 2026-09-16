@@ -15,7 +15,7 @@ icon_path: ""
 tags: {}
 # 是否启用该项目；禁用后不会参与扫描和公共展示。
 enabled: false
-# 每个下载节点应保留的版本数量，默认值为 3。
+# 每个下载节点应保留的实际镜像版本数量，默认值为 3；只有经过资产筛选后至少有一个有效镜像资产的版本才占用名额。
 retain_versions: 3
 # 是否允许 GitHub prerelease 版本进入候选版本。
 include_prerelease: false

@@ -8,10 +8,12 @@ import (
 )
 
 func (s Store) MissingSelectedReleases(ctx context.Context, projectID string,
-	incoming []ResourceVersion, keep int) ([]ResourceVersion, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT github_release_id, tag_name, published_at
-		FROM releases WHERE project_id = ? AND selected = 1
-		ORDER BY published_at DESC, github_release_id DESC`, projectID)
+	incoming, observed []ResourceVersion, keep int) ([]ResourceVersion, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT r.github_release_id, r.tag_name, r.published_at
+		FROM releases r WHERE r.project_id = ? AND r.selected = 1
+		AND EXISTS (SELECT 1 FROM assets a WHERE a.release_id = r.id
+			AND a.service_state IN ('candidate','pending','active','superseded'))
+		ORDER BY r.published_at DESC, r.github_release_id DESC`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -33,9 +35,13 @@ func (s Store) MissingSelectedReleases(ctx context.Context, projectID string,
 		return nil, err
 	}
 	incomingIDs := make(map[int64]struct{}, len(incoming))
+	observedIDs := make(map[int64]struct{}, len(observed))
 	candidates := append([]ResourceVersion(nil), incoming...)
 	for _, release := range incoming {
 		incomingIDs[release.NumericID] = struct{}{}
+	}
+	for _, release := range observed {
+		observedIDs[release.NumericID] = struct{}{}
 	}
 	for _, release := range previous {
 		if _, ok := incomingIDs[release.NumericID]; !ok {
@@ -43,19 +49,32 @@ func (s Store) MissingSelectedReleases(ctx context.Context, projectID string,
 		}
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].PublishedAt.Equal(candidates[j].PublishedAt) {
-			return candidates[i].NumericID > candidates[j].NumericID
-		}
-		return candidates[i].PublishedAt.After(candidates[j].PublishedAt)
+		return newerResourceVersion(candidates[i], candidates[j])
 	})
 	if keep > 0 && len(candidates) > keep {
 		candidates = candidates[:keep]
 	}
 	missing := make([]ResourceVersion, 0)
 	for _, release := range candidates {
-		if _, ok := incomingIDs[release.NumericID]; !ok {
-			missing = append(missing, release)
+		if _, ok := incomingIDs[release.NumericID]; ok {
+			continue
 		}
+		if _, ok := observedIDs[release.NumericID]; ok {
+			continue
+		}
+		if replacedByNewerSameVersion(release, incoming) {
+			continue
+		}
+		missing = append(missing, release)
 	}
 	return missing, nil
+}
+
+func replacedByNewerSameVersion(previous ResourceVersion, incoming []ResourceVersion) bool {
+	for _, release := range incoming {
+		if release.Version == previous.Version && newerResourceVersion(release, previous) {
+			return true
+		}
+	}
+	return false
 }

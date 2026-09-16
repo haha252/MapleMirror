@@ -28,10 +28,12 @@ func TestRelativeAssetPathUsesProjectVersionAndFileName(t *testing.T) {
 		t.Fatalf("relative path should preserve file extension, got %q", got)
 	}
 	if strings.Contains(got, "FoldCraftLauncher:") {
-		t.Fatalf("relative path should not include asset id when project/version exist, got %q", got)
+		t.Fatalf("relative path should not expose raw asset id, got %q", got)
 	}
-	if got != filepath.Join("fcl", "1.3.0.8", "FCL-release-1.3.0.8-arm64-v8a.apk") {
-		t.Fatalf("relative path should use project/version/file name, got %q", got)
+	parts := strings.Split(filepath.ToSlash(got), "/")
+	if len(parts) != 5 || parts[0] != "fcl" || parts[1] != "1.3.0.8" ||
+		parts[2] != ".mirror-assets" || parts[4] != "FCL-release-1.3.0.8-arm64-v8a.apk" {
+		t.Fatalf("relative path should isolate asset identity under project/version, got %q", got)
 	}
 }
 

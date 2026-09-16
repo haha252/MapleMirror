@@ -40,7 +40,7 @@ func TestDownloadUsesUniqueTempPathForDuplicateTaskExecution(t *testing.T) {
 			t.Fatalf("duplicate task execution should not lose temp file: %+v", result)
 		}
 	}
-	if got, _, err := fileDigest(filepath.Join(storageDir, "p1", "v1", "a.zip")); err != nil ||
+	if got, _, err := fileDigest(filepath.Join(storageDir, relativeAssetPath(task.Asset))); err != nil ||
 		got != digest("abcdef") {
 		t.Fatalf("stored asset mismatch digest=%s err=%v", got, err)
 	}

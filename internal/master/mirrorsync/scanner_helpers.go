@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
-	"sort"
 	"strings"
 
 	"mirror-server/internal/config"
@@ -122,8 +121,14 @@ func markInventoryStaleOnAssetChange(ctx context.Context, tx *sql.Tx, assetID, d
 	if oldDigest == digest && oldSize == size {
 		return nil
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE node_inventory SET state = 'stale',
-		verified_at = ? WHERE asset_id = ? AND state = 'verified'`, now, assetID)
+	if _, err = tx.ExecContext(ctx, `UPDATE node_inventory SET state = 'stale',
+		verified_at = ? WHERE asset_id = ? AND state = 'verified'`, now, assetID); err != nil {
+		return err
+	}
+	// A manifest is bound to the authoritative whole-file digest and size. If
+	// source metadata changes for the same asset identity, any authoritative,
+	// conflict, or disabled Swarm state belongs to the old content revision.
+	_, err = tx.ExecContext(ctx, `DELETE FROM asset_piece_manifests WHERE asset_id = ?`, assetID)
 	return err
 }
 
@@ -137,26 +142,6 @@ func classificationLabelsJSON(labels []string) (string, error) {
 	}
 	data, err := json.Marshal(labels)
 	return string(data), err
-}
-
-func selectReleases(releases []ResourceVersion, includePrerelease bool, keep int) []ResourceVersion {
-	var selected []ResourceVersion
-	for _, rel := range releases {
-		if rel.Draft || (rel.Prerelease && !includePrerelease) {
-			continue
-		}
-		selected = append(selected, rel)
-	}
-	sort.SliceStable(selected, func(i, j int) bool {
-		if selected[i].PublishedAt.Equal(selected[j].PublishedAt) {
-			return selected[i].NumericID > selected[j].NumericID
-		}
-		return selected[i].PublishedAt.After(selected[j].PublishedAt)
-	})
-	if keep > 0 && len(selected) > keep {
-		selected = selected[:keep]
-	}
-	return selected
 }
 
 func projectHash(project config.Project) string {

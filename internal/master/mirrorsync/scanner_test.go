@@ -83,14 +83,10 @@ func TestScanSupersedesDuplicateLatestPublicPath(t *testing.T) {
 	}
 	assertWhereCount(t, db, "assets", "service_state = 'candidate'", 1)
 	assertWhereCount(t, db, "assets", "service_state = 'superseded'", 1)
-	assertWhereCount(t, db, "target_inventory", "desired_state = 'required'", 1)
-	assertWhereCount(t, db, "node_tasks", "state = 'pending'", 1)
-	var assetID string
-	err = db.QueryRow(`SELECT asset_id FROM target_inventory
-		WHERE desired_state = 'required'`).Scan(&assetID)
-	if err != nil || assetID != "p1:2:1" {
-		t.Fatalf("重复 latest 应只要求最新资产，asset_id=%q err=%v", assetID, err)
-	}
+	assertWhereCount(t, db, "target_inventory", "desired_state = 'required'", 2)
+	assertWhereCount(t, db, "node_tasks", "state = 'pending'", 2)
+	assertWhereCount(t, db, "target_inventory", "asset_id = 'p1:1:1' AND desired_state = 'required'", 1)
+	assertWhereCount(t, db, "target_inventory", "asset_id = 'p1:2:1' AND desired_state = 'required'", 1)
 }
 
 func TestScanProjectsDisabledConfigImmediately(t *testing.T) {

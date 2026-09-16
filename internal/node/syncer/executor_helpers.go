@@ -120,7 +120,13 @@ func relativeAssetPath(asset protocol.SyncAsset) string {
 	if asset.ProjectID == "" || asset.Version == "" {
 		return assetpath.SafeRelativePath(asset.AssetID, "legacy", asset.FileName)
 	}
-	return assetpath.SafeRelativePath(asset.ProjectID, asset.Version, asset.FileName)
+	canonical := assetpath.SafeRelativePath(asset.ProjectID, asset.Version, asset.FileName)
+	if asset.AssetID == "" {
+		return canonical
+	}
+	sum := sha256.Sum256([]byte(asset.AssetID))
+	return filepath.Join(filepath.Dir(canonical), ".mirror-assets",
+		hex.EncodeToString(sum[:8]), filepath.Base(canonical))
 }
 
 func tempAssetPath(tempDir, taskID string) (string, error) {

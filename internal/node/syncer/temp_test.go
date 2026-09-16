@@ -106,13 +106,13 @@ func TestCleanTempDirectoryRejectsStorageParent(t *testing.T) {
 	}
 }
 
-func TestDownloadReplacesStaleIncompleteTargetAfterValidation(t *testing.T) {
+func TestDownloadDoesNotReuseUntrackedCanonicalFile(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
-	finalPath := filepath.Join(storageDir, "p1", "v1", "a.zip")
-	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+	canonical := filepath.Join(storageDir, "p1", "v1", "a.zip")
+	if err := os.MkdirAll(filepath.Dir(canonical), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(finalPath, []byte("partial"), 0o600); err != nil {
+	if err := os.WriteFile(canonical, []byte("partial"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	primary := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -124,11 +124,14 @@ func TestDownloadReplacesStaleIncompleteTargetAfterValidation(t *testing.T) {
 	result := (Executor{DB: db, Storage: storageDir, TempDir: tempDir, Client: primary.Client(),
 		AllowPrivateSourceURLs: true}).download(context.Background(), task)
 	if result.Result != "succeeded" {
-		t.Fatalf("validated download should replace stale target: %+v", result)
+		t.Fatalf("validated download should succeed: %+v", result)
 	}
-	data, err := os.ReadFile(finalPath)
-	if err != nil || string(data) != "abcdef" {
-		t.Fatalf("target was not replaced correctly data=%q err=%v", string(data), err)
+	if data, err := os.ReadFile(canonical); err != nil || string(data) != "partial" {
+		t.Fatalf("untracked canonical file should be left untouched data=%q err=%v", string(data), err)
+	}
+	physical := filepath.Join(storageDir, relativeAssetPath(task.Asset))
+	if data, err := os.ReadFile(physical); err != nil || string(data) != "abcdef" {
+		t.Fatalf("asset should use identity-isolated path data=%q err=%v", string(data), err)
 	}
 }
 
@@ -188,12 +191,19 @@ func TestMoveAssetFileRestoresTargetWhenReplacementRenameFails(t *testing.T) {
 	}
 }
 
-func TestDownloadSupersedesOldLocalAssetOnSamePath(t *testing.T) {
+func TestDownloadKeepsOlderSamePublicPathAssetVerified(t *testing.T) {
 	db, storageDir, tempDir := prepareSyncer(t)
-	rel := filepath.Join("p1", "v1", "a.zip")
+	oldRel := filepath.Join("p1", "v1", ".mirror-assets", "old", "a.zip")
+	oldPath := filepath.Join(storageDir, oldRel)
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldPath, []byte("oldold"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	_, err := db.Exec(`INSERT INTO local_assets
 		(asset_id, relative_path, digest_sha256, size_bytes, verified_at, state)
-		VALUES ('old-asset', ?, ?, 6, 'old', 'verified')`, rel, digest("oldold"))
+		VALUES ('old-asset', ?, ?, 6, 'old', 'verified')`, oldRel, digest("oldold"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,9 +218,17 @@ func TestDownloadSupersedesOldLocalAssetOnSamePath(t *testing.T) {
 	if result.Result != "succeeded" {
 		t.Fatalf("download should succeed: %+v", result)
 	}
-	var state string
-	err = db.QueryRow(`SELECT state FROM local_assets WHERE asset_id = 'old-asset'`).Scan(&state)
-	if err != nil || state != "superseded" {
-		t.Fatalf("old same-path asset should be superseded state=%q err=%v", state, err)
+	var oldState, newState, newRel string
+	if err := db.QueryRow(`SELECT state FROM local_assets WHERE asset_id='old-asset'`).Scan(&oldState); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT state,relative_path FROM local_assets WHERE asset_id='asset-1'`).Scan(&newState, &newRel); err != nil {
+		t.Fatal(err)
+	}
+	if oldState != "verified" || newState != "verified" || newRel == oldRel {
+		t.Fatalf("same public path generations must coexist old=%s new=%s oldRel=%q newRel=%q", oldState, newState, oldRel, newRel)
+	}
+	if data, err := os.ReadFile(oldPath); err != nil || string(data) != "oldold" {
+		t.Fatalf("older generation should remain on disk data=%q err=%v", string(data), err)
 	}
 }

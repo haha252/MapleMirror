@@ -61,7 +61,7 @@ func TestDownloadFallsBackToPeerParts(t *testing.T) {
 	if result.Result != "succeeded" || result.LocalDigestSHA256 != digest(string(data)) {
 		t.Fatalf("fallback parts should succeed: %+v", result)
 	}
-	stored, err := os.ReadFile(filepath.Join(storageDir, "p1", "v1", "a.zip"))
+	stored, err := os.ReadFile(filepath.Join(storageDir, relativeAssetPath(task.Asset)))
 	if err != nil || !bytes.Equal(stored, data) {
 		t.Fatalf("stored data mismatch data=%q err=%v", string(stored), err)
 	}

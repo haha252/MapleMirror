@@ -25,7 +25,7 @@ func (c *recordingLimitedGitHubClient) ListReleasesLimited(_ context.Context, _ 
 	return []GitHubRelease{}, nil
 }
 
-func TestGitHubReleaseSourcePassesRetainVersionsAsRecoveryLimit(t *testing.T) {
+func TestGitHubReleaseSourceUsesBroadRecoveryCandidateWindow(t *testing.T) {
 	client := &recordingLimitedGitHubClient{}
 	source := GitHubReleaseSource{Client: client}
 	_, err := source.ListResourceVersions(context.Background(), config.Project{
@@ -34,8 +34,8 @@ func TestGitHubReleaseSourcePassesRetainVersionsAsRecoveryLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.limit != 3 {
-		t.Fatalf("recovery limit got=%d want=3", client.limit)
+	if client.limit != 100 {
+		t.Fatalf("recovery candidate limit got=%d want=100", client.limit)
 	}
 }
 

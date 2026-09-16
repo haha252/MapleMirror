@@ -82,9 +82,12 @@ func TestScanRejectsGapInsideRetainedReleaseWindow(t *testing.T) {
 	project := config.Project{ID: "electerm", Name: "electerm", Repository: "electerm/electerm",
 		Enabled: true, RetainVersions: 2}
 	projects := config.Projects{Projects: []config.Project{project}}
+	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	release := func(id int64, tag string, day int) GitHubRelease {
 		return GitHubRelease{ID: id, TagName: tag,
-			PublishedAt: time.Date(2026, 6, day, 4, 0, 0, 0, time.UTC)}
+			PublishedAt: time.Date(2026, 6, day, 4, 0, 0, 0, time.UTC),
+			Assets: []GitHubAsset{{ID: id*10 + 1, Name: tag + ".zip", Size: 10,
+				URL: "https://example.invalid/" + tag, Digest: digest}}}
 	}
 	release100 := release(100, "v3.15.100", 30)
 	release90 := release(90, "v3.15.90", 29)
