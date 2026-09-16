@@ -13,7 +13,6 @@ import (
 	"mirror-server/internal/bootstrap"
 	"mirror-server/internal/buildinfo"
 	"mirror-server/internal/config"
-	"mirror-server/internal/controltls"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
 	"mirror-server/internal/master/accountingarchive"
@@ -198,35 +197,4 @@ func main() {
 		databaseFailed = !databaseWatchdog.Ready()
 		exitCode = 1
 	}
-}
-
-func startControlServices(cfg config.Master, repo mastercontrol.Repository, logger *logging.Logger) {
-	timeout, _ := time.ParseDuration(cfg.Node.HeartbeatTimeout)
-	grace, _ := time.ParseDuration(cfg.Node.HeartbeatOfflineGrace)
-	interval, _ := time.ParseDuration(cfg.Node.HeartbeatInterval)
-	probes := publicProbeService(cfg, repo, logger)
-	if cfg.Server.ControlListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
-		tlsCfg, err := controltls.ControlServer(cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile, cfg.Node.TLS.ClientCAFile)
-		startTLSListener(cfg.Server.ControlListen, tlsCfg, err, logger, mastercontrol.ControlServer{
-			Repo: repo, HeartbeatInterval: interval, HeartbeatTimeout: timeout, Logger: logger,
-			PublicProbes: probes,
-		}.Handle)
-	}
-	if cfg.Server.EnrollmentListen != "" && cfg.Node.TLS.CertFile != "" && cfg.Node.TLS.KeyFile != "" {
-		tlsCfg, err := controltls.EnrollmentServer(cfg.Node.TLS.CertFile, cfg.Node.TLS.KeyFile, "")
-		enrollTimeout, _ := time.ParseDuration(cfg.Node.EnrollmentTimeout)
-		publicKey, keyErr := bootstrap.PublicKeyPEM(cfg.DownloadToken.VerifyPublicKeyFile)
-		if keyErr != nil {
-			err = keyErr
-		}
-		caData, caErr := os.ReadFile(cfg.Node.TLS.CAFile)
-		if caErr != nil {
-			err = caErr
-		}
-		startTLSListener(cfg.Server.EnrollmentListen, tlsCfg, err, logger, mastercontrol.EnrollmentServer{
-			Repo: repo, EnrollmentTimeout: enrollTimeout, DownloadTokenPublicKeyPEM: publicKey,
-			MasterCAPEM: string(caData),
-		}.Handle)
-	}
-	startHeartbeatSweep(repo, timeout, grace, logger)
 }

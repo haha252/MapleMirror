@@ -1,12 +1,7 @@
 package config
 
 import (
-	"errors"
 	"fmt"
-	"net"
-	"net/url"
-
-	"mirror-server/internal/downloadurl"
 
 	"gopkg.in/yaml.v3"
 )
@@ -33,8 +28,10 @@ type NodeServer struct {
 	PublicDownloadBaseURL string `yaml:"public_download_base_url"`
 }
 type NodeMaster struct {
-	ControlAddress    string `yaml:"control_address"`
-	EnrollmentAddress string `yaml:"enrollment_address"`
+	ControlAddress      string `yaml:"control_address"`
+	EnrollmentAddress   string `yaml:"enrollment_address"`
+	ControlWSAddress    string `yaml:"control_ws_address"`
+	EnrollmentWSAddress string `yaml:"enrollment_ws_address"`
 }
 type NodeStorage struct {
 	Directory     string `yaml:"directory"`
@@ -53,6 +50,8 @@ type Sync struct {
 	ForcePeerDownload         bool   `yaml:"force_peer_download"`
 	BandwidthLimit            string `yaml:"bandwidth_limit"`
 	BandwidthLimitBPS         int64  `yaml:"-"`
+	SwarmUploadLimit          string `yaml:"swarm_upload_limit"`
+	SwarmUploadLimitBPS       int64  `yaml:"-"`
 	PeerFallbackMaxConcurrent int    `yaml:"peer_fallback_max_concurrent"`
 	PeerFallbackWorkers       int    `yaml:"peer_fallback_workers"`
 	PeerFallbackMinSize       string `yaml:"peer_fallback_min_size"`
@@ -93,10 +92,12 @@ func SaveNodeFirstRun(path string, c Node) error {
 		return err
 	}
 	return updateYAMLScalars(path, map[string]string{
-		"node.name":                 c.Node.Name,
-		"master.control_address":    c.Master.ControlAddress,
-		"master.enrollment_address": c.Master.EnrollmentAddress,
-		"tls.server_name":           c.TLS.ServerName,
+		"node.name":                    c.Node.Name,
+		"master.control_address":       c.Master.ControlAddress,
+		"master.enrollment_address":    c.Master.EnrollmentAddress,
+		"master.control_ws_address":    c.Master.ControlWSAddress,
+		"master.enrollment_ws_address": c.Master.EnrollmentWSAddress,
+		"tls.server_name":              c.TLS.ServerName,
 	})
 }
 
@@ -117,6 +118,7 @@ func applyNodeDefaults(c *Node, warn WarnFunc) {
 	}
 	setString(&c.Bandwidth.Minimum, "5 MiB/s", "bandwidth.minimum", warn)
 	setString(&c.Sync.BandwidthLimit, "0", "sync.bandwidth_limit", warn)
+	setString(&c.Sync.SwarmUploadLimit, "auto", "sync.swarm_upload_limit", warn)
 	if c.Sync.PeerFallbackMaxConcurrent == 0 {
 		c.Sync.PeerFallbackMaxConcurrent = 3
 		warnDefault(warn, "sync.peer_fallback_max_concurrent", "3")
@@ -126,84 +128,6 @@ func applyNodeDefaults(c *Node, warn WarnFunc) {
 		warnDefault(warn, "sync.peer_fallback_workers", "8")
 	}
 	setString(&c.Sync.PeerFallbackMinSize, "32 MiB", "sync.peer_fallback_min_size", warn)
-}
-
-func validateNode(c *Node) error {
-	if c.Node.Name == "" {
-		return errors.New("节点配置 node.name 不得为空")
-	}
-	if !validListen(c.Server.Listen) {
-		return errors.New("节点配置 server.listen 必须为合法监听地址")
-	}
-	if _, ok := downloadurl.NormalizeBase(c.Server.PublicDownloadBaseURL); !ok {
-		return errors.New("节点配置 server.public_download_base_url 必须为 HTTPS 公网基址；HTTP 仅允许本机回环地址，且不得包含路径、查询或片段")
-	}
-	address, err := url.Parse(c.Master.ControlAddress)
-	if err != nil || address.Scheme != "https" || address.Host == "" {
-		return errors.New("节点配置 master.control_address 必须为 HTTPS 地址")
-	}
-	if c.Master.EnrollmentAddress != "" {
-		enrollment, err := url.Parse(c.Master.EnrollmentAddress)
-		if err != nil || enrollment.Scheme != "https" || enrollment.Host == "" {
-			return errors.New("节点配置 master.enrollment_address 必须为 HTTPS 地址")
-		}
-	}
-	if c.TLS.ServerName == "" {
-		return errors.New("节点配置 tls.server_name 不得为空")
-	}
-	if c.Storage.Directory == "" || c.Storage.TempDirectory == "" || c.Storage.StateDB == "" {
-		return errors.New("节点存储目录和本地状态库路径不得为空")
-	}
-	if c.Download.SigningKeyFile != "" {
-		return errors.New("download_token.signing_key_file 已废弃，下载节点只应配置 verify_public_key_file")
-	}
-	if c.Download.VerifyPublicKeyFile == "" {
-		return errors.New("节点配置 download_token.verify_public_key_file 不得为空")
-	}
-	for _, cidr := range c.Proxy.TrustedCIDRs {
-		if _, _, err := net.ParseCIDR(cidr); err != nil {
-			return errors.New("节点配置 proxy.trusted_cidrs 包含无效 CIDR")
-		}
-	}
-	if c.Bandwidth.Target == "" {
-		return errors.New("节点目标带宽不得为空")
-	}
-	target, err := ParseBandwidthBPS("bandwidth.target", c.Bandwidth.Target, false)
-	if err != nil {
-		return err
-	}
-	c.Bandwidth.TargetBPS = target
-	minimum, err := ParseBandwidthBPS("bandwidth.minimum", c.Bandwidth.Minimum, true)
-	if err != nil {
-		return err
-	}
-	if minimum > target {
-		return errors.New("节点保底带宽不得大于目标带宽")
-	}
-	c.Bandwidth.MinimumBPS = minimum
-	if c.Sync.MaxWorkers <= 0 {
-		return errors.New("同步线程数必须大于零")
-	}
-	if c.Sync.MaxMirrorProjects < 0 {
-		return errors.New("节点最大镜像项目数不得小于零")
-	}
-	if c.Sync.PeerFallbackMaxConcurrent <= 0 {
-		return errors.New("节点间复制全局并发数必须大于零")
-	}
-	if c.Sync.PeerFallbackWorkers <= 0 {
-		return errors.New("节点间复制分片并发数必须大于零")
-	}
-	limit, err := ParseBandwidthBPS("sync.bandwidth_limit", c.Sync.BandwidthLimit, true)
-	if err != nil {
-		return err
-	}
-	c.Sync.BandwidthLimitBPS = limit
-	minSize, err := ParseBytes("sync.peer_fallback_min_size", c.Sync.PeerFallbackMinSize, true)
-	if err != nil {
-		return err
-	}
-	c.Sync.PeerFallbackMinSizeBytes = minSize
-	return validateLogging(c.Logging)
 }
 
 func migrateNodeIDFile(doc *yaml.Node) (bool, bool) {

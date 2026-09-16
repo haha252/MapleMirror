@@ -11,6 +11,10 @@ import (
 	"time"
 
 	"mirror-server/internal/logging"
+	"mirror-server/internal/node/activity"
+	"mirror-server/internal/node/capacity"
+	"mirror-server/internal/node/eventwake"
+	"mirror-server/internal/node/swarmstate"
 	"mirror-server/internal/protocol"
 	"mirror-server/internal/requestid"
 )
@@ -28,6 +32,7 @@ type Client struct {
 	Storage               string
 	TargetBandwidthBPS    int64
 	MaxMirrorProjects     int
+	ForcePeerDownload     bool
 	SoftwareVersion       string
 	TLSConfig             *tls.Config
 	HeartbeatInterval     time.Duration
@@ -39,16 +44,20 @@ type Client struct {
 	TaskLimiter *TaskLimiter
 	TaskTimeout time.Duration
 	Bandwidth   BandwidthSampler
+	Capacity    *capacity.Manager
+	Activity    *activity.Counters
+	EventWake   *eventwake.Notifier
+	Swarm       *swarmstate.Registry
 	ProbeStore  interface {
 		Accept(protocol.PublicProbeChallenge) error
 	}
-	DialTLSContext                 func(context.Context, string, string, *tls.Config) (net.Conn, error)
-	runningTaskAckLogged           map[string]time.Time
-	runningTaskAckSent             map[string]time.Time
-	controlWorkWake                chan struct{}
-	pendingPublicProbeReady        map[string]pendingPublicProbeReady
-	interruptedLocalTasksRecovered bool
-	frameReader                    *protocol.FrameReader
+	DialTLSContext          func(context.Context, string, string, *tls.Config) (net.Conn, error)
+	runningTaskAckLogged    map[string]time.Time
+	runningTaskAckSent      map[string]time.Time
+	controlWorkWake         chan struct{}
+	pendingPublicProbeReady map[string]pendingPublicProbeReady
+	frameReader             *protocol.FrameReader
+	V2Runtime               *V2Runtime
 }
 
 func (c Client) syncTaskTimeout() time.Duration {
@@ -61,9 +70,6 @@ func (c Client) syncTaskTimeout() time.Duration {
 func (c *Client) RunOnce() (time.Duration, error) {
 	c.runningTaskAckLogged = map[string]time.Time{}
 	c.runningTaskAckSent = map[string]time.Time{}
-	if err := c.recoverInterruptedLocalTasksOnce(); err != nil {
-		return 0, err
-	}
 	c.logDebug("node control connection starting",
 		slog.String("node_id", c.NodeID), slog.String("master", c.Address))
 	dialTLS := c.DialTLSContext
@@ -104,17 +110,6 @@ func (c *Client) RunOnce() (time.Duration, error) {
 		return interval, err
 	}
 	return interval, nil
-}
-
-func (c *Client) recoverInterruptedLocalTasksOnce() error {
-	if c.interruptedLocalTasksRecovered {
-		return nil
-	}
-	if err := c.resetInterruptedLocalTasks(); err != nil {
-		return err
-	}
-	c.interruptedLocalTasksRecovered = true
-	return nil
 }
 
 func (c Client) readWelcome(conn net.Conn) (protocol.Welcome, error) {
@@ -158,7 +153,7 @@ func (c *Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 	active := c.activeDownloads()
 	slots := c.availableSyncTaskSlots()
 	body, _ := json.Marshal(protocol.Heartbeat{
-		Status: "syncing", ActiveDownloads: active, FreeBytes: 0,
+		Status: "syncing", ActiveDownloads: active, FreeBytes: c.legacyFreeBytes(),
 		PublicDownloadBaseURL:  c.PublicDownloadBaseURL,
 		MaxMirrorProjects:      c.MaxMirrorProjects,
 		SyncTaskSlotsAvailable: &slots,

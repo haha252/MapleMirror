@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 func Interactive() bool {
-	info, err := os.Stdin.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 type Console struct {

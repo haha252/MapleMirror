@@ -64,3 +64,23 @@ func runServer(address string, handler http.Handler, fatal <-chan error, logger 
 		return fmt.Errorf("主节点健康服务异常退出：%w", err)
 	}
 }
+
+func startHTTPSTLSListener(address string, tlsCfg *tls.Config, cfgErr error, logger *logging.Logger, handler http.Handler) {
+	if cfgErr != nil {
+		logger.Error(context.Background(), "控制面 HTTPS TLS 配置失败", slog.String("error", cfgErr.Error()))
+		return
+	}
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		logger.Error(context.Background(), "控制面 HTTPS 监听启动失败", slog.String("listen", address), slog.String("error", err.Error()))
+		return
+	}
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, TLSConfig: tlsCfg}
+	go func() {
+		logger.Info(context.Background(), "控制面 HTTPS 监听已启动", slog.String("listen", address))
+		err := server.Serve(tls.NewListener(listener, tlsCfg))
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error(context.Background(), "控制面 HTTPS 监听异常退出", slog.String("listen", address), slog.String("error", err.Error()))
+		}
+	}()
+}

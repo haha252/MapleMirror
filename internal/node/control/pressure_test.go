@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"mirror-server/internal/node/capacity"
 	"mirror-server/internal/protocol"
 )
 
@@ -127,4 +128,24 @@ func TestTaskLimiterCapsConcurrentExecution(t *testing.T) {
 	<-started
 	close(<-releases)
 	<-done
+}
+
+func TestLegacyReportsUseFilesystemCapacity(t *testing.T) {
+	dir := t.TempDir()
+	manager := capacity.NewManager(dir, dir)
+	manager.SafetyBytes = 0
+	client := Client{Capacity: manager}
+	free := client.legacyFreeBytes()
+	if free <= 0 {
+		t.Fatalf("legacy free bytes=%d", free)
+	}
+	release, err := manager.ReserveDownload(1 << 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	reserved := client.legacyFreeBytes()
+	if reserved >= free {
+		t.Fatalf("reservation not reflected free=%d reserved=%d", free, reserved)
+	}
 }

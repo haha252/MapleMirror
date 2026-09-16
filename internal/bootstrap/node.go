@@ -17,12 +17,14 @@ import (
 )
 
 type NodeAnswers struct {
-	Name              string
-	ControlAddress    string
-	EnrollmentAddress string
-	ServerName        string
-	PairingCode       string
-	TLSConfig         *tls.Config
+	Name                string
+	ControlAddress      string
+	EnrollmentAddress   string
+	ControlWSAddress    string
+	EnrollmentWSAddress string
+	ServerName          string
+	PairingCode         string
+	TLSConfig           *tls.Config
 }
 
 func NodeFirstRun(cfg config.Node) (NodeAnswers, error) {
@@ -34,30 +36,44 @@ func NodeFirstRun(cfg config.Node) (NodeAnswers, error) {
 	if err != nil {
 		return NodeAnswers{}, err
 	}
-	control, err := c.Ask("主节点控制地址", cfg.Master.ControlAddress)
+	answers := NodeAnswers{Name: name}
+	useV2 := cfg.Master.ControlWSAddress != "" || cfg.Master.EnrollmentWSAddress != ""
+	var enrollmentEndpoint string
+	if useV2 {
+		answers.ControlWSAddress, err = c.Ask("主节点 control.v2 WSS 地址", cfg.Master.ControlWSAddress)
+		if err != nil {
+			return NodeAnswers{}, err
+		}
+		answers.EnrollmentWSAddress, err = c.Ask("主节点 enrollment.v2 WSS 地址", cfg.Master.EnrollmentWSAddress)
+		if err != nil {
+			return NodeAnswers{}, err
+		}
+		enrollmentEndpoint = answers.EnrollmentWSAddress
+	} else {
+		answers.ControlAddress, err = c.Ask("主节点 legacy 控制地址", cfg.Master.ControlAddress)
+		if err != nil {
+			return NodeAnswers{}, err
+		}
+		answers.EnrollmentAddress, err = c.Ask("主节点 legacy 登记地址", cfg.Master.EnrollmentAddress)
+		if err != nil {
+			return NodeAnswers{}, err
+		}
+		enrollmentEndpoint = answers.EnrollmentAddress
+	}
+	answers.ServerName, err = c.Ask("TLS 服务端名称", cfg.TLS.ServerName)
 	if err != nil {
 		return NodeAnswers{}, err
 	}
-	enroll, err := c.Ask("主节点登记地址", cfg.Master.EnrollmentAddress)
+	answers.PairingCode, err = c.Ask("一次性配对码", "")
 	if err != nil {
 		return NodeAnswers{}, err
 	}
-	serverName, err := c.Ask("TLS 服务端名称", cfg.TLS.ServerName)
+	answers.TLSConfig, err = confirmEnrollmentCert(c, enrollmentEndpoint, answers.ServerName, cfg.TLS.CAFile)
 	if err != nil {
 		return NodeAnswers{}, err
 	}
-	code, err := c.Ask("一次性配对码", "")
-	if err != nil {
-		return NodeAnswers{}, err
-	}
-	tlsCfg, err := confirmEnrollmentCert(c, enroll, serverName, cfg.TLS.CAFile)
-	if err != nil {
-		return NodeAnswers{}, err
-	}
-	return NodeAnswers{Name: name, ControlAddress: control, EnrollmentAddress: enroll,
-		ServerName: serverName, PairingCode: code, TLSConfig: tlsCfg}, nil
+	return answers, nil
 }
-
 func WritePairingCode(path, code string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

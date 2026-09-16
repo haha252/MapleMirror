@@ -10,8 +10,12 @@ server:
   management_listen: "127.0.0.1:9080"
   # 下载节点 mTLS 控制通道监听地址。
   control_listen: ":9443"
-  # 首次领证登记入口，独立于正式 mTLS 控制通道。
+  # 首次领证登记入口，独立于正式 mTLS 控制通道（legacy control.v1）。
   enrollment_listen: ":9444"
+  # control.v2 WebSocket mTLS 监听地址；迁移期可与 legacy control_listen 并存。
+  control_ws_listen: ":9543"
+  # v2 首次领证 WSS JSON 入口。
+  enrollment_ws_listen: ":9544"
   # 首页项目瀑布流每一批加载的行数；实际卡片数为当前列数乘以该值。
   catalog_batch_rows: 4
   # 本批剩余多少行尚未滚到时预加载下一批；0 表示进入最后一行时加载。

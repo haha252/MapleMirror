@@ -17,6 +17,9 @@ func (s *RuntimeStore) LatestRoutingPressure(nodeID string, maxAge time.Duration
 	defer s.mu.RUnlock()
 	node := s.latest[nodeID]
 	out := newerRoutingPressure(node.Heartbeat, node.Pressure)
+	if v2 := routingPressureFromV2(node.V2Status); v2.Valid && (!out.Valid || v2.ReportedAt.After(out.ReportedAt)) {
+		out = v2
+	}
 	if !out.Valid || maxAge <= 0 {
 		return out
 	}
@@ -68,4 +71,16 @@ func routingPressureFromReport(report runtimePressureReport) RoutingPressure {
 		ReportedAt:      reported,
 		Valid:           true,
 	}
+}
+
+func routingPressureFromV2(item runtimeV2Status) RoutingPressure {
+	if item.ReportedAt.IsZero() {
+		return RoutingPressure{}
+	}
+	ratio := float64(0)
+	if item.Status.TargetBandwidthBPS > 0 {
+		ratio = float64(item.Status.ActualBandwidthBPS) / float64(item.Status.TargetBandwidthBPS)
+	}
+	return RoutingPressure{PressureRatio: ratio, ActiveDownloads: item.Status.PublicActiveDownloads,
+		ReportedAt: item.ReportedAt, Valid: true}
 }

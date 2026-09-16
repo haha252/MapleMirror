@@ -17,8 +17,12 @@ server:
 master:
   # 下载节点主动连接主节点 mTLS 控制面。
   control_address: "https://127.0.0.1:9443"
-  # 下载节点首次登记和重新登记时访问的主节点 HTTPS 登记入口。
+  # 下载节点首次登记和重新登记时访问的主节点 HTTPS 登记入口（legacy v1）。
   enrollment_address: "https://127.0.0.1:9444"
+  # control.v2 WSS 长连接入口；配置后优先使用 v2。
+  control_ws_address: "wss://127.0.0.1:9543/control/v2"
+  # v2 首次登记 WSS JSON 入口。
+  enrollment_ws_address: "wss://127.0.0.1:9544/enroll/v2"
 
 # 下载节点本地存储配置。
 storage:
@@ -44,8 +48,10 @@ sync:
   max_mirror_projects: 0
   # 是否强制只从其他下载节点复制资产；启用后不会尝试 GitHub 源站，缺少可用节点副本时等待主节点重试。
   force_peer_download: false
-  # 单个同步下载限速；支持 MiB/s、MB/s、Mbps，"0" 表示不限制。
+  # 整个节点的同步入站总限速；origin 与其他节点下载共同受此限制。支持 MiB/s、MB/s、Mbps，"0" 表示不限制。
   bandwidth_limit: "0"
+  # Swarm 对其他节点上传的额外子限速。auto 默认取 bandwidth.target 的 25%；"0" 表示不加子限速。
+  swarm_upload_limit: "auto"
   # peer fallback 全局任务并发数；源站故障时可调高以加快从其他节点复制。
   peer_fallback_max_concurrent: 3
   # peer fallback 单文件分片下载并发数。

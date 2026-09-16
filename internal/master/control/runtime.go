@@ -11,6 +11,8 @@ type RuntimeStore struct {
 	latest           map[string]runtimeNode
 	inventoryBatches map[string]runtimeInventoryBatch
 	syncTaskWake     map[string]int
+	syncTaskSignals  map[string]chan struct{}
+	v2Persisted      map[string]time.Time
 }
 
 type runtimeSession struct {
@@ -25,7 +27,11 @@ type runtimeNode struct {
 	Heartbeat              runtimeHeartbeat
 	Inventory              runtimeInventoryReport
 	Pressure               runtimePressureReport
+	V2Status               runtimeV2Status
+	SwarmAvailability      map[string]runtimeSwarmAvailability
 	SoftwareVersion        string
+	ControlProtocol        string
+	PeerOnly               bool
 	SyncTaskSlotsAvailable int
 	SyncTaskSlotsKnown     bool
 }
@@ -68,6 +74,8 @@ func NewRuntimeStore() *RuntimeStore {
 		latest:           map[string]runtimeNode{},
 		inventoryBatches: map[string]runtimeInventoryBatch{},
 		syncTaskWake:     map[string]int{},
+		syncTaskSignals:  map[string]chan struct{}{},
+		v2Persisted:      map[string]time.Time{},
 	}
 }
 

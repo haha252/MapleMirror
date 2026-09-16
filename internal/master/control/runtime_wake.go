@@ -17,8 +17,37 @@ func (s *RuntimeStore) NotifySyncTasks(nodeIDs ...string) {
 		}
 		if s.nodeSessionActiveLocked(nodeID) {
 			s.syncTaskWake[nodeID]++
+			if ch := s.syncTaskSignals[nodeID]; ch != nil {
+				select {
+				case ch <- struct{}{}:
+				default:
+				}
+			}
 		}
 	}
+}
+
+func (s *RuntimeStore) SyncTaskWakeChannel(nodeID string) <-chan struct{} {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.syncTaskSignals == nil {
+		s.syncTaskSignals = map[string]chan struct{}{}
+	}
+	ch := s.syncTaskSignals[nodeID]
+	if ch == nil {
+		ch = make(chan struct{}, 1)
+		s.syncTaskSignals[nodeID] = ch
+	}
+	if s.syncTaskWake[nodeID] > 0 {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+	return ch
 }
 
 func (s *RuntimeStore) ConsumeSyncTaskWake(nodeID string) bool {

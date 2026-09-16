@@ -48,6 +48,16 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 		if item.RoutingReady {
 			out.NodeStat["routing_ready"]++
 		}
+		if connectionState != "offline" && connectionState != "disabled" {
+			switch item.ControlProtocol {
+			case "v2":
+				out.NodeStat["control_v2"]++
+			case "v1":
+				out.NodeStat["control_v1"]++
+			default:
+				out.NodeStat["control_unknown"]++
+			}
+		}
 	}
 	out.Nodes = s.nodeSummaries(ctx, nodes)
 	projectNames := s.projectNames(ctx)

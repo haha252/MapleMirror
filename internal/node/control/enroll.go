@@ -24,6 +24,7 @@ import (
 type Enroller struct {
 	NodeName           string
 	Address            string
+	WSAddress          string
 	TLSConfig          *tls.Config
 	CodeFile           string
 	CredentialFile     string
@@ -76,10 +77,13 @@ func (e Enroller) RunUntilComplete(timeout time.Duration) error {
 }
 
 func (e Enroller) submit(code, csrPEM, fp string) error {
+	capabilities := []string{"heartbeat.v1", "inventory.report.v1", "pressure.report.v1"}
+	if e.WSAddress != "" {
+		capabilities = []string{"control.v2", "node.status.v2", "inventory.snapshot.v2", "task.attempt.v2", "swarm.v1"}
+	}
 	reply, err := e.exchange(protocol.TypeEnrollRequest, protocol.EnrollRequest{
 		PairingCode: code, PublicName: e.NodeName, CSRPem: csrPEM,
-		PublicKeyFingerprint: fp,
-		Capabilities:         []string{"heartbeat.v1", "inventory.report.v1", "pressure.report.v1"},
+		PublicKeyFingerprint: fp, Capabilities: capabilities,
 	})
 	if err != nil {
 		return err
@@ -93,6 +97,11 @@ func (e Enroller) submit(code, csrPEM, fp string) error {
 		return e.Identity.SaveEnrollmentID(pending.EnrollmentID)
 	case protocol.TypeEnrollCertificate:
 		return e.saveCertificate(reply)
+	case protocol.TypeProtocolError:
+		if body, ok := parseProtocolError(reply.Payload); ok && body.Message != "" {
+			return errors.New(body.Message)
+		}
+		return errors.New("登记请求被拒绝")
 	default:
 		return fmt.Errorf("登记响应类型不符合预期")
 	}
@@ -122,6 +131,9 @@ func (e Enroller) collect(enrollmentID string) error {
 }
 
 func (e Enroller) exchange(messageType string, payload any) (protocol.Envelope, error) {
+	if e.WSAddress != "" {
+		return e.exchangeWS(messageType, payload)
+	}
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", e.Address, e.TLSConfig)
 	if err != nil {
 		return protocol.Envelope{}, err

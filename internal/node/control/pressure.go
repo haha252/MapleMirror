@@ -22,7 +22,7 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 		ActualBandwidthBPS:     actualBandwidth,
 		PressureRatio:          pressureRatio(actualBandwidth, c.TargetBandwidthBPS),
 		ActiveDownloads:        active,
-		FreeBytes:              0,
+		FreeBytes:              c.legacyFreeBytes(),
 		MaxMirrorProjects:      c.MaxMirrorProjects,
 		SyncTaskSlotsAvailable: &slots,
 	})
@@ -57,7 +57,28 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 }
 
 func (c Client) activeDownloads() int64 {
+	if c.Activity != nil {
+		return c.Activity.PublicDownloads()
+	}
+	if c.TaskLimiter == nil {
+		return 0
+	}
 	return c.TaskLimiter.Active()
+}
+
+func (c Client) legacyFreeBytes() int64 {
+	if c.Capacity == nil {
+		return 0
+	}
+	snapshot := c.Capacity.Snapshot()
+	if !snapshot.Asset.Valid {
+		return 0
+	}
+	available := snapshot.Asset.AvailableBytes - snapshot.ReservedAsset
+	if available < 0 {
+		return 0
+	}
+	return available
 }
 
 func (c Client) sampleBandwidth() int64 {

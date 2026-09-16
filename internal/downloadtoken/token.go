@@ -16,6 +16,7 @@ import (
 
 const Version = "download.v2"
 const ReplicationVersion = "replication.v1"
+const SwarmVersion = "swarm.v1"
 const OpaqueBytes = 32
 
 type Signer struct {
@@ -41,18 +42,6 @@ type Claims struct {
 	TrafficLimitBytes      int64  `json:"traffic_limit_bytes,omitempty"`
 	RangeConcurrencyLimit  int    `json:"range_concurrency_limit"`
 	RequestID              string `json:"request_id"`
-}
-
-type ReplicationClaims struct {
-	TokenVersion string `json:"token_version"`
-	AssetID      string `json:"asset_id"`
-	SourceNodeID string `json:"source_node_id"`
-	TargetNodeID string `json:"target_node_id"`
-	ExpiresAt    string `json:"expires_at"`
-	RequestID    string `json:"request_id"`
-	TaskID       string `json:"task_id"`
-	RangeStart   int64  `json:"range_start,omitempty"`
-	RangeEnd     int64  `json:"range_end,omitempty"`
 }
 
 func NewSignerFromPrivateFile(path string) (Signer, error) {
@@ -131,20 +120,6 @@ func (s Signer) Sign(claims Claims) (string, error) {
 	return payload + "." + sig, nil
 }
 
-func (s Signer) SignReplication(claims ReplicationClaims) (string, error) {
-	if len(s.private) == 0 {
-		return "", errors.New("复制令牌私钥未加载")
-	}
-	claims.TokenVersion = ReplicationVersion
-	body, err := json.Marshal(claims)
-	if err != nil {
-		return "", err
-	}
-	payload := base64.RawURLEncoding.EncodeToString(body)
-	sig := base64.RawURLEncoding.EncodeToString(ed25519.Sign(s.private, []byte(payload)))
-	return payload + "." + sig, nil
-}
-
 func (s Signer) Signature(message string) string {
 	if len(s.private) == 0 {
 		return ""
@@ -196,34 +171,4 @@ func (c Claims) Timing() (time.Time, time.Time, bool) {
 		return time.Time{}, expires, false
 	}
 	return issued, expires, true
-}
-
-func (s Signer) VerifyReplication(token string) (ReplicationClaims, error) {
-	var out ReplicationClaims
-	if len(s.public) == 0 {
-		return out, errors.New("复制令牌公钥未加载")
-	}
-	parts := strings.Split(token, ".")
-	if len(parts) != 2 {
-		return out, errors.New("令牌格式不合法")
-	}
-	got, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || !ed25519.Verify(s.public, []byte(parts[0]), got) {
-		return out, errors.New("令牌签名不合法")
-	}
-	body, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return out, err
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return out, err
-	}
-	if out.TokenVersion != ReplicationVersion {
-		return out, errors.New("令牌版本不支持")
-	}
-	expires, err := time.Parse(time.RFC3339Nano, out.ExpiresAt)
-	if err != nil || time.Now().UTC().After(expires) {
-		return out, errors.New("令牌已过期")
-	}
-	return out, nil
 }

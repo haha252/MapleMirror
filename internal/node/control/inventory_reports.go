@@ -13,7 +13,7 @@ import (
 )
 
 const inventoryChunkSize = 1000
-const inventoryReportMinInterval = time.Minute
+const inventoryReportMinInterval = 30 * time.Minute
 
 type inventoryCursor struct {
 	NextRevision      uint64

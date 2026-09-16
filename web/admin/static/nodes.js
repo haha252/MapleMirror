@@ -38,8 +38,8 @@
       nodeCache[node.node_id] = node;
       var ready = readinessLabel(node);
       var open = currentNode === node.node_id;
-      var meta = a.regionLabel(node.region) + " · 压力 " + a.pressureText(node) +
-        " · 心跳 " + (node.last_heartbeat_at || "暂无");
+      var meta = a.regionLabel(node.region) + " · Control " + (node.control_protocol || "未知") +
+        " · 压力 " + a.pressureText(node) + " · 心跳 " + (node.last_heartbeat_at || "暂无");
       return '<article class="admin-record node-record" data-node-card="' + a.esc(node.node_id) + '">' +
         '<div class="admin-record__summary"><div class="admin-record__identity"><strong>' +
         a.esc(node.public_name || node.node_id) + '</strong><span class="sub">' + a.esc(meta) +
@@ -91,7 +91,12 @@
       var sync = items[0], reports = items[1], sla = items[2];
       var node = nodeCache[nodeID] || {};
       var pressure = reports.pressure || reports.heartbeat || {};
+      var assetFS = pressure.asset_fs || {};
+      var partialFS = pressure.partial_fs || {};
       var free = Number(pressure.free_bytes || 0) > 0 ? a.bytes(pressure.free_bytes) : "节点暂未上报";
+      var assetFree = assetFS.valid ? a.bytes(Math.max(0, Number(assetFS.available_bytes || 0) - Number(assetFS.reserved_bytes || 0))) : free;
+      var partialFree = partialFS.valid ? a.bytes(Math.max(0, Number(partialFS.available_bytes || 0) - Number(partialFS.reserved_bytes || 0))) : "节点暂未上报";
+      var publicActive = pressure.public_active_downloads !== undefined ? pressure.public_active_downloads : (pressure.active_downloads || 0);
       var slaText = (sla.windows || []).map(function (w) {
         return w.window + " " + (w.insufficient_samples ? "样本不足" :
           (Number(w.availability_ratio || 0) * 100).toFixed(2) + "%");
@@ -105,8 +110,9 @@
           "待同步": sync.missing_assets || 0, "执行中": sync.running_tasks || 0,
           "等待重试": sync.retry_wait_tasks || 0, "失败任务": sync.failed_tasks || 0}, "detail-plain") +
         '</section><section class="detail-pane"><h3>运行概况</h3>' +
-        a.compactKv({"当前带宽": a.bandwidthText(node), "压力": a.pressureText(node),
-          "可用磁盘": free, "活动下载": pressure.active_downloads || 0,
+        a.compactKv({"Control": node.control_protocol || "未知", "当前带宽": a.bandwidthText(node),
+          "压力": a.pressureText(node), "资产盘可用": assetFree, "Partial 盘可用": partialFree,
+          "公网活动下载": publicActive, "Swarm 活动上传": pressure.swarm_active_uploads || 0,
           "最近报告": pressure.reported_at || "暂无", "地区": a.regionLabel(node.region)}, "detail-plain") +
         '</section></div><div><h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") + '</p></div>' +
         '<div class="admin-record__actions admin-record__management">' +

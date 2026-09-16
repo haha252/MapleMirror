@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -40,7 +41,10 @@ func (s IdentityStore) PairingCode(fallbackPath string) (string, error) {
 	if readErr != nil {
 		return "", fmt.Errorf("读取配对码失败：%w", readErr)
 	}
-	code = string(data)
+	code = strings.TrimSpace(string(data))
+	if code == "" {
+		return "", fmt.Errorf("配对码文件为空")
+	}
 	if saveErr := s.SavePairingCode(code); saveErr != nil {
 		return "", saveErr
 	}

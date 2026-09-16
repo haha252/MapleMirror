@@ -74,6 +74,7 @@ func (s ControlServer) Handle(conn net.Conn) {
 		s.writeStartSessionReject(conn, tlsConn, reqID, fp, err)
 		return
 	}
+	s.Repo.runtime().SetControlProtocol(session.NodeID, "v1")
 	closeReason := "连接关闭"
 	defer func() {
 		_ = s.Repo.CloseSession(context.Background(), session.ID, closeReason)

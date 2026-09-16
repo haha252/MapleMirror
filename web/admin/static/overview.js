@@ -9,7 +9,10 @@
       ["在线", stats.online || 0],
       ["离线", stats.offline || 0],
       ["已禁用", stats.disabled || 0],
-      ["路由就绪", stats.routing_ready || 0]
+      ["路由就绪", stats.routing_ready || 0],
+      ["Control v2", stats.control_v2 || 0],
+      ["Control v1", stats.control_v1 || 0],
+      ["协议未知", stats.control_unknown || 0]
     ];
     box.innerHTML = rows.map(function (row) {
       return '<div class="summary-item"><span>' + a.esc(row[0]) +
