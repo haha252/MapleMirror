@@ -176,7 +176,11 @@ func main() {
 	if indexNow != nil {
 		publicServer.IndexNowKey = indexNow.Key()
 	}
-	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger, indexNow)
+	var publicNotifier mirrorsync.PublicChangeNotifier
+	if indexNow != nil {
+		publicNotifier = indexNow
+	}
+	syncService := startMirrorSync(cfg, projectLoader, database, runtime, logger, publicNotifier)
 	developerStore := developerapi.NewStore(database, location, cfg.Server.PublicBaseURL)
 	developerHandler := developerapi.NewHandler(developerStore, projectLoader, syncService,
 		cfg.Proxy.TrustedCIDRs, logger)
