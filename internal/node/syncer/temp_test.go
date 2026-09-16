@@ -66,6 +66,32 @@ func TestCleanTempDirectoryRemovesOnlyChildren(t *testing.T) {
 	}
 }
 
+func TestCleanTempDirectoryPreservesSwarmPartials(t *testing.T) {
+	dir := t.TempDir()
+	tempDir := filepath.Join(dir, "tmp")
+	partialDir := filepath.Join(tempDir, "swarm-partials")
+	if err := os.MkdirAll(partialDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	partial := filepath.Join(partialDir, "resume.part")
+	if err := os.WriteFile(partial, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "stale.tmp"), []byte("remove"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, removed, err := CleanTempDirectory(filepath.Join(dir, "assets"), tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != 1 {
+		t.Fatalf("removed=%d want=1", removed)
+	}
+	if data, err := os.ReadFile(partial); err != nil || string(data) != "keep" {
+		t.Fatalf("swarm partial should survive startup cleanup data=%q err=%v", data, err)
+	}
+}
+
 func TestCleanTempDirectoryRejectsEmptyPath(t *testing.T) {
 	if _, _, err := CleanTempDirectory(t.TempDir(), ""); err == nil {
 		t.Fatal("expected empty temp dir to be rejected")

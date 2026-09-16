@@ -11,8 +11,12 @@ import (
 	"mirror-server/internal/bootstrap"
 	"mirror-server/internal/config"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/node/activity"
+	"mirror-server/internal/node/capacity"
 	nodecontrol "mirror-server/internal/node/control"
+	"mirror-server/internal/node/eventwake"
 	nodeprobe "mirror-server/internal/node/probe"
+	"mirror-server/internal/node/swarmstate"
 	"mirror-server/internal/node/syncer"
 )
 
@@ -21,14 +25,24 @@ type controlSupervisor struct {
 	db        *sql.DB
 	logger    *logging.Logger
 	address   string
+	wsURL     string
 	version   string
 	executor  syncer.Executor
 	limiter   *nodecontrol.TaskLimiter
 	bandwidth nodecontrol.BandwidthSampler
+	capacity  *capacity.Manager
+	activity  *activity.Counters
+	eventWake *eventwake.Notifier
+	swarm     *swarmstate.Registry
 	probes    *nodeprobe.Store
+	v2Runtime *nodecontrol.V2Runtime
 }
 
 func (s controlSupervisor) run() {
+	if s.wsURL != "" {
+		s.runV2()
+		return
+	}
 	interval := 5 * time.Second
 	for {
 		client, err := s.buildClient(interval)
@@ -96,12 +110,13 @@ func (s controlSupervisor) buildClient(interval time.Duration) (*nodecontrol.Cli
 	return &nodecontrol.Client{
 		NodeID: nodeID, Address: s.address, PublicDownloadBaseURL: s.cfg.Server.PublicDownloadBaseURL,
 		TargetBandwidthBPS: s.cfg.Bandwidth.TargetBPS,
-		MaxMirrorProjects:  s.cfg.Sync.MaxMirrorProjects, TLSConfig: tlsCfg,
+		MaxMirrorProjects:  s.cfg.Sync.MaxMirrorProjects, ForcePeerDownload: s.cfg.Sync.ForcePeerDownload, TLSConfig: tlsCfg,
 		SoftwareVersion: s.version,
 		Storage:         s.cfg.Storage.Directory, HeartbeatInterval: interval,
 		Logger: s.logger, Executor: s.executor, DB: s.db, TaskLimiter: s.limiter,
 		TaskTimeout: syncer.DefaultHTTPClientTimeout,
-		Bandwidth:   s.bandwidth, ProbeStore: s.probes,
+		Bandwidth:   s.bandwidth, Capacity: s.capacity, Activity: s.activity, EventWake: s.eventWake,
+		Swarm: s.swarm, ProbeStore: s.probes, V2Runtime: s.v2Runtime,
 	}, nil
 }
 
@@ -155,7 +170,7 @@ func (s controlSupervisor) reEnroll(client *nodecontrol.Client, rejection nodeco
 	if err != nil {
 		return err
 	}
-	if err := resetNodeLocalData(s.cfg, s.db, s.logger); err != nil {
+	if err := resetNodeIdentityForReEnrollment(s.cfg, s.db, s.logger); err != nil {
 		return err
 	}
 	if err := identity.SavePairingCode(code); err != nil {
@@ -164,24 +179,71 @@ func (s controlSupervisor) reEnroll(client *nodecontrol.Client, rejection nodeco
 	enroller := nodecontrol.Enroller{
 		NodeName:           s.cfg.Node.Name,
 		Address:            "",
+		WSAddress:          s.cfg.Master.EnrollmentWSAddress,
 		TLSConfig:          tlsCfg,
 		CodeFile:           s.cfg.Pairing.CodeFile,
 		CredentialFile:     s.cfg.Pairing.CredentialFile,
 		TokenPublicKeyFile: s.cfg.Download.VerifyPublicKeyFile,
 		Identity:           identity,
 	}
-	if s.cfg.Master.EnrollmentAddress == "" {
+	if s.cfg.Master.EnrollmentAddress == "" && s.cfg.Master.EnrollmentWSAddress == "" {
 		return errors.New("主节点登记地址为空，无法重新登记")
 	}
-	parsed, err := url.Parse(s.cfg.Master.EnrollmentAddress)
-	if err != nil {
-		return err
+	if s.cfg.Master.EnrollmentAddress != "" {
+		parsed, err := url.Parse(s.cfg.Master.EnrollmentAddress)
+		if err != nil {
+			return err
+		}
+		enroller.Address = parsed.Host
 	}
-	enroller.Address = parsed.Host
 	if s.logger != nil {
+		nodeID := ""
+		if client != nil {
+			nodeID = client.NodeID
+		}
 		s.logger.Info(context.Background(), "节点开始重新登记",
-			slog.String("node_id", client.NodeID),
+			slog.String("node_id", nodeID),
 			slog.String("master", enroller.Address))
 	}
 	return enroller.RunUntilComplete(15 * time.Minute)
+}
+
+func (s controlSupervisor) runV2() {
+	interval := 5 * time.Second
+	backoff := time.Second
+	for {
+		client, err := s.buildClient(interval)
+		if err == nil {
+			started := time.Now()
+			next, runErr := client.RunV2(context.Background(), s.wsURL)
+			if next > 0 {
+				interval = next
+			}
+			err = runErr
+			if time.Since(started) > 30*time.Second {
+				backoff = time.Second
+			}
+		}
+		if err != nil {
+			var rejection nodecontrol.RejectionError
+			if errors.As(err, &rejection) && rejection.Recoverable() && bootstrap.Interactive() {
+				if reErr := s.reEnroll(nil, rejection); reErr == nil {
+					backoff = time.Second
+					continue
+				}
+			}
+		}
+		if err != nil && s.logger != nil {
+			s.logger.Warn(context.Background(), "control.v2 WSS 连接中断",
+				slog.String("master", s.wsURL), slog.String("error", err.Error()),
+				slog.Duration("retry_in", backoff))
+		}
+		time.Sleep(backoff + time.Duration(time.Now().UnixNano()%int64(backoff/5+1)))
+		if backoff < 30*time.Second {
+			backoff *= 2
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+		}
+	}
 }

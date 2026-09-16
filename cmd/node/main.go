@@ -20,9 +20,12 @@ import (
 	"mirror-server/internal/config"
 	"mirror-server/internal/controltls"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/node/activity"
 	nodecontrol "mirror-server/internal/node/control"
+	"mirror-server/internal/node/eventwake"
 	"mirror-server/internal/node/health"
 	nodeprobe "mirror-server/internal/node/probe"
+	"mirror-server/internal/node/swarmstate"
 	"mirror-server/internal/node/syncer"
 	"mirror-server/internal/node/trafficlimit"
 	"mirror-server/internal/requestid"
@@ -76,6 +79,11 @@ func main() {
 			slog.Int("removed_entries", removed),
 			slog.String("temp_directory", tempDir))
 	}
+	if removed, err := syncer.CleanSwarmPartials(database, cfg.Storage.Directory, cfg.Storage.TempDirectory, syncer.DefaultSwarmPartialTTL); err != nil {
+		logger.Warn(context.Background(), "Swarm partial 启动清理未完成", slog.String("error", err.Error()))
+	} else if removed > 0 {
+		logger.Info(context.Background(), "Swarm partial 启动清理已完成", slog.Int("removed_entries", removed))
+	}
 	cleanup, err := syncer.CleanEmptyAssetDirectories(cfg.Storage.Directory)
 	if err != nil {
 		logger.Warn(context.Background(), "下载节点历史空资产目录清理未完成",
@@ -96,14 +104,19 @@ func main() {
 	}
 	startEnrollmentClient(cfg, database, logger)
 	probeStore := publicProbeStore(cfg, database, logger)
-	startControlClient(cfg, database, logger, probeStore)
+	eventWake := eventwake.New()
+	activityCounters := &activity.Counters{}
+	swarmRegistry := swarmstate.New()
+	swarmRegistry.SetWake(eventWake.Wake)
+	startControlClient(cfg, database, logger, probeStore, eventWake, swarmRegistry, activityCounters)
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", requestid.Middleware(health.Handler{
 		Logger: logger, Version: version,
 	}, "X-Request-ID", "X-Request-ID"))
 	outboundLimiter := trafficlimit.New(cfg.Bandwidth.TargetBPS,
 		cfg.Bandwidth.MinimumBPS, nodecontrol.ReadNonLoopbackNetworkBytes)
-	if handler := fileHandler(cfg, database, logger, probeStore, outboundLimiter); handler != nil {
+	swarmLimiter := trafficlimit.New(cfg.Sync.SwarmUploadLimitBPS, cfg.Sync.SwarmUploadLimitBPS, nil)
+	if handler := fileHandler(cfg, database, logger, probeStore, outboundLimiter, swarmLimiter, eventWake, swarmRegistry, activityCounters); handler != nil {
 		mux.Handle("/downloads/", requestid.Middleware(handler, "X-Request-ID", "X-Request-ID"))
 		mux.Handle("/", requestid.Middleware(handler, "X-Request-ID", "X-Request-ID"))
 	}
@@ -131,7 +144,7 @@ func publicProbeStore(cfg config.Node, db *sql.DB, logger *logging.Logger) *node
 }
 
 func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) {
-	if cfg.Master.EnrollmentAddress == "" || cfg.Pairing.CodeFile == "" {
+	if (cfg.Master.EnrollmentAddress == "" && cfg.Master.EnrollmentWSAddress == "") || cfg.Pairing.CodeFile == "" {
 		return
 	}
 	identity := nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
@@ -139,10 +152,14 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 	if _, err := identity.NodeID(); err == nil {
 		return
 	}
-	address, err := url.Parse(cfg.Master.EnrollmentAddress)
-	if err != nil {
-		logger.Error(context.Background(), "主节点登记地址无效", slog.String("error", err.Error()))
-		return
+	addressHost := ""
+	if cfg.Master.EnrollmentAddress != "" {
+		address, err := url.Parse(cfg.Master.EnrollmentAddress)
+		if err != nil {
+			logger.Error(context.Background(), "主节点登记地址无效", slog.String("error", err.Error()))
+			return
+		}
+		addressHost = address.Host
 	}
 	tlsCfg, err := controltls.NodeClient(cfg.TLS.CAFile, "", "", cfg.TLS.ServerName)
 	if err != nil {
@@ -150,7 +167,7 @@ func startEnrollmentClient(cfg config.Node, db *sql.DB, logger *logging.Logger) 
 		return
 	}
 	enroller := nodecontrol.Enroller{
-		NodeName: cfg.Node.Name, Address: address.Host, TLSConfig: tlsCfg,
+		NodeName: cfg.Node.Name, Address: addressHost, WSAddress: cfg.Master.EnrollmentWSAddress, TLSConfig: tlsCfg,
 		CodeFile: cfg.Pairing.CodeFile, CredentialFile: cfg.Pairing.CredentialFile,
 		TokenPublicKeyFile: cfg.Download.VerifyPublicKeyFile,
 		Identity:           identity,
@@ -168,13 +185,26 @@ func interactiveEnrollIfNeeded(path string, cfg *config.Node, db *sql.DB) error 
 	if _, err := identity.NodeID(); err == nil {
 		return nil
 	}
+	if !bootstrap.Interactive() {
+		return nonInteractiveEnroll(*cfg, identity)
+	}
 	answers, err := bootstrap.NodeFirstRun(*cfg)
 	if err != nil {
 		return err
 	}
 	cfg.Node.Name = answers.Name
-	cfg.Master.ControlAddress = answers.ControlAddress
-	cfg.Master.EnrollmentAddress = answers.EnrollmentAddress
+	if answers.ControlAddress != "" {
+		cfg.Master.ControlAddress = answers.ControlAddress
+	}
+	if answers.EnrollmentAddress != "" {
+		cfg.Master.EnrollmentAddress = answers.EnrollmentAddress
+	}
+	if answers.ControlWSAddress != "" {
+		cfg.Master.ControlWSAddress = answers.ControlWSAddress
+	}
+	if answers.EnrollmentWSAddress != "" {
+		cfg.Master.EnrollmentWSAddress = answers.EnrollmentWSAddress
+	}
 	cfg.TLS.ServerName = answers.ServerName
 	if err := config.SaveNodeFirstRun(path, *cfg); err != nil {
 		return err
@@ -185,43 +215,21 @@ func interactiveEnrollIfNeeded(path string, cfg *config.Node, db *sql.DB) error 
 	if err := identity.SavePairingCode(answers.PairingCode); err != nil {
 		return err
 	}
-	address, err := url.Parse(cfg.Master.EnrollmentAddress)
-	if err != nil {
-		return err
+	addressHost := ""
+	if cfg.Master.EnrollmentAddress != "" {
+		address, err := url.Parse(cfg.Master.EnrollmentAddress)
+		if err != nil {
+			return err
+		}
+		addressHost = address.Host
 	}
 	enroller := nodecontrol.Enroller{
-		NodeName: cfg.Node.Name, Address: address.Host, TLSConfig: answers.TLSConfig,
+		NodeName: cfg.Node.Name, Address: addressHost, WSAddress: cfg.Master.EnrollmentWSAddress, TLSConfig: answers.TLSConfig,
 		CodeFile: cfg.Pairing.CodeFile, CredentialFile: cfg.Pairing.CredentialFile,
 		TokenPublicKeyFile: cfg.Download.VerifyPublicKeyFile,
 		Identity:           identity,
 	}
 	return enroller.RunUntilComplete(15 * time.Minute)
-}
-
-func startControlClient(cfg config.Node, db *sql.DB, logger *logging.Logger,
-	probes *nodeprobe.Store) {
-	address, err := url.Parse(cfg.Master.ControlAddress)
-	if err != nil {
-		logger.Error(context.Background(), "主节点控制地址无效", slog.String("error", err.Error()))
-		return
-	}
-	supervisor := controlSupervisor{
-		cfg: cfg, db: db, logger: logger, address: address.Host, version: version,
-		executor: syncer.Executor{DB: db, Storage: cfg.Storage.Directory,
-			TempDir: cfg.Storage.TempDirectory, Logger: logger,
-			Client:                    &http.Client{Timeout: syncer.DefaultHTTPClientTimeout},
-			Probe:                     syncer.NewSourceProbe(nil),
-			BandwidthLimitBPS:         cfg.Sync.BandwidthLimitBPS,
-			ForcePeerDownload:         cfg.Sync.ForcePeerDownload,
-			PeerFallbackMaxConcurrent: cfg.Sync.PeerFallbackMaxConcurrent,
-			PeerFallbackWorkers:       cfg.Sync.PeerFallbackWorkers,
-			PeerFallbackMinSize:       cfg.Sync.PeerFallbackMinSizeBytes},
-		limiter:   nodecontrol.NewTaskLimiter(cfg.Sync.MaxWorkers),
-		bandwidth: nodecontrol.NewNetworkBandwidthSampler(),
-		probes:    probes,
-	}
-	go supervisor.run()
-	logger.Info(context.Background(), "节点主动控制连接已启动", slog.String("master", address.Host))
 }
 
 func runServer(address string, handler http.Handler, logger *logging.Logger) {

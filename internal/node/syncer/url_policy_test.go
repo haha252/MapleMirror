@@ -25,7 +25,7 @@ func TestFetchWithTokenRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
 	defer restore()
 	_, _, err := (Executor{Client: &http.Client{Transport: &http.Transport{}}}).fetchWithToken(context.Background(),
 		"http://public.example.test:8080/asset.zip", filepath.Join(t.TempDir(), "asset.tmp"), "", 6)
-	if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
+	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected DNS private source rejection, got %v", err)
 	}
 }
@@ -36,7 +36,7 @@ func TestSecureSourceDialRejectsPrivateResolvedRanges(t *testing.T) {
 			restore := stubSourceLookup(t, net.ParseIP(rawIP))
 			defer restore()
 			_, err := secureSourceDialContext(context.Background(), "tcp", "public.example.test:80")
-			if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
+			if err == nil || !strings.Contains(err.Error(), "内网") {
 				t.Fatalf("expected private resolved address rejection, got %v", err)
 			}
 		})
@@ -84,7 +84,7 @@ func TestSourceProbeRejectsDNSPrivateAddressBeforeRequest(t *testing.T) {
 	defer restore()
 	probe := NewSourceProbe(&http.Client{Transport: &http.Transport{}})
 	err := probe.Check(context.Background(), "http://public.example.test:8080/asset.zip")
-	if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
+	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected DNS private probe rejection, got %v", err)
 	}
 }
@@ -111,7 +111,7 @@ func TestFetchFallbackRejectsDNSPrivatePeerURL(t *testing.T) {
 		"http://public.example.test:8080/internal/replication/asset-1", digest("abcdef"), 6)
 	tmp := filepath.Join(t.TempDir(), "asset.tmp")
 	_, _, attempted, err := (Executor{Client: &http.Client{Transport: &http.Transport{}}}).fetchFallback(context.Background(), task, tmp)
-	if err == nil || !strings.Contains(err.Error(), "鍐呯綉") {
+	if err == nil || !strings.Contains(err.Error(), "内网") {
 		t.Fatalf("expected DNS private fallback rejection, got %v", err)
 	}
 	if !attempted {

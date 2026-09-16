@@ -107,6 +107,9 @@ func (h *Handler) expireAuthorization(claims downloadtoken.Claims, status string
 	if err != nil {
 		return err
 	}
+	if h.EventWake != nil {
+		h.EventWake.Wake()
+	}
 	return errAuthorizationExpired
 }
 

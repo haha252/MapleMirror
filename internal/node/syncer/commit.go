@@ -15,6 +15,7 @@ import (
 var (
 	assetRename = os.Rename
 	assetRemove = os.Remove
+	assetCopy   = io.Copy
 )
 
 func (e Executor) commitAsset(task protocol.SyncTask, tmpPath, finalPath, rel, digest string, size int64) protocol.SyncTaskResult {
@@ -115,7 +116,7 @@ func copyAssetToTargetDir(src, dir string) (string, error) {
 		return "", err
 	}
 	tmp := out.Name()
-	if _, err = io.Copy(out, in); err != nil {
+	if _, err = assetCopy(out, in); err != nil {
 		_ = out.Close()
 		_ = os.Remove(tmp)
 		return "", err

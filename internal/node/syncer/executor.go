@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"mirror-server/internal/logging"
+	"mirror-server/internal/node/capacity"
+	"mirror-server/internal/node/swarmstate"
 	"mirror-server/internal/protocol"
 )
 
@@ -19,14 +21,18 @@ type Executor struct {
 	Storage                   string
 	TempDir                   string
 	Client                    *http.Client
+	SourceClient              *http.Client
 	Logger                    *logging.Logger
 	Probe                     *SourceProbe
-	BandwidthLimitBPS         int64
+	BandwidthLimitBPS         int64 // legacy/config value; SyncLimiter is authoritative when non-nil.
+	SyncLimiter               *BandwidthLimiter
 	ForcePeerDownload         bool
 	PeerFallbackWorkers       int
 	PeerFallbackMinSize       int64
 	PeerFallbackMaxConcurrent int
 	AllowPrivateSourceURLs    bool
+	Capacity                  *capacity.Manager
+	Swarm                     *swarmstate.Registry
 }
 
 const DefaultHTTPClientTimeout = 30 * time.Minute
@@ -83,6 +89,13 @@ func (e Executor) download(ctx context.Context, task protocol.SyncTask) protocol
 	if result, ok := e.reuseVerifiedAsset(task); ok {
 		_ = e.recordTask(task, result.Result, result.Message)
 		return result
+	}
+	if e.Capacity != nil {
+		release, err := e.Capacity.ReserveDownload(task.Asset.SizeBytes)
+		if err != nil {
+			return taskResult(task, "temporary_error", "", 0, "磁盘可用空间不足")
+		}
+		defer release()
 	}
 	if e.Logger != nil {
 		e.Logger.Debug(context.Background(), "节点开始下载资产",

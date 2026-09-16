@@ -10,14 +10,18 @@ import (
 	"mirror-server/internal/config"
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/node/activity"
 	nodecontrol "mirror-server/internal/node/control"
+	"mirror-server/internal/node/eventwake"
 	"mirror-server/internal/node/files"
 	nodeprobe "mirror-server/internal/node/probe"
+	"mirror-server/internal/node/swarmstate"
 	"mirror-server/internal/node/trafficlimit"
 )
 
 func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger,
-	probes *nodeprobe.Store, limiter *trafficlimit.Limiter) http.Handler {
+	probes *nodeprobe.Store, limiter, swarmLimiter *trafficlimit.Limiter, wake *eventwake.Notifier,
+	swarmRegistry *swarmstate.Registry, activityCounters *activity.Counters) http.Handler {
 	identity := nodecontrol.IdentityStore{DB: db, CertFile: cfg.TLS.CertFile,
 		KeyFile: cfg.TLS.KeyFile, CAFile: cfg.TLS.CAFile}
 	signer, err := identity.DownloadTokenVerifier()
@@ -39,5 +43,6 @@ func fileHandler(cfg config.Node, db *sql.DB, logger *logging.Logger,
 	}
 	return &files.Handler{DB: db, Storage: cfg.Storage.Directory, NodeID: nodeID,
 		Signer: signer, TrustedCIDRs: cfg.Proxy.TrustedCIDRs, Logger: logger,
-		TrafficLimiter: limiter, ProbeStore: probes}
+		TrafficLimiter: limiter, SwarmLimiter: swarmLimiter, Activity: activityCounters,
+		EventWake: wake, Swarm: swarmRegistry, ProbeStore: probes}
 }

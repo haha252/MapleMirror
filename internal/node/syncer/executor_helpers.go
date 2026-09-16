@@ -27,11 +27,7 @@ func (e Executor) fetchWithToken(ctx context.Context, url, tmpPath, token string
 	if err := validateSourceURL(url, e.AllowPrivateSourceURLs); err != nil {
 		return "", 0, err
 	}
-	client := e.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
-	client = sourceHTTPClient(client, e.AllowPrivateSourceURLs)
+	client := e.effectiveSourceClient()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", 0, err

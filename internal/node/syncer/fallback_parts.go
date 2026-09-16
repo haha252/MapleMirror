@@ -78,15 +78,11 @@ sendLoop:
 }
 
 func (e Executor) fetchPeerPart(ctx context.Context, rawURL string,
-	part protocol.SyncFallbackPart, file *os.File, limiter *rateLimiter) error {
+	part protocol.SyncFallbackPart, file *os.File, limiter *BandwidthLimiter) error {
 	if err := validateSourceURL(rawURL, e.AllowPrivateSourceURLs); err != nil {
 		return err
 	}
-	client := e.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
-	client = sourceHTTPClient(client, e.AllowPrivateSourceURLs)
+	client := e.effectiveSourceClient()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return err

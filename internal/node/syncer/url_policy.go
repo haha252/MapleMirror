@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 var sourceLookupIPAddr = net.DefaultResolver.LookupIPAddr
@@ -57,6 +58,23 @@ func privateSourceIP(ip net.IP) bool {
 		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()
 }
 
+func NewSourceHTTPClient(base *http.Client, allowPrivate bool, responseHeaderTimeout time.Duration) *http.Client {
+	client := sourceHTTPClient(base, allowPrivate)
+	if transport, ok := client.Transport.(*http.Transport); ok {
+		clone := transport.Clone()
+		clone.ResponseHeaderTimeout = responseHeaderTimeout
+		client.Transport = clone
+	}
+	return client
+}
+
+func (e Executor) effectiveSourceClient() *http.Client {
+	if e.SourceClient != nil {
+		return e.SourceClient
+	}
+	return NewSourceHTTPClient(e.Client, e.AllowPrivateSourceURLs, swarmHeaderTimeout)
+}
+
 func sourceHTTPClient(base *http.Client, allowPrivate bool) *http.Client {
 	if base == nil {
 		base = http.DefaultClient
@@ -102,11 +120,11 @@ func secureSourceDialContext(ctx context.Context, network, address string) (net.
 		return nil, err
 	}
 	if len(resolved) == 0 {
-		return nil, fmt.Errorf("婧愮珯鍦板潃 %s 鏃犳硶瑙ｆ瀽", host)
+		return nil, fmt.Errorf("源站地址 %s 无法解析", host)
 	}
 	for _, addr := range resolved {
 		if privateSourceIP(addr.IP) {
-			return nil, errors.New("婧愮珯鍦板潃涓嶅緱瑙ｆ瀽鍒版湰鏈烘垨鍐呯綉鍦板潃")
+			return nil, errors.New("源站地址不得解析到本机或内网地址")
 		}
 	}
 	dialer := net.Dialer{}

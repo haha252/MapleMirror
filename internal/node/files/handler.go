@@ -14,6 +14,9 @@ import (
 
 	"mirror-server/internal/downloadtoken"
 	"mirror-server/internal/logging"
+	"mirror-server/internal/node/activity"
+	"mirror-server/internal/node/eventwake"
+	"mirror-server/internal/node/swarmstate"
 	"mirror-server/internal/protocol"
 	"mirror-server/internal/requestid"
 )
@@ -25,6 +28,10 @@ type Handler struct {
 	TrustedCIDRs    []string
 	Logger          *logging.Logger
 	TrafficLimiter  trafficLimiter
+	SwarmLimiter    trafficLimiter
+	Activity        *activity.Counters
+	EventWake       *eventwake.Notifier
+	Swarm           *swarmstate.Registry
 	ProbeStore      interface {
 		Response(string) (protocol.PublicProbeResponse, bool)
 	}
@@ -48,6 +55,10 @@ type localAsset struct {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/.well-known/mirror-node/probes/") {
 		h.servePublicProbe(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/internal/swarm/") {
+		h.serveSwarm(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/internal/replication/") {
@@ -94,6 +105,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.leave(claims.AuthorizationID)
+	finishPublic := func() {}
+	if h.Activity != nil {
+		finishPublic = h.Activity.BeginPublicDownload()
+	}
+	defer finishPublic()
 	if h.rejectPendingTraffic(w, r, claims.AuthorizationID) {
 		return
 	}

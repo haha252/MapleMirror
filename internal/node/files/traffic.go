@@ -71,6 +71,9 @@ func (h *Handler) insertTrafficEventLocked(event pendingTrafficEvent) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')`,
 		next, event.Claims.AuthorizationID, event.NodeRequestID, event.Claims.RequestID,
 		event.Sent, time.Now().UTC().Format(time.RFC3339Nano), event.AssetID)
+	if err == nil && h.EventWake != nil {
+		h.EventWake.Wake()
+	}
 	return err
 }
 

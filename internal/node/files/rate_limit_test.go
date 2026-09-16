@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"mirror-server/internal/downloadtoken"
+	"mirror-server/internal/swarm"
 )
 
 func TestHandlerPublicDownloadUsesTrafficLimiter(t *testing.T) {
@@ -74,4 +75,27 @@ func testReplicationClaims() downloadtoken.ReplicationClaims {
 		AssetID: "asset-1", SourceNodeID: "node-1", TargetNodeID: "node-2",
 		ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano),
 		RequestID: "req-1", TaskID: "task-1"}
+}
+
+func TestHandlerSwarmUsesGlobalAndChildLimiterWithoutPublicAccounting(t *testing.T) {
+	db, storageDir, signer := prepareNodeFile(t)
+	token := swarmToken(t, signer, "asset-1", "manifest-1", "node-1", 6, swarm.MinPieceSize, 1)
+	req := httptest.NewRequest(http.MethodGet, "/internal/swarm/asset-1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Range", "bytes=0-5")
+	rec := httptest.NewRecorder()
+	global := &countingLimiter{}
+	child := &countingLimiter{}
+	(&Handler{DB: db, Storage: storageDir, NodeID: "node-1", Signer: signer,
+		TrafficLimiter: global, SwarmLimiter: child}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent || global.bytes != 6 || child.bytes != 6 {
+		t.Fatalf("code=%d global=%d child=%d", rec.Code, global.bytes, child.bytes)
+	}
+	var events int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pending_traffic_events`).Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if events != 0 {
+		t.Fatalf("internal swarm bytes entered public accounting: %d events", events)
+	}
 }

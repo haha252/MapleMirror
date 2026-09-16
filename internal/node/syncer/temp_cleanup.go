@@ -20,6 +20,9 @@ func CleanTempDirectory(storageDir, tempDir string) (string, int, error) {
 	}
 	removed := 0
 	for _, entry := range entries {
+		if entry.Name() == "swarm-partials" {
+			continue
+		}
 		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
 			return dir, removed, err
 		}
