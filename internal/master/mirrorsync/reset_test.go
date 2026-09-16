@@ -138,7 +138,7 @@ func assertPublicStatsAfterReset(t *testing.T, db *sql.DB) {
 		WHERE stat_day = '2026-06-03'`).Scan(&views, &auth, &started, &sent); err != nil {
 		t.Fatal(err)
 	}
-	if views != 9 || auth != 0 || started != 0 || sent != 0 {
+	if views != 9 || auth != 0 || started != 0 || sent != 100 {
 		t.Fatalf("项目重置后每日公开状态错误：views=%d auth=%d started=%d sent=%d",
 			views, auth, started, sent)
 	}
@@ -147,7 +147,7 @@ func assertPublicStatsAfterReset(t *testing.T, db *sql.DB) {
 		WHERE id = 'global'`).Scan(&views, &auth, &started, &sent); err != nil {
 		t.Fatal(err)
 	}
-	if views != 20 || auth != 0 || started != 0 || sent != 0 {
+	if views != 20 || auth != 0 || started != 0 || sent != 100 {
 		t.Fatalf("项目重置后公开累计状态错误：views=%d auth=%d started=%d sent=%d",
 			views, auth, started, sent)
 	}

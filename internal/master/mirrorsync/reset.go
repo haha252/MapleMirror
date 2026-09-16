@@ -81,6 +81,7 @@ func (s Store) ResetProject(ctx context.Context, projectID string) error {
 }
 
 func subtractProjectPublicStats(ctx context.Context, tx *sql.Tx, projectID string) error {
+	// sent_bytes 是已经实际发生的历史网络流量，不属于可随项目派生数据重置的计数。
 	if _, err := tx.ExecContext(ctx, `UPDATE daily_public_stats SET
 		authorization_count = MAX(authorization_count - COALESCE((
 			SELECT SUM(authorization_count) FROM daily_project_stats dps
@@ -97,14 +98,10 @@ func subtractProjectPublicStats(ctx context.Context, tx *sql.Tx, projectID strin
 		transfer_started_count = MAX(transfer_started_count - COALESCE((
 			SELECT SUM(transfer_started_count) FROM daily_project_stats dps
 			WHERE dps.project_id = ? AND dps.stat_day = daily_public_stats.stat_day
-		), 0), 0),
-		sent_bytes = MAX(sent_bytes - COALESCE((
-			SELECT SUM(sent_bytes) FROM daily_project_stats dps
-			WHERE dps.project_id = ? AND dps.stat_day = daily_public_stats.stat_day
 		), 0), 0)
 		WHERE stat_day IN (
 			SELECT stat_day FROM daily_project_stats WHERE project_id = ?
-		)`, projectID, projectID, projectID, projectID, projectID, projectID); err != nil {
+		)`, projectID, projectID, projectID, projectID, projectID); err != nil {
 		return err
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE public_stat_totals SET
@@ -119,10 +116,7 @@ func subtractProjectPublicStats(ctx context.Context, tx *sql.Tx, projectID strin
 		), 0), 0),
 		transfer_started_count = MAX(transfer_started_count - COALESCE((
 			SELECT SUM(transfer_started_count) FROM daily_project_stats WHERE project_id = ?
-		), 0), 0),
-		sent_bytes = MAX(sent_bytes - COALESCE((
-			SELECT SUM(sent_bytes) FROM daily_project_stats WHERE project_id = ?
 		), 0), 0)
-		WHERE id = 'global'`, projectID, projectID, projectID, projectID, projectID)
+		WHERE id = 'global'`, projectID, projectID, projectID, projectID)
 	return err
 }

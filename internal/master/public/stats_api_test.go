@@ -22,10 +22,10 @@ func TestStatsAPIsSplitFastAndDetailsSnapshots(t *testing.T) {
 	var fast statsFastSnapshot
 	decodeStatsResponse(t, fastRec, &fast)
 	if fast.Metrics[0] != [3]int64{7, 7, 0} || fast.Metrics[1] != [3]int64{3, 3, 0} ||
-		fast.Metrics[2] != [3]int64{4096, 4096, 0} ||
+		fast.Metrics[2] != [3]int64{8192, 8192, 0} ||
 		fast.DownloadSources[0] != [3]int64{2, 2, 0} ||
 		fast.DownloadSources[1] != [3]int64{1, 1, 0} ||
-		fast.Today[1].(float64) != 7 ||
+		fast.Today[1].(float64) != 7 || fast.Today[3].(float64) != 8192 ||
 		fast.Today[4].(float64) != 2 || fast.Today[5].(float64) != 1 {
 		t.Fatalf("unexpected fast stats snapshot: %+v", fast)
 	}
@@ -48,8 +48,25 @@ func TestStatsAPIsSplitFastAndDetailsSnapshots(t *testing.T) {
 	}
 	if len(details.Trend.Views) != 30 || len(details.Trend.Downloads) != 30 ||
 		len(details.Trend.WebDownloads) != 30 || len(details.Trend.APIDownloads) != 30 ||
-		len(details.Trend.Bytes) != 30 {
+		len(details.Trend.Bytes) != 30 || details.Trend.Bytes[len(details.Trend.Bytes)-1] != 8192 {
 		t.Fatalf("expected 30-day compact trend payload: %+v", details.Trend)
+	}
+}
+
+func TestTrafficSummaryKeepsHistoricalGlobalWhenNodeSumIsLower(t *testing.T) {
+	db := openMaster(t)
+	seedStatsSnapshot(t, db)
+	day := statDay(timeNow(), time.Local)
+	mustExec(t, db, `UPDATE public_stat_totals SET sent_bytes = 12288 WHERE id = 'global'`)
+	mustExec(t, db, `UPDATE daily_public_stats SET sent_bytes = 12288 WHERE stat_day = ?`, day)
+
+	srv := Server{Store: Store{DB: db}}
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/public/v1/stats", nil))
+	var snapshot statsFastSnapshot
+	decodeStatsResponse(t, rec, &snapshot)
+	if snapshot.Metrics[2] != [3]int64{12288, 12288, 0} || snapshot.Today[3].(float64) != 12288 {
+		t.Fatalf("historical global traffic should win when current node sum is lower: %+v", snapshot)
 	}
 }
 

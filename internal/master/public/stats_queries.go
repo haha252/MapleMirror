@@ -7,9 +7,12 @@ import (
 
 func (s Store) loadMetricSummaries(ctx context.Context, previousStart, start, end string,
 	views, downloads, traffic *MetricStat) error {
+	// 流量同时保存在全局累计和节点累计中。历史版本的项目重置可能回退全局累计，
+	// 而节点删除会清理节点累计，因此展示时取两份账本的较大值以保留已发生的历史流量。
 	if err := s.DB.QueryRowContext(ctx, `SELECT
 		COALESCE(t.page_views, 0), COALESCE(t.authorization_count, 0),
-		COALESCE(t.sent_bytes, 0)
+		MAX(COALESCE(t.sent_bytes, 0),
+			COALESCE((SELECT SUM(sent_bytes) FROM node_traffic_totals), 0))
 		FROM (SELECT 1) seed
 		LEFT JOIN public_stat_totals t ON t.id = 'global'`).
 		Scan(&views.Total, &downloads.Total, &traffic.Total); err != nil {
@@ -19,16 +22,38 @@ func (s Store) loadMetricSummaries(ctx context.Context, previousStart, start, en
 		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN page_views ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN page_views ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN authorization_count ELSE 0 END), 0),
-		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN authorization_count ELSE 0 END), 0),
-		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN sent_bytes ELSE 0 END), 0),
-		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN sent_bytes ELSE 0 END), 0)
+		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN authorization_count ELSE 0 END), 0)
 		FROM daily_public_stats`,
-		start, end, previousStart, dateOffset(start, -1),
 		start, end, previousStart, dateOffset(start, -1),
 		start, end, previousStart, dateOffset(start, -1)).
 		Scan(&views.Recent, &views.Previous,
-			&downloads.Recent, &downloads.Previous,
-			&traffic.Recent, &traffic.Previous); err != nil {
+			&downloads.Recent, &downloads.Previous); err != nil {
+		return err
+	}
+	if err := s.DB.QueryRowContext(ctx, `WITH node_daily AS (
+		SELECT stat_day, COALESCE(SUM(sent_bytes), 0) AS sent_bytes
+		FROM daily_node_traffic_stats
+		WHERE stat_day BETWEEN ? AND ?
+		GROUP BY stat_day
+	), merged_traffic AS (
+		SELECT days.stat_day,
+			MAX(COALESCE(p.sent_bytes, 0), COALESCE(n.sent_bytes, 0)) AS sent_bytes
+		FROM (
+			SELECT stat_day FROM daily_public_stats WHERE stat_day BETWEEN ? AND ?
+			UNION
+			SELECT stat_day FROM node_daily
+		) days
+		LEFT JOIN daily_public_stats p ON p.stat_day = days.stat_day
+		LEFT JOIN node_daily n ON n.stat_day = days.stat_day
+	)
+	SELECT
+		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN sent_bytes ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN stat_day BETWEEN ? AND ? THEN sent_bytes ELSE 0 END), 0)
+	FROM merged_traffic`,
+		previousStart, end,
+		previousStart, end,
+		start, end, previousStart, dateOffset(start, -1)).
+		Scan(&traffic.Recent, &traffic.Previous); err != nil {
 		return err
 	}
 	views.TrendLabel = trendLabel(views.Recent, views.Previous)
@@ -90,11 +115,24 @@ func (s Store) TopProjects(ctx context.Context) ([]ProjectRank, error) {
 }
 
 func (s Store) DailyTrends(ctx context.Context, start, end string) ([]DailyTrend, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT stat_day,
-		page_views, authorization_count, web_authorization_count,
-		api_authorization_count, sent_bytes
-		FROM daily_public_stats WHERE stat_day BETWEEN ? AND ?
-		ORDER BY stat_day`, start, end)
+	rows, err := s.DB.QueryContext(ctx, `WITH node_daily AS (
+		SELECT stat_day, COALESCE(SUM(sent_bytes), 0) AS sent_bytes
+		FROM daily_node_traffic_stats
+		WHERE stat_day BETWEEN ? AND ?
+		GROUP BY stat_day
+	), days AS (
+		SELECT stat_day FROM daily_public_stats WHERE stat_day BETWEEN ? AND ?
+		UNION
+		SELECT stat_day FROM node_daily
+	)
+	SELECT days.stat_day,
+		COALESCE(p.page_views, 0), COALESCE(p.authorization_count, 0),
+		COALESCE(p.web_authorization_count, 0), COALESCE(p.api_authorization_count, 0),
+		MAX(COALESCE(p.sent_bytes, 0), COALESCE(n.sent_bytes, 0))
+	FROM days
+	LEFT JOIN daily_public_stats p ON p.stat_day = days.stat_day
+	LEFT JOIN node_daily n ON n.stat_day = days.stat_day
+	ORDER BY days.stat_day`, start, end, start, end)
 	if err != nil {
 		return nil, err
 	}
