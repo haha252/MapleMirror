@@ -54,6 +54,7 @@ var expectedSchemaFiles = map[string]string{
 	"migrations/node/000007_authorization_state.sql":        "091deeac4f7ef4a1196ff0f55af72b9b19eb064a35ca9e1d8235fc08f2d7743c",
 	"migrations/node/000008_opaque_download_tokens.sql":     "93376fc051fc9c73f5309aadcddd8860793ebf679b3b067f38f0835c4a8c0571",
 	"migrations/master/000034_control_v2_swarm.sql":         "371178b434749c47e8ecbc20764796033a363afa5271ba92a508575cf3378d50",
+	"migrations/master/000035_historical_node_traffic.sql": "96e4799cb32aaa91ddbe3a7034ac13c1dd27e20c98243bfa3d983eb0307f41df",
 	"migrations/node/000009_control_v2_swarm.sql":           "67301f6d22c4605a62c99786b37482fb644e38474d89d229e0efb7418993d994",
 }
 

@@ -33,6 +33,7 @@ func TestApproveEnrollmentDeletesSameNameQuarantinedNode(t *testing.T) {
 	assertTableCount(t, repo, "node_tasks", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "daily_node_traffic_stats", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_traffic_totals", "node_id = 'old-node'", 0)
+	assertHistoricalNodeTraffic(t, repo, "old-node", "节点一", 10)
 	assertTableCount(t, repo, "node_availability_rollups", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_project_assignments", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "nodes", "id = 'new-node'", 1)
@@ -79,6 +80,7 @@ func TestDeleteNodeRemovesRuntimeData(t *testing.T) {
 	assertTableCount(t, repo, "node_tasks", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "daily_node_traffic_stats", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_traffic_totals", "node_id = 'old-node'", 0)
+	assertHistoricalNodeTraffic(t, repo, "old-node", "节点一", 10)
 	assertTableCount(t, repo, "node_availability_rollups", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "node_project_assignments", "node_id = 'old-node'", 0)
 	assertTableCount(t, repo, "admin_audit_events", "operation = 'node.delete'", 1)
@@ -126,6 +128,28 @@ func seedDisabledNode(t *testing.T, repo Repository, nodeID, name string) {
 		(id, node_id, certificate_id, request_id, connected_at, last_message_sequence,
 		disconnected_at, close_reason)
 		VALUES ('session-old', ?, 'cert-old', 'req-old', 'now', 1, NULL, '')`, nodeID)
+}
+
+func assertHistoricalNodeTraffic(t *testing.T, repo Repository, nodeID, wantName string, wantBytes int64) {
+	t.Helper()
+	var name string
+	var total int64
+	if err := repo.DB.QueryRow(`SELECT public_name, sent_bytes
+		FROM historical_node_traffic_totals WHERE node_id = ?`, nodeID).Scan(&name, &total); err != nil {
+		t.Fatal(err)
+	}
+	if name != wantName || total != wantBytes {
+		t.Fatalf("historical total mismatch: name=%q bytes=%d want name=%q bytes=%d",
+			name, total, wantName, wantBytes)
+	}
+	var daily int64
+	if err := repo.DB.QueryRow(`SELECT COALESCE(SUM(sent_bytes), 0)
+		FROM historical_daily_node_traffic_stats WHERE node_id = ?`, nodeID).Scan(&daily); err != nil {
+		t.Fatal(err)
+	}
+	if daily != wantBytes {
+		t.Fatalf("historical daily mismatch: got=%d want=%d", daily, wantBytes)
+	}
 }
 
 func assertNodeCount(t *testing.T, repo Repository, name string, want int) {

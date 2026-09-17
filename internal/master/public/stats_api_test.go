@@ -70,6 +70,27 @@ func TestTrafficSummaryKeepsHistoricalGlobalWhenNodeSumIsLower(t *testing.T) {
 	}
 }
 
+func TestTrafficSummaryIncludesDeletedNodeHistory(t *testing.T) {
+	db := openMaster(t)
+	seedStatsSnapshot(t, db)
+	day := statDay(timeNow(), time.Local)
+	mustExec(t, db, `INSERT INTO historical_node_traffic_totals
+		(node_id, public_name, sent_bytes, deleted_at)
+		VALUES ('deleted-node', '已删除节点', 4096, 'now')`)
+	mustExec(t, db, `INSERT INTO historical_daily_node_traffic_stats
+		(stat_day, node_id, sent_bytes, deleted_at)
+		VALUES (?, 'deleted-node', 4096, 'now')`, day)
+
+	srv := Server{Store: Store{DB: db}}
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/public/v1/stats", nil))
+	var snapshot statsFastSnapshot
+	decodeStatsResponse(t, rec, &snapshot)
+	if snapshot.Metrics[2] != [3]int64{12288, 12288, 0} || snapshot.Today[3].(float64) != 12288 {
+		t.Fatalf("deleted-node traffic should remain in public totals: %+v", snapshot)
+	}
+}
+
 func TestStatsAPIGzipCompression(t *testing.T) {
 	db := openMaster(t)
 	seedStatsSnapshot(t, db)

@@ -29,13 +29,13 @@ func TestTrafficOverviewMergesGlobalAndNodeLedgers(t *testing.T) {
 
 	assertAdminTrafficOverview(t, server, day, 8192, 8192)
 
-	mustExecAdminUI(t, db, `UPDATE daily_public_stats SET sent_bytes = 12288 WHERE stat_day = ?`, day)
-	mustExecAdminUI(t, db, `UPDATE public_stat_totals SET sent_bytes = 12288 WHERE id = 'global'`)
-	assertAdminTrafficOverview(t, server, day, 12288, 12288)
-
 	if err := server.repo.DeleteNode(context.Background(), "node-traffic", "req-delete", "admin"); err != nil {
 		t.Fatal(err)
 	}
+	assertAdminTrafficOverview(t, server, day, 8192, 8192)
+
+	mustExecAdminUI(t, db, `UPDATE daily_public_stats SET sent_bytes = 12288 WHERE stat_day = ?`, day)
+	mustExecAdminUI(t, db, `UPDATE public_stat_totals SET sent_bytes = 12288 WHERE id = 'global'`)
 	assertAdminTrafficOverview(t, server, day, 12288, 12288)
 
 	overview, err := server.overviewData(context.Background())

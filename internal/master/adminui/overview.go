@@ -28,14 +28,18 @@ func (s *Server) overviewData(ctx context.Context) (overviewResponse, error) {
 		COALESCE(p.authorization_count, 0),
 		COALESCE(p.transfer_started_count, 0),
 		MAX(COALESCE(p.sent_bytes, 0), COALESCE((
-			SELECT SUM(sent_bytes) FROM daily_node_traffic_stats WHERE stat_day = ?
+			SELECT SUM(sent_bytes) FROM (
+				SELECT sent_bytes FROM daily_node_traffic_stats WHERE stat_day = ?
+				UNION ALL
+				SELECT sent_bytes FROM historical_daily_node_traffic_stats WHERE stat_day = ?
+			)
 		), 0))
 		FROM (SELECT 1) seed
-		LEFT JOIN daily_public_stats p ON p.stat_day = ?`, day, day).Scan(&auth, &started, &daily)
+		LEFT JOIN daily_public_stats p ON p.stat_day = ?`, day, day, day).Scan(&auth, &started, &daily)
 	_ = s.repo.DB.QueryRowContext(ctx, `SELECT
-		MAX(COALESCE(t.sent_bytes, 0), COALESCE((
-			SELECT SUM(sent_bytes) FROM node_traffic_totals
-		), 0))
+		MAX(COALESCE(t.sent_bytes, 0),
+			COALESCE((SELECT SUM(sent_bytes) FROM node_traffic_totals), 0) +
+			COALESCE((SELECT SUM(sent_bytes) FROM historical_node_traffic_totals), 0))
 		FROM (SELECT 1) seed
 		LEFT JOIN public_stat_totals t ON t.id = 'global'`).Scan(&total)
 	out := overviewResponse{

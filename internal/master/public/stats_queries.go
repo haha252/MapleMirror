@@ -7,12 +7,13 @@ import (
 
 func (s Store) loadMetricSummaries(ctx context.Context, previousStart, start, end string,
 	views, downloads, traffic *MetricStat) error {
-	// 流量同时保存在全局累计和节点累计中。历史版本的项目重置可能回退全局累计，
-	// 而节点删除会清理节点累计，因此展示时取两份账本的较大值以保留已发生的历史流量。
+	// 节点累计（现存 + 已删除历史）是历史流量的主账本；旧版全局累计仅作为兼容兜底。
+	// 取两者较大值可兼容升级前曾发生的项目重置回退或已删除节点历史缺失。
 	if err := s.DB.QueryRowContext(ctx, `SELECT
 		COALESCE(t.page_views, 0), COALESCE(t.authorization_count, 0),
 		MAX(COALESCE(t.sent_bytes, 0),
-			COALESCE((SELECT SUM(sent_bytes) FROM node_traffic_totals), 0))
+			COALESCE((SELECT SUM(sent_bytes) FROM node_traffic_totals), 0) +
+			COALESCE((SELECT SUM(sent_bytes) FROM historical_node_traffic_totals), 0))
 		FROM (SELECT 1) seed
 		LEFT JOIN public_stat_totals t ON t.id = 'global'`).
 		Scan(&views.Total, &downloads.Total, &traffic.Total); err != nil {
@@ -32,7 +33,11 @@ func (s Store) loadMetricSummaries(ctx context.Context, previousStart, start, en
 	}
 	if err := s.DB.QueryRowContext(ctx, `WITH node_daily AS (
 		SELECT stat_day, COALESCE(SUM(sent_bytes), 0) AS sent_bytes
-		FROM daily_node_traffic_stats
+		FROM (
+			SELECT stat_day, sent_bytes FROM daily_node_traffic_stats
+			UNION ALL
+			SELECT stat_day, sent_bytes FROM historical_daily_node_traffic_stats
+		)
 		WHERE stat_day BETWEEN ? AND ?
 		GROUP BY stat_day
 	), merged_traffic AS (
@@ -117,7 +122,11 @@ func (s Store) TopProjects(ctx context.Context) ([]ProjectRank, error) {
 func (s Store) DailyTrends(ctx context.Context, start, end string) ([]DailyTrend, error) {
 	rows, err := s.DB.QueryContext(ctx, `WITH node_daily AS (
 		SELECT stat_day, COALESCE(SUM(sent_bytes), 0) AS sent_bytes
-		FROM daily_node_traffic_stats
+		FROM (
+			SELECT stat_day, sent_bytes FROM daily_node_traffic_stats
+			UNION ALL
+			SELECT stat_day, sent_bytes FROM historical_daily_node_traffic_stats
+		)
 		WHERE stat_day BETWEEN ? AND ?
 		GROUP BY stat_day
 	), days AS (

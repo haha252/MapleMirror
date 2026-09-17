@@ -38,6 +38,9 @@ func deleteQuarantinedNodesByName(ctx context.Context, tx *sql.Tx, name, newNode
 }
 
 func deleteNodeData(ctx context.Context, tx *sql.Tx, nodeID string) error {
+	if err := archiveNodeTraffic(ctx, tx, nodeID); err != nil {
+		return err
+	}
 	statements := []string{
 		`DELETE FROM traffic_events WHERE node_id = ?`,
 		`DELETE FROM traffic_event_dedupe WHERE node_id = ?`,
