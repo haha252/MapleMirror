@@ -23,6 +23,10 @@ type Scanner struct {
 }
 
 func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, requestID string) (ScanSummary, error) {
+	return s.scanWithOptions(ctx, projects, projectID, requestID, scanOptions{})
+}
+
+func (s Scanner) scanWithOptions(ctx context.Context, projects config.Projects, projectID, requestID string, opts scanOptions) (ScanSummary, error) {
 	scanID, err := s.Store.StartScan(ctx, projectID, requestID)
 	if err != nil {
 		return ScanSummary{}, err
@@ -32,7 +36,7 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 		before, _ = s.storedPublicSnapshot(ctx, projects)
 	}
 	summary := ScanSummary{ScanID: scanID, ProjectID: projectID, RequestID: requestID}
-	err = s.scan(ctx, projects, projectID, &summary)
+	err = s.scan(ctx, projects, projectID, &summary, opts)
 	errText := ""
 	if err != nil {
 		errText = err.Error()
@@ -46,7 +50,7 @@ func (s Scanner) Scan(ctx context.Context, projects config.Projects, projectID, 
 	return summary, err
 }
 
-func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID string, summary *ScanSummary) error {
+func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID string, summary *ScanSummary, opts scanOptions) error {
 	if err := s.Store.SyncProjectConfig(ctx, projects); err != nil {
 		return err
 	}
@@ -87,23 +91,25 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 		if err != nil {
 			return err
 		}
-		missing, err := s.Store.MissingSelectedReleases(ctx, project.ID, selected, observed, project.RetainVersions)
-		if err != nil {
-			return err
-		}
-		if len(missing) > 0 {
-			err = fmt.Errorf("新快照缺少仍应保留的已知 Release %q，判定为不完整快照", missing[0].Version)
-		}
-		if err != nil {
-			if s.Logger != nil {
-				s.Logger.Warn(ctx, "拒绝不完整的 Release 快照",
-					slog.String("request_id", summary.RequestID),
-					slog.String("project_id", project.ID),
-					slog.String("error", err.Error()))
+		if !opts.resetVersionBaseline {
+			missing, err := s.Store.MissingSelectedReleases(ctx, project.ID, selected, observed, project.RetainVersions)
+			if err != nil {
+				return err
 			}
-			return err
+			if len(missing) > 0 {
+				err = fmt.Errorf("新快照缺少仍应保留的已知 Release %q，判定为不完整快照", missing[0].Version)
+			}
+			if err != nil {
+				if s.Logger != nil {
+					s.Logger.Warn(ctx, "拒绝不完整的 Release 快照",
+						slog.String("request_id", summary.RequestID),
+						slog.String("project_id", project.ID),
+						slog.String("error", err.Error()))
+				}
+				return err
+			}
 		}
-		projectSummary, err := s.writeProject(ctx, project, selected, observed)
+		projectSummary, err := s.writeProject(ctx, project, selected, observed, opts.resetVersionBaseline)
 		if err != nil {
 			return err
 		}
@@ -122,7 +128,7 @@ func (s Scanner) scan(ctx context.Context, projects config.Projects, projectID s
 	return nil
 }
 
-func (s Scanner) writeProject(ctx context.Context, project config.Project, releases, observed []ResourceVersion) (ScanSummary, error) {
+func (s Scanner) writeProject(ctx context.Context, project config.Project, releases, observed []ResourceVersion, resetVersionBaseline bool) (ScanSummary, error) {
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return ScanSummary{}, err
@@ -148,6 +154,11 @@ func (s Scanner) writeProject(ctx context.Context, project config.Project, relea
 		project.RetainVersions, boolInt(project.IncludePrerelease),
 		project.DownloadMultiplier, projectHash(project), now); err != nil {
 		return ScanSummary{}, err
+	}
+	if resetVersionBaseline {
+		if _, err := tx.ExecContext(ctx, `UPDATE releases SET selected = 0 WHERE project_id = ?`, project.ID); err != nil {
+			return ScanSummary{}, err
+		}
 	}
 
 	summary, err := writeReleases(ctx, tx, project, releases, now, s.Logger)

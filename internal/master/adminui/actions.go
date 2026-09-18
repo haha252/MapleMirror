@@ -48,7 +48,7 @@ func (s *Server) projectActionAPI(w http.ResponseWriter, r *http.Request) {
 		s.rotateProjectDeveloperToken(w, r, projectID)
 		return
 	}
-	if r.Method != http.MethodPost || action != "reset" {
+	if r.Method != http.MethodPost || (action != "reset" && action != "reset-versions") {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
 		return
 	}
@@ -64,6 +64,12 @@ func (s *Server) projectActionAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "项目不存在"})
 		return
 	}
+	if action == "reset-versions" {
+		s.triggerVersionResetAsync(r.Context(), projectID, requestID(r))
+		_ = s.repo.Audit(r.Context(), "project.versions_reset", "project", projectID, "success", requestID(r), "项目版本状态重置扫描任务已创建", admin)
+		writeJSON(w, http.StatusAccepted, map[string]any{"message": "版本状态重置扫描任务已创建"})
+		return
+	}
 	if err := s.syncStore.ResetProject(r.Context(), projectID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "项目重置失败"})
 		return
@@ -77,6 +83,13 @@ func (s *Server) triggerScanAsync(ctx context.Context, projectID, requestID stri
 	scanCtx := context.WithoutCancel(ctx)
 	go func() {
 		_, _ = s.sync.Trigger(scanCtx, projectID, requestID)
+	}()
+}
+
+func (s *Server) triggerVersionResetAsync(ctx context.Context, projectID, requestID string) {
+	scanCtx := context.WithoutCancel(ctx)
+	go func() {
+		_, _ = s.sync.TriggerVersionReset(scanCtx, projectID, requestID)
 	}()
 }
 

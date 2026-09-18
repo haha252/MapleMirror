@@ -151,8 +151,12 @@ func assertSelectedTags(t *testing.T, db interface {
 
 type verifyingFakeGitHub struct {
 	releases []GitHubRelease
+	err      error
 }
 
 func (f verifyingFakeGitHub) ListReleases(context.Context, string) ([]GitHubRelease, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
 	return f.releases, nil
 }

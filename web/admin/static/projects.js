@@ -45,7 +45,8 @@
       '<div class="admin-record__actions admin-record__management">' +
       '<button class="admin-secondary" data-project-toggle="' + a.esc(p.ID) + '">' +
       (p.Enabled ? "禁用项目" : "启用项目") + '</button><button class="admin-secondary" data-project-reset="' +
-      a.esc(p.ID) + '">重置派生数据</button><button class="admin-secondary admin-danger" data-project-delete="' +
+      a.esc(p.ID) + '">重置派生数据</button><button class="admin-secondary" data-project-version-reset="' +
+      a.esc(p.ID) + '">重置版本状态</button><button class="admin-secondary admin-danger" data-project-delete="' +
       a.esc(p.ID) + '">删除项目</button></div><details class="admin-tech-details"><summary>显示技术信息</summary>' +
       a.compactKv({"项目 ID": p.ID}, "detail-plain") + '</details></div>' +
       '<div class="project-card__developer" data-developer-panel="' + a.esc(p.ID) + '"' +
@@ -163,6 +164,15 @@
     });
   }
 
+  function resetProjectVersions(id) {
+    a.confirmAction("重置版本状态", "将放弃「" + projectName(id) +
+      "」当前的版本选择基线，并以现在的上游 Release 列表重新扫描。适用于开发者撤回或删除 Release 后手动恢复。下载次数、流量和历史统计不会被清除。确认继续？", function () {
+      a.api("/admin/api/projects/" + encodeURIComponent(id) + "/reset-versions", {method: "POST", body: "{}"})
+        .then(function (data) { a.setStatus(data.message || "版本状态重置扫描任务已创建"); })
+        .catch(function (err) { a.setStatus(err.message); });
+    });
+  }
+
   document.addEventListener("click", function (event) {
     var developer = event.target.closest("[data-project-developer]");
     if (developer) {
@@ -189,6 +199,8 @@
     }
     var reset = event.target.closest("[data-project-reset]");
     if (reset) return resetProject(reset.getAttribute("data-project-reset"));
+    var versionReset = event.target.closest("[data-project-version-reset]");
+    if (versionReset) return resetProjectVersions(versionReset.getAttribute("data-project-version-reset"));
     var del = event.target.closest("[data-project-delete]");
     if (del) {
       var deleteID = del.getAttribute("data-project-delete");

@@ -28,6 +28,7 @@ type Server struct {
 	signer       func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
 	sync         interface {
 		Trigger(context.Context, string, string) (string, error)
+		TriggerVersionReset(context.Context, string, string) (string, error)
 	}
 	indexNow interface {
 		TriggerFullPublicNotification(context.Context) (int, error)
@@ -50,6 +51,7 @@ type Options struct {
 	Signer       func(*x509.CertificateRequest) (mastercontrol.SignedCertificate, error)
 	Sync         interface {
 		Trigger(context.Context, string, string) (string, error)
+		TriggerVersionReset(context.Context, string, string) (string, error)
 	}
 	IndexNow interface {
 		TriggerFullPublicNotification(context.Context) (int, error)

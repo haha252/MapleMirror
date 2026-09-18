@@ -46,6 +46,7 @@
     "node.download_priority": "调整下载优先级",
     "node.region": "修改节点地区",
     "project.reset": "重置项目",
+    "project.versions_reset": "重置项目版本状态",
     "project.developer_token.rotate": "重置 Developer API Token",
     "certificate.rotate": "轮换节点证书",
     "pairing.approve": "批准节点接入",

@@ -59,11 +59,19 @@ func (l *ProjectLoader) Current() config.Projects {
 }
 
 func (s Service) Trigger(ctx context.Context, projectID, requestID string) (string, error) {
+	return s.trigger(ctx, projectID, requestID, false)
+}
+
+func (s Service) trigger(ctx context.Context, projectID, requestID string, resetVersionBaseline bool) (string, error) {
 	if requestID == "" {
 		requestID, _ = requestid.New()
 	}
 	if s.Logger != nil {
-		s.Logger.Debug(ctx, "手动触发 Release 扫描",
+		message := "手动触发 Release 扫描"
+		if resetVersionBaseline {
+			message = "手动重置版本状态并触发 Release 扫描"
+		}
+		s.Logger.Debug(ctx, message,
 			slog.String("request_id", requestID),
 			slog.String("project_id", projectID))
 	}
@@ -83,7 +91,7 @@ func (s Service) Trigger(ctx context.Context, projectID, requestID string) (stri
 	if projectID == "" {
 		return s.triggerAll(ctx, projects, requestID)
 	}
-	summary, err := s.scanProject(ctx, projects, projectID, requestID)
+	summary, err := s.scanProject(ctx, projects, projectID, requestID, resetVersionBaseline)
 	if s.Logger != nil {
 		fields := []slog.Attr{
 			slog.String("request_id", requestID),
@@ -101,29 +109,6 @@ func (s Service) Trigger(ctx context.Context, projectID, requestID string) (stri
 		}
 	}
 	return summary.ScanID, err
-}
-
-func (s Service) triggerAll(ctx context.Context, projects config.Projects, requestID string) (string, error) {
-	var firstScanID string
-	for _, project := range projects.Projects {
-		if !project.Enabled {
-			continue
-		}
-		summary, err := s.scanProject(ctx, projects, project.ID, requestID)
-		if firstScanID == "" {
-			firstScanID = summary.ScanID
-		}
-		if err != nil {
-			return firstScanID, err
-		}
-	}
-	return firstScanID, nil
-}
-
-func (s Service) scanProject(ctx context.Context, projects config.Projects, projectID, requestID string) (ScanSummary, error) {
-	summary, err := s.Scanner.Scan(ctx, projects, projectID, requestID)
-	s.scheduleNextScan(ctx, summary.ProjectID, err)
-	return summary, err
 }
 
 func (s Service) scheduleNextScan(ctx context.Context, projectID string, scanErr error) {
