@@ -220,7 +220,7 @@ func (s *Server) syncReset(w http.ResponseWriter, r *http.Request, nodeID string
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步状态重置失败"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"message": "同步状态已重置", "node_id": nodeID})
+	writeJSON(w, http.StatusOK, map[string]any{"message": "已重新开始同步，保留已验证文件与分片", "node_id": nodeID})
 }
 
 func (s *Server) syncTask(w http.ResponseWriter, r *http.Request, nodeID, action string) {

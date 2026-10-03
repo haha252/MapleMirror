@@ -9,6 +9,8 @@ import (
 type v2Execution struct {
 	attemptID string
 	cancel    context.CancelFunc
+	done      <-chan struct{}
+	ctx       context.Context
 }
 
 // V2Runtime owns process-local control.v2 state that must survive WebSocket
@@ -27,6 +29,16 @@ func NewV2Runtime() *V2Runtime {
 	return &V2Runtime{executions: make(map[string]v2Execution)}
 }
 
+func (r *V2Runtime) hasExecution(taskID, attemptID string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	execution, ok := r.executions[taskID]
+	return ok && execution.attemptID == attemptID && (execution.ctx == nil || execution.ctx.Err() == nil)
+}
+
 func (r *V2Runtime) beginSession() {
 	if r == nil {
 		return
@@ -39,6 +51,27 @@ func (r *V2Runtime) beginSession() {
 	r.inventoryPendingID = ""
 	r.inventorySentAt = time.Time{}
 	r.mu.Unlock()
+}
+
+func (c *Client) waitV2Execution(taskID, attemptID string, timeout time.Duration) bool {
+	r := c.v2Runtime()
+	r.mu.Lock()
+	execution, ok := r.executions[taskID]
+	r.mu.Unlock()
+	if !ok || execution.attemptID != attemptID {
+		return true
+	}
+	if execution.done == nil {
+		return false
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-execution.done:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 func (c *Client) v2Runtime() *V2Runtime {

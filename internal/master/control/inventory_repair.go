@@ -98,8 +98,9 @@ func clearSatisfiedDownloadTasks(ctx context.Context, tx *sql.Tx, nodeID, now st
 		WHERE node_id = ? AND task_type = 'asset_download'
 		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
 		AND asset_id IN (
-			SELECT asset_id FROM node_inventory
-			WHERE node_id = ? AND state = 'verified'
+			SELECT ni.asset_id FROM node_inventory ni JOIN assets a ON a.id=ni.asset_id
+			WHERE ni.node_id = ? AND ni.state = 'verified'
+			AND COALESCE(ni.local_digest_sha256,'')=COALESCE(a.digest_sha256,'')
 		)`, now, now, nodeID, nodeID)
 	if err != nil {
 		return 0, err
@@ -200,7 +201,8 @@ func insertRepairTask(ctx context.Context, tx *sql.Tx, target repairTarget, now 
 	var exists int
 	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND asset_id = ? AND task_type = 'asset_download'
-		AND state IN ('pending', 'sent', 'running', 'retry_wait')`,
+		AND (state IN ('pending', 'sent', 'running', 'retry_wait') OR
+		 (state='cancelled' AND error_message='管理员取消'))`,
 		target.NodeID, target.AssetID).Scan(&exists)
 	if err != nil || exists > 0 {
 		return false, err

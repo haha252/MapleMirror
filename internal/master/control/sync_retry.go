@@ -69,7 +69,8 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 				nextAttempts, nullable(result.Message), nowText, result.TaskID, nodeID)
 			return "pending", nextAttempts, "", err
 		}
-		if nextAttempts > len(retryBackoffSchedule) {
+		keepRetrying := result.Result == "temporary_error" && r.retryableV2SwarmTask(ctx, tx, nodeID, result.AssetID)
+		if nextAttempts > len(retryBackoffSchedule) && !keepRetrying {
 			_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'failed',
 				attempts = ?, error_message = ?, retry_after = NULL,
 				lease_expires_at = NULL, updated_at = ?
@@ -77,7 +78,11 @@ func (r Repository) applyTaskResult(ctx context.Context, tx *sql.Tx, nodeID stri
 				nextAttempts, nullable(result.Message), nowText, result.TaskID, nodeID)
 			return "failed", nextAttempts, "", err
 		}
-		retryAfter := now.Add(retryBackoffSchedule[nextAttempts-1]).Format(time.RFC3339Nano)
+		backoffIndex := nextAttempts - 1
+		if backoffIndex >= len(retryBackoffSchedule) {
+			backoffIndex = len(retryBackoffSchedule) - 1
+		}
+		retryAfter := now.Add(retryBackoffSchedule[backoffIndex]).Format(time.RFC3339Nano)
 		_, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'retry_wait',
 			attempts = ?, error_message = ?, retry_after = ?,
 			lease_expires_at = NULL, updated_at = ?

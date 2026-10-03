@@ -37,17 +37,25 @@ func (c *Client) handleV2SyncTask(queue *controlv2.Queue, envelope protocolv2.En
 	var existingAttempt, state string
 	err = c.DB.QueryRow(`SELECT COALESCE(attempt_id,''), state FROM local_sync_tasks WHERE task_id=?`, task.TaskID).
 		Scan(&existingAttempt, &state)
-	if err == nil && existingAttempt == task.AttemptID && state == "running" {
-		return c.enqueueV2Accepted(queue, envelope.ID, task)
+	if err == nil && existingAttempt == task.AttemptID {
+		if (state == "running" && c.V2Runtime.hasExecution(task.TaskID, task.AttemptID)) || (state != "cancelled" && c.hasV2DurableTask(task.TaskID, task.AttemptID)) {
+			if err := c.enqueueV2Accepted(queue, envelope.ID, task); err != nil {
+				return err
+			}
+			return c.enqueueV2Durable(queue)
+		}
 	}
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
-	if !c.reserveSyncTaskSlot() {
-		return c.enqueueV2Rejected(queue, envelope.ID, task, "sync task slots full")
-	}
 	if existingAttempt != "" && existingAttempt != task.AttemptID {
 		c.cancelV2Execution(task.TaskID, existingAttempt)
+		if !c.waitV2Execution(task.TaskID, existingAttempt, 2*time.Second) {
+			return c.enqueueV2Rejected(queue, envelope.ID, task, "previous attempt is still stopping")
+		}
+	}
+	if !c.reserveSyncTaskSlot() {
+		return c.enqueueV2Rejected(queue, envelope.ID, task, "sync task slots full")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = c.DB.Exec(`INSERT INTO local_sync_tasks
@@ -62,7 +70,13 @@ func (c *Client) handleV2SyncTask(queue *controlv2.Queue, envelope protocolv2.En
 	}
 	if err := c.enqueueV2Accepted(queue, envelope.ID, task); err != nil {
 		c.releaseSyncTaskSlot()
-		return err
+		// The worker has not started. Persist a retryable result so reconnects
+		// cannot mistake this row for an executing attempt and keep its lease.
+		persistErr := c.storePendingV2Result(protocolv2.SyncResult{
+			TaskID: task.TaskID, AttemptID: task.AttemptID, AssetID: task.Asset.AssetID,
+			Result: "temporary_error", Message: "sync task acceptance could not be queued: " + err.Error(),
+		})
+		return errors.Join(err, persistErr)
 	}
 	c.executeV2TaskAsync(queue, task)
 	return nil
@@ -85,17 +99,22 @@ func (c *Client) enqueueV2Rejected(queue *controlv2.Queue, replyTo string, task 
 func (c *Client) executeV2TaskAsync(queue *controlv2.Queue, task protocolv2.SyncTask) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.syncTaskTimeout())
 	runtime := c.v2Runtime()
+	done := make(chan struct{})
 	runtime.mu.Lock()
 	if old, ok := runtime.executions[task.TaskID]; ok && old.cancel != nil {
 		old.cancel()
 	}
-	runtime.executions[task.TaskID] = v2Execution{attemptID: task.AttemptID, cancel: cancel}
+	runtime.executions[task.TaskID] = v2Execution{attemptID: task.AttemptID, cancel: cancel, done: done, ctx: ctx}
 	runtime.mu.Unlock()
 	go func() {
 		defer cancel()
 		defer func() {
 			c.releaseSyncTaskSlot()
+			close(done)
 			_ = c.enqueueV2Status(queue)
+			if c.EventWake != nil {
+				c.EventWake.Wake()
+			}
 		}()
 		var result protocolv2.SyncResult
 		var manifest *protocolv2.SwarmManifest
@@ -125,7 +144,6 @@ func (c *Client) executeV2TaskAsync(queue *controlv2.Queue, task protocolv2.Sync
 					_ = c.enqueuePendingV2Results(queue)
 				}
 			} else {
-				_, _ = c.DB.Exec(`UPDATE local_sync_tasks SET state='waiting_manifest',updated_at=? WHERE task_id=? AND attempt_id=?`, time.Now().UTC().Format(time.RFC3339Nano), task.TaskID, task.AttemptID)
 				_ = c.enqueuePendingV2Manifests(queue)
 			}
 		} else if err := c.storePendingV2Result(result); err == nil {
@@ -143,9 +161,7 @@ func (c *Client) cancelV2Execution(taskID, attemptID string) {
 	runtime := c.v2Runtime()
 	runtime.mu.Lock()
 	execution, ok := runtime.executions[taskID]
-	if ok && (attemptID == "" || execution.attemptID == attemptID) {
-		delete(runtime.executions, taskID)
-	} else {
+	if !ok || (attemptID != "" && execution.attemptID != attemptID) {
 		ok = false
 	}
 	runtime.mu.Unlock()

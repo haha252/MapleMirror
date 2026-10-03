@@ -23,7 +23,20 @@ func (c *Client) storePendingV2Manifest(manifest protocolv2.SwarmManifest, resul
 	if err != nil {
 		return err
 	}
-	_, err = c.DB.Exec(`INSERT INTO pending_swarm_manifests
+	tx, err := c.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var current string
+	err = tx.QueryRow(`SELECT COALESCE(attempt_id,'') FROM local_sync_tasks WHERE task_id=?`, result.TaskID).Scan(&current)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if err == nil && current != result.AttemptID {
+		return nil
+	}
+	_, err = tx.Exec(`INSERT INTO pending_swarm_manifests
 		(manifest_id,asset_id,task_id,attempt_id,manifest_json,result_json,created_at)
 		VALUES(?,?,?,?,?,?,?)
 		ON CONFLICT(manifest_id) DO UPDATE SET asset_id=excluded.asset_id,
@@ -31,7 +44,14 @@ func (c *Client) storePendingV2Manifest(manifest protocolv2.SwarmManifest, resul
 		manifest_json=excluded.manifest_json,result_json=excluded.result_json`,
 		manifest.ManifestID, manifest.AssetID, result.TaskID, result.AttemptID,
 		manifestJSON, resultJSON, time.Now().UTC().Format(time.RFC3339Nano))
-	return err
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE local_sync_tasks SET state='waiting_manifest',updated_at=?
+	 WHERE task_id=? AND attempt_id=? AND state!='cancelled'`, time.Now().UTC().Format(time.RFC3339Nano), result.TaskID, result.AttemptID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (c *Client) enqueuePendingV2Manifests(queue *controlv2.Queue) error {
@@ -79,9 +99,12 @@ func (c *Client) handleV2ManifestAck(queue *controlv2.Queue, envelope protocolv2
 	}
 	var manifestRaw, resultRaw []byte
 	err = c.DB.QueryRow(`SELECT manifest_json,result_json FROM pending_swarm_manifests WHERE manifest_id=?`, ack.ManifestID).Scan(&manifestRaw, &resultRaw)
-	if err != nil {
+	if err == sql.ErrNoRows {
 		// A duplicate ACK after the outbox was already consumed is harmless.
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 	var manifest protocolv2.SwarmManifest
 	if err := json.Unmarshal(manifestRaw, &manifest); err != nil {

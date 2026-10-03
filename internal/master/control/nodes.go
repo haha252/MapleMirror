@@ -148,22 +148,6 @@ func (r Repository) DeleteNode(ctx context.Context, nodeID, requestID, admin str
 	return tx.Commit()
 }
 
-func (r Repository) SyncReset(ctx context.Context, nodeID, requestID, admin string) error {
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	var state string
-	if err := r.DB.QueryRowContext(ctx, `SELECT state FROM nodes WHERE id = ?`, nodeID).Scan(&state); err != nil {
-		return err
-	}
-	if state != "disabled" {
-		_, err := r.DB.ExecContext(ctx, `UPDATE nodes SET routing_ready = 0,
-		updated_at = ? WHERE id = ? AND state != 'disabled'`, now, nodeID)
-		if err != nil {
-			return err
-		}
-	}
-	return r.Audit(ctx, "node.sync_reset", "node", nodeID, "success", requestID, "同步状态已重置", admin)
-}
-
 func (r Repository) Audit(ctx context.Context, op, targetType, targetID, result, requestID, summary, admin string) error {
 	return auditTx(ctx, r.DB, op, targetType, targetID, result, requestID, summary, admin)
 }

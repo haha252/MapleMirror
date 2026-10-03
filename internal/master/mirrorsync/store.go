@@ -200,12 +200,16 @@ func (s Store) SyncStatus(ctx context.Context, nodeID string) (SyncStatus, error
 }
 
 func (s Store) CancelTask(ctx context.Context, nodeID, taskID string) error {
-	return updateTask(ctx, s.DB, nodeID, taskID, "cancelled", "管理员取消")
+	err := updateTask(ctx, s.DB, nodeID, taskID, "cancelled", "管理员取消")
+	if err == nil && s.Runtime != nil {
+		s.Runtime.NotifySyncTasks(nodeID)
+	}
+	return err
 }
 
 func updateTask(ctx context.Context, db *sql.DB, nodeID, taskID, state, msg string) error {
 	result, err := db.ExecContext(ctx, `UPDATE node_tasks SET state = ?,
-		error_message = ?, updated_at = ? WHERE id = ? AND node_id = ?`,
+		error_message = ?, updated_at = ?, lease_expires_at=NULL,retry_after=NULL WHERE id = ? AND node_id = ?`,
 		state, nullable(msg), nowText(), taskID, nodeID)
 	if err != nil {
 		return err

@@ -66,7 +66,9 @@
   function taskCard(task, open) {
     var title = task.file_name || a.taskTypeLabel(task.task_type);
     var state = a.taskStateLabel(task.state);
-    var canOperate = task.state === "failed" || task.state === "retry_wait" || task.state === "pending";
+    var canRetry = task.state === "failed" || task.state === "retry_wait" ||
+      (task.state === "cancelled" && task.error_message === "管理员取消");
+    var canCancel = ["pending", "sent", "running", "retry_wait", "failed"].indexOf(task.state) >= 0;
     var attempts = Number(task.attempts || 0);
     return '<article class="admin-record" data-task-card="' + a.esc(task.task_id) + '">' +
       '<div class="admin-record__summary"><div class="admin-record__identity"><strong>' +
@@ -75,8 +77,9 @@
       (attempts ? '<span class="admin-record__meta">已尝试 ' + a.esc(attempts) + ' 次</span>' : "") +
       '</div><div class="admin-record__actions"><button class="admin-secondary" data-task-detail="' +
       a.esc(task.task_id) + '" aria-expanded="' + open + '">' + (open ? "收起" : "查看详情") + '</button>' +
-      (canOperate ? '<button class="admin-secondary" data-task-action="retry" data-task="' +
-        a.esc(task.task_id) + '">重试</button><button class="admin-secondary" data-task-action="cancel" data-task="' +
+      (canRetry ? '<button class="admin-secondary" data-task-action="retry" data-task="' +
+        a.esc(task.task_id) + '">重试</button>' : "") +
+      (canCancel ? '<button class="admin-secondary" data-task-action="cancel" data-task="' +
         a.esc(task.task_id) + '">取消</button>' : "") + '</div></div>' +
       (task.state === "failed" && task.error_message ? '<p class="admin-record__message admin-record__message--bad sync-error-preview">' +
         a.esc(task.error_message) + '</p>' : "") +

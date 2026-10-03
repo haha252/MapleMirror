@@ -100,9 +100,9 @@ func (r *Registry) Partial(asset, manifest string) (Partial, bool) {
 	}
 	r.mu.RLock()
 	p, ok := r.partials[key(asset, manifest)]
-	r.mu.RUnlock()
 	p.Bitset = append([]byte(nil), p.Bitset...)
 	p.Trusted = append([]byte(nil), p.Trusted...)
+	r.mu.RUnlock()
 	return p, ok
 }
 func (r *Registry) UpdateBitset(asset, manifest string, bits []byte) {

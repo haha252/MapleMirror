@@ -112,7 +112,8 @@ func insertDownloadTask(ctx context.Context, tx *sql.Tx, nodeID, assetID, now st
 	var exists int
 	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND asset_id = ? AND task_type = 'asset_download'
-		AND state IN ('pending', 'sent', 'running', 'retry_wait')`,
+		AND (state IN ('pending', 'sent', 'running', 'retry_wait') OR
+		 (state='cancelled' AND error_message='管理员取消'))`,
 		nodeID, assetID).Scan(&exists)
 	if err != nil || exists > 0 {
 		return false, err

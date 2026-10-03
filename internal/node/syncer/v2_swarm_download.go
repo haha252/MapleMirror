@@ -71,6 +71,30 @@ func (e Executor) downloadSwarmPiece(ctx context.Context, task protocolv2.SyncTa
 }
 
 func (e Executor) fetchSwarmBlock(ctx context.Context, task protocolv2.SyncTask, m protocolv2.SwarmManifest, piece int, start, end int64, file *os.File) error {
+	// A peer-only node needs time for cooldowns and refreshed capabilities.
+	// Bound recovery by both the task deadline and a per-block deadline.
+	if e.Swarm == nil || !e.ForcePeerDownload {
+		return e.trySwarmBlock(ctx, task, m, piece, start, end, file)
+	}
+	retryCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	var last error
+	for {
+		last = e.trySwarmBlock(retryCtx, task, m, piece, start, end, file)
+		if last == nil {
+			return nil
+		}
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-retryCtx.Done():
+			timer.Stop()
+			return fmt.Errorf("piece %d bytes %d-%d: %w (last source error: %v)", piece, start, end-1, retryCtx.Err(), last)
+		case <-timer.C:
+		}
+	}
+}
+
+func (e Executor) trySwarmBlock(ctx context.Context, task protocolv2.SyncTask, m protocolv2.SwarmManifest, piece int, start, end int64, file *os.File) error {
 	var sources []protocolv2.SwarmSource
 	if e.Swarm != nil {
 		sources = e.Swarm.Sources(m.ManifestID)
@@ -95,7 +119,10 @@ func (e Executor) fetchSwarmBlock(ctx context.Context, task protocolv2.SyncTask,
 			}
 			return nil
 		} else {
-			last = err
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			last = fmt.Errorf("peer %s: %w", source.NodeID, err)
 			if e.Swarm != nil {
 				e.Swarm.ReportSourceFailure(m.ManifestID, source.NodeID)
 			}

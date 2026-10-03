@@ -7,10 +7,10 @@ import (
 
 func (s Store) RetryTask(ctx context.Context, nodeID, taskID string) error {
 	result, err := s.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
-		error_message = NULL, attempts = 0, retry_after = NULL, updated_at = ?
+		error_message = NULL, attempts = 0, retry_after = NULL, lease_expires_at=NULL, updated_at = ?
 		WHERE id = ? AND node_id = ?
 		AND task_type = 'asset_download'
-		AND state IN ('failed', 'retry_wait')
+		AND (state IN ('failed', 'retry_wait') OR (state='cancelled' AND error_message='管理员取消'))
 		AND asset_id IS NOT NULL
 		AND EXISTS (
 			SELECT 1 FROM target_inventory ti

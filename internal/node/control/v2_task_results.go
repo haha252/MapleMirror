@@ -10,11 +10,25 @@ import (
 	protocolv2 "mirror-server/internal/protocol/v2"
 )
 
-func (c *Client) storePendingV2Result(result protocolv2.SyncResult) error {
+func (c *Client) storePendingV2ResultOnce(result protocolv2.SyncResult) error {
 	if c.DB == nil {
 		return nil
 	}
-	_, err := c.DB.Exec(`INSERT INTO pending_sync_task_results
+	result.Message = trimSyncTaskResultMessage(result.Message)
+	tx, err := c.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var current string
+	err = tx.QueryRow(`SELECT COALESCE(attempt_id,'') FROM local_sync_tasks WHERE task_id=?`, result.TaskID).Scan(&current)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if err == nil && current != result.AttemptID {
+		return nil // An old worker or manifest ACK cannot overwrite a newer result.
+	}
+	_, err = tx.Exec(`INSERT INTO pending_sync_task_results
 		(task_id, asset_id, result, local_digest_sha256, size_bytes, message,
 		peer_fallback_attempted, created_at, reported_at, attempt_id)
 		VALUES (?, ?, ?, ?, ?, ?, 0, ?, NULL, ?)
@@ -26,10 +40,13 @@ func (c *Client) storePendingV2Result(result protocolv2.SyncResult) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.DB.Exec(`UPDATE local_sync_tasks SET state=?, error_message=?, updated_at=?
-		WHERE task_id=? AND attempt_id=?`, result.Result, nullableString(result.Message),
+	_, err = tx.Exec(`UPDATE local_sync_tasks SET state=?, error_message=?, updated_at=?
+		WHERE task_id=? AND attempt_id=? AND state!='cancelled'`, result.Result, nullableString(result.Message),
 		time.Now().UTC().Format(time.RFC3339Nano), result.TaskID, result.AttemptID)
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (c *Client) enqueuePendingV2Results(queue *controlv2.Queue) error {
@@ -87,6 +104,10 @@ func (c *Client) handleV2ResultAck(envelope protocolv2.Envelope) error {
 		err := c.DB.QueryRow(`SELECT COALESCE(reported_at,'') FROM pending_sync_task_results
 			WHERE task_id=? AND attempt_id=?`, ack.TaskID, ack.AttemptID).Scan(&reportedAt)
 		if err == sql.ErrNoRows {
+			var current string
+			if c.DB.QueryRow(`SELECT COALESCE(attempt_id,'') FROM local_sync_tasks WHERE task_id=?`, ack.TaskID).Scan(&current) == nil && current != ack.AttemptID {
+				return nil // ACK for the previous attempt may arrive after replacement.
+			}
 			return fmt.Errorf("sync.result.ack does not match pending result")
 		}
 		if err != nil {
@@ -104,8 +125,12 @@ func (c *Client) loadV2ActiveTasks() []protocolv2.ActiveTask {
 	if c.DB == nil {
 		return nil
 	}
-	rows, err := c.DB.Query(`SELECT task_id, COALESCE(attempt_id,'') FROM local_sync_tasks
-		WHERE state IN ('running','waiting_manifest') AND COALESCE(attempt_id,'') != '' ORDER BY task_id`)
+	rows, err := c.DB.Query(`SELECT task_id, COALESCE(attempt_id,''), state FROM local_sync_tasks t
+		WHERE COALESCE(attempt_id,'') != '' AND (state = 'running' OR
+			(state = 'waiting_manifest' AND EXISTS (
+				SELECT 1 FROM pending_swarm_manifests m
+				WHERE m.task_id = t.task_id AND m.attempt_id = t.attempt_id
+			))) ORDER BY task_id`)
 	if err != nil {
 		return nil
 	}
@@ -113,9 +138,16 @@ func (c *Client) loadV2ActiveTasks() []protocolv2.ActiveTask {
 	var out []protocolv2.ActiveTask
 	for rows.Next() {
 		var item protocolv2.ActiveTask
-		if rows.Scan(&item.TaskID, &item.AttemptID) == nil {
-			out = append(out, item)
+		var state string
+		if rows.Scan(&item.TaskID, &item.AttemptID, &state) != nil {
+			continue
 		}
+		// A durable running row can outlive its worker after an acceptance or
+		// result persistence failure. Renew only the attempt actually executing.
+		if state == "running" && !c.V2Runtime.hasExecution(item.TaskID, item.AttemptID) {
+			continue
+		}
+		out = append(out, item)
 	}
 	return out
 }

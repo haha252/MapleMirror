@@ -154,8 +154,9 @@
     if (action === "detail") return toggleDetail(nodeID);
     var node = nodeCache[nodeID] || {};
     var name = node.public_name || nodeID;
-    var labels = {"sync-reset": "重置同步状态", disable: "禁用", enable: "启用", delete: "删除"};
+    var labels = {"sync-reset": "重新开始同步", disable: "禁用", enable: "启用", delete: "删除"};
     var message = action === "delete" ? "确认删除节点「" + name + "」？节点运行数据、任务、库存和授权记录会被清理。"
+      : action === "sync-reset" ? "确认重新开始「" + name + "」的同步？将停止旧任务并重新拉取缺失文件，保留已验证文件和分片。"
       : "确认对「" + name + "」执行“" + labels[action] + "”？";
     a.confirmAction("节点操作", message, function () {
       var path = "/admin/api/nodes/" + encodeURIComponent(nodeID);

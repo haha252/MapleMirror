@@ -2,7 +2,6 @@ package control
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -120,8 +119,11 @@ func (c *Client) RunV2(ctx context.Context, wsURL string) (time.Duration, error)
 		}():
 			_ = c.enqueueV2Durable(queue)
 			_ = c.enqueueV2SwarmState(queue)
+			_ = c.enqueueV2Status(queue)
 		case <-pingTicker.C:
-			pingCtx, pingCancel := context.WithTimeout(runCtx, 5*time.Second)
+			// Writes have a 10s deadline; allow a ping to wait for that write
+			// lock and still receive its pong over a high-latency link.
+			pingCtx, pingCancel := context.WithTimeout(runCtx, 20*time.Second)
 			err := conn.Ping(pingCtx)
 			pingCancel()
 			if err != nil {
@@ -153,10 +155,15 @@ func (c *Client) enqueueV2Status(queue *controlv2.Queue) error {
 }
 
 func (c *Client) runV2ClientReader(ctx context.Context, conn *websocket.Conn, queue *controlv2.Queue) error {
+	messages, failures := controlv2.ReadStream(ctx, conn, readV2ClientEnvelope)
 	for {
-		envelope, err := readV2ClientEnvelope(ctx, conn)
-		if err != nil {
+		var envelope protocolv2.Envelope
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-failures:
 			return err
+		case envelope = <-messages:
 		}
 		if envelope.Type == protocolv2.TypeProtocolError {
 			p, _ := protocolv2.Decode[protocolv2.ProtocolError](envelope)
@@ -181,49 +188,6 @@ func (c *Client) handleV2Inbound(_ context.Context, queue *controlv2.Queue, enve
 	default:
 		return c.handleV2BusinessInbound(queue, envelope)
 	}
-}
-
-func runV2ClientWriter(ctx context.Context, conn *websocket.Conn, queue *controlv2.Queue) error {
-	for {
-		envelope, err := queue.Dequeue(ctx)
-		if err != nil {
-			return err
-		}
-		if err := writeV2ClientEnvelope(ctx, conn, envelope); err != nil {
-			return err
-		}
-	}
-}
-
-func readV2ClientEnvelope(ctx context.Context, conn *websocket.Conn) (protocolv2.Envelope, error) {
-	messageType, data, err := conn.Read(ctx)
-	if err != nil {
-		return protocolv2.Envelope{}, err
-	}
-	if messageType != websocket.MessageText {
-		return protocolv2.Envelope{}, errors.New("control.v2 requires text JSON messages")
-	}
-	var envelope protocolv2.Envelope
-	if err := json.Unmarshal(data, &envelope); err != nil {
-		return protocolv2.Envelope{}, err
-	}
-	if err := envelope.Validate(); err != nil {
-		return protocolv2.Envelope{}, err
-	}
-	return envelope, nil
-}
-
-func writeV2ClientEnvelope(ctx context.Context, conn *websocket.Conn, envelope protocolv2.Envelope) error {
-	data, err := json.Marshal(envelope)
-	if err != nil {
-		return err
-	}
-	if len(data) > protocolv2.MaxMessageBytes {
-		return errors.New("control.v2 message exceeds hard limit")
-	}
-	writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return conn.Write(writeCtx, websocket.MessageText, data)
 }
 
 func (c *Client) v2Capabilities() []string {

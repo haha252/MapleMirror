@@ -134,19 +134,21 @@ func (s *V2Server) handle(w http.ResponseWriter, r *http.Request) {
 	_ = s.dispatchV2Authorizations(ctx, session, queue)
 	_ = s.maybeDispatchV2PublicProbe(session, queue)
 	go s.v2TaskWakeLoop(writerCtx, session, queue)
+	messages, readErrors := controlv2.ReadStream(writerCtx, conn, readV2Envelope)
 
 	for {
+		var envelope protocolv2.Envelope
 		select {
+		case <-ctx.Done():
+			return
+		case <-readErrors:
+			return
 		case err := <-writerErr:
 			if err != nil && !errors.Is(err, context.Canceled) && s.Logger != nil {
 				s.Logger.Debug(ctx, "control.v2 writer 结束", slog.String("node_id", session.NodeID), slog.String("error", err.Error()))
 			}
 			return
-		default:
-		}
-		envelope, err := readV2Envelope(ctx, conn)
-		if err != nil {
-			return
+		case envelope = <-messages:
 		}
 		if !s.isCurrentV2Connection(session.NodeID, conn) {
 			return
@@ -225,24 +227,6 @@ func runV2Writer(ctx context.Context, conn *websocket.Conn, queue *controlv2.Que
 		}
 		if err := writeV2Envelope(ctx, conn, envelope); err != nil {
 			return err
-		}
-	}
-}
-
-func (s *V2Server) v2TaskWakeLoop(ctx context.Context, session Session, queue *controlv2.Queue) {
-	wake := s.Repo.runtime().SyncTaskWakeChannel(session.NodeID)
-	probeTicker := time.NewTicker(30 * time.Second)
-	defer probeTicker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-wake:
-			_ = s.Repo.runtime().ConsumeSyncTaskWake(session.NodeID)
-			_ = s.dispatchV2Tasks(ctx, session, queue)
-			_ = s.dispatchV2Authorizations(ctx, session, queue)
-		case <-probeTicker.C:
-			_ = s.maybeDispatchV2PublicProbe(session, queue)
 		}
 	}
 }

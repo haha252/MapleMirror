@@ -95,18 +95,17 @@ func (e Executor) executeV2Swarm(ctx context.Context, task protocolv2.SyncTask, 
 				if err := e.downloadSwarmPiece(workCtx, task, m, piece, partial); err != nil {
 					select {
 					case errCh <- err:
-						cancelWorkers()
 					default:
 					}
-					return
+					// Preserve progress on other pieces even if this piece has no
+					// reachable owner. The next attempt restores verified pieces.
+					continue
 				}
 				bitMu.Lock()
 				swarm.Set(bits, piece)
-				local := append([]byte(nil), bits...)
 				bitMu.Unlock()
 				if e.Swarm != nil {
 					e.Swarm.MarkPiece(m.AssetID, m.ManifestID, piece)
-					e.Swarm.UpdateBitset(m.AssetID, m.ManifestID, local)
 				}
 			}
 		}()
@@ -123,6 +122,12 @@ feed:
 	wg.Wait()
 	cancelWorkers()
 	<-persistDone
+	if err := e.persistPartialBitmap(task.Asset.AssetID, m.ManifestID, bits); err != nil {
+		return v2Failure(task, "temporary_error", err.Error()), nil
+	}
+	if err := ctx.Err(); err != nil {
+		return v2Failure(task, "temporary_error", err.Error()), nil
+	}
 	select {
 	case err := <-errCh:
 		// If peers/range origin cannot complete, a full origin fetch remains the final safe fallback.
@@ -132,9 +137,6 @@ feed:
 		}
 		return v2Failure(task, "temporary_error", err.Error()), nil
 	default:
-	}
-	if err := e.persistPartialBitmap(task.Asset.AssetID, m.ManifestID, bits); err != nil {
-		return v2Failure(task, "temporary_error", err.Error()), nil
 	}
 	return e.finishSwarmPartial(task, legacy, m, partial.Name(), bits)
 }
