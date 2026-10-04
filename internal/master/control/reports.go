@@ -40,28 +40,15 @@ func (r Repository) AcceptInventoryReport(ctx context.Context, session Session, 
 		return r.acceptStaleInventoryReport(ctx, tx, session, seq, report, now)
 	}
 	reported := make(map[string]bool, len(report.Items))
-	quarantined := false
-	verifiedProjects := map[string]struct{}{}
-	var pendingTaskNodes []string
 	for _, item := range report.Items {
 		reported[item.AssetID] = true
-		result, err := acceptInventoryItem(ctx, tx, session.NodeID, item, now)
-		if err != nil {
-			return HeartbeatResult{}, err
-		}
-		if result.TargetRequired && result.PublicAsset && result.State == "mismatch" {
-			if err := r.quarantineNodeForPublicAssetMismatch(ctx, tx, session, result, now); err != nil {
-				return HeartbeatResult{}, err
-			}
-			quarantined = true
-			break
-		}
-		if result.TargetRequired && result.State == "verified" {
-			if err := recordVerifiedAssetProject(ctx, tx, result.AssetID, verifiedProjects); err != nil {
-				return HeartbeatResult{}, err
-			}
-		}
 	}
+	verifiedProjects, quarantined, err := r.acceptInventoryItems(ctx, tx, session, report.Items, now)
+	if err != nil {
+		return HeartbeatResult{}, err
+	}
+	var pendingTaskNodes []string
+
 	nodes, err := publishVerifiedProjects(ctx, tx, verifiedProjects, now)
 	if err != nil {
 		return HeartbeatResult{}, err

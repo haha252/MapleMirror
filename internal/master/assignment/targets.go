@@ -5,6 +5,9 @@ import (
 	"database/sql"
 )
 
+// Scope removal to this node and exclude already removed rows before evaluating
+// rollout readiness. Materialize readiness once per retired project rather than
+// repeating the selected-asset verification for every historical target.
 func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO target_inventory
 		(node_id, asset_id, desired_state, updated_at)
@@ -21,19 +24,26 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
-		updated_at = ? WHERE desired_state != 'remove'
-		AND (node_id, asset_id) IN (
-		SELECT ti.node_id, ti.asset_id FROM target_inventory ti
+	_, err = tx.ExecContext(ctx, `WITH retired_projects AS MATERIALIZED (
+		SELECT DISTINCT r.project_id FROM target_inventory ti
+		JOIN assets a ON a.id = ti.asset_id JOIN releases r ON r.id = a.release_id
+		WHERE ti.node_id = ? AND ti.desired_state != 'remove' AND r.selected = 0
+	), ready_projects AS MATERIALIZED (
+		SELECT project_id FROM retired_projects WHERE `+nodeHasSelectedProjectAssetsSQL("?", "retired_projects.project_id")+`
+	)
+	UPDATE target_inventory SET desired_state = 'remove',
+		updated_at = ? WHERE node_id = ? AND desired_state != 'remove'
+		AND asset_id IN (
+		SELECT ti.asset_id FROM target_inventory ti
 		JOIN assets a ON a.id = ti.asset_id
 		JOIN releases r ON r.id = a.release_id
 			JOIN projects p ON p.id = r.project_id
 			LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
 				AND npa.project_id = p.id AND npa.assigned = 1
-			WHERE ti.node_id = ? AND (p.enabled = 0
+			WHERE ti.node_id = ? AND ti.desired_state != 'remove' AND (p.enabled = 0
 				OR a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded') OR npa.project_id IS NULL
-				OR (r.selected = 0 AND `+nodeHasSelectedProjectAssetsSQL("ti.node_id", "p.id")+`)))`,
-		now, nodeID)
+				OR (r.selected = 0 AND p.id IN (SELECT project_id FROM ready_projects))))`,
+		nodeID, nodeID, now, nodeID, nodeID)
 	return err
 }
 
@@ -53,18 +63,27 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE target_inventory SET desired_state = 'remove',
+	_, err = tx.ExecContext(ctx, `WITH retired_nodes AS MATERIALIZED (
+		SELECT DISTINCT ti.node_id FROM releases r JOIN assets a ON a.release_id = r.id
+		JOIN target_inventory ti ON ti.asset_id = a.id
+		WHERE r.project_id = ? AND r.selected = 0 AND ti.desired_state != 'remove'
+	), ready_nodes AS MATERIALIZED (
+		SELECT node_id FROM retired_nodes WHERE `+nodeHasSelectedProjectAssetsSQL("retired_nodes.node_id", "?")+`
+	)
+	UPDATE target_inventory SET desired_state = 'remove',
 		updated_at = ? WHERE desired_state != 'remove'
+		AND asset_id IN (SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+			WHERE r.project_id = ?)
 		AND (node_id, asset_id) IN (
 		SELECT ti.node_id, ti.asset_id FROM target_inventory ti
 			JOIN assets a ON a.id = ti.asset_id
 			JOIN releases r ON r.id = a.release_id
 			LEFT JOIN node_project_assignments npa ON npa.node_id = ti.node_id
 				AND npa.project_id = r.project_id AND npa.assigned = 1
-			WHERE r.project_id = ? AND (
+			WHERE r.project_id = ? AND ti.desired_state != 'remove' AND (
 				a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded') OR npa.project_id IS NULL
-				OR (r.selected = 0 AND `+nodeHasSelectedProjectAssetsSQL("ti.node_id", "r.project_id")+`)))`,
-		now, projectID)
+				OR (r.selected = 0 AND ti.node_id IN (SELECT node_id FROM ready_nodes))))`,
+		projectID, projectID, projectID, now, projectID, projectID)
 	return err
 }
 

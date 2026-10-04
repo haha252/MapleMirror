@@ -59,27 +59,12 @@ func (r Repository) AcceptV2InventorySegment(ctx context.Context, session Sessio
 		}
 		return report.Complete, nil
 	}
-	quarantined := false
-	verifiedProjects := map[string]struct{}{}
-	var pendingNodes []string
-	for _, item := range report.Items {
-		result, err := acceptInventoryItem(ctx, tx, session.NodeID, item, now)
-		if err != nil {
-			return false, err
-		}
-		if result.TargetRequired && result.PublicAsset && result.State == "mismatch" {
-			if err := r.quarantineNodeForPublicAssetMismatch(ctx, tx, session, result, now); err != nil {
-				return false, err
-			}
-			quarantined = true
-			break
-		}
-		if result.TargetRequired && result.State == "verified" {
-			if err := recordVerifiedAssetProject(ctx, tx, result.AssetID, verifiedProjects); err != nil {
-				return false, err
-			}
-		}
+	verifiedProjects, quarantined, err := r.acceptInventoryItems(ctx, tx, session, report.Items, now)
+	if err != nil {
+		return false, err
 	}
+	var pendingNodes []string
+
 	nodes, err := publishVerifiedProjects(ctx, tx, verifiedProjects, now)
 	if err != nil {
 		return false, err

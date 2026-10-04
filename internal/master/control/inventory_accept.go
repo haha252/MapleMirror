@@ -32,24 +32,11 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 	if result.TargetRequired {
 		result.PublicAsset = publicCandidateAsset(ctx, tx, item.AssetID)
 	}
-	localDigest := item.DigestSHA256
-	localSize := item.SizeBytes
 	previousState, previousDigest, previousSize, err := currentInventory(ctx, tx, nodeID, item.AssetID)
 	if err != nil {
 		return result, err
 	}
-	state := normalizedInventoryState(item.LocalState)
-	if state == "missing" || state == "removed" {
-		localDigest = ""
-		localSize = 0
-	}
-	if result.TargetRequired && state == "verified" {
-		if previousState == "stale" && localDigest == previousDigest && localSize == previousSize {
-			state = "stale"
-		} else if localDigest != expectedDigest || localSize != expectedSize {
-			state = "mismatch"
-		}
-	}
+	result = resolveInventoryItem(result, item, previousState, previousDigest, previousSize)
 	_, err = tx.ExecContext(ctx, `INSERT INTO node_inventory
 		(node_id, asset_id, local_digest_sha256, size_bytes, verified_at, state)
 		VALUES (?, ?, ?, ?, ?, ?)
@@ -57,10 +44,7 @@ func acceptInventoryItem(ctx context.Context, tx interface {
 		local_digest_sha256 = excluded.local_digest_sha256,
 		size_bytes = excluded.size_bytes, verified_at = excluded.verified_at,
 		state = excluded.state`,
-		nodeID, item.AssetID, localDigest, localSize, now, state)
-	result.State = state
-	result.LocalDigest = localDigest
-	result.LocalSize = localSize
+		nodeID, item.AssetID, result.LocalDigest, result.LocalSize, now, result.State)
 	return result, err
 }
 
@@ -76,4 +60,26 @@ func normalizedInventoryState(localState string) string {
 	default:
 		return "verified"
 	}
+}
+
+func resolveInventoryItem(result inventoryAcceptResult, item protocol.InventoryItem,
+	previousState, previousDigest string, previousSize int64) inventoryAcceptResult {
+	localDigest := item.DigestSHA256
+	localSize := item.SizeBytes
+	state := normalizedInventoryState(item.LocalState)
+	if state == "missing" || state == "removed" {
+		localDigest = ""
+		localSize = 0
+	}
+	if result.TargetRequired && state == "verified" {
+		if previousState == "stale" && localDigest == previousDigest && localSize == previousSize {
+			state = "stale"
+		} else if localDigest != result.ExpectedDigest || localSize != result.ExpectedSize {
+			state = "mismatch"
+		}
+	}
+	result.State = state
+	result.LocalDigest = localDigest
+	result.LocalSize = localSize
+	return result
 }
