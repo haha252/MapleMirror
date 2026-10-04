@@ -8,92 +8,121 @@
     <span data-i18n="project.back">返回枫源镜像</span>
   </a>
 
-  <section class="project-layout">
-    <div class="project-art">
-      <img class="project-hero__icon" src="{{.IconURL}}" data-i18n-alt="project.icon" data-i18n-params='{"value":"{{.DisplayName}}"}' alt="{{.DisplayName}} 图标">
-    </div>
-
-    <div class="project-main">
-      <div class="project-heading">
-        <div class="project-title-wrap">
-          <h2>{{.DisplayName}}</h2>
-          <p class="muted">{{.Repository}}</p>
-          {{if .LatestPublishedAt}}<p class="muted project-updated" data-updated-at="{{.LatestPublishedAt}}" data-i18n="download.projectUpdated" data-i18n-params='{"value":"{{.LatestPublishedAt}}"}'>最近更新：{{.LatestPublishedAt}}</p>{{end}}
-        </div>
-        {{if .HomepageURL}}
-        <a class="project-homepage" href="{{.HomepageURL}}" target="_blank" rel="noopener noreferrer"
-          data-i18n-aria-label="project.homepage" data-i18n-title="project.homepage" aria-label="转到官网" title="转到官网">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M14 4h6v6"></path>
-            <path d="M10 14 20 4"></path>
-            <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path>
-          </svg>
-          <span data-i18n="project.homepage">转到官网</span>
-        </a>
-        {{end}}
-      </div>
-
-      <div class="selection-mode project-selection-mode" role="group" data-i18n-aria-label="selection.group" aria-label="文件选择方式">
-        <button type="button" data-selection-mode="selectors" aria-pressed="true"
-          data-i18n-aria-label="selection.conditions" data-i18n-title="selection.conditions" aria-label="条件选择" title="条件选择">
-          <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
-        </button>
-        <button type="button" data-selection-mode="file" aria-pressed="false"
-          data-i18n-aria-label="selection.files" data-i18n-title="selection.files" aria-label="文件选择" title="文件选择">
-          <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
-        </button>
-      </div>
-
-      <section class="project-download">
-        <div class="project-download__summary">
-          <p id="project-download-status" data-i18n="download.loading">正在加载下载组件...</p>
-        </div>
-        <div class="project-download__controls">
-          <label class="field" id="project-version-field">
-            <span data-i18n="field.version">版本</span>
-            <select id="project-version"></select>
-          </label>
-          <label class="field" id="project-system-field" hidden>
-            <span data-i18n="field.system">系统</span>
-            <select id="project-system"></select>
-          </label>
-          <label class="field" id="project-architecture-field" hidden>
-            <span data-i18n="field.architecture">架构</span>
-            <select id="project-architecture"></select>
-          </label>
-          <div class="file-browser" id="project-file-browser"
-            data-folder-icon="{{staticURL "icons.svg#selection-files"}}" hidden>
-            <section class="file-browser__level file-browser__level--versions">
-              <p class="file-browser__title" data-i18n="file.versionFolder">版本文件夹</p>
-              <div class="file-browser__versions" role="group" data-i18n-aria-label="field.version" aria-label="版本"></div>
-            </section>
-            <section class="file-browser__level file-browser__level--files" hidden>
-              <div class="file-browser__toolbar">
-                <button class="file-browser__back" type="button" data-i18n="file.backVersions">← 返回版本列表</button>
-                <p class="file-browser__path"></p>
-              </div>
-              <div class="file-browser__files" role="group" data-i18n-aria-label="field.file" aria-label="文件"></div>
-            </section>
-          </div>
-        </div>
-        <div class="project-download__asset">
-          <div>
-            <p id="project-file-name" data-i18n="project.noFile">暂无可下载文件</p>
-            <div class="project-file-subline">
-              <p id="project-file-meta"></p>
-              <p id="project-availability" class="project-availability"></p>
+  <div class="project-columns">
+    <div class="project-content">
+      <section class="project-layout">
+        <div class="project-main">
+          <div class="project-heading">
+            <img class="project-hero__icon" src="{{.IconURL}}" data-i18n-alt="project.icon" data-i18n-params='{"value":"{{.DisplayName}}"}' alt="{{.DisplayName}} 图标">
+            <div class="project-title-wrap">
+              <h2>{{.DisplayName}}</h2>
+              <p class="muted">{{.Repository}}</p>
+              {{if .LatestPublishedAt}}<p class="muted project-updated" data-updated-at="{{.LatestPublishedAt}}" data-i18n="download.projectUpdated" data-i18n-params='{"value":"{{.LatestPublishedAt}}"}'>最近更新：{{.LatestPublishedAt}}</p>{{end}}
             </div>
+            {{if .HomepageURL}}
+            <a class="project-homepage" href="{{.HomepageURL}}" target="_blank" rel="noopener noreferrer"
+              data-i18n-aria-label="project.homepage" data-i18n-title="project.homepage" aria-label="转到官网" title="转到官网">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14 4h6v6"></path>
+                <path d="M10 14 20 4"></path>
+                <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path>
+              </svg>
+              <span data-i18n="project.homepage">转到官网</span>
+            </a>
+            {{end}}
           </div>
-          <button id="project-download-button" class="download-button" data-i18n="download.download" type="button" disabled>下载</button>
+
+          <div class="selection-mode project-selection-mode" role="group" data-i18n-aria-label="selection.group" aria-label="文件选择方式">
+            <button type="button" data-selection-mode="selectors" aria-pressed="true"
+              data-i18n-aria-label="selection.conditions" data-i18n-title="selection.conditions" aria-label="条件选择" title="条件选择">
+              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-conditions"}}"></use></svg>
+            </button>
+            <button type="button" data-selection-mode="file" aria-pressed="false"
+              data-i18n-aria-label="selection.files" data-i18n-title="selection.files" aria-label="文件选择" title="文件选择">
+              <svg aria-hidden="true"><use href="{{staticURL "icons.svg#selection-files"}}"></use></svg>
+            </button>
+          </div>
+
+          <section class="project-download">
+            <div class="project-download__summary">
+              <p id="project-download-status" data-i18n="download.loading">正在加载下载组件...</p>
+            </div>
+            <div class="project-download__controls">
+              <label class="field" id="project-version-field">
+                <span data-i18n="field.version">版本</span>
+                <select id="project-version"></select>
+              </label>
+              <label class="field" id="project-system-field" hidden>
+                <span data-i18n="field.system">系统</span>
+                <select id="project-system"></select>
+              </label>
+              <label class="field" id="project-architecture-field" hidden>
+                <span data-i18n="field.architecture">架构</span>
+                <select id="project-architecture"></select>
+              </label>
+              <div class="file-browser" id="project-file-browser"
+                data-folder-icon="{{staticURL "icons.svg#selection-files"}}" hidden>
+                <section class="file-browser__level file-browser__level--versions">
+                  <p class="file-browser__title" data-i18n="file.versionFolder">版本文件夹</p>
+                  <div class="file-browser__versions" role="group" data-i18n-aria-label="field.version" aria-label="版本"></div>
+                </section>
+                <section class="file-browser__level file-browser__level--files" hidden>
+                  <div class="file-browser__toolbar">
+                    <button class="file-browser__back" type="button" data-i18n="file.backVersions">← 返回版本列表</button>
+                    <p class="file-browser__path"></p>
+                  </div>
+                  <div class="file-browser__files" role="group" data-i18n-aria-label="field.file" aria-label="文件"></div>
+                </section>
+              </div>
+            </div>
+            <div class="project-download__asset">
+              <div>
+                <p id="project-file-name" data-i18n="project.noFile">暂无可下载文件</p>
+                <div class="project-file-subline">
+                  <p id="project-file-meta"></p>
+                  <p id="project-availability" class="project-availability"></p>
+                </div>
+              </div>
+              <button id="project-download-button" class="download-button" data-i18n="download.download" type="button" disabled>下载</button>
+            </div>
+          </section>
         </div>
       </section>
-    </div>
-  </section>
 
-  {{if .Description}}
-  <section class="project-description panel-card">
-    <h2 data-i18n="project.description">项目描述</h2>
-    <p>{{.Description}}</p>
-  </section>
-  {{end}}
+      {{if .Description}}
+      <section class="project-description panel-card">
+        <h2 data-i18n="project.description">项目描述</h2>
+        <p>{{.Description}}</p>
+      </section>
+      {{end}}
+    </div>
+    <section class="project-stats stats-section" aria-labelledby="project-stats-title">
+      <h2 id="project-stats-title" data-i18n="project.stats.title">项目数据统计</h2>
+      <div id="project-stats-metrics" class="metric-grid" aria-busy="true">
+        <article class="metric-card panel-card"><div class="metric-card__top"><h3 data-i18n="stats.downloads">总下载量</h3></div><strong>--</strong><p class="muted" data-i18n="stats.reading">正在读取数据</p></article>
+        <article class="metric-card panel-card"><div class="metric-card__top"><h3 data-i18n="project.stats.web">网页下载量</h3></div><strong>--</strong><p class="muted" data-i18n="stats.reading">正在读取数据</p></article>
+        <article class="metric-card panel-card"><div class="metric-card__top"><h3 data-i18n="project.stats.api">API 下载量</h3></div><strong>--</strong><p class="muted" data-i18n="stats.reading">正在读取数据</p></article>
+        <article class="metric-card panel-card"><div class="metric-card__top"><h3 data-i18n="stats.traffic">总流量</h3></div><strong>--</strong><p class="muted" data-i18n="stats.reading">正在读取数据</p></article>
+      </div>
+      <div class="project-stats-status" role="status" aria-live="polite">
+        <span id="project-stats-status" class="muted" data-i18n="stats.loading">正在加载统计数据...</span>
+        <button id="project-stats-retry" type="button" data-i18n="project.stats.retry" hidden>重试</button>
+      </div>
+      <section class="panel-card chart-card project-stats-chart-card">
+        <div class="chart-card__head">
+          <h3 data-i18n="project.stats.trend">近 30 日趋势</h3>
+          <div class="project-stats-tabs" role="group" data-i18n-aria-label="project.stats.view" aria-label="趋势指标">
+            <button type="button" data-stats-view="downloads" aria-pressed="true" data-i18n="stats.downloadsTooltip">下载量</button>
+            <button type="button" data-stats-view="traffic" aria-pressed="false" data-i18n="project.stats.trafficView">流量</button>
+          </div>
+        </div>
+        <div id="project-stats-legend" class="project-stats-legend">
+          <span class="project-stats-legend__web" data-i18n="stats.webDownload">网页下载</span>
+          <span class="project-stats-legend__api" data-i18n="stats.apiDownload">API 下载</span>
+        </div>
+        <div id="project-stats-chart" class="stats-chart" aria-busy="true"></div>
+        <div id="project-stats-tooltip" class="stats-tooltip" hidden></div>
+      </section>
+    </section>
+  </div>
 </section>

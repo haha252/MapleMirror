@@ -14,6 +14,9 @@ func (s Server) Handler() http.Handler {
 	if s.StatsCache == nil {
 		s.StatsCache = &statsCache{}
 	}
+	if s.ProjectStatsCache == nil {
+		s.ProjectStatsCache = &projectStatsCache{}
+	}
 	if s.WebVerifications == nil {
 		s.WebVerifications = newWebVerificationTokenStore(webVerificationTokenCapacity, webVerificationTokenTTL)
 	}
@@ -57,7 +60,7 @@ func (s Server) Handler() http.Handler {
 	mux.Handle("/api/public/v1/stats/details", statsJSONCompression(http.HandlerFunc(s.statsDetailsAPI)))
 	mux.HandleFunc("/api/public/v1/changelog", s.changelogAPI)
 	mux.HandleFunc("/api/public/v1/projects", s.projects)
-	mux.HandleFunc("/api/public/v1/projects/", s.projectAssets)
+	mux.HandleFunc("/api/public/v1/projects/", s.projectResource)
 	mux.Handle("/api/public/v1/web/challenges", privateNoStore(http.HandlerFunc(s.webChallenge)))
 	mux.Handle("/api/public/v1/web/authorizations", privateNoStore(http.HandlerFunc(s.webAuthorize)))
 	mux.HandleFunc("/api/public/v1/web/verifications", s.webVerification)

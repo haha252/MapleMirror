@@ -1,0 +1,30 @@
+.page-project .site-main,
+.project-stats,
+.project-stats > * { min-width: 0; }
+.project-stats { margin-bottom: 0; gap: 14px; }
+.project-stats h2 { font-size: 23px; margin-bottom: 0; }
+.project-stats .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.project-stats .metric-card { padding: 18px; }
+.project-stats .metric-card strong { font-size: 28px; }
+.project-stats .metric-card p { margin-bottom: 0; }
+.project-stats .metric-card h3 { font-size: 14px; }
+.project-stats .trend-up, .project-stats .trend-down { font-size: 12px; }
+.project-stats-chart-card { min-height: 0; }
+.project-stats .chart-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.project-stats .chart-card h3 { margin-bottom: 0; }
+.project-stats .stats-chart { height: 300px; margin-top: 12px; }
+.project-stats .chart-line { stroke: var(--text); stroke-width: 2.5; }
+.project-stats-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-muted); }
+.project-stats-tabs button { padding: 6px 10px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 13px; }
+.project-stats-tabs button[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast, #111); }
+.project-stats-legend { display: flex; gap: 8px 14px; flex-wrap: wrap; margin-top: 14px; color: var(--muted); font-size: 12px; }
+.project-stats-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.project-stats-legend span::before { content: ""; width: 12px; height: 8px; border-radius: 2px; background: var(--accent); }
+.project-stats-legend .project-stats-legend__api::before { background: var(--muted); opacity: .78; }
+.project-stats-legend .project-stats-legend__total::before { height: 2px; background: var(--text); }
+.project-stats-status { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.project-stats-status[hidden] { display: none; }
+.project-stats-status button { padding: 5px 12px; }
+@media (max-width: 680px) {
+  .project-stats .stats-chart { height: 260px; }
+}

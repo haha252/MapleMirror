@@ -50,6 +50,7 @@
 | `403` | `CHALLENGE_FAILED` | 网页挑战或 PoW 校验失败 |
 | `403` | `CLIENT_BLOCKED` | 客户端命中静态或订阅黑名单 |
 | `404` | `ASSET_NOT_FOUND` | 项目、版本或资产不存在 |
+| `404` | `PROJECT_NOT_FOUND` | 统计查询中的项目不存在或未启用 |
 | `409` | `CHALLENGE_IN_PROGRESS` | 同一挑战正在签发授权，请稍后重试 |
 | `409` | `NO_ROUTABLE_NODE` | 当前没有可用下载节点 |
 | `410` | `API_VERSION_RETIRED` | API V1 挑战或授权已由配置关闭 |
@@ -234,6 +235,31 @@ GET /api/public/v1/catalog?q=ffmpeg&filter=software_type:launcher&filter=support
 `description_html` 已由服务端限制为安全的行内格式，只包含加粗、斜体、删除线、
 `http/https` 链接和换行。配置热重载导致快照变化时，旧游标返回
 `409 CHANGELOG_CHANGED`，客户端应清空已有记录并重新查询首批。
+
+### 3.5 项目下载统计
+
+`GET /api/public/v1/projects/{project_id}/stats`
+
+返回当前项目所有版本和文件的统计，使用通用成功响应格式。`data` 包含下列字段：
+
+| 字段 | 含义 |
+| --- | --- |
+| `project_id` | 当前项目 ID |
+| `timezone` | 服务端统计时区 |
+| `generated_at` | 快照生成时间，UTC RFC3339 |
+| `today` | 该统计时区下的当前日期 |
+| `has_data` | 累计或最近两个 30 日窗口内是否存在非零统计 |
+| `metrics.downloads` | 总下载授权次数 |
+| `metrics.web_downloads` | 网页下载授权次数 |
+| `metrics.api_downloads` | API 下载授权次数 |
+| `metrics.traffic` | 实际发送字节 |
+| `trend` | 连续 30 个统计日，按日期升序，缺失日期补零 |
+
+每个 `metrics` 指标包含 `total`（当前保留的累计值）、`recent`（含今天的最近 30 日值）、`previous`（之前 30 日值）。`trend` 每项包含 `day`、`downloads`、`web_downloads`、`api_downloads` 和 `sent_bytes`。
+
+公开但没有统计记录的项目返回 `200`、零值指标和连续 30 日零值趋势。项目不存在或被停用时返回 `404 PROJECT_NOT_FOUND`；非 GET 请求返回 `405 INVALID_REQUEST`。响应带 `Cache-Control: no-store`，服务端按项目和统计日缓存 5 秒；累计统计缓冲可能产生短暂更新延迟。
+
+下载次数表示成功签发下载令牌次数；流量表示实际发送字节，包含 Range、重传和中断前发送的数据。跨日流量沿用授权预留统计日。切换下载文件或版本不会改变项目聚合范围。项目页不使用全站访问量、全站流量或节点流量补充项目数据。项目重置会清除该项目的日统计和累计统计。
 
 ## 4. 下载接入方式
 

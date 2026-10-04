@@ -42,6 +42,7 @@ type Server struct {
 	BlocklistExport              *blocklistExportCache
 	ResourceLimiter              *publicResourceLimiter
 	StatsCache                   *statsCache
+	ProjectStatsCache            *projectStatsCache
 	WebVerifications             *webVerificationTokenStore
 	CatalogIndex                 *catalogIndex
 	CatalogCache                 *catalogResultCache

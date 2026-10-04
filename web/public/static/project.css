@@ -42,21 +42,17 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.project-layout {
+.project-columns {
   display: grid;
-  grid-template-columns: minmax(220px, 31%) minmax(0, 1fr);
-  gap: 48px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
-  padding: 12px 52px 0;
 }
-.project-art {
-  display: flex;
-  justify-content: center;
-  padding-top: 58px;
-}
+.project-content { display: grid; gap: 24px; min-width: 0; }
+.project-layout { min-width: 0; }
 .project-hero__icon {
-  width: 150px;
-  height: 150px;
+  width: 84px;
+  height: 84px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-muted);
@@ -67,10 +63,10 @@
   gap: 12px;
 }
 .project-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 20px;
   min-width: 0;
 }
 .project-title-wrap {
@@ -95,7 +91,8 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-width: 148px;
+  grid-column: 2;
+  justify-self: start;
   min-height: 44px;
   padding: 9px 15px;
   border: 1px solid var(--border);
@@ -189,6 +186,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .project-download .download-button {
   min-width: 116px;
@@ -197,13 +195,12 @@
 .project-description {
   width: 100%;
   justify-self: stretch;
-  min-height: 212px;
   padding: 24px;
   text-align: left;
 }
 .project-description h2 {
   margin-bottom: 14px;
-  font-size: 27px;
+  font-size: 23px;
   line-height: 1.2;
 }
 .project-description p {

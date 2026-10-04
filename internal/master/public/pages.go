@@ -14,7 +14,8 @@ func (s Server) statsPage(w http.ResponseWriter, r *http.Request) {
 		Subtitle:    "查看节点状态、访问量、下载量、流量与近 30 日趋势。",
 		BodyClass:   "page-stats",
 		Body:        statsShellBody(), Styles: []string{"/static/public/stats.css"},
-		Scripts: []string{"/static/public/stats-sources.js", "/static/public/stats.js"}}))
+		Scripts: []string{"/static/public/stats-sources.js", "/static/public/stats-metrics.js",
+			"/static/public/stats-chart.js", "/static/public/stats.js"}}))
 }
 
 func (s Server) changelogPage(w http.ResponseWriter, r *http.Request) {

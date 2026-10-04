@@ -121,6 +121,7 @@
 .chart-bar { fill: var(--accent); rx: 4; }
 .chart-bar--api { fill: var(--muted); opacity: .78; }
 .chart-hit { fill: transparent; cursor: crosshair; }
+.chart-hit:focus-visible { outline: none; stroke: var(--text); stroke-width: 1; }
 .stats-tooltip {
   position: fixed;
   z-index: 30;
