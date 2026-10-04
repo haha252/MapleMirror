@@ -158,6 +158,7 @@ func (c *Client) heartbeat(conn net.Conn, reqID string, sequence uint64,
 		MaxMirrorProjects:      c.MaxMirrorProjects,
 		SyncTaskSlotsAvailable: &slots,
 		Pressure: protocol.PressureSample{
+			DownloadPressure:   c.sampleDownloadPressure(actualBandwidth),
 			TargetBandwidthBPS: c.TargetBandwidthBPS,
 			ActualBandwidthBPS: actualBandwidth,
 			Ratio:              pressureRatio(actualBandwidth, c.TargetBandwidthBPS),

@@ -1,6 +1,10 @@
 package v2
 
-import "time"
+import (
+	"time"
+
+	"mirror-server/internal/protocol"
+)
 
 type Hello struct {
 	SoftwareVersion string   `json:"software_version"`
@@ -34,18 +38,19 @@ type ActiveTask struct {
 }
 
 type NodeStatus struct {
-	Status                 string             `json:"status"`
-	UptimeSeconds          uint64             `json:"uptime_seconds"`
-	PublicDownloadBaseURL  string             `json:"public_download_base_url"`
-	MaxMirrorProjects      int                `json:"max_mirror_projects"`
-	SyncTaskSlotsAvailable int                `json:"sync_task_slots_available"`
-	TargetBandwidthBPS     int64              `json:"target_bandwidth_bps"`
-	ActualBandwidthBPS     int64              `json:"actual_bandwidth_bps"`
-	PublicActiveDownloads  int64              `json:"public_active_downloads"`
-	SwarmActiveUploads     int64              `json:"swarm_active_uploads"`
-	AssetFS                FilesystemCapacity `json:"asset_fs"`
-	PartialFS              FilesystemCapacity `json:"partial_fs"`
-	ActiveTasks            []ActiveTask       `json:"active_tasks,omitempty"`
+	DownloadPressure       *protocol.DownloadPressure `json:"download_pressure,omitempty"`
+	Status                 string                     `json:"status"`
+	UptimeSeconds          uint64                     `json:"uptime_seconds"`
+	PublicDownloadBaseURL  string                     `json:"public_download_base_url"`
+	MaxMirrorProjects      int                        `json:"max_mirror_projects"`
+	SyncTaskSlotsAvailable int                        `json:"sync_task_slots_available"`
+	TargetBandwidthBPS     int64                      `json:"target_bandwidth_bps"`
+	ActualBandwidthBPS     int64                      `json:"actual_bandwidth_bps"`
+	PublicActiveDownloads  int64                      `json:"public_active_downloads"`
+	SwarmActiveUploads     int64                      `json:"swarm_active_uploads"`
+	AssetFS                FilesystemCapacity         `json:"asset_fs"`
+	PartialFS              FilesystemCapacity         `json:"partial_fs"`
+	ActiveTasks            []ActiveTask               `json:"active_tasks,omitempty"`
 }
 
 type SyncAsset struct {

@@ -91,6 +91,7 @@
       var sync = items[0], reports = items[1], sla = items[2];
       var node = nodeCache[nodeID] || {};
       var pressure = reports.pressure || reports.heartbeat || {};
+      var downloadPressure = pressure.download_pressure || {};
       var assetFS = pressure.asset_fs || {};
       var partialFS = pressure.partial_fs || {};
       var free = Number(pressure.free_bytes || 0) > 0 ? a.bytes(pressure.free_bytes) : "节点暂未上报";
@@ -113,6 +114,8 @@
         a.compactKv({"Control": node.control_protocol || "未知", "当前带宽": a.bandwidthText(node),
           "压力": a.pressureText(node), "资产盘可用": assetFree, "Partial 盘可用": partialFree,
           "公网活动下载": publicActive, "Swarm 活动上传": pressure.swarm_active_uploads || 0,
+          "吞吐状态": pressure.throughput_limited ? "吞吐受限，已降低分配权重" : "未检测到受限或样本不足",
+          "估计有效带宽": pressure.throughput_limited ? a.bytes(downloadPressure.effective_bandwidth_bps || 0) + "/s" : "暂无有效估计",
           "最近报告": pressure.reported_at || "暂无", "地区": a.regionLabel(node.region)}, "detail-plain") +
         '</section></div><div><h3>SLA</h3><p class="muted">' + a.esc(slaText || "暂无样本") + '</p></div>' +
         '<div class="admin-record__actions admin-record__management">' +

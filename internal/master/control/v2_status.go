@@ -8,7 +8,7 @@ import (
 )
 
 func (r Repository) AcceptV2NodeStatus(ctx context.Context, session Session, status protocolv2.NodeStatus) error {
-	if status.SyncTaskSlotsAvailable < 0 || status.PublicActiveDownloads < 0 || status.SwarmActiveUploads < 0 {
+	if status.SyncTaskSlotsAvailable < 0 || status.PublicActiveDownloads < 0 || status.SwarmActiveUploads < 0 || !status.DownloadPressure.Valid() {
 		return ErrInvalidV2Status
 	}
 	now := time.Now().UTC()

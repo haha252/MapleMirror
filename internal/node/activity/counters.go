@@ -1,8 +1,13 @@
 package activity
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+
+	"mirror-server/internal/node/networkpressure"
+)
 
 type Counters struct {
+	Network         networkpressure.Tracker
 	publicDownloads atomic.Int64
 	swarmUploads    atomic.Int64
 }

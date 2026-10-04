@@ -141,6 +141,7 @@ func (c *Client) enqueueV2Status(queue *controlv2.Queue) error {
 		TargetBandwidthBPS: c.TargetBandwidthBPS, ActualBandwidthBPS: c.sampleBandwidth(),
 		ActiveTasks: c.loadV2ActiveTasks(),
 	}
+	status.DownloadPressure = c.sampleDownloadPressure(status.ActualBandwidthBPS)
 	if c.Activity != nil {
 		status.PublicActiveDownloads = c.Activity.PublicDownloads()
 		status.SwarmActiveUploads = c.Activity.SwarmUploads()

@@ -36,17 +36,6 @@ type runtimeNode struct {
 	SyncTaskSlotsKnown     bool
 }
 
-type runtimeHeartbeat struct {
-	State           string
-	PressureRatio   float64
-	ActiveDownloads int64
-	FreeBytes       int64
-	TargetBandwidth int64
-	ActualBandwidth int64
-	ReportedAt      string
-	Valid           bool
-}
-
 type runtimeInventoryReport struct {
 	Revision  int
 	Complete  bool
@@ -55,17 +44,6 @@ type runtimeInventoryReport struct {
 	RequestID string
 	Reported  string
 	Valid     bool
-}
-
-type runtimePressureReport struct {
-	PressureRatio   float64
-	ActiveDownloads int64
-	FreeBytes       int64
-	TargetBandwidth int64
-	ActualBandwidth int64
-	RequestID       string
-	ReportedAt      string
-	Valid           bool
 }
 
 func NewRuntimeStore() *RuntimeStore {

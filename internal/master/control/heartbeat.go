@@ -3,7 +3,6 @@ package control
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -20,6 +19,9 @@ type HeartbeatResult struct {
 }
 
 func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq uint64, hb protocol.Heartbeat) (HeartbeatResult, error) {
+	if !hb.Pressure.DownloadPressure.Valid() {
+		return HeartbeatResult{}, fmt.Errorf("下载压力数值不合法")
+	}
 	downloadBaseURL := normalizedPublicDownloadBaseURL(hb.PublicDownloadBaseURL)
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -77,7 +79,8 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	}
 	ready := r.nodeRoutingReady(ctx, session.NodeID)
 	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
-		State: hb.Status, PressureRatio: hb.Pressure.Ratio,
+		DownloadPressure: hb.Pressure.DownloadPressure,
+		State:            hb.Status, PressureRatio: hb.Pressure.Ratio,
 		ActiveDownloads: int64(hb.ActiveDownloads), FreeBytes: hb.FreeBytes,
 		TargetBandwidth: hb.Pressure.TargetBandwidthBPS,
 		ActualBandwidth: hb.Pressure.ActualBandwidthBPS,
@@ -192,17 +195,6 @@ func stringArgs(values []string) []any {
 		args = append(args, v)
 	}
 	return args
-}
-
-func HeartbeatAck(result HeartbeatResult) json.RawMessage {
-	body, _ := json.Marshal(protocol.HeartbeatAckPayload{
-		AcceptedSequence: result.AcceptedSequence,
-		ServerTime:       time.Now().UTC(),
-		ManagedState:     result.ManagedState,
-		RoutingReady:     result.RoutingReady,
-		PublicProbe:      result.PublicProbe,
-	})
-	return body
 }
 
 func (r Repository) nodeRoutingReady(ctx context.Context, nodeID string) bool {

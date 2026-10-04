@@ -86,8 +86,9 @@ func TestHeartbeatAndPressureReportUseTargetBandwidth(t *testing.T) {
 }
 
 func TestNetworkBandwidthSamplerUsesWindowDelta(t *testing.T) {
+	now := time.Now()
 	values := []uint64{1000, 4600}
-	sampler := &NetworkBandwidthSampler{read: func() (uint64, error) {
+	sampler := &NetworkBandwidthSampler{now: func() time.Time { return now }, read: func() (uint64, error) {
 		value := values[0]
 		values = values[1:]
 		return value, nil
@@ -95,6 +96,7 @@ func TestNetworkBandwidthSamplerUsesWindowDelta(t *testing.T) {
 	if got := sampler.SampleBandwidthBPS(6 * time.Second); got != 0 {
 		t.Fatalf("first sample should establish baseline, got %d", got)
 	}
+	now = now.Add(6 * time.Second)
 	if got := sampler.SampleBandwidthBPS(6 * time.Second); got != 600 {
 		t.Fatalf("sample bandwidth = %d", got)
 	}
@@ -128,6 +130,29 @@ func TestTaskLimiterCapsConcurrentExecution(t *testing.T) {
 	<-started
 	close(<-releases)
 	<-done
+}
+
+func TestNetworkBandwidthSamplerUsesElapsedTimeAndCoalescesEvents(t *testing.T) {
+	now := time.Now()
+	bytes := uint64(1000)
+	reads := 0
+	sampler := &NetworkBandwidthSampler{now: func() time.Time { return now }, read: func() (uint64, error) { reads++; return bytes, nil }}
+	sampler.SampleBandwidthBPS(30 * time.Second)
+	now = now.Add(2 * time.Second)
+	bytes += 2000
+	if got := sampler.SampleBandwidthBPS(30 * time.Second); got != 1000 {
+		t.Fatalf("event-driven sample=%d want 1000", got)
+	}
+	now = now.Add(100 * time.Millisecond)
+	bytes += 100
+	if got := sampler.SampleBandwidthBPS(30 * time.Second); got != 1000 || reads != 2 {
+		t.Fatalf("coalesced rate=%d reads=%d", got, reads)
+	}
+	now = now.Add(1900 * time.Millisecond)
+	bytes += 1900
+	if got := sampler.SampleBandwidthBPS(30 * time.Second); got != 1000 {
+		t.Fatalf("lost bytes during coalescing: %d", got)
+	}
 }
 
 func TestLegacyReportsUseFilesystemCapacity(t *testing.T) {

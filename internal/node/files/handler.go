@@ -140,6 +140,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment",
 		map[string]string{"filename": filepath.Base(asset.RelativePath)}))
 	target := h.rateLimitedResponseWriter(r, w)
+	if h.Activity != nil {
+		defer h.Activity.Network.BeginDownload(h.clientIP(r))()
+	}
 	counter := &limitCountingWriter{ResponseWriter: target, handler: h,
 		authorizationID: claims.AuthorizationID, claims: claims, limit: limit,
 		sent: sent, timing: timing, assetID: asset.AssetID,

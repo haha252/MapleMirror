@@ -9,7 +9,7 @@ import (
 )
 
 func (r Repository) AcceptPressureReport(ctx context.Context, session Session, seq uint64, report protocol.PressureReport) (HeartbeatResult, error) {
-	if report.SampleWindowSeconds <= 0 || report.ActiveDownloads < 0 || report.FreeBytes < 0 {
+	if report.SampleWindowSeconds <= 0 || report.ActiveDownloads < 0 || report.FreeBytes < 0 || !report.DownloadPressure.Valid() {
 		return HeartbeatResult{}, fmt.Errorf("压力报告数值不合法")
 	}
 	ratio := float64(0)
@@ -58,13 +58,15 @@ func (r Repository) AcceptPressureReport(ctx context.Context, session Session, s
 		return HeartbeatResult{}, err
 	}
 	r.runtime().MarkPressure(session.NodeID, runtimePressureReport{
-		PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
+		DownloadPressure: report.DownloadPressure,
+		PressureRatio:    ratio, ActiveDownloads: int64(report.ActiveDownloads),
 		FreeBytes: report.FreeBytes, TargetBandwidth: report.TargetBandwidthBPS,
 		ActualBandwidth: report.ActualBandwidthBPS,
 		RequestID:       session.RequestID, ReportedAt: now, Valid: true,
 	})
 	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
-		State: "syncing", PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
+		DownloadPressure: report.DownloadPressure,
+		State:            "syncing", PressureRatio: ratio, ActiveDownloads: int64(report.ActiveDownloads),
 		FreeBytes: report.FreeBytes, TargetBandwidth: report.TargetBandwidthBPS,
 		ActualBandwidth: report.ActualBandwidthBPS, ReportedAt: now, Valid: true,
 	})

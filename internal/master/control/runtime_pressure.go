@@ -1,6 +1,17 @@
 package control
 
-import "time"
+import (
+	"time"
+
+	"mirror-server/internal/protocol"
+)
+
+func runtimeRoutingRatio(fallback float64, actual, target int64, download *protocol.DownloadPressure) float64 {
+	if target <= 0 {
+		return fallback
+	}
+	return download.RoutingRatio(actual, target, time.Now())
+}
 
 type RoutingPressure struct {
 	PressureRatio   float64
@@ -50,7 +61,7 @@ func routingPressureFromHeartbeat(hb runtimeHeartbeat) RoutingPressure {
 		return RoutingPressure{}
 	}
 	return RoutingPressure{
-		PressureRatio:   hb.PressureRatio,
+		PressureRatio:   runtimeRoutingRatio(hb.PressureRatio, hb.ActualBandwidth, hb.TargetBandwidth, hb.DownloadPressure),
 		ActiveDownloads: hb.ActiveDownloads,
 		ReportedAt:      reported,
 		Valid:           true,
@@ -66,7 +77,7 @@ func routingPressureFromReport(report runtimePressureReport) RoutingPressure {
 		return RoutingPressure{}
 	}
 	return RoutingPressure{
-		PressureRatio:   report.PressureRatio,
+		PressureRatio:   runtimeRoutingRatio(report.PressureRatio, report.ActualBandwidth, report.TargetBandwidth, report.DownloadPressure),
 		ActiveDownloads: report.ActiveDownloads,
 		ReportedAt:      reported,
 		Valid:           true,
@@ -77,10 +88,7 @@ func routingPressureFromV2(item runtimeV2Status) RoutingPressure {
 	if item.ReportedAt.IsZero() {
 		return RoutingPressure{}
 	}
-	ratio := float64(0)
-	if item.Status.TargetBandwidthBPS > 0 {
-		ratio = float64(item.Status.ActualBandwidthBPS) / float64(item.Status.TargetBandwidthBPS)
-	}
+	ratio := item.Status.DownloadPressure.RoutingRatio(item.Status.ActualBandwidthBPS, item.Status.TargetBandwidthBPS, time.Now())
 	return RoutingPressure{PressureRatio: ratio, ActiveDownloads: item.Status.PublicActiveDownloads,
 		ReportedAt: item.ReportedAt, Valid: true}
 }

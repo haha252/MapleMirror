@@ -91,9 +91,10 @@ type Heartbeat struct {
 }
 
 type PressureSample struct {
-	TargetBandwidthBPS int64   `json:"target_bandwidth_bps"`
-	ActualBandwidthBPS int64   `json:"actual_bandwidth_bps"`
-	Ratio              float64 `json:"ratio"`
+	DownloadPressure   *DownloadPressure `json:"download_pressure,omitempty"`
+	TargetBandwidthBPS int64             `json:"target_bandwidth_bps"`
+	ActualBandwidthBPS int64             `json:"actual_bandwidth_bps"`
+	Ratio              float64           `json:"ratio"`
 }
 
 type InventoryReport struct {
@@ -113,16 +114,17 @@ type InventoryItem struct {
 }
 
 type PressureReport struct {
-	ReportID               string    `json:"report_id"`
-	SampledAt              time.Time `json:"sampled_at"`
-	SampleWindowSeconds    int64     `json:"sample_window_seconds"`
-	TargetBandwidthBPS     int64     `json:"target_bandwidth_bps"`
-	ActualBandwidthBPS     int64     `json:"actual_bandwidth_bps"`
-	PressureRatio          float64   `json:"pressure_ratio"`
-	ActiveDownloads        int64     `json:"active_downloads"`
-	FreeBytes              int64     `json:"free_bytes"`
-	MaxMirrorProjects      int       `json:"max_mirror_projects"`
-	SyncTaskSlotsAvailable *int      `json:"sync_task_slots_available,omitempty"`
+	DownloadPressure       *DownloadPressure `json:"download_pressure,omitempty"`
+	ReportID               string            `json:"report_id"`
+	SampledAt              time.Time         `json:"sampled_at"`
+	SampleWindowSeconds    int64             `json:"sample_window_seconds"`
+	TargetBandwidthBPS     int64             `json:"target_bandwidth_bps"`
+	ActualBandwidthBPS     int64             `json:"actual_bandwidth_bps"`
+	PressureRatio          float64           `json:"pressure_ratio"`
+	ActiveDownloads        int64             `json:"active_downloads"`
+	FreeBytes              int64             `json:"free_bytes"`
+	MaxMirrorProjects      int               `json:"max_mirror_projects"`
+	SyncTaskSlotsAvailable *int              `json:"sync_task_slots_available,omitempty"`
 }
 
 type SyncAsset struct {

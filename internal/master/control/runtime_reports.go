@@ -3,7 +3,33 @@ package control
 import (
 	"database/sql"
 	"time"
+
+	"mirror-server/internal/protocol"
 )
+
+type runtimeHeartbeat struct {
+	DownloadPressure *protocol.DownloadPressure
+	State            string
+	PressureRatio    float64
+	ActiveDownloads  int64
+	FreeBytes        int64
+	TargetBandwidth  int64
+	ActualBandwidth  int64
+	ReportedAt       string
+	Valid            bool
+}
+
+type runtimePressureReport struct {
+	DownloadPressure *protocol.DownloadPressure
+	PressureRatio    float64
+	ActiveDownloads  int64
+	FreeBytes        int64
+	TargetBandwidth  int64
+	ActualBandwidth  int64
+	RequestID        string
+	ReportedAt       string
+	Valid            bool
+}
 
 func (s *RuntimeStore) LatestHeartbeat(nodeID string) (map[string]any, error) {
 	s.mu.RLock()
@@ -16,11 +42,11 @@ func (s *RuntimeStore) LatestHeartbeat(nodeID string) (map[string]any, error) {
 	if !item.Valid {
 		return nil, sql.ErrNoRows
 	}
-	return map[string]any{"state": item.State, "pressure_ratio": item.PressureRatio,
+	return reportDownloadPressure(map[string]any{"state": item.State, "pressure_ratio": item.PressureRatio,
 		"active_downloads": item.ActiveDownloads, "free_bytes": item.FreeBytes,
 		"target_bandwidth_bps": item.TargetBandwidth,
 		"actual_bandwidth_bps": item.ActualBandwidth,
-		"reported_at":          item.ReportedAt}, nil
+		"reported_at":          item.ReportedAt}, item.DownloadPressure, item.ActualBandwidth, item.TargetBandwidth), nil
 }
 
 func (s *RuntimeStore) LatestInventoryReport(nodeID string) (map[string]any, error) {
@@ -46,11 +72,11 @@ func (s *RuntimeStore) LatestPressureReport(nodeID string) (map[string]any, erro
 	if !item.Valid {
 		return nil, sql.ErrNoRows
 	}
-	return map[string]any{"pressure_ratio": item.PressureRatio,
+	return reportDownloadPressure(map[string]any{"pressure_ratio": item.PressureRatio,
 		"active_downloads": item.ActiveDownloads, "free_bytes": item.FreeBytes,
 		"target_bandwidth_bps": item.TargetBandwidth,
 		"actual_bandwidth_bps": item.ActualBandwidth,
-		"request_id":           item.RequestID, "reported_at": item.ReportedAt}, nil
+		"request_id":           item.RequestID, "reported_at": item.ReportedAt}, item.DownloadPressure, item.ActualBandwidth, item.TargetBandwidth), nil
 }
 
 func v2StatusReport(item runtimeV2Status) map[string]any {
@@ -63,7 +89,7 @@ func v2StatusReport(item runtimeV2Status) map[string]any {
 	if status.AssetFS.Valid {
 		free = status.AssetFS.AvailableBytes
 	}
-	return map[string]any{
+	return reportDownloadPressure(map[string]any{
 		"state": status.Status, "pressure_ratio": ratio,
 		"active_downloads":        status.PublicActiveDownloads,
 		"public_active_downloads": status.PublicActiveDownloads,
@@ -75,5 +101,16 @@ func v2StatusReport(item runtimeV2Status) map[string]any {
 		"partial_fs": map[string]any{"available_bytes": status.PartialFS.AvailableBytes,
 			"total_bytes": status.PartialFS.TotalBytes, "reserved_bytes": status.PartialFS.ReservedBytes, "valid": status.PartialFS.Valid},
 		"reported_at": item.ReportedAt.Format(time.RFC3339Nano),
+	}, status.DownloadPressure, status.ActualBandwidthBPS, status.TargetBandwidthBPS)
+}
+
+func reportDownloadPressure(data map[string]any, download *protocol.DownloadPressure, actual, target int64) map[string]any {
+	fallback, _ := data["pressure_ratio"].(float64)
+	data["bandwidth_pressure_ratio"] = fallback
+	data["pressure_ratio"] = runtimeRoutingRatio(fallback, actual, target, download)
+	data["throughput_limited"] = download.Limited(time.Now())
+	if download != nil {
+		data["download_pressure"] = download
 	}
+	return data
 }

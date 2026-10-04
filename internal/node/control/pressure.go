@@ -15,6 +15,7 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 	active := c.activeDownloads()
 	slots := c.availableSyncTaskSlots()
 	body, _ := json.Marshal(protocol.PressureReport{
+		DownloadPressure:       c.sampleDownloadPressure(actualBandwidth),
 		ReportID:               reqID + "-pressure",
 		SampledAt:              time.Now().UTC(),
 		SampleWindowSeconds:    int64(c.heartbeatWindowSeconds()),
@@ -103,4 +104,11 @@ func pressureRatio(actual, target int64) float64 {
 		return 0
 	}
 	return float64(actual) / float64(target)
+}
+
+func (c Client) sampleDownloadPressure(actual int64) *protocol.DownloadPressure {
+	if c.Activity == nil {
+		return nil
+	}
+	return c.Activity.Network.Sample(c.TargetBandwidthBPS, actual)
 }
