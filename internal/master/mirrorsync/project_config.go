@@ -15,15 +15,25 @@ func (s Store) SyncProjectConfig(ctx context.Context, projects config.Projects) 
 	}
 	defer tx.Rollback()
 
+	previous, err := loadProjectConfigState(ctx, tx)
+	if err != nil {
+		return err
+	}
 	now := nowText()
 	seen := make([]string, 0, len(projects.Projects))
 	changedProjects := map[string]bool{}
 	for _, project := range projects.Projects {
-		if err := upsertProjectConfig(ctx, tx, project, now); err != nil {
-			return err
+		state := previous[project.ID]
+		hash := projectHash(project)
+		if !state.matches(project, hash) {
+			if err := upsertProjectConfig(ctx, tx, project, now); err != nil {
+				return err
+			}
 		}
-		if err := upsertProjectScanState(ctx, tx, project, now); err != nil {
-			return err
+		if !state.scanMatches(project, hash) {
+			if err := upsertProjectScanState(ctx, tx, project, now); err != nil {
+				return err
+			}
 		}
 		seen = append(seen, project.ID)
 		if !project.Enabled {
@@ -141,15 +151,11 @@ func disableMissingProjects(ctx context.Context, tx *sql.Tx, seen []string, now 
 
 func upsertProjectScanState(ctx context.Context, tx *sql.Tx, project config.Project, now string) error {
 	hash := projectHash(project)
-	exists, previousHash, err := projectScanStateExists(ctx, tx, project.ID)
-	if err != nil {
-		return err
-	}
 	nextScan := any(nil)
-	if project.Enabled && (!exists || previousHash != hash) {
+	if project.Enabled {
 		nextScan = now
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO project_scan_state
+	_, err := tx.ExecContext(ctx, `INSERT INTO project_scan_state
 		(project_id, enabled, config_hash, next_scan_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(project_id) DO UPDATE SET

@@ -148,13 +148,14 @@ func (s loginStore) verifySession(ctx context.Context, token, ip string) (string
 	if token == "" {
 		return "", false, nil
 	}
-	now := nowText()
+	current := time.Now().UTC()
+	now := current.Format(time.RFC3339Nano)
 	if s.memory != nil {
 		return s.memory.verifySession(s.sessionKey(token), s.ipKey(ip), now)
 	}
-	var username, ipKey string
-	err := s.db.QueryRowContext(ctx, `SELECT username, ip_key FROM admin_web_sessions
-		WHERE id = ? AND expires_at > ?`, s.sessionKey(token), now).Scan(&username, &ipKey)
+	var username, ipKey, lastSeen string
+	err := s.db.QueryRowContext(ctx, `SELECT username, ip_key, last_seen_at FROM admin_web_sessions
+		WHERE id = ? AND expires_at > ?`, s.sessionKey(token), now).Scan(&username, &ipKey, &lastSeen)
 	if err == sql.ErrNoRows {
 		return "", false, nil
 	}
@@ -164,8 +165,12 @@ func (s loginStore) verifySession(ctx context.Context, token, ip string) (string
 	if ipKey != s.ipKey(ip) {
 		return "", false, errors.New("管理面板会话来源不匹配")
 	}
-	_, _ = s.db.ExecContext(ctx, `UPDATE admin_web_sessions SET last_seen_at = ? WHERE id = ?`,
-		now, s.sessionKey(token))
+	// Last seen is informational; authentication and fixed expiry stay live.
+	seen, parseErr := time.Parse(time.RFC3339Nano, lastSeen)
+	if parseErr != nil || current.Sub(seen) >= time.Minute {
+		_, _ = s.db.ExecContext(ctx, `UPDATE admin_web_sessions SET last_seen_at = ?
+			WHERE id = ? AND last_seen_at = ?`, now, s.sessionKey(token), lastSeen)
+	}
 	return username, true, nil
 }
 

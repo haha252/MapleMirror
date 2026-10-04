@@ -1,9 +1,6 @@
 package mirrorsync
 
-import (
-	"context"
-	"database/sql"
-)
+import "context"
 
 type ProjectScanState struct {
 	ProjectID           string `json:"project_id"`
@@ -100,14 +97,4 @@ func (s Store) SetProjectNextScan(ctx context.Context, projectID, next string) e
 	_, err := s.DB.ExecContext(ctx, `UPDATE project_scan_state SET
 		next_scan_at = ?, updated_at = ? WHERE project_id = ?`, next, nowText(), projectID)
 	return err
-}
-
-func projectScanStateExists(ctx context.Context, tx *sql.Tx, projectID string) (bool, string, error) {
-	var hash string
-	err := tx.QueryRowContext(ctx, `SELECT config_hash FROM project_scan_state
-		WHERE project_id = ?`, projectID).Scan(&hash)
-	if err == sql.ErrNoRows {
-		return false, "", nil
-	}
-	return err == nil, hash, err
 }

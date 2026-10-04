@@ -25,6 +25,8 @@ func TestOpenMasterBackfillsDownloadSourceStatsForExistingV9Database(t *testing.
 			id TEXT PRIMARY KEY,
 			asset_id TEXT NOT NULL,
 			node_id TEXT NOT NULL,
+			token_hash TEXT NOT NULL DEFAULT '',
+			delivered_at TEXT NOT NULL DEFAULT '',
 			client_prefix_key TEXT NOT NULL,
 			issued_at TEXT NOT NULL,
 			expires_at TEXT NOT NULL,

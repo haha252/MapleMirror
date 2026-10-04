@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"mirror-server/internal/geoip"
 	mastercontrol "mirror-server/internal/master/control"
@@ -69,10 +70,10 @@ func (s *Server) nodeReports(w http.ResponseWriter, r *http.Request, nodeID stri
 }
 
 func (s *Server) nodeSLA(w http.ResponseWriter, r *http.Request, nodeID string) {
-	items := []map[string]any{
-		slaWindow(s.repo.DB, r, nodeID, "24h", 24),
-		slaWindow(s.repo.DB, r, nodeID, "7d", 24*7),
-		slaWindow(s.repo.DB, r, nodeID, "30d", 24*30),
+	items, err := slaWindows(r.Context(), s.repo.DB, nodeID, time.Now())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "节点可用率查询失败"})
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"node_id": nodeID, "windows": items})
 }

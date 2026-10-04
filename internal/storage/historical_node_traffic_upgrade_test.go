@@ -37,5 +37,5 @@ func TestOpenMasterCreatesHistoricalNodeTrafficTablesForExistingV21Database(t *t
 	assertTable(t, opened, "historical_node_traffic_totals")
 	assertTable(t, opened, "historical_daily_node_traffic_stats")
 	assertIndex(t, opened, "idx_historical_daily_node_traffic_day")
-	assertDBVersion(t, opened, "master", 22)
+	assertDBVersion(t, opened, "master", masterDBVersion)
 }

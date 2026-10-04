@@ -117,42 +117,49 @@ func CancelObsoleteProjectTasks(ctx context.Context, tx *sql.Tx, projectID, now 
 }
 
 func CancelObsoleteNodeTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) error {
-	_, err := tx.ExecContext(ctx, obsoleteTaskSQL(`node_tasks.node_id = ?`), now, now, nodeID)
+	_, err := tx.ExecContext(ctx, obsoleteTaskSQL(`1=1`, `node_tasks.node_id = ?`), now, now, nodeID)
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, obsoleteDeleteTaskSQL(`node_tasks.node_id = ?`), now, now, nodeID)
+	_, err = tx.ExecContext(ctx, obsoleteDeleteTaskSQL(`1=1`, `node_tasks.node_id = ?`), now, now, nodeID)
 	return err
 }
 
-func obsoleteTaskSQL(extra string) string {
+func obsoleteTaskSQL(extra string, scope ...string) string {
 	return `UPDATE node_tasks SET state = 'obsolete',
 		error_message = '资产已不在当前目标库存中', completed_at = ?,
 		updated_at = ?, lease_expires_at = NULL
-		WHERE task_type = 'asset_download'
+		WHERE ` + obsoleteTaskScope(scope) + `task_type = 'asset_download'
 		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
-		AND asset_id IN (
-			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+		AND EXISTS (
+			SELECT 1 FROM assets a JOIN releases r ON r.id = a.release_id
 			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
 				AND ti.asset_id = a.id
-			WHERE ` + extra + `
+			WHERE a.id = node_tasks.asset_id AND ` + extra + `
 			AND (a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded')
 				OR ti.asset_id IS NULL OR ti.desired_state != 'required'))`
 }
 
-func obsoleteDeleteTaskSQL(extra string) string {
+func obsoleteDeleteTaskSQL(extra string, scope ...string) string {
 	return `UPDATE node_tasks SET state = 'obsolete',
 		error_message = '删除目标已不在当前移除目标中', completed_at = ?,
 		updated_at = ?, lease_expires_at = NULL
-		WHERE task_type = 'asset_delete'
+		WHERE ` + obsoleteTaskScope(scope) + `task_type = 'asset_delete'
 		AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')
-		AND asset_id IN (
-			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+		AND EXISTS (
+			SELECT 1 FROM assets a JOIN releases r ON r.id = a.release_id
 			LEFT JOIN target_inventory ti ON ti.node_id = node_tasks.node_id
 				AND ti.asset_id = a.id
 			LEFT JOIN node_inventory ni ON ni.node_id = node_tasks.node_id
 				AND ni.asset_id = a.id
-			WHERE ` + extra + `
+			WHERE a.id = node_tasks.asset_id AND ` + extra + `
 			AND (ti.asset_id IS NULL OR ti.desired_state != 'remove'
 				OR ni.asset_id IS NULL OR ni.state != 'verified'))`
+}
+
+func obsoleteTaskScope(scope []string) string {
+	if len(scope) == 0 {
+		return ""
+	}
+	return scope[0] + " AND "
 }

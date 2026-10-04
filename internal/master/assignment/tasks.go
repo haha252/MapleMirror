@@ -81,9 +81,9 @@ func generateDeleteTasks(ctx context.Context, tx *sql.Tx, now, nodeID, projectID
 		args = append(args, nodeID)
 	}
 	if projectID != "" {
-		query += ` AND EXISTS (
-			SELECT 1 FROM assets a JOIN releases r ON r.id = a.release_id
-			WHERE a.id = ti.asset_id AND r.project_id = ?)`
+		query += ` AND ti.asset_id IN (
+			SELECT a.id FROM assets a JOIN releases r ON r.id = a.release_id
+			WHERE r.project_id = ?)`
 		args = append(args, projectID)
 	}
 	rows, err := tx.QueryContext(ctx, query, args...)
