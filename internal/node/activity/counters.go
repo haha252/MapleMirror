@@ -1,15 +1,25 @@
 package activity
 
 import (
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"mirror-server/internal/node/networkpressure"
+	"mirror-server/internal/protocol"
 )
 
 type Counters struct {
 	Network         networkpressure.Tracker
 	publicDownloads atomic.Int64
 	swarmUploads    atomic.Int64
+	publicBytes     atomic.Int64
+	swarmBytes      atomic.Int64
+	trafficMu       sync.Mutex
+	trafficAt       time.Time
+	previousPublic  int64
+	previousSwarm   int64
+	traffic         protocol.MirrorTraffic
 }
 
 func (c *Counters) BeginPublicDownload() func() {

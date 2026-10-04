@@ -19,7 +19,7 @@ type HeartbeatResult struct {
 }
 
 func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq uint64, hb protocol.Heartbeat) (HeartbeatResult, error) {
-	if !hb.Pressure.DownloadPressure.Valid() {
+	if !hb.Pressure.DownloadPressure.Valid() || !hb.Pressure.MirrorTraffic.Valid() {
 		return HeartbeatResult{}, fmt.Errorf("下载压力数值不合法")
 	}
 	downloadBaseURL := normalizedPublicDownloadBaseURL(hb.PublicDownloadBaseURL)
@@ -79,6 +79,7 @@ func (r Repository) AcceptHeartbeat(ctx context.Context, session Session, seq ui
 	}
 	ready := r.nodeRoutingReady(ctx, session.NodeID)
 	r.runtime().MarkHeartbeat(session.NodeID, runtimeHeartbeat{
+		MirrorTraffic:    hb.Pressure.MirrorTraffic,
 		DownloadPressure: hb.Pressure.DownloadPressure,
 		State:            hb.Status, PressureRatio: hb.Pressure.Ratio,
 		ActiveDownloads: int64(hb.ActiveDownloads), FreeBytes: hb.FreeBytes,

@@ -139,7 +139,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment",
 		map[string]string{"filename": filepath.Base(asset.RelativePath)}))
-	target := h.rateLimitedResponseWriter(r, w)
+	target := h.rateLimitedResponseWriter(r, h.payloadResponseWriter(w, false))
 	if h.Activity != nil {
 		defer h.Activity.Network.BeginDownload(h.clientIP(r))()
 	}

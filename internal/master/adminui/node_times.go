@@ -20,11 +20,14 @@ func (s *Server) nodeSummaries(ctx context.Context, items []mastercontrol.NodeSu
 			"software_version":        item.SoftwareVersion,
 			"control_protocol":        item.ControlProtocol,
 			"last_heartbeat_at":       s.displayTime(item.LastHeartbeat),
+			"last_heartbeat_unix_ms":  timestampMillis(item.LastHeartbeat),
 		}
 		if pressure, err := s.repo.LatestPressureReport(ctx, item.NodeID); err == nil {
 			row["pressure"] = s.displayTimeMap(pressure)
+			row["pressure_reported_unix_ms"] = timestampMillis(pressure["reported_at"])
 		} else if heartbeat, err := s.repo.LatestHeartbeat(ctx, item.NodeID); err == nil {
 			row["pressure"] = s.displayTimeMap(heartbeat)
+			row["pressure_reported_unix_ms"] = timestampMillis(heartbeat["reported_at"])
 		}
 		out = append(out, row)
 	}
@@ -36,7 +39,8 @@ func (s *Server) syncStatusResponse(item mirrorsync.SyncStatus) map[string]any {
 		"node_id": item.NodeID, "connection_state": item.ConnectionState,
 		"sync_phase": item.SyncPhase, "routing_ready": item.RoutingReady,
 		"required_assets": item.RequiredAssets, "verified_assets": item.VerifiedAssets,
-		"missing_assets": item.MissingAssets, "mismatched_assets": item.MismatchedAssets,
+		"verified_required_assets": item.RequiredAssets - item.MissingAssets,
+		"missing_assets":           item.MissingAssets, "mismatched_assets": item.MismatchedAssets,
 		"pending_tasks": item.PendingTasks, "sent_tasks": item.SentTasks,
 		"running_tasks": item.RunningTasks, "retry_wait_tasks": item.RetryWaitTasks,
 		"failed_tasks":              item.FailedTasks,

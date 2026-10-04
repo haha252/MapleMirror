@@ -11,19 +11,6 @@ import (
 	mastercontrol "mirror-server/internal/master/control"
 )
 
-func (s *Server) nodesAPI(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
-		return
-	}
-	items, err := s.repo.ListNodes(r.Context())
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "节点列表查询失败"})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"nodes": s.nodeSummaries(r.Context(), items)})
-}
-
 func (s *Server) nodeActionAPI(w http.ResponseWriter, r *http.Request) {
 	nodeID, action := splitAdminPath(r.URL.Path, "/admin/api/nodes/")
 	if nodeID == "" {

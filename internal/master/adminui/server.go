@@ -38,6 +38,8 @@ type Server struct {
 	trustedCIDRs                 []string
 	timeLocation                 *time.Location
 	downloadHistoryRetentionDays int
+	publicProbeNetworkFailures   int
+	nodeHeartbeatTimeout         time.Duration
 	templates                    *template.Template
 	adminFS                      fs.FS
 	publicFS                     fs.FS
@@ -59,6 +61,8 @@ type Options struct {
 	TrustedCIDRs                 []string
 	Timezone                     string
 	DownloadHistoryRetentionDays int
+	PublicProbeNetworkFailures   int
+	NodeHeartbeatTimeout         time.Duration
 	ResetResourceLimiter         func(string)
 	ResetClientBlockCache        func(string)
 }
@@ -107,6 +111,8 @@ func New(cfg config.Administration, repo mastercontrol.Repository, syncStore mir
 		trustedCIDRs:                 opts.TrustedCIDRs,
 		timeLocation:                 timeLocation,
 		downloadHistoryRetentionDays: opts.DownloadHistoryRetentionDays,
+		publicProbeNetworkFailures:   opts.PublicProbeNetworkFailures,
+		nodeHeartbeatTimeout:         opts.NodeHeartbeatTimeout,
 		resetResourceLimiter:         opts.ResetResourceLimiter,
 		resetClientBlockCache:        opts.ResetClientBlockCache,
 		store: loginStore{db: repo.DB, secret: secret, window: window,

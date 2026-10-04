@@ -82,7 +82,7 @@ func (h *Handler) serveSwarm(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Swarm-Piece", strconv.Itoa(pieceIndex))
 	w.WriteHeader(http.StatusPartialContent)
 
-	var target http.ResponseWriter = h.rateLimitedResponseWriter(r, w)
+	var target http.ResponseWriter = h.rateLimitedResponseWriter(r, h.payloadResponseWriter(w, true))
 	if h.SwarmLimiter != nil {
 		target = rateLimitedResponseWriter{ResponseWriter: target,
 			writer: h.SwarmLimiter.WrapWriter(r.Context(), target)}

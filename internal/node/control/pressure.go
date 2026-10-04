@@ -15,6 +15,7 @@ func (c Client) sendPressureReport(conn net.Conn, reqID string, sequence uint64,
 	active := c.activeDownloads()
 	slots := c.availableSyncTaskSlots()
 	body, _ := json.Marshal(protocol.PressureReport{
+		MirrorTraffic:          c.Activity.SampleTraffic(),
 		DownloadPressure:       c.sampleDownloadPressure(actualBandwidth),
 		ReportID:               reqID + "-pressure",
 		SampledAt:              time.Now().UTC(),

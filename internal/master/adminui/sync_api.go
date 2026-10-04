@@ -28,9 +28,15 @@ func (s *Server) syncTasksAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := paginationFrom(r, 20)
+	where := " WHERE t.node_id = ?"
+	order := " ORDER BY t.created_at DESC"
+	if r.URL.Query().Get("active") == "1" {
+		where += " AND t.state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')"
+		order = " ORDER BY CASE t.state WHEN 'failed' THEN 0 WHEN 'retry_wait' THEN 1 ELSE 2 END, t.updated_at DESC, t.created_at DESC"
+	}
 	var total int
 	if err := s.repo.DB.QueryRowContext(r.Context(),
-		"SELECT COUNT(*) FROM node_tasks WHERE node_id = ?", nodeID).Scan(&total); err != nil {
+		"SELECT COUNT(*) FROM node_tasks t"+where, nodeID).Scan(&total); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务查询失败"})
 		return
 	}
@@ -45,7 +51,7 @@ func (s *Server) syncTasksAPI(w http.ResponseWriter, r *http.Request) {
 		"LEFT JOIN releases r ON r.id = a.release_id " +
 		"LEFT JOIN projects p ON p.id = r.project_id " +
 		"LEFT JOIN nodes n ON n.id = t.node_id " +
-		"WHERE t.node_id = ? ORDER BY t.created_at DESC LIMIT ? OFFSET ?"
+		where + order + " LIMIT ? OFFSET ?"
 	rows, err := s.repo.DB.QueryContext(r.Context(), query, nodeID, page.PageSize, page.offset())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务查询失败"})

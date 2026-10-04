@@ -8,6 +8,7 @@ import (
 )
 
 type runtimeHeartbeat struct {
+	MirrorTraffic    *protocol.MirrorTraffic
 	DownloadPressure *protocol.DownloadPressure
 	State            string
 	PressureRatio    float64
@@ -20,6 +21,7 @@ type runtimeHeartbeat struct {
 }
 
 type runtimePressureReport struct {
+	MirrorTraffic    *protocol.MirrorTraffic
 	DownloadPressure *protocol.DownloadPressure
 	PressureRatio    float64
 	ActiveDownloads  int64
@@ -42,7 +44,7 @@ func (s *RuntimeStore) LatestHeartbeat(nodeID string) (map[string]any, error) {
 	if !item.Valid {
 		return nil, sql.ErrNoRows
 	}
-	return reportDownloadPressure(map[string]any{"state": item.State, "pressure_ratio": item.PressureRatio,
+	return reportDownloadPressure(map[string]any{"state": item.State, "pressure_ratio": item.PressureRatio, "mirror_traffic": item.MirrorTraffic,
 		"active_downloads": item.ActiveDownloads, "free_bytes": item.FreeBytes,
 		"target_bandwidth_bps": item.TargetBandwidth,
 		"actual_bandwidth_bps": item.ActualBandwidth,
@@ -72,7 +74,7 @@ func (s *RuntimeStore) LatestPressureReport(nodeID string) (map[string]any, erro
 	if !item.Valid {
 		return nil, sql.ErrNoRows
 	}
-	return reportDownloadPressure(map[string]any{"pressure_ratio": item.PressureRatio,
+	return reportDownloadPressure(map[string]any{"pressure_ratio": item.PressureRatio, "mirror_traffic": item.MirrorTraffic,
 		"active_downloads": item.ActiveDownloads, "free_bytes": item.FreeBytes,
 		"target_bandwidth_bps": item.TargetBandwidth,
 		"actual_bandwidth_bps": item.ActualBandwidth,
@@ -90,7 +92,8 @@ func v2StatusReport(item runtimeV2Status) map[string]any {
 		free = status.AssetFS.AvailableBytes
 	}
 	return reportDownloadPressure(map[string]any{
-		"state": status.Status, "pressure_ratio": ratio,
+		"mirror_traffic": status.MirrorTraffic,
+		"state":          status.Status, "pressure_ratio": ratio,
 		"active_downloads":        status.PublicActiveDownloads,
 		"public_active_downloads": status.PublicActiveDownloads,
 		"swarm_active_uploads":    status.SwarmActiveUploads,

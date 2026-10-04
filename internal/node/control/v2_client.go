@@ -136,7 +136,8 @@ func (c *Client) RunV2(ctx context.Context, wsURL string) (time.Duration, error)
 func (c *Client) enqueueV2Status(queue *controlv2.Queue) error {
 	id, _ := requestid.New()
 	status := protocolv2.NodeStatus{
-		Status: "syncing", PublicDownloadBaseURL: c.PublicDownloadBaseURL,
+		MirrorTraffic: c.Activity.SampleTraffic(),
+		Status:        "syncing", PublicDownloadBaseURL: c.PublicDownloadBaseURL,
 		MaxMirrorProjects: c.MaxMirrorProjects, SyncTaskSlotsAvailable: c.availableSyncTaskSlots(),
 		TargetBandwidthBPS: c.TargetBandwidthBPS, ActualBandwidthBPS: c.sampleBandwidth(),
 		ActiveTasks: c.loadV2ActiveTasks(),

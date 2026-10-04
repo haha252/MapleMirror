@@ -130,7 +130,8 @@
 
   function loadNodes() {
     return a.api("/admin/api/nodes").then(function (data) {
-      var select = document.getElementById("task-node-select"), current = select.value;
+      var select = document.getElementById("task-node-select"), current = select.value ||
+        new URLSearchParams(location.search).get("node_id");
       select.innerHTML = '<option value="">选择节点</option>' + (data.nodes || []).map(function (node) {
         return '<option value="' + a.esc(node.node_id) + '">' + a.esc(node.public_name || node.node_id) + '</option>';
       }).join("");

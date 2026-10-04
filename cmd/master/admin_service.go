@@ -94,6 +94,7 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 		resetResourceLimiter = publicServer.ResetResourceLimiter
 		resetClientBlockCache = publicServer.ResetClientBlockCache
 	}
+	heartbeatTimeout, _ := time.ParseDuration(cfg.Node.HeartbeatTimeout)
 	ui, err := adminui.New(cfg.Admin, repo, syncService.Scanner.Store, adminui.Options{
 		Projects:                     projectLoader,
 		DeveloperAPI:                 developerStore,
@@ -103,6 +104,8 @@ func adminHandler(cfg config.Master, repo mastercontrol.Repository, syncService 
 		TrustedCIDRs:                 cfg.Proxy.TrustedCIDRs,
 		Timezone:                     cfg.Stats.Timezone,
 		DownloadHistoryRetentionDays: cfg.History.DownloadRetentionDays,
+		PublicProbeNetworkFailures:   cfg.Node.PublicProbeNetworkFailures,
+		NodeHeartbeatTimeout:         heartbeatTimeout,
 		ResetResourceLimiter:         resetResourceLimiter,
 		ResetClientBlockCache:        resetClientBlockCache,
 	})

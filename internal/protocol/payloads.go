@@ -91,6 +91,7 @@ type Heartbeat struct {
 }
 
 type PressureSample struct {
+	MirrorTraffic      *MirrorTraffic    `json:"mirror_traffic,omitempty"`
 	DownloadPressure   *DownloadPressure `json:"download_pressure,omitempty"`
 	TargetBandwidthBPS int64             `json:"target_bandwidth_bps"`
 	ActualBandwidthBPS int64             `json:"actual_bandwidth_bps"`
@@ -114,6 +115,7 @@ type InventoryItem struct {
 }
 
 type PressureReport struct {
+	MirrorTraffic          *MirrorTraffic    `json:"mirror_traffic,omitempty"`
 	DownloadPressure       *DownloadPressure `json:"download_pressure,omitempty"`
 	ReportID               string            `json:"report_id"`
 	SampledAt              time.Time         `json:"sampled_at"`

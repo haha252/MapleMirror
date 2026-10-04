@@ -1,0 +1,72 @@
+@media (max-width: 1250px) {
+  .nodes-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .nodes-workspace { gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(320px, 36%); }
+  .nodes-list-columns, .nodes-row { gap: 8px; padding-inline: 12px; }
+}
+@media (max-width: 1050px) {
+  .nodes-filters input { flex-basis: 100%; }
+  .nodes-filters select { flex: 1 1 110px; }
+  .nodes-list-columns, .nodes-row { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr) minmax(0, 1fr) minmax(0, 1.15fr); }
+  .nodes-list-columns > :last-child { display: none; }
+  .nodes-cell--report { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 4px 14px; }
+}
+@media (max-width: 900px) {
+  .page-admin[data-admin-page="nodes"] .admin-main { width: calc(100% - 20px); padding-bottom: 10px; }
+  .page-admin[data-admin-page="nodes"] .page-title-row { flex-direction: row; align-items: center; margin-bottom: 10px; gap: 8px; }
+  .page-admin[data-admin-page="nodes"] .page-title-actions { width: auto; gap: 6px; }
+  .nodes-workspace { display: flex; }
+  .nodes-list-panel { flex: 1; }
+  .nodes-detail-panel { display: none; }
+  .nodes-detail-panel.is-open { display: flex; position: fixed; inset: 12px; z-index: 950; box-shadow: var(--shadow); }
+  .nodes-detail-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 940; background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); }
+  .nodes-detail-actions { flex-wrap: wrap; }
+  .nodes-filters input { flex-basis: 170px; }
+  .nodes-list-columns, .nodes-row { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, .8fr); }
+  .nodes-list-columns > :last-child { display: block; }
+  .nodes-cell--report { grid-column: auto; flex-direction: column; }
+}
+@media (max-width: 620px) {
+  .page-admin[data-admin-page="nodes"] .page-title-row h1 { font-size: 21px; }
+  .page-admin[data-admin-page="nodes"] .page-title-actions { flex: 1; justify-content: flex-end; }
+  .page-admin[data-admin-page="nodes"] .page-title-actions > * { width: auto; }
+  .page-admin[data-admin-page="nodes"] .page-title-actions .admin-secondary { padding: 6px 8px; font-size: 12px; }
+  .nodes-refresh-state { flex-basis: 100%; text-align: right; font-size: 11px; }
+  .nodes-metrics { gap: 6px; margin-bottom: 10px; }
+  .nodes-metric { gap: 6px; padding: 8px; }
+  .nodes-metric > span { font-size: 11px; }
+  .nodes-metric strong { font-size: 19px; }
+  .nodes-metric--throughput strong { font-size: 16px; }
+  .nodes-metric--throughput small { font-size: 10px; }
+  .nodes-list-head { padding: 10px 12px 8px; }
+  .nodes-list-title h2 { font-size: 15px; }
+  .nodes-list-title span, #nodes-updated { font-size: 11px; }
+  .nodes-filters { padding: 0 12px 10px; gap: 6px; }
+  .nodes-filters input { flex-basis: 100%; }
+  .nodes-filters select { flex: 1 1 80px; min-width: 0; }
+  .nodes-list-columns { display: none; }
+  .nodes-row { grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 12px; }
+  .nodes-cell::before { content: attr(data-label); color: var(--muted); font-size: 11px; }
+  .nodes-cell:first-child::before { display: none; }
+  .nodes-cell--state { align-self: start; }
+  .nodes-cell--state::before { display: none; }
+  .nodes-cell--report { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 6px 12px; }
+  .nodes-cell--report::before { display: none; }
+  .nodes-detail-panel.is-open { inset: 8px; }
+  .nodes-detail-head, .nodes-detail-scroll { padding: 12px; }
+  .nodes-detail-actions .admin-secondary { flex: 0 1 auto; }
+  .nodes-detail-identity h2 { font-size: 16px; }
+  .nodes-detail-identity > span { font-size: 11px; }
+}
+@media (max-width: 460px) {
+  .nodes-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nodes-metric--throughput { gap: 4px; }
+  .nodes-metric--throughput > span { font-size: 10px; }
+  .nodes-metric--throughput strong { font-size: 12px; }
+  .nodes-metric--throughput small { font-size: 9px; }
+  .nodes-detail-actions .admin-secondary { padding: 6px 8px; }
+}
+@media (max-height: 520px) {
+  .nodes-metrics { gap: 4px; margin-bottom: 6px; }
+  .nodes-metric { padding-block: 5px; }
+  .page-admin[data-admin-page="nodes"] .page-title-row { margin-bottom: 6px; }
+}

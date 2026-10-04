@@ -1,9 +1,47 @@
 {{define "nodes"}}
-<section class="admin-grid">
-  <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><div><h2>节点</h2><p class="muted">默认只显示运行概况；展开后查看同步、磁盘、SLA 与管理操作。</p></div><span id="node-summary" class="muted">加载中</span></div>
-    <div id="nodes-list" class="admin-record-list"></div>
-  </article>
+<section class="nodes-metrics" aria-label="节点汇总">
+  <button type="button" class="panel-card nodes-metric" data-node-filter="all"><span>节点总数</span><strong id="nodes-total">—</strong></button>
+  <button type="button" class="panel-card nodes-metric" data-node-filter="online"><span>在线节点</span><strong id="nodes-online">—</strong></button>
+  <button type="button" class="panel-card nodes-metric" data-node-filter="download"><span>可提供下载</span><strong id="nodes-download">—</strong></button>
+  <button type="button" class="panel-card nodes-metric" data-node-filter="ready"><span>全量就绪</span><strong id="nodes-ready">—</strong></button>
+  <button type="button" class="panel-card nodes-metric" data-node-filter="attention"><span>需要关注</span><strong id="nodes-attention">—</strong></button>
+  <div class="panel-card nodes-metric nodes-metric--throughput"><span>有效总吞吐</span><strong id="nodes-throughput">—</strong></div>
+</section>
+<section class="nodes-workspace" aria-label="节点巡检">
+  <section class="panel-card nodes-list-panel" aria-label="节点列表">
+    <div class="nodes-list-head"><div class="nodes-list-title"><h2>节点列表</h2><span id="node-summary" class="muted">加载中</span></div><span id="nodes-updated" class="muted">最近更新 —</span></div>
+    <div class="nodes-filters">
+      <input id="nodes-search" type="search" maxlength="200" aria-label="搜索节点名称或 ID" placeholder="搜索节点名称或 ID">
+      <select id="nodes-filter" aria-label="筛选节点状态"><option value="all">全部状态</option><option value="attention">需要关注</option><option value="online">在线</option><option value="download">可提供下载</option><option value="ready">全量就绪</option><option value="sync">同步未完成</option><option value="offline">离线</option><option value="disabled">已禁用</option></select>
+      <select id="nodes-region" aria-label="筛选节点地区"><option value="all">全部地区</option><option value="mainland_china">中国大陆</option><option value="outside_mainland_china">非中国大陆</option><option value="unknown">未设置</option></select>
+      <select id="nodes-sort" aria-label="节点排序"><option value="attention">需要关注优先</option><option value="name">按名称排序</option><option value="bandwidth">按调度压力排序</option><option value="disk">按资产盘余量排序</option></select>
+    </div>
+    <div class="nodes-list-columns" aria-hidden="true"><span>节点</span><span>服务状态</span><span>同步进展</span><span>吞吐 / 压力</span><span>最近上报</span></div>
+    <div id="nodes-list" class="nodes-list-scroll" role="group" aria-label="选择节点"><p class="nodes-list-empty muted">正在读取节点…</p></div>
+  </section>
+  <div id="nodes-detail-backdrop" class="nodes-detail-backdrop" hidden></div>
+  <aside id="nodes-detail-panel" class="panel-card nodes-detail-panel" aria-label="节点详情">
+    <div id="nodes-detail-empty" class="nodes-detail-empty muted">在左侧选择节点</div>
+    <div id="nodes-detail-head" class="nodes-detail-head" hidden>
+      <div class="nodes-detail-actions">
+        <a id="nodes-management" class="admin-secondary admin-link-button" href="/admin/nodes">项目与调度</a>
+        <button class="admin-secondary" type="button" data-node-action="sync-reset">重新同步</button>
+        <button id="nodes-enable-toggle" class="admin-secondary" type="button" data-node-action="disable">禁用节点</button>
+        <button class="admin-secondary admin-danger" type="button" data-node-action="delete">删除</button>
+        <button id="nodes-detail-close" class="admin-secondary" type="button" aria-label="关闭节点详情">关闭</button>
+      </div>
+      <div class="nodes-detail-identity"><h2 id="nodes-detail-name"></h2><span id="nodes-detail-id" class="muted"></span></div>
+      <div id="nodes-detail-state" class="nodes-detail-state"></div>
+    </div>
+    <div id="nodes-detail-scroll" class="nodes-detail-scroll" hidden>
+      <p id="nodes-detail-reason" class="admin-record__message" hidden></p>
+      <section class="nodes-detail-section"><div class="nodes-section-head"><h3>同步进展</h3><span class="muted">文件验证进度</span></div><div id="nodes-sync-progress" class="nodes-sync-progress"></div><div id="nodes-sync-counts" class="nodes-detail-grid"></div><p id="nodes-inventory" class="muted"></p></section>
+      <section class="nodes-detail-section"><div class="nodes-section-head"><h3>相关任务</h3><a id="nodes-all-tasks" href="/admin/sync">查看全部</a></div><div id="nodes-detail-tasks"><p class="muted">正在读取任务…</p></div></section>
+      <section class="nodes-detail-section"><h3>运行与容量</h3><dl id="nodes-runtime" class="nodes-detail-kv"></dl></section>
+      <section class="nodes-detail-section"><h3>SLA</h3><div id="nodes-detail-sla" class="nodes-sla"><span class="muted">正在读取…</span></div></section>
+      <details class="admin-tech-details"><summary>显示技术信息</summary><dl id="nodes-tech" class="nodes-detail-kv"></dl></details>
+    </div>
+  </aside>
 </section>
 {{end}}
 

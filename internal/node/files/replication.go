@@ -57,7 +57,8 @@ func (h *Handler) serveReplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("X-Replication-Task-ID", claims.TaskID)
-	target := h.rateLimitedResponseWriter(r, w)
+	defer h.Activity.BeginSwarmUpload()()
+	target := h.rateLimitedResponseWriter(r, h.payloadResponseWriter(w, true))
 	http.ServeContent(target, r, filepath.Base(asset.RelativePath), info.ModTime(), file)
 }
 

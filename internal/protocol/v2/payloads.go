@@ -38,6 +38,7 @@ type ActiveTask struct {
 }
 
 type NodeStatus struct {
+	MirrorTraffic          *protocol.MirrorTraffic    `json:"mirror_traffic,omitempty"`
 	DownloadPressure       *protocol.DownloadPressure `json:"download_pressure,omitempty"`
 	Status                 string                     `json:"status"`
 	UptimeSeconds          uint64                     `json:"uptime_seconds"`
