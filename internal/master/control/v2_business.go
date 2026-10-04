@@ -150,7 +150,11 @@ func (s *V2Server) handleV2BusinessMessage(ctx context.Context, session Session,
 		if err := requireV2ReplyTo(envelope, protocolv2.TypeDownloadAuthorization, ack.AuthorizationID); err != nil {
 			return err
 		}
-		return s.Repo.AcceptV2DownloadAuthorizationAck(ctx, session, ack.AuthorizationID)
+		if err := s.Repo.AcceptV2DownloadAuthorizationAck(ctx, session, ack.AuthorizationID); err != nil {
+			return err
+		}
+		queue.Acknowledge(envelope.ReplyTo)
+		return nil
 	case protocolv2.TypeTrafficEvent:
 		event, err := protocolv2.Decode[protocolv2.TrafficEvent](envelope)
 		if err != nil {

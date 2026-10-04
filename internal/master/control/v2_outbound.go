@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 
 	"mirror-server/internal/controlv2"
 	"mirror-server/internal/protocol"
@@ -20,20 +21,29 @@ func toV2Authorization(a protocol.DownloadAuthorization) protocolv2.DownloadAuth
 }
 
 func (s *V2Server) dispatchV2Authorizations(ctx context.Context, session Session, queue *controlv2.Queue) error {
-	for i := 0; i < maxAuthorizationDispatchPerWake; i++ {
-		auth, ok, err := s.Repo.NextDownloadAuthorization(ctx, session.NodeID)
-		if err != nil || !ok {
-			return err
+	return queue.Dispatch(func() error {
+		for i := 0; i < controlv2.ReplayWindow; i++ {
+			excluded := queue.ReplayKeys(protocolv2.TypeDownloadAuthorization)
+			if len(excluded) >= controlv2.ReplayWindow {
+				return nil
+			}
+			auth, ok, err := s.Repo.nextDownloadAuthorization(ctx, session.NodeID, excluded)
+			if err != nil || !ok {
+				return err
+			}
+			envelope, err := protocolv2.New(protocolv2.TypeDownloadAuthorization, protocolv2.StableMessageID(protocolv2.TypeDownloadAuthorization, auth.AuthorizationID), toV2Authorization(auth))
+			if err != nil {
+				return err
+			}
+			if err := queue.EnqueueReplay(envelope, auth.AuthorizationID); err != nil {
+				if errors.Is(err, controlv2.ErrReplayWindowFull) || errors.Is(err, controlv2.ErrQueueFull) {
+					return nil
+				}
+				return err
+			}
 		}
-		envelope, err := protocolv2.New(protocolv2.TypeDownloadAuthorization, protocolv2.StableMessageID(protocolv2.TypeDownloadAuthorization, auth.AuthorizationID), toV2Authorization(auth))
-		if err != nil {
-			return err
-		}
-		if err := queue.Enqueue(envelope, auth.AuthorizationID); err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (s *V2Server) maybeDispatchV2PublicProbe(session Session, queue *controlv2.Queue) error {

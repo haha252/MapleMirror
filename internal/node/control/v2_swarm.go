@@ -58,7 +58,7 @@ func (c *Client) enqueuePendingV2Manifests(queue *controlv2.Queue) error {
 	if c.DB == nil {
 		return nil
 	}
-	rows, err := c.DB.Query(`SELECT manifest_id,manifest_json FROM pending_swarm_manifests ORDER BY created_at LIMIT 8`)
+	rows, err := c.DB.QueryContext(c.controlContext(), `SELECT manifest_id,manifest_json FROM pending_swarm_manifests ORDER BY created_at LIMIT 8`)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,10 @@ func (c *Client) enqueuePendingV2Manifests(queue *controlv2.Queue) error {
 		}
 		id := protocolv2.StableMessageID(protocolv2.TypeSwarmManifestReport, manifest.ManifestID)
 		envelope, _ := protocolv2.New(protocolv2.TypeSwarmManifestReport, id, manifest)
-		if err := queue.Enqueue(envelope, manifestID); err != nil && err != controlv2.ErrQueueFull {
+		if err := queue.EnqueueReplay(envelope, manifestID); err != nil {
+			if replayBackpressure(err) {
+				return nil
+			}
 			return err
 		}
 	}
@@ -98,7 +101,7 @@ func (c *Client) handleV2ManifestAck(queue *controlv2.Queue, envelope protocolv2
 		return nil
 	}
 	var manifestRaw, resultRaw []byte
-	err = c.DB.QueryRow(`SELECT manifest_json,result_json FROM pending_swarm_manifests WHERE manifest_id=?`, ack.ManifestID).Scan(&manifestRaw, &resultRaw)
+	err = c.DB.QueryRowContext(c.controlContext(), `SELECT manifest_json,result_json FROM pending_swarm_manifests WHERE manifest_id=?`, ack.ManifestID).Scan(&manifestRaw, &resultRaw)
 	if err == sql.ErrNoRows {
 		// A duplicate ACK after the outbox was already consumed is harmless.
 		return nil
@@ -126,7 +129,7 @@ func (c *Client) handleV2ManifestAck(queue *controlv2.Queue, envelope protocolv2
 	if err := c.storePendingV2Result(result); err != nil {
 		return err
 	}
-	if _, err := c.DB.Exec(`DELETE FROM pending_swarm_manifests WHERE manifest_id=?`, ack.ManifestID); err != nil {
+	if _, err := c.DB.ExecContext(c.controlContext(), `DELETE FROM pending_swarm_manifests WHERE manifest_id=?`, ack.ManifestID); err != nil {
 		return err
 	}
 	return c.enqueuePendingV2Results(queue)
@@ -148,7 +151,7 @@ func (c *Client) handleV2Sources(envelope protocolv2.Envelope) error {
 	}
 	if c.DB != nil {
 		var currentAttempt string
-		err := c.DB.QueryRow(`SELECT COALESCE(attempt_id,'') FROM local_sync_tasks
+		err := c.DB.QueryRowContext(c.controlContext(), `SELECT COALESCE(attempt_id,'') FROM local_sync_tasks
 			WHERE task_id=? AND asset_id=? AND state IN ('running','waiting_manifest')`, body.TaskID, body.AssetID).Scan(&currentAttempt)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -183,7 +186,7 @@ func (c *Client) enqueueV2SwarmState(queue *controlv2.Queue) error {
 		}
 		if c.DB != nil && c.Swarm.NeedsSourceRefresh(p.ManifestID, 30*time.Second) {
 			var taskID, attemptID string
-			if err := c.DB.QueryRow(`SELECT task_id,COALESCE(attempt_id,'') FROM local_sync_tasks WHERE asset_id=? AND state IN ('running','waiting_manifest') ORDER BY updated_at DESC LIMIT 1`, p.AssetID).Scan(&taskID, &attemptID); err == nil && attemptID != "" {
+			if err := c.DB.QueryRowContext(c.controlContext(), `SELECT task_id,COALESCE(attempt_id,'') FROM local_sync_tasks WHERE asset_id=? AND state IN ('running','waiting_manifest') ORDER BY updated_at DESC LIMIT 1`, p.AssetID).Scan(&taskID, &attemptID); err == nil && attemptID != "" {
 				requestBody := protocolv2.SwarmSourcesRequest{TaskID: taskID, AttemptID: attemptID, AssetID: p.AssetID, ManifestID: p.ManifestID}
 				rid := protocolv2.StableMessageID(protocolv2.TypeSwarmSourcesRequest, taskID, attemptID, p.AssetID, p.ManifestID)
 				req, _ := protocolv2.New(protocolv2.TypeSwarmSourcesRequest, rid, requestBody)

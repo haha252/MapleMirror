@@ -153,7 +153,7 @@ func (c Client) sendInventoryReport(conn net.Conn, reqID string, sequence uint64
 }
 
 func (c Client) loadInventoryItems() ([]protocol.InventoryItem, error) {
-	rows, err := c.DB.Query(`SELECT asset_id, size_bytes, digest_sha256, state
+	rows, err := c.DB.QueryContext(c.controlContext(), `SELECT asset_id, size_bytes, digest_sha256, state
 		FROM local_assets ORDER BY asset_id`)
 	if err != nil {
 		return nil, err
@@ -171,13 +171,13 @@ func (c Client) loadInventoryItems() ([]protocol.InventoryItem, error) {
 }
 
 func (c Client) loadInventoryCursor() (inventoryCursor, error) {
-	if _, err := c.DB.Exec(`INSERT OR IGNORE INTO inventory_report_cursor
+	if _, err := c.DB.ExecContext(c.controlContext(), `INSERT OR IGNORE INTO inventory_report_cursor
 		(id, next_revision, last_acked_revision, updated_at)
 		VALUES (1, 1, 0, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return inventoryCursor{}, err
 	}
 	var cursor inventoryCursor
-	err := c.DB.QueryRow(`SELECT next_revision, last_acked_revision, updated_at,
+	err := c.DB.QueryRowContext(c.controlContext(), `SELECT next_revision, last_acked_revision, updated_at,
 		COALESCE(force_report_requested_at, '')
 		FROM inventory_report_cursor WHERE id = 1`).
 		Scan(&cursor.NextRevision, &cursor.LastAckedRevision, &cursor.UpdatedAt,
@@ -187,7 +187,7 @@ func (c Client) loadInventoryCursor() (inventoryCursor, error) {
 
 func (c Client) storeInventoryCursor(cursor inventoryCursor) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := c.DB.Exec(`UPDATE inventory_report_cursor
+	_, err := c.DB.ExecContext(c.controlContext(), `UPDATE inventory_report_cursor
 		SET next_revision = ?, last_acked_revision = ?, updated_at = ?,
 			force_report_requested_at = CASE
 				WHEN COALESCE(force_report_requested_at, '') = ? THEN NULL

@@ -44,7 +44,10 @@ func (c *Client) enqueuePendingV2Traffic(queue *controlv2.Queue) error {
 		}
 		id := protocolv2.StableMessageID(protocolv2.TypeTrafficEvent, strconv.FormatUint(event.EventSequence, 10))
 		envelope, _ := protocolv2.New(protocolv2.TypeTrafficEvent, id, body)
-		if err := queue.Enqueue(envelope, ""); err != nil {
+		if err := queue.EnqueueReplay(envelope, ""); err != nil {
+			if replayBackpressure(err) {
+				return nil
+			}
 			return err
 		}
 	}
@@ -66,7 +69,7 @@ func (c *Client) handleV2TrafficAck(envelope protocolv2.Envelope) error {
 	if c.DB == nil {
 		return nil
 	}
-	res, err := c.DB.Exec(`UPDATE pending_traffic_events SET confirmed_at=? WHERE event_sequence=? AND confirmed_at IS NULL`,
+	res, err := c.DB.ExecContext(c.controlContext(), `UPDATE pending_traffic_events SET confirmed_at=? WHERE event_sequence=? AND confirmed_at IS NULL`,
 		time.Now().UTC().Format(time.RFC3339Nano), ack.EventSequence)
 	if err != nil {
 		return err
@@ -90,7 +93,10 @@ func (c *Client) enqueuePendingV2AuthorizationStatus(queue *controlv2.Queue) err
 			Status: event.Status, Reason: event.Reason, OccurredAt: event.OccurredAt}
 		id := protocolv2.StableMessageID(protocolv2.TypeAuthorizationStatus, event.AuthorizationID, event.Status, event.Reason, event.OccurredAt.UTC().Format(time.RFC3339Nano))
 		envelope, _ := protocolv2.New(protocolv2.TypeAuthorizationStatus, id, body)
-		if err := queue.Enqueue(envelope, ""); err != nil {
+		if err := queue.EnqueueReplay(envelope, ""); err != nil {
+			if replayBackpressure(err) {
+				return nil
+			}
 			return err
 		}
 	}
@@ -108,9 +114,9 @@ func (c *Client) handleV2AuthorizationStatusAck(envelope protocolv2.Envelope) er
 	if c.DB == nil {
 		return nil
 	}
-	var reason, updatedAt string
-	if err := c.DB.QueryRow(`SELECT COALESCE(reason,''), updated_at FROM local_authorizations
-		WHERE authorization_id=? AND status=? AND reported_at IS NULL`, ack.AuthorizationID, ack.Status).Scan(&reason, &updatedAt); err != nil {
+	var reason, updatedAt, reportedAt string
+	if err := c.DB.QueryRowContext(c.controlContext(), `SELECT COALESCE(reason,''), updated_at, COALESCE(reported_at,'') FROM local_authorizations
+		WHERE authorization_id=? AND status=?`, ack.AuthorizationID, ack.Status).Scan(&reason, &updatedAt, &reportedAt); err != nil {
 		return err
 	}
 	occurredAt, err := time.Parse(time.RFC3339Nano, updatedAt)
@@ -121,14 +127,17 @@ func (c *Client) handleV2AuthorizationStatusAck(envelope protocolv2.Envelope) er
 	if envelope.ReplyTo != expectedReplyTo {
 		return errors.New("authorization status ack reply_to mismatch")
 	}
-	res, err := c.DB.Exec(`UPDATE local_authorizations SET reported_at=?
+	if reportedAt != "" {
+		return nil
+	} // Duplicate exact ACK.
+	res, err := c.DB.ExecContext(c.controlContext(), `UPDATE local_authorizations SET reported_at=?
 		WHERE authorization_id=? AND status=? AND COALESCE(reason,'')=? AND updated_at=? AND reported_at IS NULL`,
 		time.Now().UTC().Format(time.RFC3339Nano), ack.AuthorizationID, ack.Status, reason, updatedAt)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return errors.New("authorization status ack no longer matches pending event")
+		return nil // A concurrent status update must remain pending.
 	}
 	return nil
 }
@@ -181,3 +190,7 @@ func (c *Client) handleV2PublicProbe(queue *controlv2.Queue, envelope protocolv2
 
 func trafficKey(seq uint64) string         { return "traffic:" + strconv.FormatUint(seq, 10) }
 func statusKey(auth, status string) string { return fmt.Sprintf("auth:%s:%s", auth, status) }
+
+func replayBackpressure(err error) bool {
+	return errors.Is(err, controlv2.ErrReplayWindowFull) || errors.Is(err, controlv2.ErrQueueFull)
+}

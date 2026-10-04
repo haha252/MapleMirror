@@ -21,6 +21,7 @@ func runV2ClientWriter(ctx context.Context, conn *websocket.Conn, queue *control
 		if err := writeV2ClientEnvelope(ctx, conn, envelope); err != nil {
 			return err
 		}
+		queue.ReplaySent(envelope.ID)
 	}
 }
 

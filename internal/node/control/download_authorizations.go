@@ -46,7 +46,7 @@ func (c Client) storeDownloadAuthorization(auth protocol.DownloadAuthorization) 
 		return nil
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := c.DB.Exec(`INSERT INTO local_authorizations
+	_, err := c.DB.ExecContext(c.controlContext(), `INSERT INTO local_authorizations
 		(authorization_id, token_hash, asset_id, node_id, client_prefix_key,
 		 issued_at, expires_at, first_seen_at, last_activity_at, status, reason,
 		 reported_at, created_at, updated_at, max_bytes, traffic_limit_bytes,

@@ -25,18 +25,24 @@ type queuedItem struct {
 }
 
 type Queue struct {
-	mu        sync.Mutex
-	buckets   [protocolv2.PriorityLowest + 1][]*queuedItem
-	coalesced map[string]*queuedItem
-	messages  int
-	bytes     int
-	maxMsg    int
-	maxBytes  int
-	nextOrder uint64
-	burst     int
-	burstMax  int
-	closed    bool
-	notify    chan struct{}
+	dispatchMu   sync.Mutex
+	replayMu     sync.Mutex
+	replay       map[string]replayItem
+	replayWake   chan struct{}
+	receipts     map[string]string
+	receiptOrder []string
+	mu           sync.Mutex
+	buckets      [protocolv2.PriorityLowest + 1][]*queuedItem
+	coalesced    map[string]*queuedItem
+	messages     int
+	bytes        int
+	maxMsg       int
+	maxBytes     int
+	nextOrder    uint64
+	burst        int
+	burstMax     int
+	closed       bool
+	notify       chan struct{}
 }
 
 func NewQueue(maxMessages, maxBytes int) *Queue {
@@ -47,6 +53,7 @@ func NewQueue(maxMessages, maxBytes int) *Queue {
 		maxBytes = 4 << 20
 	}
 	return &Queue{
+		replay: make(map[string]replayItem), replayWake: make(chan struct{}, 1), receipts: make(map[string]string),
 		coalesced: make(map[string]*queuedItem), maxMsg: maxMessages, maxBytes: maxBytes,
 		burstMax: defaultHighPriorityBurst, notify: make(chan struct{}, 1),
 	}

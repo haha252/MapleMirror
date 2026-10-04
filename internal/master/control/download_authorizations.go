@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"mirror-server/internal/protocol"
@@ -68,14 +69,26 @@ func (s ControlServer) dispatchDownloadAuthorizations(conn net.Conn,
 
 func (r Repository) NextDownloadAuthorization(ctx context.Context,
 	nodeID string) (protocol.DownloadAuthorization, bool, error) {
+	return r.nextDownloadAuthorization(ctx, nodeID, nil)
+}
+
+func (r Repository) nextDownloadAuthorization(ctx context.Context, nodeID string, excluded []string) (protocol.DownloadAuthorization, bool, error) {
 	var out protocol.DownloadAuthorization
+	args := []any{nodeID}
+	exclusion := ""
+	if len(excluded) > 0 {
+		exclusion = " AND id NOT IN (" + strings.TrimSuffix(strings.Repeat("?,", len(excluded)), ",") + ")"
+		for _, id := range excluded {
+			args = append(args, id)
+		}
+	}
 	err := r.DB.QueryRowContext(ctx, `SELECT id, token_hash, asset_id, node_id,
 		client_prefix_key, first_connection_timeout_seconds,
 		idle_timeout_seconds, max_duration_seconds, max_bytes, traffic_limit_bytes,
 		range_limit, request_id FROM download_authorizations
 		WHERE node_id = ? AND token_hash != '' AND delivered_at = ''
-		AND status IN ('issued', 'active')
-		ORDER BY issued_at LIMIT 1`, nodeID).
+		AND status IN ('issued', 'active')`+exclusion+`
+		ORDER BY issued_at,id LIMIT 1`, args...).
 		Scan(&out.AuthorizationID, &out.TokenHash, &out.AssetID, &out.NodeID,
 			&out.ClientPrefix, &out.FirstConnectionSeconds,
 			&out.IdleTimeoutSeconds, &out.MaxDurationSeconds, &out.MaxBytes,

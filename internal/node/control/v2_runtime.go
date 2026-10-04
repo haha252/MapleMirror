@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	protocolv2 "mirror-server/internal/protocol/v2"
 	"sync"
 	"time"
 )
@@ -19,10 +20,13 @@ type v2Execution struct {
 type V2Runtime struct {
 	mu sync.Mutex
 
-	executions         map[string]v2Execution
-	inventoryPending   uint64
-	inventoryPendingID string
-	inventorySentAt    time.Time
+	executions             map[string]v2Execution
+	inventoryPending       uint64
+	inventoryPendingID     string
+	inventorySentAt        time.Time
+	inventorySegments      []protocolv2.Envelope
+	inventoryNextSegment   int
+	inventoryLastSegmentAt time.Time
 }
 
 func NewV2Runtime() *V2Runtime {
@@ -50,6 +54,9 @@ func (r *V2Runtime) beginSession() {
 	r.inventoryPending = 0
 	r.inventoryPendingID = ""
 	r.inventorySentAt = time.Time{}
+	r.inventorySegments = nil
+	r.inventoryNextSegment = 0
+	r.inventoryLastSegmentAt = time.Time{}
 	r.mu.Unlock()
 }
 

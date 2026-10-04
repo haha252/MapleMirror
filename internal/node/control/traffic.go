@@ -47,7 +47,7 @@ func (c Client) loadPendingTrafficEvents(limit int) ([]protocol.TrafficEvent, er
 	if limit <= 0 {
 		limit = 1
 	}
-	rows, err := c.DB.Query(`SELECT event_sequence, authorization_id, node_request_id,
+	rows, err := c.DB.QueryContext(c.controlContext(), `SELECT event_sequence, authorization_id, node_request_id,
 		master_request_id, sent_bytes, created_at, asset_id, status
 		FROM pending_traffic_events WHERE confirmed_at IS NULL
 		ORDER BY event_sequence LIMIT ?`, limit)

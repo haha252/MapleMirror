@@ -57,6 +57,7 @@ type Client struct {
 	controlWorkWake         chan struct{}
 	pendingPublicProbeReady map[string]pendingPublicProbeReady
 	frameReader             *protocol.FrameReader
+	controlCtx              context.Context
 	V2Runtime               *V2Runtime
 }
 

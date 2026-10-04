@@ -53,7 +53,7 @@ func (c *Client) enqueuePendingV2Results(queue *controlv2.Queue) error {
 	if c.DB == nil {
 		return nil
 	}
-	rows, err := c.DB.Query(`SELECT task_id, COALESCE(attempt_id,''), COALESCE(asset_id,''), result,
+	rows, err := c.DB.QueryContext(c.controlContext(), `SELECT task_id, COALESCE(attempt_id,''), COALESCE(asset_id,''), result,
 		COALESCE(local_digest_sha256,''), size_bytes, COALESCE(message,'')
 		FROM pending_sync_task_results WHERE reported_at IS NULL ORDER BY created_at LIMIT 50`)
 	if err != nil {
@@ -71,7 +71,10 @@ func (c *Client) enqueuePendingV2Results(queue *controlv2.Queue) error {
 		}
 		id := protocolv2.StableMessageID(protocolv2.TypeSyncResult, result.TaskID, result.AttemptID)
 		envelope, _ := protocolv2.New(protocolv2.TypeSyncResult, id, result)
-		if err := queue.Enqueue(envelope, ""); err != nil {
+		if err := queue.EnqueueReplay(envelope, ""); err != nil {
+			if replayBackpressure(err) {
+				return nil
+			}
 			return err
 		}
 	}
@@ -93,7 +96,7 @@ func (c *Client) handleV2ResultAck(envelope protocolv2.Envelope) error {
 	if c.DB == nil {
 		return nil
 	}
-	res, err := c.DB.Exec(`UPDATE pending_sync_task_results SET reported_at=?
+	res, err := c.DB.ExecContext(c.controlContext(), `UPDATE pending_sync_task_results SET reported_at=?
 		WHERE task_id=? AND attempt_id=? AND reported_at IS NULL`,
 		time.Now().UTC().Format(time.RFC3339Nano), ack.TaskID, ack.AttemptID)
 	if err != nil {
@@ -101,11 +104,11 @@ func (c *Client) handleV2ResultAck(envelope protocolv2.Envelope) error {
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		var reportedAt string
-		err := c.DB.QueryRow(`SELECT COALESCE(reported_at,'') FROM pending_sync_task_results
+		err := c.DB.QueryRowContext(c.controlContext(), `SELECT COALESCE(reported_at,'') FROM pending_sync_task_results
 			WHERE task_id=? AND attempt_id=?`, ack.TaskID, ack.AttemptID).Scan(&reportedAt)
 		if err == sql.ErrNoRows {
 			var current string
-			if c.DB.QueryRow(`SELECT COALESCE(attempt_id,'') FROM local_sync_tasks WHERE task_id=?`, ack.TaskID).Scan(&current) == nil && current != ack.AttemptID {
+			if c.DB.QueryRowContext(c.controlContext(), `SELECT COALESCE(attempt_id,'') FROM local_sync_tasks WHERE task_id=?`, ack.TaskID).Scan(&current) == nil && current != ack.AttemptID {
 				return nil // ACK for the previous attempt may arrive after replacement.
 			}
 			return fmt.Errorf("sync.result.ack does not match pending result")
@@ -125,7 +128,7 @@ func (c *Client) loadV2ActiveTasks() []protocolv2.ActiveTask {
 	if c.DB == nil {
 		return nil
 	}
-	rows, err := c.DB.Query(`SELECT task_id, COALESCE(attempt_id,''), state FROM local_sync_tasks t
+	rows, err := c.DB.QueryContext(c.controlContext(), `SELECT task_id, COALESCE(attempt_id,''), state FROM local_sync_tasks t
 		WHERE COALESCE(attempt_id,'') != '' AND (state = 'running' OR
 			(state = 'waiting_manifest' AND EXISTS (
 				SELECT 1 FROM pending_swarm_manifests m

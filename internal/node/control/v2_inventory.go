@@ -18,9 +18,9 @@ func (c *Client) enqueueV2Inventory(queue *controlv2.Queue, force bool) error {
 	runtime.mu.Lock()
 	if runtime.inventoryPending != 0 {
 		runtime.mu.Unlock()
-		return nil
+		return c.flushV2Inventory(queue)
 	}
-	runtime.mu.Unlock()
+	defer runtime.mu.Unlock()
 	cursor, err := c.loadInventoryCursor()
 	if err != nil {
 		return err
@@ -47,6 +47,7 @@ func (c *Client) enqueueV2Inventory(queue *controlv2.Queue, force bool) error {
 		chunks = [][]protocol.InventoryItem{{}}
 	}
 	generated := time.Now().UTC()
+	segments := make([]protocolv2.Envelope, 0, len(chunks))
 	for i, chunk := range chunks {
 		converted := make([]protocolv2.InventoryItem, 0, len(chunk))
 		for _, it := range chunk {
@@ -55,16 +56,15 @@ func (c *Client) enqueueV2Inventory(queue *controlv2.Queue, force bool) error {
 		body := protocolv2.InventorySnapshotSegment{Revision: revision, Segment: i, Complete: i == len(chunks)-1, GeneratedAt: generated, Items: converted}
 		id := protocolv2.StableMessageID(protocolv2.TypeInventorySnapshotSegment, c.NodeID, strconv.FormatUint(revision, 10), strconv.Itoa(i))
 		env, _ := protocolv2.New(protocolv2.TypeInventorySnapshotSegment, id, body)
-		if err := queue.Enqueue(env, ""); err != nil {
-			return err
-		}
+		segments = append(segments, env)
 	}
-	runtime.mu.Lock()
 	runtime.inventoryPending = revision
 	runtime.inventoryPendingID = protocolv2.StableMessageID(protocolv2.TypeInventorySnapshotSegment, c.NodeID, strconv.FormatUint(revision, 10), strconv.Itoa(len(chunks)-1))
-	runtime.inventorySentAt = time.Now()
-	runtime.mu.Unlock()
-	return nil
+	runtime.inventorySegments = segments
+	runtime.inventoryNextSegment = 0
+	runtime.inventoryLastSegmentAt = time.Time{}
+	runtime.inventorySentAt = time.Time{}
+	return c.flushV2InventoryLocked(queue, runtime)
 }
 
 func (c *Client) handleV2InventoryAck(envelope protocolv2.Envelope) error {
@@ -76,7 +76,7 @@ func (c *Client) handleV2InventoryAck(envelope protocolv2.Envelope) error {
 	runtime.mu.Lock()
 	pending := runtime.inventoryPending
 	pendingID := runtime.inventoryPendingID
-	runtime.mu.Unlock()
+	defer runtime.mu.Unlock()
 	if pending == 0 || ack.Revision != pending {
 		return nil
 	}
@@ -94,10 +94,9 @@ func (c *Client) handleV2InventoryAck(envelope protocolv2.Envelope) error {
 	if err := c.storeInventoryCursor(cursor); err != nil {
 		return err
 	}
-	runtime.mu.Lock()
 	runtime.inventoryPending = 0
 	runtime.inventoryPendingID = ""
-	runtime.mu.Unlock()
+	runtime.inventorySegments = nil
 	return nil
 }
 
@@ -105,7 +104,7 @@ func (c *Client) reserveV2InventoryRevision(revision uint64) error {
 	if c.DB == nil {
 		return nil
 	}
-	_, err := c.DB.Exec(`UPDATE inventory_report_cursor
+	_, err := c.DB.ExecContext(c.controlContext(), `UPDATE inventory_report_cursor
 		SET next_revision = CASE WHEN next_revision <= ? THEN ? ELSE next_revision END
 		WHERE id = 1`, revision, revision+1)
 	return err

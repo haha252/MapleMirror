@@ -80,10 +80,13 @@ func (s *V2Server) handle(w http.ResponseWriter, r *http.Request) {
 		_ = conn.Close(websocket.StatusPolicyViolation, "certificate rejected")
 		return
 	}
+	closeReason := "control.v2 websocket closed"
 	defer func() {
 		s.registry.CompareAndDelete(session.NodeID, conn)
-		_ = s.Repo.CloseSession(context.Background(), session.ID, "control.v2 websocket closed")
+		closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		_ = conn.CloseNow()
+		_ = s.Repo.CloseSession(closeCtx, session.ID, closeReason)
 	}()
 	if old, loaded := s.registry.Swap(session.NodeID, conn); loaded {
 		if previous, ok := old.(*websocket.Conn); ok && previous != conn {
@@ -126,41 +129,11 @@ func (s *V2Server) handle(w http.ResponseWriter, r *http.Request) {
 	queue := controlv2.NewQueue(512, 4<<20)
 	s.queues.Store(session.NodeID, queue)
 	defer func() { s.queues.CompareAndDelete(session.NodeID, queue); queue.Close() }()
-	writerCtx, writerCancel := context.WithCancel(ctx)
-	defer writerCancel()
-	writerErr := make(chan error, 1)
-	go func() { writerErr <- runV2Writer(writerCtx, conn, queue) }()
-	_ = s.dispatchV2Tasks(ctx, session, queue)
-	_ = s.dispatchV2Authorizations(ctx, session, queue)
-	_ = s.maybeDispatchV2PublicProbe(session, queue)
-	go s.v2TaskWakeLoop(writerCtx, session, queue)
-	messages, readErrors := controlv2.ReadStream(writerCtx, conn, readV2Envelope)
-
-	for {
-		var envelope protocolv2.Envelope
-		select {
-		case <-ctx.Done():
-			return
-		case <-readErrors:
-			return
-		case err := <-writerErr:
-			if err != nil && !errors.Is(err, context.Canceled) && s.Logger != nil {
-				s.Logger.Debug(ctx, "control.v2 writer 结束", slog.String("node_id", session.NodeID), slog.String("error", err.Error()))
-			}
-			return
-		case envelope = <-messages:
-		}
-		if !s.isCurrentV2Connection(session.NodeID, conn) {
-			return
-		}
-		if err := s.handleV2Message(ctx, session, queue, envelope); err != nil {
-			if s.Logger != nil {
-				s.Logger.Warn(ctx, "control.v2 消息处理失败", slog.String("node_id", session.NodeID),
-					slog.String("type", envelope.Type), slog.String("error", err.Error()))
-			}
-			pe, _ := protocolv2.Reply(protocolv2.TypeProtocolError, mustID(), envelope.ID,
-				protocolv2.ProtocolError{Code: "invalid_message", Message: err.Error()})
-			_ = queue.Enqueue(pe, "")
+	if err := s.serveV2Session(ctx, conn, session, queue); err != nil {
+		closeReason = err.Error()
+		if s.Logger != nil {
+			s.Logger.Warn(ctx, "control.v2 会话结束", slog.String("node_id", session.NodeID),
+				slog.String("session_id", session.ID), slog.String("error", closeReason))
 		}
 	}
 }
@@ -228,5 +201,6 @@ func runV2Writer(ctx context.Context, conn *websocket.Conn, queue *controlv2.Que
 		if err := writeV2Envelope(ctx, conn, envelope); err != nil {
 			return err
 		}
+		queue.ReplaySent(envelope.ID)
 	}
 }
