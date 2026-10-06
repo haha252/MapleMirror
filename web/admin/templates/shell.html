@@ -38,6 +38,7 @@
 <link rel="stylesheet" href="/static/admin/admin-visual.css">
 <link rel="stylesheet" href="/static/admin/admin-responsive.css">
 {{if eq .Page.ID "nodes"}}<link rel="stylesheet" href="/static/admin/admin-nodes.css"><link rel="stylesheet" href="/static/admin/admin-nodes-responsive.css">{{end}}
+<link rel="stylesheet" href="/static/admin/admin-workspace.css">
 </head>
 <body class="page-admin" data-admin-page="{{.Page.ID}}">
 <div id="page-loading-bar" class="page-loading-bar" aria-hidden="true"></div>
@@ -67,8 +68,9 @@
 </header>
 <main class="site-main admin-main">
   <div class="page-title-row">
-    <div>
+    <div class="ws-page-name">
       <h1>{{.Page.Title}}</h1>
+      {{if eq .Page.ID "security"}}<nav class="ws-tabs" aria-label="安全功能" role="tablist"><button type="button" role="tab" data-security-view="blocks" aria-selected="true">封禁</button><button type="button" role="tab" data-security-view="audit" aria-selected="false">审计</button><button type="button" role="tab" data-security-view="downloads" aria-selected="false">IP 内容查询</button></nav>{{end}}
       <p class="page-subtitle">{{.Page.Subtitle}}</p>
     </div>
     {{if eq .Page.ID "nodes"}}
@@ -79,6 +81,10 @@
       <button id="pairing-create" class="admin-secondary" type="button">创建配对码</button>
       <div id="pairing-code" class="admin-status pairing-code-chip" hidden></div>
     </div>
+    {{else if eq .Page.ID "project-edit"}}
+    <div class="page-title-actions"><span id="project-edit-summary" class="muted">加载中</span><a class="admin-secondary" href="/admin/projects">返回项目</a><button id="project-save" class="admin-primary" type="button">保存项目</button></div>
+    {{else if ne .Page.ID "node-management"}}
+    <div class="page-title-actions"><span id="workspace-refresh-state" class="muted">状态刷新 · 1 秒</span><button id="workspace-refresh-pause" class="admin-secondary" type="button" aria-pressed="false">暂停</button><button id="workspace-refresh-now" class="admin-secondary" type="button">刷新</button>{{if eq .Page.ID "projects"}}<button id="indexnow-submit" class="admin-secondary" type="button" title="将全量公开 URL 加入 IndexNow 提交队列">提交 IndexNow</button><a id="project-add" class="admin-primary admin-link-button" href="/admin/projects/new">新增项目</a>{{end}}{{if eq .Page.ID "overview"}}<button id="overview-open-attention" class="admin-secondary ws-close" type="button">待处理事项</button>{{end}}</div>
     {{end}}
   </div>
   <div id="admin-status" class="status" hidden></div>
@@ -124,7 +130,9 @@
 <script src="/static/admin/admin-labels.js" defer></script>
 <script src="/static/admin/admin-controls.js" defer></script>
 <script src="/static/admin/admin-pairing.js" defer></script>
+<script src="/static/admin/admin-workspace.js" defer></script>
 {{if eq .Page.ID "sync"}}<script src="/static/admin/sync-cards.js" defer></script>{{end}}
+{{if eq .Page.ID "projects"}}<script src="/static/admin/project-developer.js" defer></script>{{end}}
 {{if eq .Page.ID "security"}}<script src="/static/admin/download-history.js" defer></script>{{end}}
 {{if eq .Page.ID "nodes"}}<script src="/static/admin/node-inspection.js" defer></script><script src="/static/admin/node-list.js" defer></script><script src="/static/admin/node-detail.js" defer></script><script src="/static/admin/node-detail-window.js" defer></script>{{end}}
 <script src="/static/admin/{{.Page.Script}}" defer></script>

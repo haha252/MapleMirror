@@ -45,14 +45,17 @@ func TestIndexNowAPIRequiresOwner(t *testing.T) {
 	}
 }
 
-func TestOverviewContainsIndexNowTriggerButton(t *testing.T) {
+func TestIndexNowTriggerIsOnProjectsPage(t *testing.T) {
 	server, db := newTestServer(t)
 	t.Cleanup(func() { _ = db.Close() })
-	req := withAdminUser(httptest.NewRequest(http.MethodGet, "/admin/", nil))
-	rec := httptest.NewRecorder()
-	server.shell(rec, req)
-	if !strings.Contains(rec.Body.String(), `id="indexnow-submit"`) {
-		t.Fatalf("overview page missing IndexNow trigger button: %s", rec.Body.String())
+	for _, path := range []string{"/admin/", "/admin/projects"} {
+		req := withAdminUser(httptest.NewRequest(http.MethodGet, path, nil))
+		rec := httptest.NewRecorder()
+		server.shell(rec, req)
+		present := strings.Contains(rec.Body.String(), `id="indexnow-submit"`)
+		if present != (path == "/admin/projects") {
+			t.Fatalf("IndexNow button placement mismatch on %s", path)
+		}
 	}
 }
 

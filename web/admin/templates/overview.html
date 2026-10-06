@@ -1,26 +1,16 @@
 {{define "overview"}}
-<section class="overview-top">
-  <div class="overview-metrics" aria-label="关键指标">
-    <article class="panel-card admin-metric"><span>今日授权</span><strong id="metric-auth">0</strong></article>
-    <article class="panel-card admin-metric"><span>今日传输</span><strong id="metric-started">0</strong></article>
-    <article class="panel-card admin-metric"><span>今日流量</span><strong id="metric-daily">0 B</strong></article>
-    <article class="panel-card admin-metric"><span>累计流量</span><strong id="metric-total">0 B</strong></article>
+<section class="ws-metrics" aria-label="运行汇总">
+  <article class="panel-card ws-metric"><span>在线节点</span><strong id="metric-online">—</strong></article>
+  <article class="panel-card ws-metric"><span>可下载节点</span><strong id="metric-download">—</strong></article>
+  <article class="panel-card ws-metric"><span>镜像有效吞吐</span><strong id="metric-throughput">—</strong></article>
+  <article class="panel-card ws-metric"><span>今日公网流量</span><strong id="metric-daily">—</strong></article>
+  <article class="panel-card ws-metric"><span>待处理事项</span><strong id="metric-attention">—</strong></article>
+</section>
+<section class="ws-workspace ws-overview">
+  <div class="ws-overview-stack ws-left">
+    <section class="panel-card ws-panel ws-overview-nodes"><div class="ws-head"><h2>节点状态</h2><div class="ws-head-actions"><span id="overview-updated" class="muted">最近更新 —</span><a href="/admin/nodes">查看全部节点 →</a></div></div><div id="overview-nodes" class="ws-scroll"><div class="ws-empty">正在读取节点…</div></div></section>
+    <section class="panel-card ws-panel"><div class="ws-head"><h2>同步概况</h2><a href="/admin/sync">进入同步 →</a></div><div id="overview-sync" class="ws-summary-grid ws-summary-grid--sync"></div></section>
   </div>
-  <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>节点摘要</h2><a class="admin-secondary" href="/admin/nodes">查看节点</a></div>
-    <div id="node-summary-grid" class="summary-grid"></div>
-  </article>
-</section>
-<section class="admin-extra">
-  <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><div><h2>需要关注</h2><p class="muted">只显示离线节点和失败扫描；同步中、对账中不会被列为异常。</p></div></div>
-    <div id="overview-attention" class="admin-record-list"></div>
-  </article>
-</section>
-<section class="admin-extra">
-  <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>IndexNow</h2><button id="indexnow-submit" class="admin-primary" type="button">立即提交全量 URL</button></div>
-    <p class="muted">页面变化会合并 5 分钟后自动通知；手动提交会立即排队发送首页、公共页面和全部启用项目页。</p>
-  </article>
+  {{template "workspace-detail" .}}
 </section>
 {{end}}

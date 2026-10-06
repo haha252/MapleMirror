@@ -1,17 +1,14 @@
 {{define "projects"}}
-<section class="admin-toolbar">
-  <a id="project-add" class="admin-primary admin-link-button" href="/admin/projects/new">新增项目</a>
-  <button id="projects-save" class="admin-secondary" type="button">保存全部项目</button>
-  <span id="projects-summary" class="muted">加载中</span>
+<section id="projects-metrics" class="ws-metrics" aria-label="项目汇总"></section>
+<section class="ws-workspace">
+  <section class="panel-card ws-panel ws-left"><div class="ws-head"><h2>项目列表</h2><span id="projects-updated" class="muted">最近更新 —</span></div><div class="ws-controls"><input id="projects-search" type="search" placeholder="搜索项目、仓库或标签" aria-label="搜索项目"><select id="projects-filter" aria-label="筛选项目"><option value="all">全部项目</option><option value="enabled">已启用</option><option value="disabled">已停用</option><option value="failed">扫描失败</option></select><span id="projects-summary" class="muted">加载中</span></div><div id="project-grid" class="ws-scroll"></div></section>
+  {{template "workspace-detail" .}}
 </section>
-<section id="project-grid" class="project-grid admin-project-grid"></section>
 {{end}}
 
 {{define "project-edit"}}
-<section class="admin-toolbar">
-  <a class="admin-secondary" href="/admin/projects">返回项目列表</a>
-  <button id="project-save" class="admin-primary" type="button">保存项目</button>
-  <span id="project-edit-summary" class="muted">加载中</span>
+<section class="ws-workspace ws-editor" id="workspace-editor">
+  <nav class="panel-card ws-editor-nav" aria-label="项目配置分类"><a href="#editor-basic" aria-current="true">基本信息</a><a href="#editor-policy">运行与保留</a><a href="#editor-selectors">下载选择器</a><a href="#editor-architecture">架构识别</a><a href="#editor-system">系统识别</a><a href="#editor-include">包含规则</a><a href="#editor-exclude">排除规则</a></nav>
+  <section class="panel-card ws-panel"><div id="project-editor" class="ws-scroll ws-detail-body project-editor-page"></div></section>
 </section>
-<section id="project-editor" class="project-editor-page"></section>
 {{end}}

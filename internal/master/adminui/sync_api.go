@@ -1,6 +1,9 @@
 package adminui
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 func (s *Server) latestScanAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -22,21 +25,40 @@ func (s *Server) syncTasksAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "接口不存在"})
 		return
 	}
-	nodeID := r.URL.Query().Get("node_id")
-	if nodeID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "node_id 不能为空"})
-		return
-	}
 	page := paginationFrom(r, 20)
-	where := " WHERE t.node_id = ?"
-	order := " ORDER BY t.created_at DESC"
+	where, args := " WHERE 1 = 1", []any{}
+	if nodeID := r.URL.Query().Get("node_id"); nodeID != "" {
+		where += " AND t.node_id = ?"
+		args = append(args, nodeID)
+	}
+	order := " ORDER BY t.created_at DESC, t.id DESC"
 	if r.URL.Query().Get("active") == "1" {
 		where += " AND t.state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')"
-		order = " ORDER BY CASE t.state WHEN 'failed' THEN 0 WHEN 'retry_wait' THEN 1 ELSE 2 END, t.updated_at DESC, t.created_at DESC"
+		order = " ORDER BY CASE t.state WHEN 'failed' THEN 0 WHEN 'retry_wait' THEN 1 ELSE 2 END, t.updated_at DESC, t.created_at DESC, t.id DESC"
+	} else if state := r.URL.Query().Get("state"); state != "" {
+		switch state {
+		case "pending", "sent", "running", "retry_wait", "failed", "succeeded", "cancelled":
+			where += " AND t.state = ?"
+			args = append(args, state)
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "未知任务状态"})
+			return
+		}
+	}
+	joins := " FROM node_tasks t LEFT JOIN assets a ON a.id = t.asset_id " +
+		"LEFT JOIN releases r ON r.id = a.release_id LEFT JOIN projects p ON p.id = r.project_id " +
+		"LEFT JOIN nodes n ON n.id = t.node_id "
+	countFrom := " FROM node_tasks t"
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+		countFrom = joins
+		where += " AND (instr(lower(COALESCE(a.file_name, '')), lower(?)) > 0 OR " +
+			"instr(lower(COALESCE(p.name, r.project_id, '')), lower(?)) > 0 OR " +
+			"instr(lower(COALESCE(n.public_name, t.node_id)), lower(?)) > 0 OR t.id = ?)"
+		args = append(args, q, q, q, q)
 	}
 	var total int
 	if err := s.repo.DB.QueryRowContext(r.Context(),
-		"SELECT COUNT(*) FROM node_tasks t"+where, nodeID).Scan(&total); err != nil {
+		"SELECT COUNT(*)"+countFrom+where, args...).Scan(&total); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务查询失败"})
 		return
 	}
@@ -46,13 +68,9 @@ func (s *Server) syncTasksAPI(w http.ResponseWriter, r *http.Request) {
 		"COALESCE(t.lease_expires_at, ''), COALESCE(a.file_name, ''), " +
 		"COALESCE(a.architecture, ''), COALESCE(a.system, ''), COALESCE(a.size_bytes, 0), " +
 		"COALESCE(r.project_id, ''), COALESCE(r.tag_name, ''), COALESCE(p.name, ''), " +
-		"COALESCE(n.public_name, '') FROM node_tasks t " +
-		"LEFT JOIN assets a ON a.id = t.asset_id " +
-		"LEFT JOIN releases r ON r.id = a.release_id " +
-		"LEFT JOIN projects p ON p.id = r.project_id " +
-		"LEFT JOIN nodes n ON n.id = t.node_id " +
-		where + order + " LIMIT ? OFFSET ?"
-	rows, err := s.repo.DB.QueryContext(r.Context(), query, nodeID, page.PageSize, page.offset())
+		"COALESCE(n.public_name, '')" + joins + where + order + " LIMIT ? OFFSET ?"
+	queryArgs := append(append([]any{}, args...), page.PageSize, page.offset())
+	rows, err := s.repo.DB.QueryContext(r.Context(), query, queryArgs...)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "同步任务查询失败"})
 		return

@@ -82,6 +82,15 @@ func TestProjectsStaticIncludesDeveloperAPIControls(t *testing.T) {
 		t.Fatalf("projects.js status=%d", rec.Code)
 	}
 	body := rec.Body.String()
+	if !strings.Contains(body, "adminProjectDeveloper") {
+		t.Fatal("projects.js must initialize the developer API controls")
+	}
+	helper := httptest.NewRecorder()
+	server.Handler().ServeHTTP(helper, httptest.NewRequest(http.MethodGet, "/static/admin/project-developer.js", nil))
+	if helper.Code != http.StatusOK {
+		t.Fatalf("project-developer.js status=%d", helper.Code)
+	}
+	body += helper.Body.String()
 	for _, want := range []string{
 		"开发者 API", "Developer Sync API", "/developer-api/token",
 		"重置 Token", "今日使用", "Authorization: Bearer",

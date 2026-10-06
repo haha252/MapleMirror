@@ -1,56 +1,16 @@
 {{define "security"}}
-<section class="security-overview">
-  <article class="panel-card admin-panel security-summary-card">
-    <div class="admin-panel__head"><div><h2>安全概览</h2><p class="muted">只突出需要处理的事项，正常状态不制造告警。</p></div><button id="security-refresh" class="admin-secondary" type="button">刷新</button></div>
-    <div id="security-summary" class="security-summary">加载中...</div>
-  </article>
-  <article class="panel-card admin-panel">
-    <div class="admin-panel__head"><h2>需要关注</h2></div>
-    <div id="security-attention" class="admin-record-list"></div>
-  </article>
+<section id="security-summary" class="ws-metrics" aria-label="安全汇总"></section>
+<section class="ws-workspace">
+  <section class="panel-card ws-panel ws-left">
+    <div class="ws-head"><h2 id="security-list-title">当前封禁</h2><span id="security-updated" class="muted">最近更新 —</span></div>
+    <section id="security-blocks" class="ws-mode ws-panel">
+      <div class="ws-controls"><input id="blocks-search" type="search" placeholder="搜索 IP 或前缀" aria-label="搜索封禁"><button id="blocks-search-button" class="admin-secondary">搜索</button><button id="blocks-search-clear" class="admin-secondary">清空</button><button id="blocks-delete-selected" class="admin-secondary">解除选中</button></div>
+      <div class="ws-controls"><label><input id="blocks-check-all" type="checkbox"> 选择本页</label><span id="blocks-search-scope" class="muted">全部活跃封禁</span><button id="block-create-open" class="admin-secondary">添加封禁</button></div>
+      <div id="blocks-list" class="ws-scroll"></div><div id="blocks-pager" class="ws-pager"></div>
+    </section>
+    <section id="security-audit" class="ws-mode ws-panel" hidden><div class="ws-controls"><input id="audit-search" type="search" placeholder="筛选本页操作、目标和结果" aria-label="筛选本页审计记录"><span class="muted">最近管理活动</span></div><div id="audit-list" class="ws-scroll"></div><div id="audit-pager" class="ws-pager"></div></section>
+    <section id="security-downloads" class="ws-mode ws-panel" hidden><div class="ws-controls"><input id="download-history-ip" type="text" placeholder="单个 IPv4 / IPv6" aria-label="查询 IP"><button id="download-history-query" class="admin-secondary">查询</button><button id="download-history-clear" class="admin-secondary">清空</button></div><div id="download-history-summary" class="ws-controls"></div><div id="download-history-list" class="ws-scroll"></div><div id="download-history-pager" class="ws-pager"></div></section>
+  </section>
+  {{template "workspace-detail" .}}
 </section>
-
-<section class="panel-card admin-panel admin-extra">
-  <div class="admin-panel__head"><div><h2>当前封禁</h2><p class="muted">默认显示原因、范围与到期时间；支持按单个 IP 或前缀快速定位。</p></div><button id="blocks-delete-selected" class="admin-secondary" type="button">解除选中</button></div>
-  <div class="security-query security-block-search">
-    <input id="blocks-search" type="text" inputmode="text" placeholder="搜索 IP，例如 192.0.2.10">
-    <button id="blocks-search-button" class="admin-secondary" type="button">搜索</button>
-    <button id="blocks-search-clear" class="admin-secondary" type="button">清空</button>
-    <span id="blocks-search-scope" class="muted">显示全部活跃封禁</span>
-  </div>
-  <details class="security-create">
-    <summary>添加手动封禁</summary>
-    <div class="security-form">
-      <label class="admin-field"><span>封禁类型</span><select id="block-kind" class="admin-select"><option value="client">公开下载客户端</option><option value="admin">管理登录来源</option></select></label>
-      <label class="admin-field"><span>IP / 前缀</span><input id="block-key" type="text" placeholder="单个 IP；下载客户端也支持 IPv4 /24"></label>
-      <label class="admin-field"><span>原因</span><input id="block-reason" type="text" placeholder="例如：持续异常请求"></label>
-      <label class="admin-field security-duration"><span>时长</span><input id="block-duration" type="text" value="168h"></label>
-      <div class="security-form-actions"><button id="block-create" class="admin-primary" type="button">确认添加</button></div>
-    </div>
-  </details>
-  <div class="security-select-all"><label><input id="blocks-check-all" type="checkbox"> 选择本页全部</label><span class="muted">封禁后尝试次数最多延迟约 30 秒。</span></div>
-  <div id="blocks-list" class="admin-record-list"></div>
-  <div id="blocks-pager" class="admin-pager"></div>
-</section>
-
-<section class="panel-card admin-panel admin-extra">
-  <div class="admin-panel__head"><div><h2>最近管理活动</h2><p class="muted">优先显示人类可读的操作与目标；ID 仅在详情中保留。</p></div></div>
-  <div id="audit-list" class="admin-record-list"></div>
-  <div id="audit-pager" class="admin-pager"></div>
-</section>
-
-<details class="panel-card admin-panel admin-extra security-advanced">
-  <summary><strong>高级排障</strong><span class="muted">按 IP 查询近期令牌签发与实际下载流量</span></summary>
-  <div class="security-advanced__body">
-    <div class="security-query download-history-filter">
-      <input id="download-history-ip" type="text" inputmode="text" placeholder="单个 IPv4 / IPv6，例如 192.0.2.10">
-      <button id="download-history-query" class="admin-secondary" type="button">查询</button>
-      <button id="download-history-clear" class="admin-secondary" type="button">清空</button>
-      <span class="muted">每条记录代表一次下载令牌签发；Range 和重试流量会合并到同一条。</span>
-    </div>
-    <div id="download-history-summary" class="download-history-summary"></div>
-    <div id="download-history-list" class="admin-record-list"></div>
-    <div id="download-history-pager" class="admin-pager"></div>
-  </div>
-</details>
 {{end}}

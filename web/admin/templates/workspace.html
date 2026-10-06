@@ -1,0 +1,8 @@
+{{define "workspace-detail"}}
+<div id="workspace-backdrop" class="ws-backdrop"></div>
+<aside id="workspace-detail-panel" class="panel-card ws-panel ws-detail-panel" aria-label="详情">
+  <div class="ws-head"><h2 id="workspace-detail-title">详情</h2><button id="workspace-detail-close" class="admin-secondary ws-close" type="button" aria-label="关闭详情">关闭</button></div>
+  <div id="workspace-detail-actions" class="ws-detail-toolbar ws-actions"></div>
+  <div id="workspace-detail-body" class="ws-scroll ws-detail-body">{{if eq .Page.ID "overview"}}<div class="ws-empty">正在读取待处理事项…</div>{{else}}<div class="ws-empty">在左侧选择记录</div>{{end}}</div>
+</aside>
+{{end}}

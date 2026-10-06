@@ -102,3 +102,7 @@ button.nodes-metric:hover, button.nodes-metric[aria-pressed="true"] { border-col
 .nodes-detail-scroll .admin-tech-details .nodes-detail-kv { margin-top: 12px; }
 .nodes-detail-backdrop { display: none; }
 .nodes-detail-panel [hidden], .nodes-detail-backdrop[hidden] { display: none; }
+
+.nodes-detail-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.nodes-detail-title-row h2 { margin: 0; font-size: 18px; overflow-wrap: anywhere; min-width: 0; }
+.nodes-detail-title-row .nodes-detail-actions { margin: 0 0 0 auto; justify-content: flex-end; }

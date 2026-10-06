@@ -1,14 +1,14 @@
 (function () {
   var a = window.admin;
   if (!a || a.page() !== "projects") return;
-  var projects = [], developerOpen = "", moreOpen = "", revealedTokens = {};
+  var projects = [];
 
   function val(p, name, fallback) {
     return p[name] != null ? p[name] : p[name.charAt(0).toLowerCase() + name.slice(1)] || fallback;
   }
 
   function normalize(p) {
-    return {
+    return Object.assign({}, p, {
       ID: val(p, "ID", ""), Name: val(p, "Name", ""), Repository: val(p, "Repository", ""),
       IconPath: val(p, "IconPath", ""), Tags: val(p, "Tags", {}) || {},
       Enabled: !!val(p, "Enabled", false),
@@ -18,68 +18,56 @@
       AssetInclude: val(p, "AssetInclude", []) || [], AssetExclude: val(p, "AssetExclude", []) || [],
       ArchitectureMatchEnabled: !!val(p, "ArchitectureMatchEnabled", false),
       SystemMatchEnabled: !!val(p, "SystemMatchEnabled", false)
-    };
+    });
   }
 
-  function projectCard(p) {
-    var devOpen = developerOpen === p.ID, extraOpen = moreOpen === p.ID;
-    return '<article class="panel-card project-card admin-project-card">' +
-      '<div class="project-card__meta"><img class="project-card__icon" src="/static/project-icons/' +
-      encodeURIComponent(p.ID) + '" alt=""><div class="project-card__title"><h2>' +
-      a.esc(p.Name || p.ID) + '</h2><p class="project-repository">' + a.esc(p.Repository) +
-      '</p></div></div><div class="project-card__quick">' + a.badge(p.Enabled ? "已启用" : "已禁用") +
-      '<span>保留 <strong>' + a.esc(p.RetainVersions) + '</strong> 个版本</span><span>' +
-      (p.IncludePrerelease ? "包含预发布" : "仅稳定版") + '</span></div>' +
-      '<div class="project-card__actions"><div class="admin-actions">' +
-      '<a class="admin-secondary admin-link-button" href="/admin/projects/edit?id=' + encodeURIComponent(p.ID) +
-      '">修改</a><button class="admin-secondary" data-project-developer="' + a.esc(p.ID) +
-      '" aria-expanded="' + devOpen + '">开发者 API</button><button class="admin-secondary" data-project-more="' +
-      a.esc(p.ID) + '" aria-expanded="' + extraOpen + '">' + (extraOpen ? "收起" : "更多") +
-      '</button></div></div><div class="project-card__more"' + (extraOpen ? "" : " hidden") + '>' +
-      '<div class="admin-record__detail-grid">' +
-      detail("下载倍率", "×" + p.DownloadMultiplier) +
-      detail("包含规则", (p.AssetInclude || []).length + " 条") +
-      detail("排除规则", (p.AssetExclude || []).length + " 条") +
-      detail("架构识别", p.ArchitectureMatchEnabled ? "启用" : "关闭") +
-      detail("系统识别", p.SystemMatchEnabled ? "启用" : "关闭") + '</div>' +
-      '<div class="admin-record__actions admin-record__management">' +
-      '<button class="admin-secondary" data-project-toggle="' + a.esc(p.ID) + '">' +
-      (p.Enabled ? "禁用项目" : "启用项目") + '</button><button class="admin-secondary" data-project-reset="' +
-      a.esc(p.ID) + '">重置派生数据</button><button class="admin-secondary" data-project-version-reset="' +
-      a.esc(p.ID) + '">重置版本状态</button><button class="admin-secondary admin-danger" data-project-delete="' +
-      a.esc(p.ID) + '">删除项目</button></div><details class="admin-tech-details"><summary>显示技术信息</summary>' +
-      a.compactKv({"项目 ID": p.ID}, "detail-plain") + '</details></div>' +
-      '<div class="project-card__developer" data-developer-panel="' + a.esc(p.ID) + '"' +
-      (devOpen ? "" : " hidden") + '></div></article>';
+  var w = window.adminWorkspace, selected = "", scans = Object.create(null), configAt = 0, saving = false;
+  function rules(items) {
+    return items.length ? items.map(function (r) { return '<p class="ws-note"><code>' + a.esc(val(r, "Pattern", "")) + '</code> · ' + a.esc(val(r, "Type", "glob")) + (val(r, "Required", false) ? ' · 必需' : '') + '</p>'; }).join("") : '<p class="muted">未配置规则</p>';
   }
-
-  function detail(label, value) {
-    return '<div class="admin-record__detail-item"><span>' + a.esc(label) +
-      '</span><strong>' + a.esc(value) + '</strong></div>';
-  }
-
   function renderCards() {
-    var grid = document.getElementById("project-grid");
-    grid.innerHTML = projects.length ? projects.map(projectCard).join("") :
-      '<div class="panel-card admin-panel muted">暂无项目，请新增镜像项目。</div>';
-    a.text("projects-summary", projects.length + " 个项目");
-    if (developerOpen) loadDeveloperInfo(developerOpen);
+    var query = document.getElementById("projects-search").value.toLowerCase(), filter = document.getElementById("projects-filter").value;
+    var filtered = projects.filter(function (p) {
+      return [p.Name, p.ID, p.Repository, JSON.stringify(p.Tags)].join(" ").toLowerCase().indexOf(query) >= 0 &&
+        (filter === "all" || filter === "enabled" && p.Enabled || filter === "disabled" && !p.Enabled || filter === "failed" && (scans[p.ID] || {}).last_scan_state === "failed");
+    });
+    w.metrics("projects-metrics", [["项目总数", projects.length], ["已启用", projects.filter(function (p) { return p.Enabled; }).length],
+      ["已停用", projects.filter(function (p) { return !p.Enabled; }).length], ["扫描中", Object.keys(scans).filter(function (id) { return scans[id].last_scan_state === "running"; }).length],
+      ["扫描失败", Object.keys(scans).filter(function (id) { return scans[id].last_scan_state === "failed"; }).length]]);
+    w.list("project-grid", filtered, function (p) { return p.ID; }, function (p) {
+      return '<span class="ws-identity"><img class="ws-icon" src="/static/project-icons/' + encodeURIComponent(p.ID) + '" alt=""><span><strong>' + a.esc(p.Name || p.ID) + '</strong><span class="sub">' + a.esc(p.Repository) + '</span></span></span><span>' + a.badge(p.Enabled ? "已启用" : "已停用") + '</span><span class="ws-row-meta">' + a.esc(a.scanStateLabel((scans[p.ID] || {}).last_scan_state)) + '</span>';
+    }, selected);
+    a.text("projects-summary", filtered.length + " / " + projects.length + " 个项目");
+    var index = byID(selected);
+    if (index < 0) { selected = ""; return w.detail("项目详情", "", '<div class="ws-empty">在左侧选择项目</div>'); }
+    var p = projects[index], scan = scans[p.ID] || {}, id = a.esc(p.ID);
+    var actions = '<a class="admin-secondary admin-link-button" href="/admin/projects/edit?id=' + encodeURIComponent(p.ID) + '">编辑项目</a><button class="admin-secondary" data-project-toggle="' + id + '">' + (p.Enabled ? "停用" : "启用") + '</button><button class="admin-primary" data-project-scan="' + id + '"' + (p.Enabled ? '' : ' disabled') + '>立即扫描</button>';
+    var body = w.title(p.Name || p.ID, a.badge(p.Enabled ? "已启用" : "已停用") + a.esc(" · " + p.Repository)) +
+      w.section("运行与同步", w.kv([["扫描状态", a.scanStateLabel(scan.last_scan_state)], ["下次扫描", scan.next_scan_at || "待安排"], ["更新时间", scan.updated_at || "—"]])) +
+      (scan.last_error_message ? '<p class="ws-note ws-note--bad">' + a.esc(scan.last_error_message) + '</p>' : '') +
+      w.section("版本与下载策略", w.kv([["保留版本", p.RetainVersions], ["预发布", p.IncludePrerelease ? "包含" : "排除"], ["下载倍率", "×" + p.DownloadMultiplier], ["包含规则", p.AssetInclude.length + " 条"], ["排除规则", p.AssetExclude.length + " 条"], ["项目 ID", p.ID]])) +
+      w.section("资源筛选规则", w.kv([["架构识别", p.ArchitectureMatchEnabled ? "启用" : "关闭"], ["系统识别", p.SystemMatchEnabled ? "启用" : "关闭"]]) + '<details><summary>包含规则</summary>' + rules(p.AssetInclude) + '</details><details><summary>排除规则</summary>' + rules(p.AssetExclude) + '</details>') +
+      '<details class="ws-section" id="project-developer"><summary>开发者 API</summary><div data-developer-panel="' + id + '"></div></details>' +
+      '<details class="ws-section"><summary>维护操作</summary><div class="ws-actions"><button class="admin-secondary" data-project-reset="' + id + '">重置派生数据</button><button class="admin-secondary" data-project-version-reset="' + id + '">重置版本状态</button><button class="admin-secondary admin-danger" data-project-delete="' + id + '">删除项目</button></div></details>';
+    w.detail("项目详情", actions, body);
+    if (document.getElementById("project-developer").open && !developerPanel(p.ID).innerHTML) { loadDeveloperInfo(p.ID); }
   }
-
-  function saveAll(message) {
-    return a.api("/admin/api/projects", {method: "PUT", body: JSON.stringify({Projects: projects})})
-      .then(function (data) {
-        projects = (data.projects || projects).map(normalize);
-        renderCards();
-        a.setStatus(message || data.message || "项目配置已保存");
-      }).catch(function (err) { a.setStatus(err.message); });
-  }
-
-  function loadProjects() {
+  function saveAll(message, id, remove) {
+    if (saving) return; saving = true;
+    var desired = projects.find(function (p) { return p.ID === id; });
     return a.api("/admin/api/projects").then(function (data) {
-      projects = (data.Projects || data.projects || []).map(normalize);
-      renderCards();
-    }).catch(function (err) { a.setStatus(err.message); });
+      var fresh = data.Projects || data.projects || [], index = fresh.findIndex(function (p) { return val(p, "ID", "") === id; });
+      if (index < 0) throw new Error("项目已被移除，请刷新后重试");
+      if (remove) fresh.splice(index, 1); else fresh[index].Enabled = desired.Enabled;
+      return a.api("/admin/api/projects", {method: "PUT", body: JSON.stringify({Projects: fresh})});
+    }).then(function (data) { configAt = 0; a.setStatus(message || data.message || "已保存"); return loadProjects(); })
+      .catch(function (err) { a.setStatus(err.message); configAt = 0; loadProjects().catch(function () {}); })
+      .then(function () { saving = false; });
+  }
+  function loadProjects() {
+    var requests = [w.read("/admin/api/sync/scans").then(function (data) { scans = Object.create(null); (data.projects || []).forEach(function (s) { scans[s.project_id] = s; }); })];
+    if (Date.now() - configAt >= 30000) requests.push(w.read("/admin/api/projects").then(function (data) { projects = (data.Projects || data.projects || []).map(normalize); configAt = Date.now(); }));
+    return Promise.all(requests).then(function () { renderCards(); w.updated("projects-updated"); });
   }
 
   function byID(id) {
@@ -92,69 +80,8 @@
     return index >= 0 ? (projects[index].Name || id) : id;
   }
 
-  function developerPanel(id) {
-    var panels = document.querySelectorAll("[data-developer-panel]");
-    for (var i = 0; i < panels.length; i++) {
-      if (panels[i].getAttribute("data-developer-panel") === id) return panels[i];
-    }
-    return null;
-  }
-
-  function loadDeveloperInfo(id) {
-    var panel = developerPanel(id);
-    if (!panel || panel.hidden) return;
-    panel.innerHTML = '<p class="muted">正在读取 Developer API 信息...</p>';
-    a.api("/admin/api/projects/" + encodeURIComponent(id) + "/developer-api")
-      .then(function (info) { if (developerOpen === id) renderDeveloperInfo(id, info); })
-      .catch(function (err) {
-        if (developerOpen === id && panel) panel.innerHTML = '<p class="muted">' + a.esc(err.message) + '</p>';
-      });
-  }
-
-  function renderDeveloperInfo(id, info) {
-    var panel = developerPanel(id);
-    if (!panel) return;
-    var index = byID(id), project = index >= 0 ? projects[index] : null;
-    var token = revealedTokens[id] || "", placeholder = token || "<YOUR_TOKEN>";
-    var curl = 'curl -X POST -H "Authorization: Bearer ' + placeholder + '" "' + (info.endpoint || "") + '"';
-    var state = info.token_configured ? "已启用 · " + (info.token_prefix || "") + "••••" : "尚未生成 Token";
-    var disabled = project && !project.Enabled ?
-      '<p class="project-developer__notice">项目当前已禁用：Token 会保留，但外部更新 API 暂停接受触发。</p>' : "";
-    var reveal = token ? '<div class="project-developer__token"><span>本次生成的完整 Token（服务器不会再次返回）</span><code>' +
-      a.esc(token) + '</code><button class="admin-secondary" data-copy-value="' + a.esc(token) + '">复制 Token</button></div>' : "";
-    panel.innerHTML = '<div class="project-developer__head"><strong>Developer Sync API</strong><span>' +
-      a.esc(state) + '</span></div><div class="project-developer__endpoint"><span>POST</span><code>' +
-      a.esc(info.endpoint || "") + '</code></div><div class="project-developer__usage"><span>今日使用 <strong>' +
-      a.esc(info.used_today || 0) + " / " + a.esc(info.daily_limit || 100) + '</strong></span><span>剩余 <strong>' +
-      a.esc(info.remaining_today == null ? 100 : info.remaining_today) + '</strong></span><span>最近调用 <strong>' +
-      a.esc(info.last_used_at || "暂无") + '</strong></span></div>' + disabled + reveal +
-      '<div class="admin-actions project-developer__actions"><button class="admin-secondary" data-copy-value="' +
-      a.esc(info.endpoint || "") + '">复制 API</button><button class="admin-secondary" data-copy-value="' +
-      a.esc(curl) + '">复制调用示例</button><button class="admin-secondary ' +
-      (info.token_configured ? "admin-danger" : "admin-primary") + '" data-developer-token="' + a.esc(id) +
-      '" data-token-exists="' + (!!info.token_configured) + '">' +
-      (info.token_configured ? "重置 Token" : "生成 Token") + '</button></div>';
-  }
-
-  function rotateDeveloperToken(id, exists) {
-    var run = function () {
-      a.api("/admin/api/projects/" + encodeURIComponent(id) + "/developer-api/token", {method: "POST", body: "{}"})
-        .then(function (data) {
-          revealedTokens[id] = data.token || "";
-          renderDeveloperInfo(id, data.developer_api || {});
-          a.setStatus("Developer API Token 已生成，请立即复制并妥善保存");
-        }).catch(function (err) { a.setStatus(err.message); });
-    };
-    if (!exists) return run();
-    a.confirmAction("重置 Developer API Token",
-      "旧 Token 将立即失效，使用旧 Token 的 GitHub Actions 或 CI 必须同步更新。确认重置？", run);
-  }
-
-  function copyValue(value) {
-    navigator.clipboard.writeText(value || "").then(function () {
-      a.setStatus("已复制到剪贴板");
-    }).catch(function () { a.setStatus("复制失败，请手动复制"); });
-  }
+  var developer = window.adminProjectDeveloper(function (id) { return projects[byID(id)]; }, function (id) { return selected === id; });
+  var developerPanel = developer.panel, loadDeveloperInfo = developer.load, rotateDeveloperToken = developer.rotate, copyValue = developer.copy;
 
   function resetProject(id) {
     a.confirmAction("重置项目", "确认清空「" + projectName(id) + "」的派生数据并重新扫描？", function () {
@@ -174,18 +101,12 @@
   }
 
   document.addEventListener("click", function (event) {
-    var developer = event.target.closest("[data-project-developer]");
-    if (developer) {
-      var id = developer.getAttribute("data-project-developer");
-      developerOpen = developerOpen === id ? "" : id;
-      return renderCards();
-    }
-    var more = event.target.closest("[data-project-more]");
-    if (more) {
-      var moreID = more.getAttribute("data-project-more");
-      moreOpen = moreOpen === moreID ? "" : moreID;
-      return renderCards();
-    }
+    var row = event.target.closest("#project-grid [data-ws-key]");
+    if (row) { selected = row.getAttribute("data-ws-key"); renderCards(); w.open(); }
+    var scan = event.target.closest("[data-project-scan]");
+    if (scan) return a.confirmAction("立即扫描", "确认扫描当前项目？", function () {
+      a.api("/admin/api/sync/scans", {method: "POST", body: JSON.stringify({project_id: scan.getAttribute("data-project-scan")})}).then(function (data) { a.setStatus(data.message || "扫描已创建"); refresh(); }).catch(function (err) { a.setStatus(err.message); });
+    });
     var token = event.target.closest("[data-developer-token]");
     if (token) return rotateDeveloperToken(token.getAttribute("data-developer-token"),
       token.getAttribute("data-token-exists") === "true");
@@ -193,9 +114,10 @@
     if (copy) return copyValue(copy.getAttribute("data-copy-value"));
     var toggle = event.target.closest("[data-project-toggle]");
     if (toggle) {
+      if (saving) return;
       var ti = byID(toggle.getAttribute("data-project-toggle"));
       projects[ti].Enabled = !projects[ti].Enabled;
-      return saveAll("项目启用状态已保存");
+      return saveAll("项目启用状态已保存", projects[ti].ID);
     }
     var reset = event.target.closest("[data-project-reset]");
     if (reset) return resetProject(reset.getAttribute("data-project-reset"));
@@ -206,16 +128,26 @@
       var deleteID = del.getAttribute("data-project-delete");
       return a.confirmAction("删除项目", "确认删除「" + projectName(deleteID) +
         "」？历史统计不会清空，Developer API Token 将被吊销。", function () {
-        projects.splice(byID(deleteID), 1);
-        if (developerOpen === deleteID) developerOpen = "";
-        if (moreOpen === deleteID) moreOpen = "";
-        delete revealedTokens[deleteID];
-        saveAll("项目定义已删除");
+        if (saving) return;
+        saveAll("项目定义已删除", deleteID, true);
       });
     }
   });
 
-  document.getElementById("projects-save").addEventListener("click", function () { saveAll(); });
-  loadProjects();
-  a.autoRefresh(loadProjects, 30000);
+  document.getElementById("workspace-detail-body").addEventListener("toggle", function (event) {
+    if (event.target.id === "project-developer" && event.target.open) { loadDeveloperInfo(selected); }
+  }, true);
+  var indexNow = document.getElementById("indexnow-submit");
+  indexNow.onclick = function () {
+    a.confirmAction("立即提交 IndexNow", "确认立即提交全量公开 URL？", function () {
+      indexNow.disabled = true;
+      a.api("/admin/api/indexnow/submit", {method: "POST", body: "{}"}).then(function (data) {
+        a.setStatus((data.message || "已加入提交队列") + "（新增 " + (data.url_count || 0) + " 条）");
+      }).catch(function (err) { a.setStatus(err.message); }).then(function () { indexNow.disabled = false; });
+    });
+  };
+  document.getElementById("projects-search").oninput = renderCards;
+  document.getElementById("projects-filter").onchange = renderCards;
+  var refresh = w.poll(loadProjects, 1000);
+  document.getElementById("workspace-refresh-now").onclick = function () { configAt = 0; refresh(); };
 })();

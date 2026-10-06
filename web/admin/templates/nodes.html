@@ -23,6 +23,7 @@
   <aside id="nodes-detail-panel" class="panel-card nodes-detail-panel" aria-label="节点详情">
     <div id="nodes-detail-empty" class="nodes-detail-empty muted">在左侧选择节点</div>
     <div id="nodes-detail-head" class="nodes-detail-head" hidden>
+      <div class="nodes-detail-title-row"><h2 id="nodes-detail-name"></h2>
       <div class="nodes-detail-actions">
         <a id="nodes-management" class="admin-secondary admin-link-button" href="/admin/nodes">项目与调度</a>
         <button class="admin-secondary" type="button" data-node-action="sync-reset">重新同步</button>
@@ -30,7 +31,8 @@
         <button class="admin-secondary admin-danger" type="button" data-node-action="delete">删除</button>
         <button id="nodes-detail-close" class="admin-secondary" type="button" aria-label="关闭节点详情">关闭</button>
       </div>
-      <div class="nodes-detail-identity"><h2 id="nodes-detail-name"></h2><span id="nodes-detail-id" class="muted"></span></div>
+      </div>
+      <div class="nodes-detail-identity"><span id="nodes-detail-id" class="muted"></span></div>
       <div id="nodes-detail-state" class="nodes-detail-state"></div>
     </div>
     <div id="nodes-detail-scroll" class="nodes-detail-scroll" hidden>

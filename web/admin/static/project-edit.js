@@ -4,7 +4,7 @@
   var projects = [];
   var originalID = new URLSearchParams(location.search).get("id") || "";
   var currentProject = null;
-  var dirty = false;
+  var dirty = false, saving = false;
 
   function val(p, name, fallback) {
     return p[name] != null ? p[name] : p[name.charAt(0).toLowerCase() + name.slice(1)] || fallback;
@@ -28,7 +28,7 @@
   }
   function normalize(p) {
     var pipeline = val(p, "AssetPipeline", val(p, "asset_pipeline", {})) || {};
-    return {
+    return Object.assign({}, p, {
       ID: val(p, "ID", ""), Name: val(p, "Name", ""), Repository: val(p, "Repository", ""),
       Description: val(p, "Description", ""), HomepageURL: val(p, "HomepageURL", ""),
       IconPath: val(p, "IconPath", ""), Tags: val(p, "Tags", {}) || {},
@@ -48,7 +48,7 @@
       ArchitectureRegex: val(p, "ArchitectureRegex", ""),
       SystemMatchEnabled: !!val(p, "SystemMatchEnabled", false),
       SystemRegex: val(p, "SystemRegex", "")
-    };
+    });
   }
 
   function render(p) {
@@ -70,8 +70,9 @@
       ruleBlock("AssetExclude", "排除规则", p.AssetExclude);
   }
 
+  var sectionIDs = {"基础信息": "basic", "运行策略": "policy", "下载选择器": "selectors", "架构识别": "architecture", "系统识别": "system"};
   function section(title, body) {
-    return '<article class="panel-card admin-panel project-edit-section"><h2>' + title +
+    return '<article id="editor-' + sectionIDs[title] + '" class="panel-card admin-panel project-edit-section"><h2>' + title +
       '</h2><div class="project-form">' + body + "</div></article>";
   }
   function input(name, label, value) {
@@ -87,7 +88,7 @@
     return '<label class="admin-check"><input data-field="' + name + '" type="checkbox"' + (checked ? " checked" : "") + "> " + label + "</label>";
   }
   function ruleBlock(name, title, rows) {
-    return '<article class="panel-card admin-panel project-edit-section"><div class="admin-panel__head"><h2>' +
+    return '<article id="editor-' + (name === "AssetInclude" ? "include" : "exclude") + '" class="panel-card admin-panel project-edit-section"><div class="admin-panel__head"><h2>' +
       title + '</h2><button class="admin-secondary" data-rule-add="' + name + '" type="button">添加规则</button></div>' +
       '<div data-rules="' + name + '">' + (rows || []).map(function (r) { return ruleRow(name, r); }).join("") + "</div></article>";
   }
@@ -107,11 +108,11 @@
     });
     p.AssetInclude = readRules("AssetInclude");
     p.AssetExclude = readRules("AssetExclude");
-    p.AssetPipeline = p.AssetPipeline || {};
-    p.AssetPipeline.Selectors = {
+    p.AssetPipeline = JSON.parse(JSON.stringify(p.AssetPipeline || {}));
+    p.AssetPipeline.Selectors = Object.assign({}, val(p.AssetPipeline, "Selectors", {}), {
       ArchitectureEnabled: !!p.ArchitectureSelectorEnabled,
       SystemEnabled: !!p.SystemSelectorEnabled
-    };
+    });
     delete p.ArchitectureSelectorEnabled;
     delete p.SystemSelectorEnabled;
     return p;
@@ -126,38 +127,63 @@
     }).filter(function (r) { return r.Pattern; });
   }
 
+  function markDirty() { dirty = true; a.text("project-edit-summary", "有未保存修改"); }
+  function setSaving(value) {
+    saving = value;
+    document.querySelectorAll("#project-editor input,#project-editor select,#project-editor textarea,#project-editor button,#project-save").forEach(function (el) { el.disabled = value; });
+    a.text("project-save", value ? "正在保存…" : "保存项目");
+  }
   function save() {
+    if (saving || !currentProject) return;
     var p = readProject();
     if (!p.ID || !p.Name || !p.Repository) return a.setStatus("项目 ID、显示名称和仓库不能为空。");
-    var index = projects.findIndex(function (item) { return item.ID === originalID; });
-    var duplicate = projects.some(function (item, i) { return item.ID === p.ID && i !== index; });
-    if (duplicate) return a.setStatus("项目 ID 不得重复。");
-    if (index >= 0) projects[index] = p; else projects.push(p);
-    a.api("/admin/api/projects", { method: "PUT", body: JSON.stringify({ Projects: projects }) })
-      .then(function () { location.href = "/admin/projects"; })
-      .catch(function (err) { a.setStatus(err.message); });
+    setSaving(true);
+    a.api("/admin/api/projects").then(function (data) {
+      var fresh = data.Projects || data.projects || [];
+      var index = fresh.findIndex(function (item) { return val(item, "ID", "") === originalID; });
+      if (originalID && index < 0) throw new Error("项目已被移除，请保留当前输入并核对配置。");
+      if (fresh.some(function (item, i) { return val(item, "ID", "") === p.ID && i !== index; })) throw new Error("项目 ID 不得重复。");
+      if (index >= 0) fresh[index] = p; else fresh.push(p);
+      return a.api("/admin/api/projects", {method: "PUT", body: JSON.stringify({Projects: fresh})});
+    }).then(function () { dirty = false; location.href = "/admin/projects"; })
+      .catch(function (err) { a.setStatus(err.message); setSaving(false); });
   }
+  window.addEventListener("beforeunload", function (event) { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
 
   document.addEventListener("click", function (event) {
+    var nav = event.target.closest(".ws-editor-nav a");
+    if (nav) {
+      event.preventDefault();
+      document.querySelectorAll(".ws-editor-nav a").forEach(function (el) { el.setAttribute("aria-current", String(el === nav)); });
+      var target = document.querySelector(nav.getAttribute("href")), box = document.getElementById("project-editor");
+      box.scrollTop += target.getBoundingClientRect().top - box.getBoundingClientRect().top - 18;
+      return;
+    }
+    var link = event.target.closest("a[href]");
+    if (link && dirty && !saving && link.getAttribute("href").charAt(0) !== "#" && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault(); a.confirmAction("离开编辑页", "有未保存修改，确认放弃并离开？", function () { dirty = false; location.href = link.href; }); return;
+    }
     var add = event.target.closest("[data-rule-add]");
     if (add) {
-      dirty = true;
+      markDirty();
       document.querySelector('[data-rules="' + add.getAttribute("data-rule-add") + '"]').insertAdjacentHTML("beforeend", ruleRow(add.getAttribute("data-rule-add"), {}));
     }
     if (event.target.closest("[data-rule-remove]")) {
-      dirty = true;
+      markDirty();
       event.target.closest(".rule-row").remove();
     }
   });
-  document.addEventListener("input", function (event) { if (event.target.closest("#project-editor")) dirty = true; });
-  document.addEventListener("change", function (event) { if (event.target.closest("#project-editor")) dirty = true; });
+  document.addEventListener("input", function (event) { if (event.target.closest("#project-editor")) markDirty(); });
+  document.addEventListener("change", function (event) { if (event.target.closest("#project-editor")) markDirty(); });
   document.getElementById("project-save").addEventListener("click", save);
 
   function loadProjects() {
     if (dirty) return Promise.resolve();
     return a.api("/admin/api/projects").then(function (data) {
-      projects = (data.Projects || data.projects || []).map(normalize);
-      var current = projects.find(function (p) { return p.ID === originalID; }) || normalize({});
+      projects = data.Projects || data.projects || [];
+      var found = projects.find(function (p) { return val(p, "ID", "") === originalID; });
+      if (originalID && !found) throw new Error("项目不存在，请返回项目列表。");
+      var current = normalize(found || {});
       currentProject = current;
       a.text("project-edit-summary", originalID ? "正在编辑 " + originalID : "正在新增项目");
       render(current);
@@ -165,5 +191,5 @@
   }
 
   loadProjects();
-  a.autoRefresh(loadProjects, 30000);
+
 })();

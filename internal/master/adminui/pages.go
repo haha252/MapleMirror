@@ -43,7 +43,7 @@ func adminPageForPath(path string) (adminPage, bool) {
 			Subtitle: "按分类维护镜像项目配置", Script: "project-edit.js",
 		},
 		"/admin/security": {
-			ID: "security", Title: "安全管理",
+			ID: "security", Title: "安全中心",
 			Subtitle: "安全概览、封禁与管理审计", Script: "security.js",
 		},
 	}
