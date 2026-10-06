@@ -4,15 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"math"
+	"strings"
 	"time"
 
-	"mirror-server/internal/controlv2"
 	protocolv2 "mirror-server/internal/protocol/v2"
 	"mirror-server/internal/swarm"
 )
 
 func (r Repository) nextV2SyncTask(ctx context.Context, nodeID string) (protocolv2.SyncTask, bool, error) {
+	return r.nextV2SyncTaskForDispatch(ctx, nodeID, nil, true)
+}
+
+func (r Repository) nextV2SyncTaskForDispatch(ctx context.Context, nodeID string, excluded []string, canClaim bool) (protocolv2.SyncTask, bool, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return protocolv2.SyncTask{}, false, err
@@ -23,14 +26,25 @@ func (r Repository) nextV2SyncTask(ctx context.Context, nodeID string) (protocol
 
 	// A sent-but-not-accepted attempt is retransmitted with the same identity.
 	var taskID, attemptID string
+	excludeSQL := ""
+	args := []any{nodeID, nowText}
+	if len(excluded) > 0 {
+		excludeSQL = " AND id NOT IN (" + strings.TrimSuffix(strings.Repeat("?,", len(excluded)), ",") + ")"
+		for _, id := range excluded {
+			args = append(args, id)
+		}
+	}
 	err = tx.QueryRowContext(ctx, `SELECT id, attempt_id FROM node_tasks
 		WHERE node_id = ? AND state = 'sent' AND attempt_id != ''
 		AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
-		ORDER BY updated_at LIMIT 1`, nodeID, nowText).Scan(&taskID, &attemptID)
+		`+excludeSQL+` ORDER BY updated_at LIMIT 1`, args...).Scan(&taskID, &attemptID)
 	if err != nil && err != sql.ErrNoRows {
 		return protocolv2.SyncTask{}, false, err
 	}
 	if err == sql.ErrNoRows {
+		if !canClaim {
+			return protocolv2.SyncTask{}, false, nil
+		}
 		attemptID, err = newID()
 		if err != nil {
 			return protocolv2.SyncTask{}, false, err
@@ -39,6 +53,11 @@ func (r Repository) nextV2SyncTask(ctx context.Context, nodeID string) (protocol
 		capacityBudget := r.v2CapacityBudget(nodeID)
 		maxSwarmAssetBytes := swarm.ProtocolMaxPieceSize * swarm.MaxPieces
 		peerOnly := r.runtime().PeerOnly(nodeID)
+		claimArgs := []any{nodeID, nowText, nowText, capacityBudget, maxSwarmAssetBytes, peerOnly, nowText}
+		for _, id := range excluded {
+			claimArgs = append(claimArgs, id)
+		}
+		claimArgs = append(claimArgs, attemptID, lease, nowText, nodeID)
 		err = tx.QueryRowContext(ctx, `WITH candidate AS (
 			SELECT t.id FROM node_tasks t
 			LEFT JOIN assets a ON a.id = t.asset_id
@@ -54,12 +73,12 @@ func (r Repository) nextV2SyncTask(ctx context.Context, nodeID string) (protocol
 				OR EXISTS(SELECT 1 FROM asset_piece_manifests m WHERE m.asset_id=t.asset_id AND m.status IN ('authoritative','conflict','disabled'))
 				OR (? = 0 AND NOT EXISTS(SELECT 1 FROM node_tasks seed WHERE seed.asset_id=t.asset_id AND seed.id!=t.id
 					AND seed.task_type='asset_download' AND seed.state IN ('sent','running')
-					AND seed.lease_expires_at IS NOT NULL AND seed.lease_expires_at>?)))`+eligibleSyncTaskSQL("t")+`
+					AND seed.lease_expires_at IS NOT NULL AND seed.lease_expires_at>?)))`+eligibleSyncTaskSQL("t")+strings.ReplaceAll(excludeSQL, " AND id", " AND t.id")+`
 			ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1
 		)
 		UPDATE node_tasks SET state='sent', attempt_id=?, lease_expires_at=?, updated_at=?
 		WHERE id=(SELECT id FROM candidate) AND node_id=?
-		RETURNING id`, nodeID, nowText, nowText, capacityBudget, maxSwarmAssetBytes, peerOnly, nowText, attemptID, lease, nowText, nodeID).Scan(&taskID)
+			RETURNING id`, claimArgs...).Scan(&taskID)
 		if err == sql.ErrNoRows {
 			return protocolv2.SyncTask{}, false, nil
 		}
@@ -134,6 +153,11 @@ func loadV2Task(ctx context.Context, q interface {
 }
 
 func (r Repository) acceptV2Task(ctx context.Context, session Session, taskID, attemptID string) (bool, error) {
+	unlock := r.runtime().lockV2Tasks(session.NodeID)
+	defer unlock()
+	if _, err := r.runtime().CurrentSequence(session); err != nil {
+		return false, err
+	}
 	if taskID == "" || attemptID == "" {
 		return false, errors.New("task_id/attempt_id required")
 	}
@@ -171,67 +195,4 @@ func (r Repository) refreshV2TaskLeases(ctx context.Context, nodeID string, acti
 		}
 	}
 	return tx.Commit()
-}
-
-const v2MasterCapacitySafetyBytes int64 = 256 << 20
-
-func (r Repository) v2CapacityBudget(nodeID string) int64 {
-	latest, ok := r.runtime().LatestV2Status(nodeID)
-	if !ok || !latest.Status.AssetFS.Valid || !latest.Status.PartialFS.Valid {
-		return math.MaxInt64
-	}
-	usable := func(fs protocolv2.FilesystemCapacity) int64 {
-		value := fs.AvailableBytes - fs.ReservedBytes - v2MasterCapacitySafetyBytes
-		if value < 0 {
-			return 0
-		}
-		return value
-	}
-	asset := usable(latest.Status.AssetFS)
-	partial := usable(latest.Status.PartialFS)
-	if partial < asset {
-		return partial
-	}
-	return asset
-}
-
-func (r Repository) v2DispatchAllowance(ctx context.Context, nodeID string) int {
-	slots, known := r.runtime().SyncTaskDispatchCapacity(nodeID)
-	if !known || slots <= 0 {
-		return 0
-	}
-	var outstanding int
-	_ = r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks WHERE node_id=?
-		AND state IN ('sent','running') AND lease_expires_at>?`, nodeID,
-		time.Now().UTC().Format(time.RFC3339Nano)).Scan(&outstanding)
-	reflected := 0
-	if latest, ok := r.runtime().LatestV2Status(nodeID); ok {
-		reflected = len(latest.Status.ActiveTasks)
-	}
-	unreflected := outstanding - reflected
-	if unreflected < 0 {
-		unreflected = 0
-	}
-	if slots <= unreflected {
-		return 0
-	}
-	return slots - unreflected
-}
-
-func (s *V2Server) dispatchV2Tasks(ctx context.Context, session Session, queue *controlv2.Queue) error {
-	allowance := s.Repo.v2DispatchAllowance(ctx, session.NodeID)
-	for i := 0; i < allowance; i++ {
-		task, ok, err := s.Repo.nextV2SyncTask(ctx, session.NodeID)
-		if err != nil || !ok {
-			return err
-		}
-		envelope, err := protocolv2.New(protocolv2.TypeSyncTask, protocolv2.StableMessageID(protocolv2.TypeSyncTask, task.TaskID, task.AttemptID), task)
-		if err != nil {
-			return err
-		}
-		if err := queue.Enqueue(envelope, task.TaskID+"/"+task.AttemptID); err != nil {
-			return err
-		}
-	}
-	return nil
 }

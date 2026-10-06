@@ -42,6 +42,7 @@ func (c *Client) handleV2SyncTask(queue *controlv2.Queue, envelope protocolv2.En
 			if err := c.enqueueV2Accepted(queue, envelope.ID, task); err != nil {
 				return err
 			}
+			_ = c.enqueueV2Status(queue)
 			return c.enqueueV2Durable(queue)
 		}
 	}
@@ -54,8 +55,11 @@ func (c *Client) handleV2SyncTask(queue *controlv2.Queue, envelope protocolv2.En
 			return c.enqueueV2Rejected(queue, envelope.ID, task, "previous attempt is still stopping")
 		}
 	}
+	runtime := c.v2Runtime()
+	runtime.capacityMu.Lock()
+	defer runtime.capacityMu.Unlock()
 	if !c.reserveSyncTaskSlot() {
-		return c.enqueueV2Rejected(queue, envelope.ID, task, "sync task slots full")
+		return c.enqueueV2RejectedLocked(queue, envelope.ID, task, "sync task slots full")
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = c.DB.Exec(`INSERT INTO local_sync_tasks
@@ -66,6 +70,7 @@ func (c *Client) handleV2SyncTask(queue *controlv2.Queue, envelope protocolv2.En
 		task.TaskID, task.Asset.AssetID, task.TaskType, now, task.AttemptID)
 	if err != nil {
 		c.releaseSyncTaskSlot()
+		_ = c.enqueueV2StatusLocked(queue)
 		return err
 	}
 	if err := c.enqueueV2Accepted(queue, envelope.ID, task); err != nil {
@@ -76,9 +81,11 @@ func (c *Client) handleV2SyncTask(queue *controlv2.Queue, envelope protocolv2.En
 			TaskID: task.TaskID, AttemptID: task.AttemptID, AssetID: task.Asset.AssetID,
 			Result: "temporary_error", Message: "sync task acceptance could not be queued: " + err.Error(),
 		})
+		_ = c.enqueueV2StatusLocked(queue)
 		return errors.Join(err, persistErr)
 	}
 	c.executeV2TaskAsync(queue, task)
+	_ = c.enqueueV2StatusLocked(queue)
 	return nil
 }
 
@@ -90,10 +97,33 @@ func (c *Client) enqueueV2Accepted(queue *controlv2.Queue, replyTo string, task 
 }
 
 func (c *Client) enqueueV2Rejected(queue *controlv2.Queue, replyTo string, task protocolv2.SyncTask, reason string) error {
+	runtime := c.v2Runtime()
+	runtime.capacityMu.Lock()
+	defer runtime.capacityMu.Unlock()
+	return c.enqueueV2RejectedLocked(queue, replyTo, task, reason)
+}
+
+func (c *Client) enqueueV2RejectedLocked(queue *controlv2.Queue, replyTo string, task protocolv2.SyncTask, reason string) error {
+	code := ""
+	switch reason {
+	case "sync task slots full":
+		code = protocolv2.SyncRejectedSlotsFull
+	case "previous attempt is still stopping":
+		code = protocolv2.SyncRejectedPreviousAttemptStopping
+	case "sync executor unavailable":
+		code = protocolv2.SyncRejectedExecutorUnavailable
+	}
+	runtime := c.v2Runtime()
+	runtime.capacityRevision++
 	id, _ := requestid.New()
 	envelope, _ := protocolv2.Reply(protocolv2.TypeSyncRejected, id, replyTo,
-		protocolv2.SyncRejected{TaskID: task.TaskID, AttemptID: task.AttemptID, Reason: reason})
-	return queue.Enqueue(envelope, task.TaskID+"/"+task.AttemptID)
+		protocolv2.SyncRejected{TaskID: task.TaskID, AttemptID: task.AttemptID, Reason: reason,
+			Code: code, CapacityRevision: runtime.capacityRevision})
+	if err := queue.Enqueue(envelope, task.TaskID+"/"+task.AttemptID); err != nil {
+		return err
+	}
+	_ = c.enqueueV2StatusLocked(queue)
+	return nil
 }
 
 func (c *Client) executeV2TaskAsync(queue *controlv2.Queue, task protocolv2.SyncTask) {
@@ -108,14 +138,6 @@ func (c *Client) executeV2TaskAsync(queue *controlv2.Queue, task protocolv2.Sync
 	runtime.mu.Unlock()
 	go func() {
 		defer cancel()
-		defer func() {
-			c.releaseSyncTaskSlot()
-			close(done)
-			_ = c.enqueueV2Status(queue)
-			if c.EventWake != nil {
-				c.EventWake.Wake()
-			}
-		}()
 		var result protocolv2.SyncResult
 		var manifest *protocolv2.SwarmManifest
 		runErr := c.TaskLimiter.Run(ctx, func() {
@@ -133,6 +155,10 @@ func (c *Client) executeV2TaskAsync(queue *controlv2.Queue, task protocolv2.Sync
 			result = protocolv2.SyncResult{TaskID: task.TaskID, AttemptID: task.AttemptID, AssetID: task.Asset.AssetID, Result: "temporary_error", Message: "sync task cancelled or timed out"}
 			manifest = nil
 		}
+		// Periodic outbox flushing uses the same lock: a freshly persisted
+		// result must not reach the master before the execution releases its slot.
+		runtime.capacityMu.Lock()
+		defer runtime.capacityMu.Unlock()
 		if manifest != nil && result.Result == "succeeded" {
 			if c.Swarm != nil {
 				c.Swarm.SetManifest(*manifest)
@@ -140,20 +166,24 @@ func (c *Client) executeV2TaskAsync(queue *controlv2.Queue, task protocolv2.Sync
 			if err := c.storePendingV2Manifest(*manifest, result); err != nil {
 				result.Result = "temporary_error"
 				result.Message = "persist swarm manifest outbox: " + err.Error()
-				if c.storePendingV2Result(result) == nil {
-					_ = c.enqueuePendingV2Results(queue)
-				}
-			} else {
-				_ = c.enqueuePendingV2Manifests(queue)
+				_ = c.storePendingV2Result(result)
 			}
-		} else if err := c.storePendingV2Result(result); err == nil {
-			_ = c.enqueuePendingV2Results(queue)
+		} else {
+			_ = c.storePendingV2Result(result)
 		}
 		runtime.mu.Lock()
 		if current, ok := runtime.executions[task.TaskID]; ok && current.attemptID == task.AttemptID {
 			delete(runtime.executions, task.TaskID)
 		}
 		runtime.mu.Unlock()
+		c.releaseSyncTaskSlot()
+		close(done)
+		_ = c.enqueuePendingV2ManifestsLocked(queue)
+		_ = c.enqueuePendingV2ResultsLocked(queue)
+		_ = c.enqueueV2StatusLocked(queue)
+		if c.EventWake != nil {
+			c.EventWake.Wake()
+		}
 	}()
 }
 

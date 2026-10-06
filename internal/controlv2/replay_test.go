@@ -96,3 +96,22 @@ func TestReplayQueueFailureDoesNotReserveWindowAndTypesAreIndependent(t *testing
 		t.Fatalf("window error=%v", err)
 	}
 }
+
+func TestReplayAcknowledgmentRemovesQueuedRetry(t *testing.T) {
+	q := NewQueue(8, 1<<20)
+	defer q.Close()
+	e, _ := protocolv2.New(protocolv2.TypeSyncTask, "task-1", struct{}{})
+	if err := q.EnqueueReplay(e, "task-1/attempt-1"); err != nil {
+		t.Fatal(err)
+	}
+	q.Acknowledge(e.ID)
+	if messages, bytes := q.Stats(); messages != 0 || bytes != 0 {
+		t.Fatalf("ack retained retired task: %d %d", messages, bytes)
+	}
+	if err := q.EnqueueReplay(e, "task-1/attempt-1"); err != nil {
+		t.Fatal(err)
+	}
+	if messages, _ := q.Stats(); messages != 1 {
+		t.Fatal("stale coalesce entry retained after ACK")
+	}
+}

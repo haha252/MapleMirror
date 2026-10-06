@@ -20,7 +20,9 @@ func TestV2PeriodicSweepRecoversExpiredLeaseAndLostRetryTimer(t *testing.T) {
 			mustExecControl(t, repo.DB, `INSERT INTO node_tasks
 			 (id,node_id,asset_id,task_type,state,attempt_id,lease_expires_at,retry_after,request_id,created_at,updated_at)
 			 VALUES('stuck',?,'asset-1','asset_download',?,'old-attempt',?,?,'req',?,?)`, session.NodeID, state, past, past, past, past)
-			repo.runtime().SetSyncTaskSlotsAvailable(session.NodeID, 1)
+			if err := repo.AcceptV2NodeStatus(context.Background(), session, protocolv2.NodeStatus{SyncTaskSlotsAvailable: 1}); err != nil {
+				t.Fatal(err)
+			}
 			queue := controlv2.NewQueue(32, 1<<20)
 			defer queue.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)

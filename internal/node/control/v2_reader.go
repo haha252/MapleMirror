@@ -14,10 +14,21 @@ import (
 )
 
 func (c *Client) enqueueV2Status(queue *controlv2.Queue) error {
+	runtime := c.v2Runtime()
+	runtime.capacityMu.Lock()
+	defer runtime.capacityMu.Unlock()
+	return c.enqueueV2StatusLocked(queue)
+}
+
+// Caller holds capacityMu through sampling and admission to the coalesced queue.
+func (c *Client) enqueueV2StatusLocked(queue *controlv2.Queue) error {
+	runtime := c.v2Runtime()
+	runtime.capacityRevision++
 	id, _ := requestid.New()
 	status := protocolv2.NodeStatus{
-		MirrorTraffic: c.Activity.SampleTraffic(),
-		Status:        "syncing", PublicDownloadBaseURL: c.PublicDownloadBaseURL,
+		CapacityRevision: runtime.capacityRevision,
+		MirrorTraffic:    c.Activity.SampleTraffic(),
+		Status:           "syncing", PublicDownloadBaseURL: c.PublicDownloadBaseURL,
 		MaxMirrorProjects: c.MaxMirrorProjects, SyncTaskSlotsAvailable: c.availableSyncTaskSlots(),
 		TargetBandwidthBPS: c.TargetBandwidthBPS, ActualBandwidthBPS: c.sampleBandwidth(),
 		ActiveTasks: c.loadV2ActiveTasks(),

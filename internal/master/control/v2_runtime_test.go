@@ -147,6 +147,7 @@ func TestV2StatusPersistenceThrottleIsRuntimeScoped(t *testing.T) {
 
 	restarted := repo
 	restarted.Runtime = NewRuntimeStore()
+	restarted.Runtime.StartSession(session)
 	if err := restarted.AcceptV2NodeStatus(context.Background(), session, second); err != nil {
 		t.Fatal(err)
 	}

@@ -50,6 +50,13 @@ func (c *Client) storePendingV2ResultOnce(result protocolv2.SyncResult) error {
 }
 
 func (c *Client) enqueuePendingV2Results(queue *controlv2.Queue) error {
+	runtime := c.v2Runtime()
+	runtime.capacityMu.Lock()
+	defer runtime.capacityMu.Unlock()
+	return c.enqueuePendingV2ResultsLocked(queue)
+}
+
+func (c *Client) enqueuePendingV2ResultsLocked(queue *controlv2.Queue) error {
 	if c.DB == nil {
 		return nil
 	}

@@ -26,6 +26,7 @@ func (s *V2Server) handleV2BusinessMessage(ctx context.Context, session Session,
 		if err != nil {
 			return err
 		}
+		queue.Acknowledge(envelope.ReplyTo)
 		return s.dispatchV2Tasks(ctx, session, queue)
 	case protocolv2.TypeSyncRejected:
 		rejected, err := protocolv2.Decode[protocolv2.SyncRejected](envelope)
@@ -38,6 +39,7 @@ func (s *V2Server) handleV2BusinessMessage(ctx context.Context, session Session,
 		if err := s.Repo.rejectV2Task(ctx, session, rejected); err != nil {
 			return err
 		}
+		queue.Acknowledge(envelope.ReplyTo)
 		return s.dispatchV2Tasks(ctx, session, queue)
 	case protocolv2.TypeSyncResult:
 		result, err := protocolv2.Decode[protocolv2.SyncResult](envelope)
@@ -51,6 +53,7 @@ func (s *V2Server) handleV2BusinessMessage(ctx context.Context, session Session,
 		if err != nil {
 			return err
 		}
+		queue.Acknowledge(protocolv2.StableMessageID(protocolv2.TypeSyncTask, result.TaskID, result.AttemptID))
 		ack, _ := protocolv2.Reply(protocolv2.TypeSyncResultAck, mustID(), envelope.ID,
 			protocolv2.SyncResultAck{TaskID: result.TaskID, AttemptID: result.AttemptID, Accepted: processed})
 		if err := queue.Enqueue(ack, ""); err != nil {

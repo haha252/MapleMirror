@@ -7,6 +7,7 @@ import (
 
 type RuntimeStore struct {
 	mu               sync.RWMutex
+	v2TaskLocks      sync.Map // node_id -> *sync.Mutex; separate from the snapshot mutex.
 	sessions         map[string]runtimeSession
 	latest           map[string]runtimeNode
 	inventoryBatches map[string]runtimeInventoryBatch
@@ -28,6 +29,7 @@ type runtimeNode struct {
 	Inventory              runtimeInventoryReport
 	Pressure               runtimePressureReport
 	V2Status               runtimeV2Status
+	V2Dispatch             runtimeV2Dispatch
 	SwarmAvailability      map[string]runtimeSwarmAvailability
 	SoftwareVersion        string
 	ControlProtocol        string
@@ -61,6 +63,8 @@ func (s *RuntimeStore) StartSession(session Session) {
 	if s == nil {
 		return
 	}
+	unlock := s.lockV2Tasks(session.NodeID)
+	defer unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, item := range s.sessions {
@@ -69,6 +73,12 @@ func (s *RuntimeStore) StartSession(session Session) {
 		}
 	}
 	delete(s.inventoryBatches, session.NodeID)
+	node := s.latest[session.NodeID]
+	node.V2Status = runtimeV2Status{}
+	node.V2Dispatch = runtimeV2Dispatch{}
+	node.SyncTaskSlotsAvailable = 0
+	node.SyncTaskSlotsKnown = false
+	s.latest[session.NodeID] = node
 	s.sessions[session.ID] = runtimeSession{
 		NodeID: session.NodeID, CertificateID: session.CertificateID,
 		RequestID: session.RequestID, ConnectedAt: time.Now().UTC().Format(time.RFC3339Nano),

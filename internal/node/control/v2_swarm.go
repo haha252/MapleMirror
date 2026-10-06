@@ -55,6 +55,13 @@ func (c *Client) storePendingV2Manifest(manifest protocolv2.SwarmManifest, resul
 }
 
 func (c *Client) enqueuePendingV2Manifests(queue *controlv2.Queue) error {
+	runtime := c.v2Runtime()
+	runtime.capacityMu.Lock()
+	defer runtime.capacityMu.Unlock()
+	return c.enqueuePendingV2ManifestsLocked(queue)
+}
+
+func (c *Client) enqueuePendingV2ManifestsLocked(queue *controlv2.Queue) error {
 	if c.DB == nil {
 		return nil
 	}

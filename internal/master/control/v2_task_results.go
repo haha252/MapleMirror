@@ -10,6 +10,11 @@ import (
 )
 
 func (r Repository) acceptV2SyncResult(ctx context.Context, session Session, result protocolv2.SyncResult) (bool, error) {
+	unlock := r.runtime().lockV2Tasks(session.NodeID)
+	defer unlock()
+	if _, err := r.runtime().CurrentSequence(session); err != nil {
+		return false, err
+	}
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err

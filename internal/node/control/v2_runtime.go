@@ -19,6 +19,10 @@ type v2Execution struct {
 // value-receiver methods do not copy synchronization primitives.
 type V2Runtime struct {
 	mu sync.Mutex
+	// Sampling, admission and completion share this lock so a report cannot
+	// combine pre-reservation slots with post-reservation active task identities.
+	capacityMu       sync.Mutex
+	capacityRevision uint64
 
 	executions             map[string]v2Execution
 	inventoryPending       uint64

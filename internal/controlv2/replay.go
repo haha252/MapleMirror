@@ -61,6 +61,27 @@ func (q *Queue) Acknowledge(id string) {
 	q.replayMu.Lock()
 	_, present := q.replay[id]
 	delete(q.replay, id)
+	// A delayed ACK can overtake a queued retry. Remove that retry too so a
+	// retired sync attempt cannot be delivered after its replacement.
+	q.mu.Lock()
+	for p := range q.buckets {
+		bucket := q.buckets[p]
+		kept := bucket[:0]
+		for _, item := range bucket {
+			if item.envelope.ID != id {
+				kept = append(kept, item)
+				continue
+			}
+			q.messages--
+			q.bytes -= item.size
+			if item.coalesceKey != "" {
+				delete(q.coalesced, item.envelope.Type+"\x00"+item.coalesceKey)
+			}
+		}
+		clear(bucket[len(kept):])
+		q.buckets[p] = kept
+	}
+	q.mu.Unlock()
 	q.replayMu.Unlock()
 	if present {
 		select {
