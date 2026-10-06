@@ -75,17 +75,7 @@ func (r Repository) readSyncFallbackSources(ctx context.Context, rows *sql.Rows,
 
 func (r Repository) syncFallbackSelectSQL() string {
 	return `SELECT n.id, n.public_name, n.public_download_base_url
-		FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
-		JOIN assets a ON a.id = ni.asset_id
-		JOIN releases r ON r.id = a.release_id
-		JOIN projects p ON p.id = r.project_id
-		JOIN target_inventory ti ON ti.node_id = ni.node_id
-			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
-		WHERE ni.asset_id = ? AND ni.node_id != ? AND n.state != 'disabled'
-		AND n.state != 'offline' AND n.last_heartbeat_at IS NOT NULL
-		AND n.last_heartbeat_at != '' AND n.public_download_base_url != '' AND ni.state = 'verified'
-		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
-		AND a.service_state IN ('candidate', 'pending', 'active') AND r.selected = 1 AND p.enabled = 1
+` + syncPeerInventorySQL("?", "?") + `
 		ORDER BY
 			CASE WHEN ? > 0 AND n.public_probe_network_failures >= ? THEN 1 ELSE 0 END,
 			n.public_probe_network_failures,
@@ -99,17 +89,7 @@ func (r Repository) syncFallbackSelectSQL() string {
 
 func (r Repository) syncFallbackExistsSQL() string {
 	return `SELECT n.public_download_base_url
-		FROM node_inventory ni JOIN nodes n ON n.id = ni.node_id
-		JOIN assets a ON a.id = ni.asset_id
-		JOIN releases r ON r.id = a.release_id
-		JOIN projects p ON p.id = r.project_id
-		JOIN target_inventory ti ON ti.node_id = ni.node_id
-			AND ti.asset_id = ni.asset_id AND ti.desired_state = 'required'
-		WHERE ni.asset_id = ? AND ni.node_id != ? AND n.state != 'disabled'
-		AND n.state != 'offline' AND n.last_heartbeat_at IS NOT NULL
-		AND n.last_heartbeat_at != '' AND n.public_download_base_url != '' AND ni.state = 'verified'
-		AND ni.local_digest_sha256 = a.digest_sha256 AND ni.size_bytes = a.size_bytes
-		AND a.service_state IN ('candidate', 'pending', 'active') AND r.selected = 1 AND p.enabled = 1
+` + syncPeerInventorySQL("?", "?") + `
 		ORDER BY
 			CASE WHEN ? > 0 AND n.public_probe_network_failures >= ? THEN 1 ELSE 0 END,
 			n.public_probe_network_failures,

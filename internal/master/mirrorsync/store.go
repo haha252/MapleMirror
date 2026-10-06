@@ -207,19 +207,6 @@ func (s Store) CancelTask(ctx context.Context, nodeID, taskID string) error {
 	return err
 }
 
-func updateTask(ctx context.Context, db *sql.DB, nodeID, taskID, state, msg string) error {
-	result, err := db.ExecContext(ctx, `UPDATE node_tasks SET state = ?,
-		error_message = ?, updated_at = ?, lease_expires_at=NULL,retry_after=NULL WHERE id = ? AND node_id = ?`,
-		state, nullable(msg), nowText(), taskID, nodeID)
-	if err != nil {
-		return err
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
 func exists(ctx context.Context, db *sql.DB, query string, arg any) bool {
 	var ok int
 	_ = db.QueryRowContext(ctx, `SELECT EXISTS(`+query+`)`, arg).Scan(&ok)

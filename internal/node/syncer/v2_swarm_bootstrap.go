@@ -24,6 +24,11 @@ func (e Executor) executeV2Bootstrap(ctx context.Context, task protocolv2.SyncTa
 		}
 		return v2ResultFromLegacy(task, reused), manifest
 	}
+	if len(task.WholeSources) > 0 {
+		if result, manifest, done := e.executeV2PeerBootstrap(ctx, task, legacy); done {
+			return result, manifest
+		}
+	}
 	if e.Capacity != nil {
 		release, err := e.Capacity.ReserveDownload(task.Asset.SizeBytes)
 		if err != nil {

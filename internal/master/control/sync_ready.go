@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+
+	"mirror-server/internal/master/assignment"
 )
 
 func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, now string) (bool, error) {
@@ -18,8 +20,9 @@ func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, 
 	var missing, running int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM target_inventory ti
 		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
+		LEFT JOIN assets a ON a.id=ti.asset_id
 		WHERE ti.node_id = ? AND ti.desired_state = 'required'
-		AND (ni.asset_id IS NULL OR ni.state != 'verified')`, nodeID).Scan(&missing); err != nil {
+		AND (ni.asset_id IS NULL OR ni.state != 'verified' OR ni.local_digest_sha256 != a.digest_sha256 OR ni.size_bytes != a.size_bytes)`, nodeID).Scan(&missing); err != nil {
 		return false, err
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks
@@ -27,15 +30,10 @@ func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, 
 		nodeID).Scan(&running); err != nil {
 		return false, err
 	}
-	ready := 0
-	if nodeState != "disabled" && nodeState != "offline" && lastHeartbeat != "" &&
-		missing == 0 && running == 0 {
-		ready = 1
-	}
-	var err error
-	if previousReady != ready {
-		_, err = tx.ExecContext(ctx, `UPDATE nodes SET routing_ready = ?,
-			updated_at = ? WHERE id = ?`, ready, now, nodeID)
+	err := assignment.ReconcileReadiness(ctx, tx, nodeID, now)
+	var ready int
+	if err == nil {
+		err = tx.QueryRowContext(ctx, `SELECT routing_ready FROM nodes WHERE id=?`, nodeID).Scan(&ready)
 	}
 	if err == nil && r.Logger != nil && previousReady != ready {
 		r.Logger.Debug(ctx, "节点同步就绪状态已更新",
@@ -51,8 +49,9 @@ func (r Repository) reconcileNodeReady(ctx context.Context, tx *sql.Tx, nodeID, 
 func readySnapshot(ctx context.Context, tx *sql.Tx, nodeID string) (missing, running int, ready bool) {
 	_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM target_inventory ti
 		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
+		LEFT JOIN assets a ON a.id=ti.asset_id
 		WHERE ti.node_id = ? AND ti.desired_state = 'required'
-		AND (ni.asset_id IS NULL OR ni.state != 'verified')`, nodeID).Scan(&missing)
+		AND (ni.asset_id IS NULL OR ni.state != 'verified' OR ni.local_digest_sha256 != a.digest_sha256 OR ni.size_bytes != a.size_bytes)`, nodeID).Scan(&missing)
 	_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_tasks
 		WHERE node_id = ? AND state IN ('pending', 'sent', 'running', 'retry_wait', 'failed')`,
 		nodeID).Scan(&running)

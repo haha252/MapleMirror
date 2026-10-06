@@ -39,3 +39,22 @@ func (s *RuntimeStore) PeerOnly(nodeID string) bool {
 	defer s.mu.RUnlock()
 	return s.latest[nodeID].PeerOnly
 }
+
+func (s *RuntimeStore) SetPeerBootstrap(nodeID string, supported bool) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	node := s.latest[nodeID]
+	node.PeerBootstrap = supported
+	s.latest[nodeID] = node
+}
+func (s *RuntimeStore) PeerBootstrap(nodeID string) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.latest[nodeID].PeerBootstrap
+}

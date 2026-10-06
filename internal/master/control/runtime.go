@@ -34,6 +34,9 @@ type runtimeNode struct {
 	SoftwareVersion        string
 	ControlProtocol        string
 	PeerOnly               bool
+	PeerBootstrap          bool
+	V2WaitReason           string
+	V2WaitLoggedAt         time.Time
 	SyncTaskSlotsAvailable int
 	SyncTaskSlotsKnown     bool
 }
@@ -74,6 +77,7 @@ func (s *RuntimeStore) StartSession(session Session) {
 	}
 	delete(s.inventoryBatches, session.NodeID)
 	node := s.latest[session.NodeID]
+	node.PeerBootstrap = false
 	node.V2Status = runtimeV2Status{}
 	node.V2Dispatch = runtimeV2Dispatch{}
 	node.SyncTaskSlotsAvailable = 0

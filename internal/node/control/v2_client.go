@@ -164,7 +164,7 @@ func (c *Client) runV2(ctx context.Context, wsURL string) (time.Duration, error)
 }
 
 func (c *Client) v2Capabilities() []string {
-	capabilities := []string{"control.v2", "status.v2", "task.attempt.v2", "swarm.v1"}
+	capabilities := []string{"control.v2", "status.v2", "task.attempt.v2", "swarm.v1", protocolv2.CapabilityPeerBootstrap}
 	if c != nil && c.ForcePeerDownload {
 		capabilities = append(capabilities, "sync.peer_only.v1")
 	}

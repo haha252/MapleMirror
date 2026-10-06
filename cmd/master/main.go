@@ -153,6 +153,11 @@ func main() {
 		PublicProbeNetworkFailures: cfg.Node.PublicProbeNetworkFailures,
 		StatsBuffer:                statsBuffer,
 	}
+	if err := repo.RepairNodeReadiness(context.Background()); err != nil {
+		logger.Error(context.Background(), "节点同步就绪状态校正失败", slog.String("error", err.Error()))
+		exitCode = 1
+		return
+	}
 	projectLoader := mirrorsync.NewProjectLoader(*projectsPath, projects)
 	indexNow, indexNowLogger := startIndexNow(cfg, location, logger)
 	if indexNowLogger != nil {

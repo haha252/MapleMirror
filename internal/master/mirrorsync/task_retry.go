@@ -3,10 +3,17 @@ package mirrorsync
 import (
 	"context"
 	"database/sql"
+
+	"mirror-server/internal/master/assignment"
 )
 
 func (s Store) RetryTask(ctx context.Context, nodeID, taskID string) error {
-	result, err := s.DB.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE node_tasks SET state = 'pending',
 		error_message = NULL, attempts = 0, retry_after = NULL, lease_expires_at=NULL, updated_at = ?
 		WHERE id = ? AND node_id = ?
 		AND task_type = 'asset_download'
@@ -27,6 +34,12 @@ func (s Store) RetryTask(ctx context.Context, nodeID, taskID string) error {
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
+	}
+	if err := assignment.ReconcileReadiness(ctx, tx, nodeID, nowText()); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	if s.Runtime != nil {
 		s.Runtime.NotifySyncTasks(nodeID)

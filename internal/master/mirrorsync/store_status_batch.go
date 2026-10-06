@@ -7,9 +7,10 @@ import "context"
 func (s Store) SyncStatuses(ctx context.Context) ([]SyncStatus, error) {
 	rows, err := s.DB.QueryContext(ctx, `WITH targets AS (
 		SELECT ti.node_id, COUNT(*) AS required,
-			SUM(CASE WHEN ni.asset_id IS NULL OR ni.state != 'verified' THEN 1 ELSE 0 END) AS missing
+			SUM(CASE WHEN ni.asset_id IS NULL OR ni.state != 'verified' OR ni.local_digest_sha256 != a.digest_sha256 OR ni.size_bytes != a.size_bytes THEN 1 ELSE 0 END) AS missing
 		FROM target_inventory ti LEFT JOIN node_inventory ni
 			ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
+		LEFT JOIN assets a ON a.id=ti.asset_id
 		WHERE ti.desired_state = 'required' GROUP BY ti.node_id
 	), inventory AS (
 		SELECT node_id, SUM(state = 'verified') AS verified, SUM(state = 'mismatch') AS mismatched

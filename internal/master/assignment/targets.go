@@ -44,7 +44,10 @@ func rebuildNodeTargets(ctx context.Context, tx *sql.Tx, nodeID, now string) err
 				OR a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded') OR npa.project_id IS NULL
 				OR (r.selected = 0 AND p.id IN (SELECT project_id FROM ready_projects))))`,
 		nodeID, nodeID, now, nodeID, nodeID)
-	return err
+	if err != nil {
+		return err
+	}
+	return InvalidateReadiness(ctx, tx, nodeID, now)
 }
 
 func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now string) error {
@@ -84,7 +87,10 @@ func RebuildProjectTargets(ctx context.Context, tx *sql.Tx, projectID, now strin
 				a.service_state NOT IN ('candidate', 'pending', 'active', 'superseded') OR npa.project_id IS NULL
 				OR (r.selected = 0 AND ti.node_id IN (SELECT node_id FROM ready_nodes))))`,
 		projectID, projectID, projectID, now, projectID, projectID)
-	return err
+	if err != nil {
+		return err
+	}
+	return reconcileReadiness(ctx, tx, "", projectID, now, false)
 }
 
 func nodeHasSelectedProjectAssetsSQL(nodeExpr, projectExpr string) string {

@@ -2,6 +2,8 @@ package v2
 
 import "time"
 
+const CapabilityPeerBootstrap = "sync.peer_bootstrap.v1"
+
 type SyncAsset struct {
 	AssetID      string `json:"asset_id"`
 	ProjectID    string `json:"project_id,omitempty"`

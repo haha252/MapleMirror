@@ -96,13 +96,16 @@ func (s *V2Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	s.Repo.runtime().SetControlProtocol(session.NodeID, "v2")
 	s.Repo.runtime().SetSoftwareVersion(session.NodeID, hello.SoftwareVersion)
-	peerOnly := false
+	peerOnly, peerBootstrap := false, false
 	for _, capability := range hello.Capabilities {
 		if capability == "sync.peer_only.v1" {
 			peerOnly = true
-			break
+		}
+		if capability == protocolv2.CapabilityPeerBootstrap {
+			peerBootstrap = true
 		}
 	}
+	s.Repo.runtime().SetPeerBootstrap(session.NodeID, peerBootstrap)
 	s.Repo.runtime().SetPeerOnly(session.NodeID, peerOnly)
 	ready := s.Repo.nodeRoutingReady(ctx, session.NodeID)
 	interval := s.StatusInterval

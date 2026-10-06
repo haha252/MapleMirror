@@ -1,9 +1,15 @@
 package control
 
-import "testing"
+import (
+	protocolv2 "mirror-server/internal/protocol/v2"
+	"testing"
+)
 
 func TestV2CapabilitiesAdvertisePeerOnlyMode(t *testing.T) {
 	regular := (&Client{}).v2Capabilities()
+	if !hasCapability(regular, protocolv2.CapabilityPeerBootstrap) {
+		t.Fatal("missing peer bootstrap support")
+	}
 	if hasCapability(regular, "sync.peer_only.v1") {
 		t.Fatal("regular node must remain origin-capable")
 	}

@@ -7,10 +7,11 @@ import (
 
 func targetInventoryCounts(ctx context.Context, db *sql.DB, nodeID string) (required, missing int) {
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(*),
-		COALESCE(SUM(CASE WHEN ni.asset_id IS NULL OR ni.state != 'verified'
+		COALESCE(SUM(CASE WHEN ni.asset_id IS NULL OR ni.state != 'verified' OR ni.local_digest_sha256 != a.digest_sha256 OR ni.size_bytes != a.size_bytes
 			THEN 1 ELSE 0 END), 0)
 		FROM target_inventory ti
 		LEFT JOIN node_inventory ni ON ni.node_id = ti.node_id AND ni.asset_id = ti.asset_id
+		LEFT JOIN assets a ON a.id=ti.asset_id
 		WHERE ti.node_id = ? AND ti.desired_state = 'required'`, nodeID).
 		Scan(&required, &missing)
 	return required, missing

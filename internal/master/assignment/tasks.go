@@ -16,15 +16,27 @@ func GenerateNodeTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int
 }
 
 func GenerateNodeDeleteTasks(ctx context.Context, tx *sql.Tx, nodeID, now string) (int, error) {
-	return generateDeleteTasks(ctx, tx, now, nodeID, "")
+	count, err := generateDeleteTasks(ctx, tx, now, nodeID, "")
+	if err == nil {
+		err = InvalidateReadiness(ctx, tx, nodeID, now)
+	}
+	return count, err
 }
 
 func GenerateDeleteTasks(ctx context.Context, tx *sql.Tx, now string) (int, error) {
-	return generateDeleteTasks(ctx, tx, now, "", "")
+	count, err := generateDeleteTasks(ctx, tx, now, "", "")
+	if err == nil {
+		err = InvalidateReadiness(ctx, tx, "", now)
+	}
+	return count, err
 }
 
 func GenerateProjectDeleteTasks(ctx context.Context, tx *sql.Tx, projectID, now string) (int, error) {
-	return generateDeleteTasks(ctx, tx, now, "", projectID)
+	count, err := generateDeleteTasks(ctx, tx, now, "", projectID)
+	if err == nil {
+		err = reconcileReadiness(ctx, tx, "", projectID, now, false)
+	}
+	return count, err
 }
 
 func generateTasks(ctx context.Context, tx *sql.Tx, now, nodeID string) (int, error) {
@@ -33,6 +45,9 @@ func generateTasks(ctx context.Context, tx *sql.Tx, now, nodeID string) (int, er
 		return downloads, err
 	}
 	deletes, err := generateDeleteTasks(ctx, tx, now, nodeID, "")
+	if err == nil {
+		err = InvalidateReadiness(ctx, tx, nodeID, now)
+	}
 	return downloads + deletes, err
 }
 

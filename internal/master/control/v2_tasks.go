@@ -43,7 +43,7 @@ func (r Repository) nextV2SyncTaskForDispatch(ctx context.Context, nodeID string
 	}
 	if err == sql.ErrNoRows {
 		if !canClaim {
-			return protocolv2.SyncTask{}, false, nil
+			return protocolv2.SyncTask{}, false, r.logV2TaskWait(ctx, tx, nodeID, true)
 		}
 		attemptID, err = newID()
 		if err != nil {
@@ -53,7 +53,7 @@ func (r Repository) nextV2SyncTaskForDispatch(ctx context.Context, nodeID string
 		capacityBudget := r.v2CapacityBudget(nodeID)
 		maxSwarmAssetBytes := swarm.ProtocolMaxPieceSize * swarm.MaxPieces
 		peerOnly := r.runtime().PeerOnly(nodeID)
-		claimArgs := []any{nodeID, nowText, nowText, capacityBudget, maxSwarmAssetBytes, peerOnly, nowText}
+		claimArgs := []any{nodeID, nowText, nowText, capacityBudget, maxSwarmAssetBytes, peerOnly, r.runtime().PeerBootstrap(nodeID), nowText}
 		for _, id := range excluded {
 			claimArgs = append(claimArgs, id)
 		}
@@ -71,7 +71,7 @@ func (r Repository) nextV2SyncTaskForDispatch(ctx context.Context, nodeID string
 			AND (t.task_type != 'asset_download'
 				OR COALESCE(a.size_bytes,0) > ?
 				OR EXISTS(SELECT 1 FROM asset_piece_manifests m WHERE m.asset_id=t.asset_id AND m.status IN ('authoritative','conflict','disabled'))
-				OR (? = 0 AND NOT EXISTS(SELECT 1 FROM node_tasks seed WHERE seed.asset_id=t.asset_id AND seed.id!=t.id
+				OR ((? = 0 OR (? AND EXISTS (SELECT 1 `+syncPeerInventorySQL("t.asset_id", "t.node_id")+`))) AND NOT EXISTS(SELECT 1 FROM node_tasks seed WHERE seed.asset_id=t.asset_id AND seed.id!=t.id
 					AND seed.task_type='asset_download' AND seed.state IN ('sent','running')
 					AND seed.lease_expires_at IS NOT NULL AND seed.lease_expires_at>?)))`+eligibleSyncTaskSQL("t")+strings.ReplaceAll(excludeSQL, " AND id", " AND t.id")+`
 			ORDER BY r.published_at DESC, a.size_bytes, t.created_at LIMIT 1
@@ -80,7 +80,7 @@ func (r Repository) nextV2SyncTaskForDispatch(ctx context.Context, nodeID string
 		WHERE id=(SELECT id FROM candidate) AND node_id=?
 			RETURNING id`, claimArgs...).Scan(&taskID)
 		if err == sql.ErrNoRows {
-			return protocolv2.SyncTask{}, false, nil
+			return protocolv2.SyncTask{}, false, r.logV2TaskWait(ctx, tx, nodeID, false)
 		}
 		if err != nil {
 			return protocolv2.SyncTask{}, false, err
@@ -89,6 +89,19 @@ func (r Repository) nextV2SyncTaskForDispatch(ctx context.Context, nodeID string
 	task, err := loadV2Task(ctx, tx, nodeID, taskID, attemptID)
 	if err != nil {
 		return protocolv2.SyncTask{}, false, err
+	}
+	if ready, err := r.preparePeerBootstrap(ctx, tx, nodeID, &task); err != nil || !ready {
+		if err != nil {
+			return protocolv2.SyncTask{}, false, err
+		}
+		// Invalid/vanished sources must not reserve a slot or block later work.
+		if err := tx.Rollback(); err != nil {
+			return protocolv2.SyncTask{}, false, err
+		}
+		if len(excluded) >= 32 {
+			return protocolv2.SyncTask{}, false, nil
+		}
+		return r.nextV2SyncTaskForDispatch(ctx, nodeID, append(excluded, task.TaskID), canClaim)
 	}
 	if err := tx.Commit(); err != nil {
 		return protocolv2.SyncTask{}, false, err

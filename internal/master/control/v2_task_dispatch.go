@@ -40,6 +40,9 @@ func (s *V2Server) dispatchV2Tasks(ctx context.Context, session Session, queue *
 		}
 		task, ok, err := s.Repo.nextV2SyncTaskForDispatch(ctx, session.NodeID, excluded, allowance > 0)
 		if err != nil || !ok {
+			if err != nil {
+				s.logV2TaskCapacityError(ctx, session.NodeID, err)
+			}
 			return err
 		}
 		envelope, err := protocolv2.New(protocolv2.TypeSyncTask, protocolv2.StableMessageID(protocolv2.TypeSyncTask, task.TaskID, task.AttemptID), task)
@@ -62,7 +65,7 @@ func (s *V2Server) logV2TaskCapacityError(ctx context.Context, nodeID string, er
 		logger = s.Repo.Logger
 	}
 	if logger != nil && ctx.Err() == nil {
-		logger.Warn(ctx, "同步任务容量查询失败，暂停下发", slog.String("node_id", nodeID), slog.String("error", err.Error()))
+		logger.Warn(ctx, "同步任务调度失败，暂停下发", slog.String("node_id", nodeID), slog.String("error", err.Error()))
 	}
 }
 
