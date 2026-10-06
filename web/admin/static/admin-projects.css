@@ -195,3 +195,5 @@
 .project-developer__actions {
   flex-wrap: wrap;
 }
+
+.projects-list-head { flex-wrap: wrap; }

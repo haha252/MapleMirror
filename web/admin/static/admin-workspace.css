@@ -5,7 +5,7 @@
 [data-workspace="true"] .page-subtitle { display: none; }
 [data-workspace="true"] .page-title-actions { gap: 6px; }
 [data-workspace="true"] .page-title-actions button { min-height: 34px; font-size: 12px; }
-.page-admin[data-workspace="true"] #admin-status.status { position: fixed; right: 16px; bottom: 16px; top: auto; left: auto; max-width: min(480px, calc(100% - 32px)); padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; z-index: 1200; box-shadow: var(--shadow); }
+.page-admin[data-workspace="true"] #admin-status.status { position: fixed; right: 16px; bottom: 16px; top: auto; left: auto; max-width: min(480px, calc(100% - 32px)); padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; z-index: 990; pointer-events: none; box-shadow: var(--shadow); }
 .ws-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; flex: none; }
 .ws-metric { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; padding: 11px 13px; }
 .ws-metric span { color: var(--muted); font-size: 12px; }

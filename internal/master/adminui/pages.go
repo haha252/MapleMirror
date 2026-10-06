@@ -28,11 +28,11 @@ func adminPageForPath(path string) (adminPage, bool) {
 		},
 		"/admin/sync": {
 			ID: "sync", Title: "同步管理",
-			Subtitle: "项目扫描与节点同步任务", Script: "sync.js",
+			Subtitle: "节点同步任务、状态与重试", Script: "sync.js",
 		},
 		"/admin/projects": {
 			ID: "projects", Title: "镜像项目管理",
-			Subtitle: "项目卡片、仓库规则、启停与重置", Script: "projects.js",
+			Subtitle: "项目配置、扫描状态、启停与重置", Script: "projects.js",
 		},
 		"/admin/projects/new": {
 			ID: "project-edit", Title: "新增项目",

@@ -1,7 +1,7 @@
 {{define "projects"}}
 <section id="projects-metrics" class="ws-metrics" aria-label="项目汇总"></section>
 <section class="ws-workspace">
-  <section class="panel-card ws-panel ws-left"><div class="ws-head"><h2>项目列表</h2><span id="projects-updated" class="muted">最近更新 —</span></div><div class="ws-controls"><input id="projects-search" type="search" placeholder="搜索项目、仓库或标签" aria-label="搜索项目"><select id="projects-filter" aria-label="筛选项目"><option value="all">全部项目</option><option value="enabled">已启用</option><option value="disabled">已停用</option><option value="failed">扫描失败</option></select><span id="projects-summary" class="muted">加载中</span></div><div id="project-grid" class="ws-scroll"></div></section>
+  <section class="panel-card ws-panel ws-left"><div class="ws-head projects-list-head"><h2>项目列表</h2><div class="ws-head-actions"><span id="projects-updated" class="muted">最近更新 —</span><button id="scan-all" class="admin-secondary" type="button">触发全部扫描</button></div></div><div class="ws-controls"><input id="projects-search" type="search" placeholder="搜索项目、仓库或标签" aria-label="搜索项目"><select id="projects-filter" aria-label="筛选项目"><option value="all">全部项目</option><option value="enabled">已启用</option><option value="disabled">已停用</option><option value="failed">扫描失败</option></select><span id="projects-summary" class="muted">加载中</span></div><div id="project-grid" class="ws-scroll"></div></section>
   {{template "workspace-detail" .}}
 </section>
 {{end}}

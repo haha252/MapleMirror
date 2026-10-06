@@ -1,10 +1,8 @@
 {{define "sync"}}
-<section id="sync-metrics" class="ws-metrics" aria-label="同步汇总"></section>
 <section class="ws-workspace">
-  <section class="panel-card ws-panel ws-left"><div class="ws-head"><h2>同步记录</h2><span id="sync-updated" class="muted">最近更新 —</span></div>
-    <div class="ws-controls"><nav class="ws-tabs" role="tablist" aria-label="同步记录类型"><button type="button" role="tab" data-sync-view="tasks" aria-selected="true">节点任务</button><button type="button" role="tab" data-sync-view="scans" aria-selected="false">项目扫描</button></nav><button id="scan-all" class="admin-secondary" type="button">触发全部扫描</button></div>
-    <div class="ws-controls"><input id="sync-search" type="search" placeholder="搜索项目、节点或文件" aria-label="搜索同步记录"><select id="task-node-select" aria-label="筛选节点"></select><select id="sync-state" aria-label="筛选任务状态"><option value="active">未完成</option><option value="all">全部任务</option><option value="failed">失败</option><option value="succeeded">已完成</option><option value="cancelled">已取消</option></select></div>
-    <div id="sync-list" class="ws-scroll"><div class="ws-empty">正在读取同步记录…</div></div><div id="tasks-pager" class="ws-pager"></div>
+  <section class="panel-card ws-panel ws-left"><div class="ws-head"><h2>节点任务</h2><span id="sync-updated" class="muted">最近更新 —</span></div>
+    <div class="ws-controls"><input id="sync-search" type="search" placeholder="搜索项目、节点或文件" aria-label="搜索节点任务"><select id="task-node-select" aria-label="筛选节点"></select><select id="sync-state" aria-label="筛选任务状态"><option value="active">未完成</option><option value="all">全部任务</option><option value="failed">失败</option><option value="succeeded">已完成</option><option value="cancelled">已取消</option></select></div>
+    <div id="sync-list" class="ws-scroll"><div class="ws-empty">正在读取节点任务…</div></div><div id="tasks-pager" class="ws-pager"></div>
   </section>
   {{template "workspace-detail" .}}
 </section>
